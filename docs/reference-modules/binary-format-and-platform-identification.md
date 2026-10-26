@@ -4,7 +4,7 @@ Identify a binary's format ELF, PE, Mach-O, architecture 32/64-bit, endianness, 
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#binary-format-and-platform-identification)</sup>
 
 1. **Every analysis tool must know what it is analyzing before it begins.** Whether to disassemble as x86, ARM, or MIPS; whether to read `.eh_frame` or iterate load commands; whether the PLT is at a fixed offset or in a DataDirectory: all of this depends on knowing the binary's format and architecture. Format identification is the mandatory first step in the pipeline.
 
@@ -14,7 +14,7 @@ Identify a binary's format ELF, PE, Mach-O, architecture 32/64-bit, endianness, 
 
 ---
 
-## How it works
+## How it works <sup>[↑](#binary-format-and-platform-identification)</sup>
 
 ```mermaid
 flowchart TD
@@ -50,7 +50,7 @@ flowchart TD
     linkStyle 11 stroke:#2e7d32,stroke-width:3px
 ```
 
-### Magic byte constants
+### Magic byte constants <sup>[↑](#binary-format-and-platform-identification)</sup>
 
 | Magic | Constant | Format |
 |---|---|---|
@@ -61,7 +61,7 @@ flowchart TD
 | `CF FA ED FE` | `0xFEEDFACF` (LE) | Mach-O 64-bit little-endian |
 | `FF FA ED CF` | `0xCFFAEDFE` (BE) | Mach-O 64-bit big-endian |
 
-### Architecture detection per format
+### Architecture detection per format <sup>[↑](#binary-format-and-platform-identification)</sup>
 
 **ELF:** `EI_CLASS` at byte 4 `0x01` = 32-bit, `0x02` = 64-bit; `EI_DATA` at byte 5 `0x01` = little-endian, `0x02` = big-endian. Entry point at byte offset 24 (ELF64) or 24 ELF32, 4 bytes vs 8 bytes.
 
@@ -71,7 +71,7 @@ flowchart TD
 
 ---
 
-## BinaryParser
+## BinaryParser <sup>[↑](#binary-format-and-platform-identification)</sup>
 
 ```python
 from ablation.core.binary_parser import BinaryParser
@@ -96,7 +96,7 @@ print(parser.report())
 
 ---
 
-## Usage
+## Usage <sup>[↑](#binary-format-and-platform-identification)</sup>
 
 ```python
 from ablation.core.binary_parser import BinaryParser
@@ -126,7 +126,7 @@ elif info['format'] == 'ELF' and info['bits'] == 32:
 
 ---
 
-## Example output
+## Example output <sup>[↑](#binary-format-and-platform-identification)</sup>
 
 ```
 Binary: httpsd
@@ -139,7 +139,7 @@ Sections: 31
 
 ---
 
-## False positives
+## False positives <sup>[↑](#binary-format-and-platform-identification)</sup>
 
 **Packed PE files.** Packers often preserve the DOS `MZ` signature at the start of the file, so the binary correctly identifies as PE. However, the internal structure may be partially overwritten by the packer stub. The entry point parsed from the Optional Header will point to the packer's stub, not the original OEP.
 
@@ -147,7 +147,7 @@ Sections: 31
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#binary-format-and-platform-identification)</sup>
 
 **Before this module:** File acquisition only.
 
@@ -155,7 +155,7 @@ Sections: 31
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#binary-format-and-platform-identification)</sup>
 
 | Field | Content |
 |:---|:---|
@@ -167,7 +167,7 @@ Sections: 31
 
 ---
 
-## See also
+## See also <sup>[↑](#binary-format-and-platform-identification)</sup>
 
 - [Binary Context](binary-context.md): full analysis context built on top of this parser
 - [ELF Internals and Hardening](elf-internals-and-hardening.md): detailed ELF header anatomy

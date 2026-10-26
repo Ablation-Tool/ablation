@@ -6,11 +6,11 @@ Parse Windows 16-bit New Executable (NE) binaries: resolving per-segment relocat
 
 ## Why this exists
 
-1. **LIEF does not support the NE format**: every call to `lief.parse()` on an NE binary returns `None`. `win16_ne_sweep.py` implements a pure-Python NE header parser that reads the segment table, module reference table, and imported names table directly from the binary's NE header, without any external library dependency.
+1. LIEF does not support the NE format: every call to `lief.parse()` on an NE binary returns `None`. `win16_ne_sweep.py` implements a pure-Python NE header parser that reads the segment table, module reference table, and imported names table directly from the binary's NE header, without any external library dependency.
 
 2. **NE binaries use per-segment relocation records to resolve imports.** There is no IAT. Each CODE segment contains a relocation table that maps each call site to a `module_ref, ordinal/name` pair. `NEBinary.build_segment_import_map()` resolves these to human-readable import strings for example `KERNEL.GetProcAddress` using the Win16 ordinal-to-name table for KERNEL, USER, GDI, and SHELL. This gives function-level call context to the semantic sweep without requiring symbol table support.
 
-3. **16-bit function prologue recovery requires `CS_MODE_16`**: Capstone defaults to `CS_MODE_32` for x86; using it on 16-bit code produces incorrect disassembly. `win16_ne_sweep.py` uses `CS_ARCH_X86 + CS_MODE_16` and detects function starts via the 16-bit prologue: `PUSH BP; MOV BP, SP` (`0x55 0x8B 0xEC` or `0x55 0x89 0xE5`). NEAR call recovery (`E8 rel16`) provides additional function entry points within each segment.
+3. 16-bit function prologue recovery requires `CS_MODE_16`: Capstone defaults to `CS_MODE_32` for x86; using it on 16-bit code produces incorrect disassembly. `win16_ne_sweep.py` uses `CS_ARCH_X86 + CS_MODE_16` and detects function starts via the 16-bit prologue: `PUSH BP; MOV BP, SP` (`0x55 0x8B 0xEC` or `0x55 0x89 0xE5`). NEAR call recovery (`E8 rel16`) provides additional function entry points within each segment.
 
 ---
 

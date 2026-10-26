@@ -8,7 +8,7 @@ Parse Texas Instruments COFF2 object files (`.obj`) and AR archives (`.a`) produ
 
 1. **TI Code Generation Tools for C28x and C29x targets produce COFF2 object files, not ELF.** `BinaryContext.load_or_build()` uses `lief` for ELF loading and cannot parse COFF2. Without `TiCoffLoader`, TI COFF firmware F28P55x DSP, C2000 series cannot be analyzed by any Ablation tool. `TiCoffLoader` fills this gap with native Python COFF2 parsing.
 
-2. **TI AR archives (`.a`) package multiple COFF2 members**: the same `!<arch>\n` Unix AR format used by `AixBigArExtractor`, but with COFF2 members instead of AIX Big Archive members. `TiCoffLoader` parses both the standalone `.obj` and the `.a` archive format, extracting all members for bulk symbol analysis.
+2. TI AR archives (`.a`) package multiple COFF2 members: the same `!<arch>\n` Unix AR format used by `AixBigArExtractor`, but with COFF2 members instead of AIX Big Archive members. `TiCoffLoader` parses both the standalone `.obj` and the `.a` archive format, extracting all members for bulk symbol analysis.
 
 3. **`CoffSymbol.storage_class_name()`, `is_weak()`, `is_global()`, `is_defined()`** provide the same boolean interface as `lief.ELF.Symbol` for downstream tools. `TiNNCSanner` uses `TiCoffLoader` to detect `tvmgen_*` symbols in COFF-format C28x firmware, it calls `TiCoffLoader` transparently when the target is COFF2, and `lief` when the target is ELF, through a unified `NormSymbol` interface.
 

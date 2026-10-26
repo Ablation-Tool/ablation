@@ -6,11 +6,11 @@ Scan source code for ORM queries Prisma, Mongoose, SQLAlchemy, raw SQL that fetc
 
 ## Why this exists
 
-1. **Missing tenant scope in ORM queries is the highest-yield IDOR pattern in multi-tenant SaaS codebases**: a `findUnique({ where: { id: resourceId } })` that does not also include `orgId: currentUser.orgId` allows any authenticated user to fetch any resource in the system by guessing or brute-forcing the resource ID. `SourceIsolationChecker` detects exactly this pattern: ORM calls with a `where` clause that lacks a tenant-scoping field.
+1. Missing tenant scope in ORM queries is the highest-yield IDOR pattern in multi-tenant SaaS codebases: a `findUnique({ where: { id: resourceId } })` that does not also include `orgId: currentUser.orgId` allows any authenticated user to fetch any resource in the system by guessing or brute-forcing the resource ID. `SourceIsolationChecker` detects exactly this pattern: ORM calls with a `where` clause that lacks a tenant-scoping field.
 
 2. **`SourceIsolationChecker.check()` analyzes source files without executing them**, it reads source text, identifies ORM call patterns via regex AST-level extraction `findUnique`, `findFirst`, `findMany`, `update`, `delete`, `upsert` for Prisma; `findOne`, `find` for Mongoose; `filter(`, `get()` for SQLAlchemy), extracts the `where` clause content, and checks whether a tenant-scoping field `orgId`, `projectId`, `tenantId`, `userId`, `account_id`, `workspace_id` appears in the clause. Queries that pass only a resource ID as the filter condition are flagged as `MISSING_TENANT_SCOPE`.
 
-3. **Integration with `SourceEntryClassifier`**: `source_entry_classifier.py` classifies each API route by authentication level `NONE`, `API_KEY`, `SESSION`, `INTERNAL`, `ADMIN`. Routes classified as `SESSION` or `API_KEY` handle user-supplied input and are the most relevant targets for `SourceIsolationChecker` analysis. Running `SourceEntryClassifier` first to identify user-facing routes narrows the scope for isolation checking from the full codebase to the routes that actually process cross-tenant data.
+3. Integration with `SourceEntryClassifier`: `source_entry_classifier.py` classifies each API route by authentication level `NONE`, `API_KEY`, `SESSION`, `INTERNAL`, `ADMIN`. Routes classified as `SESSION` or `API_KEY` handle user-supplied input and are the most relevant targets for `SourceIsolationChecker` analysis. Running `SourceEntryClassifier` first to identify user-facing routes narrows the scope for isolation checking from the full codebase to the routes that actually process cross-tenant data.
 
 ---
 

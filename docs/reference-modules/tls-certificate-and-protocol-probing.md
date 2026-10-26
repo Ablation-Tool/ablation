@@ -6,11 +6,11 @@ Inspect TLS certificate chains, key strength, legacy protocol version support TL
 
 ## Why this exists
 
-1. **`TLSAnalyzer` extracts the full certificate chain including intermediate certificates**: `_extract_cert_key_info()` inspects each certificate's key type, key size, signature algorithm, and validity period. RSA keys below 2048 bits, MD5/SHA1 signatures on leaf certificates, and certificates expiring within 30 days are each flagged as findings. This is performed without external certificate verification libraries: `ssl.getpeercert()` provides the DER bytes; `_cert_sha256()` and `_get_san_names()` parse the certificate structure in pure Python.
+1. `TLSAnalyzer` extracts the full certificate chain including intermediate certificates: `_extract_cert_key_info()` inspects each certificate's key type, key size, signature algorithm, and validity period. RSA keys below 2048 bits, MD5/SHA1 signatures on leaf certificates, and certificates expiring within 30 days are each flagged as findings. This is performed without external certificate verification libraries: `ssl.getpeercert()` provides the DER bytes; `_cert_sha256()` and `_get_san_names()` parse the certificate structure in pure Python.
 
 2. **`CipherSuiteProber` sends raw ClientHello messages with specific cipher suites**, it constructs a `_build_clienthello()` with the target cipher IDs and calls `_send_raw_clienthello()` to determine whether the server accepts them. This detects cipher suite support that is invisible to `ssl.SSLContext`-based connections which use the OS TLS library's cipher preference list, not the server's. RC4 `0x0005`, `0x000A` and 3DES (`0x000A`) are individually probed.
 
-3. **`tls_enum.py` extends the analysis with HSTS/CT/mTLS policy checks**: `check_certificate_transparency()` queries the Google CT log for the leaf certificate's SCT extensions; `check_tls_inspection()` detects TLS inspection proxies different CA on intermediate certificate vs. leaf; `check_pin_mismatch()` identifies HPKP/certificate pinning bypass conditions.
+3. `tls_enum.py` extends the analysis with HSTS/CT/mTLS policy checks: `check_certificate_transparency()` queries the Google CT log for the leaf certificate's SCT extensions; `check_tls_inspection()` detects TLS inspection proxies different CA on intermediate certificate vs. leaf; `check_pin_mismatch()` identifies HPKP/certificate pinning bypass conditions.
 
 ---
 

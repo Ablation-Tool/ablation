@@ -4,17 +4,17 @@ Persistent SQLite store of confirmed and inferred function records, prior RE fin
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#function-identity-database)</sup>
 
 1. **RE work accumulates knowledge across engagements: a confirmed finding in one firmware image is evidence for the same function in all future images from the same vendor.** `func_id.db` persists function records `name`, `role`, `call_targets`, `string_xrefs`, `confidence` and finding records across sessions. Without a persistent store, each new binary starts from zero and the analyst re-discovers the same function patterns.
 
 2. **`FindingRegistry` stores every confirmed vulnerability with its embedding vector: `FindingRegistry.find_similar()` retrieves prior findings with semantic similarity to a new candidate, grounding LLM hypotheses and PatternLibrary queries in confirmed evidence rather than pattern speculation.** The seed corpus (`ablation/data/seed_corpus.json`) ships with embedding-ready records from published CVEs, giving the database useful signal before any engagement-specific findings are added.
 
-3. **`PatternLibrary` accumulates successful semantic search queries with hit rates per binary**: `pl.sweepsearcher` auto-replays all confirmed patterns on new binaries in step 5 of the RE workflow, ensuring that patterns that found real vulnerabilities in past engagements are always tried on new targets.
+3. `PatternLibrary` accumulates successful semantic search queries with hit rates per binary: `pl.sweepsearcher` auto-replays all confirmed patterns on new binaries in step 5 of the RE workflow, ensuring that patterns that found real vulnerabilities in past engagements are always tried on new targets.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#function-identity-database)</sup>
 
 ```mermaid
 flowchart TD
@@ -34,7 +34,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#function-identity-database)</sup>
 
 ```python
 from ablation.analyzers.finding_registry import FindingRegistry
@@ -83,7 +83,7 @@ pl.save()
 
 ---
 
-## Example output
+## Example output <sup>[↑](#function-identity-database)</sup>
 
 The following illustrates the database stats and finding output format.
 
@@ -100,7 +100,7 @@ find_similar('command injection in parser'):
 
 ---
 
-## False positives
+## False positives <sup>[↑](#function-identity-database)</sup>
 
 **`find_similar()` returns findings with similarity ≥ `min_sim` default 0.60**: a similarity of 0.65 means "semantically related" not "the same vulnerability." Use similarity scores for prioritization and hypothesis seeding only. Confirm findings independently.
 
@@ -108,13 +108,13 @@ find_similar('command injection in parser'):
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#function-identity-database)</sup>
 
 `func_id.db` is the central persistence layer used by `CorpusBuilder` (write), `SemanticSearcher` read/write, `RAGRetriever` (read), `SigLibrary` (read), `FindingRegistry` read/write, and `PatternLibrary` read/write. It is always local (`~/.ablation/`), never committed to the ablation repo. Back up with `cp ~/.ablation/findings.db ~/findings_backup_$date +%Y%m%d.db` before major schema migrations.
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#function-identity-database)</sup>
 
 `FindingRegistry.stats()` returns `{confirmed: int, inferred: int, seed: int}`.
 
@@ -130,7 +130,7 @@ find_similar('command injection in parser'):
 
 ---
 
-## See also
+## See also <sup>[↑](#function-identity-database)</sup>
 
 - [Function Corpus Builder](function-corpus-builder.md): populates `func_id.db` with `ANGR_INFERRED` records
 - [Bundled Finding Signature Seeds](bundled-finding-signature-seeds.md): `SigLibrary` reads `func_id.db` for BERT matching

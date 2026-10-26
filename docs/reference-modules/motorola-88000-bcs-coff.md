@@ -10,7 +10,7 @@ Decode Motorola 88000 (M88K) binaries: identifying `RISC.88000` architecture COF
 
 2. **M88K COFF BCS Binary Compatibility Standard containers** use the `RISC.88000` magic identifier in the COFF header's optional machine type field. `isa_m88k.py` parses BCS COFF to extract code sections and determine the base address for disassembly. This is the entry point for M88K firmware analysis without a full RE platform.
 
-3. **M88K uses a fixed 32-bit instruction width with a pure RISC encoding**: all instructions are 4 bytes, big-endian, with a 6-bit opcode field and distinct register encoding for 3-operand, immediate, and branch forms. The fixed width makes sequential disassembly reliable; `InsnM88K` provides the security-relevant subset loads, stores, branches, and arithmetic needed for taint analysis.
+3. M88K uses a fixed 32-bit instruction width with a pure RISC encoding: all instructions are 4 bytes, big-endian, with a 6-bit opcode field and distinct register encoding for 3-operand, immediate, and branch forms. The fixed width makes sequential disassembly reliable; `InsnM88K` provides the security-relevant subset loads, stores, branches, and arithmetic needed for taint analysis.
 
 ---
 

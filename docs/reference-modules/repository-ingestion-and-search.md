@@ -10,7 +10,7 @@ Build a lightweight `SourceContext` index over a local or remote git repository:
 
 2. **`SourceContext.route_files`** identifies files that define HTTP routes: Express `router.get/post`, FastAPI `@app.route`, Flask `@bp.route`, Django `urlpatterns`, Spring `@GetMapping/@PostMapping`. `SourceSinkScanner` and `PreAuthRouteAuditor` both query `route_files` as their primary candidate list, rather than scanning the full tree for every session.
 
-3. **`SourceContext.from_git()` enables shallow remote cloning**: pass a GitHub HTTPS URL and a local destination path; `SourceContext` performs a `git clone --depth 1` and indexes the result. This makes it feasible to analyze a remote dependency or third-party service in seconds without a full clone.
+3. `SourceContext.from_git()` enables shallow remote cloning: pass a GitHub HTTPS URL and a local destination path; `SourceContext` performs a `git clone --depth 1` and indexes the result. This makes it feasible to analyze a remote dependency or third-party service in seconds without a full clone.
 
 ---
 

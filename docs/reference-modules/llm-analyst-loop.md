@@ -4,7 +4,7 @@ ReAct Reason + Act agent loop that drives Claude through a tool-calling conversa
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#llm-analyst-loop)</sup>
 
 1. **Semantic search identifies function candidates by embedding similarity, but for functions whose role cannot be inferred from adjacent strings or callees alone, reasoning over the actual disassembly is required.** `AgentLoop.run()` gives Claude a set of RE tools: disassembly, CFG, cross-references, string lookup, import lookup, and function DB query; and a task ("name this function" or "find vulnerabilities") and lets it reason through the analysis in a bounded multi-turn loop. The result is a structured `AnalysisResult` with a proposed name, role, and confidence score.
 
@@ -14,7 +14,7 @@ ReAct Reason + Act agent loop that drives Claude through a tool-calling conversa
 
 ---
 
-## How it works
+## How it works <sup>[↑](#llm-analyst-loop)</sup>
 
 ```mermaid
 flowchart TD
@@ -72,7 +72,7 @@ flowchart TD
     linkStyle 22 stroke:#6a1b9a,stroke-width:2px
 ```
 
-### AnalysisResult fields
+### AnalysisResult fields <sup>[↑](#llm-analyst-loop)</sup>
 
 | Field | Type | Description |
 |:---|:---|:---|
@@ -84,7 +84,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#llm-analyst-loop)</sup>
 
 ```python
 from ablation.analyzers.llm_analyst.agent_loop import AgentLoop
@@ -130,7 +130,7 @@ loop.persist_result(result, binary_sha256='<sha256>')
 
 ---
 
-## Example output
+## Example output <sup>[↑](#llm-analyst-loop)</sup>
 
 The following illustrates the `AnalysisResult` output format. Actual names and addresses are binary-specific.
 
@@ -147,7 +147,7 @@ run_patch() cve_hypothesis:
 
 ---
 
-## False positives
+## False positives <sup>[↑](#llm-analyst-loop)</sup>
 
 **`max_tool_calls=10` is a hard budget: functions that require more tool calls to analyze will have lower-confidence results.** Increase `max_tool_calls` for complex functions large CFGs, indirect dispatch, heavily-inlined code at the cost of more API tokens per function. The default of 10 is appropriate for 90% of handler-class functions.
 
@@ -155,13 +155,13 @@ run_patch() cve_hypothesis:
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#llm-analyst-loop)</sup>
 
 Run `AgentLoop` as a targeted tool on `SemanticSearcher` top candidates that need human-quality naming and role analysis, not as a bulk pass over all functions token cost is per-function. Use `run()` for naming and `run_patch()` for diff-based vulnerability hypothesis generation after `VersionTracker.find_homolog()` identifies a changed function.
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#llm-analyst-loop)</sup>
 
 `AgentLoopctx, task.runfunc_addr` returns an `AnalysisResult`:
 
@@ -182,7 +182,7 @@ Run `AgentLoop` as a targeted tool on `SemanticSearcher` top candidates that nee
 
 ---
 
-## See also
+## See also <sup>[↑](#llm-analyst-loop)</sup>
 
 - [Assisted Function Naming](assisted-function-naming.md): higher-level interface wrapping `AgentLoop` for batch function naming
 - [Assisted Vulnerability Hypotheses](assisted-vulnerability-hypotheses.md): `run_patch()` usage for patch-based CVE hypothesis

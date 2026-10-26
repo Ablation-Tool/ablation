@@ -10,7 +10,7 @@ N-hop forward symbolic register pass across function call chains: extending `Reg
 
 2. **`IPRegAnnotator` is designed for the step 8 use case in the RE workflow: cross-library call chains.** When a function in `libservice.so` calls a function in `libapi.so` that ultimately calls `Tcl_Eval` or `system`, the cross-library chain requires following call edges across binary boundaries via `LibGraph`. `IPRegAnnotator.annotate_chain()` handles both intra-binary and cross-binary chains using `BinaryContext` (intra) or `LibGraph` cross-binary.
 
-3. **`IPChain.sink_report()` produces a targeted summary of all call chains that reach a specific sink**: given a set of sink names for example `{'system', 'execve', 'Tcl_Eval'}`, it filters the full chain to only paths that reach those sinks, making the report immediately actionable for CVE documentation.
+3. `IPChain.sink_report()` produces a targeted summary of all call chains that reach a specific sink: given a set of sink names for example `{'system', 'execve', 'Tcl_Eval'}`, it filters the full chain to only paths that reach those sinks, making the report immediately actionable for CVE documentation.
 
 ---
 

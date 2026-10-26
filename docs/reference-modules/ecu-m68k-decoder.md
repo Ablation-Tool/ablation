@@ -4,20 +4,20 @@
 
 ---
 
-## What this is
+## What this is <sup>[↑](#ecum68kdecoder)</sup>
 
 GM P-series PCMs use a Motorola CPU32 core, a 68000-family processor in automotive engine control modules. These ROMs have no ELF headers and no symbol tables. Capstone decodes M68K instructions but provides no way to find function boundaries in a flat image. `EcuM68kDecoder` scans the ROM for CPU32 frame-allocation prologues in one pass and produces a function-start list without calling Capstone. It also wraps Capstone output with the same typed instruction fields used throughout the Ablation pipeline, so M68K firmware is interchangeable with PPC VLE firmware downstream of the decoder.
 
 ---
 
-## Where it's used
+## Where it's used <sup>[↑](#ecum68kdecoder)</sup>
 
 - **GM P-series PCMs**: P01, P04, P05, P08, P10, P11, P59 engine control modules
 - Any CPU32 flat ROM image from Motorola 68000-family automotive ECUs
 
 ---
 
-## Safe usage
+## Safe usage <sup>[↑](#ecum68kdecoder)</sup>
 
 **Call `function_starts()` before constructing a taint tracker.** Without known entry points, a taint tracker has no seeds and returns no findings. `EcuM68kDecoder` produces these seeds by scanning for `LINK.W A6` and `MOVEM.L` prologues.
 
@@ -29,7 +29,7 @@ GM P-series PCMs use a Motorola CPU32 core, a 68000-family processor in automoti
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#ecum68kdecoder)</sup>
 
 Two things were not possible before in Ablation:
 
@@ -49,9 +49,9 @@ at all pipeline stages downstream of the decoder.
 
 ---
 
-## CPU32 function prologue forms
+## CPU32 function prologue forms <sup>[↑](#ecum68kdecoder)</sup>
 
-### Frame-allocating functions primary signal
+### Frame-allocating functions primary signal <sup>[↑](#ecum68kdecoder)</sup>
 
 ```
 LINK.W A6, #-N
@@ -66,7 +66,7 @@ Detection:
 hw == 0x4E56   and   (next_word & 0x8000) != 0
 ```
 
-### Callee-save leaf functions secondary signal
+### Callee-save leaf functions secondary signal <sup>[↑](#ecum68kdecoder)</sup>
 
 ```
 MOVEM.L regs, -(SP)
@@ -82,7 +82,7 @@ following the prologue LINK.
 
 ---
 
-## Usage
+## Usage <sup>[↑](#ecum68kdecoder)</sup>
 
 ```python
 from ablation.analyzers.ecu_m68k_decoder import EcuM68kDecoder
@@ -107,7 +107,7 @@ for i in insns:
 length = dec.insn_length(offset=0x42C)
 ```
 
-### Constructor parameters
+### Constructor parameters <sup>[↑](#ecum68kdecoder)</sup>
 
 | Parameter | Default | Description |
 |---|---|---|
@@ -116,7 +116,7 @@ length = dec.insn_length(offset=0x42C)
 
 ---
 
-## M68kInsn fields
+## M68kInsn fields <sup>[↑](#ecum68kdecoder)</sup>
 
 ```python
 @dataclass
@@ -142,7 +142,7 @@ class M68kInsn:
 
 ---
 
-## Branch target computation
+## Branch target computation <sup>[↑](#ecum68kdecoder)</sup>
 
 Capstone M68K formats absolute branch/call targets in `op_str` as `$hexaddr` or
 `$hexaddr.w` / `$hexaddr.l` with a size suffix.  `EcuM68kDecoder` strips the suffix and
@@ -159,7 +159,7 @@ known.
 
 ---
 
-## Capstone dependency
+## Capstone dependency <sup>[↑](#ecum68kdecoder)</sup>
 
 `function_starts()` and `insn_length()` fallback do not require Capstone and work with the
 pure-Python pattern scan. `disassemble()` and `decode_one()` require Capstone and raise
@@ -170,9 +170,9 @@ no 68020-specific instructions appear in GM P-series firmware that CPU32 does no
 
 ---
 
-## Validated results
+## Validated results <sup>[↑](#ecum68kdecoder)</sup>
 
-### GM P01 ROM CPU32, J1850 VPW OBD-II
+### GM P01 ROM CPU32, J1850 VPW OBD-II <sup>[↑](#ecum68kdecoder)</sup>
 
 ``function_starts()`` on a synthetic P01-pattern ROM block (100 LINK.W prologues, every 32
 bytes) recovers all 100 starts with zero false positives.
@@ -183,7 +183,7 @@ is a frame-allocating function whose start ``function_starts()`` correctly ident
 
 ---
 
-## Limitations
+## Limitations <sup>[↑](#ecum68kdecoder)</sup>
 
 - CPU32-specific instructions (``TBLS``, ``TBLSN``, ``DIVS.L``, ``DIVU.L`` with 32-bit
  operands) may not decode identically between ``CS_MODE_M68K_020`` and a hypothetical
@@ -199,13 +199,13 @@ is a frame-allocating function whose start ``function_starts()`` correctly ident
 
 ---
 
-## How it works
+## How it works <sup>[↑](#ecum68kdecoder)</sup>
 
 Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns UDS handler tables, seed/key routines, calibration write paths are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
 
 ---
 
-## Example output
+## Example output <sup>[↑](#ecum68kdecoder)</sup>
 
 ```
 [CRITICAL] WEAK_SEED   UDS 0x27 0x01 at ROM:0x8004A0
@@ -218,13 +218,13 @@ Reads the ROM image at the specified base address and applies the ISA decoder to
 
 ---
 
-## False positives
+## False positives <sup>[↑](#ecum68kdecoder)</sup>
 
 Calibration data regions contain byte sequences that decode as valid instructions in some ISAs. Confirm candidate function VAs against the ROM layout from `ECURomLayoutAnalyzer` before treating them as code. Security Access sequences in boot ROM are expected and not findings unless the seed/key algorithm is cryptographically weak.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#ecum68kdecoder)</sup>
 
 **Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
@@ -232,7 +232,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#ecum68kdecoder)</sup>
 
 `EcuM68kDecoder.from_bytesdata, base=0.decode_all()` returns `List[M68kInsn]`:
 
@@ -248,7 +248,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## See also
+## See also <sup>[↑](#ecum68kdecoder)</sup>
 
 - [ECUArchDetector](ecu-arch-detector.md): identify processor family before choosing a decoder
 - [ECURomLayoutAnalyzer](ecu-rom-layout-analyzer.md): map ROM sections before decoding

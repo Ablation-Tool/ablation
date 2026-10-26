@@ -10,7 +10,7 @@ Detect integer overflow in allocation size arithmetic on ARM32/Thumb2: finding p
 
 2. **ARM32 `MUL` stores only the lower 32 bits of the product: overflow is silent and produces a small wrapped value.** The overflow condition is: `n > UINT32_MAX / sizeof(T)`. Most ARM32 parsers do not check this condition before passing the product to `malloc`. `analyze_cfg()` identifies these sites by looking for multiplication instructions whose operands include an ARM32/Thumb register last written by a tainted source network input, followed by a `BL malloc` where the product register is passed as `r0`.
 
-3. **ARM32 uses a different calling convention from x86-64**: r0-r3 are the first four arguments. `analyze_cfg()` tracks r0 specifically as the `malloc` size argument, and `TaintState.taint_reg("r0", "user")` seeds taint at network input call sites to trace user-controlled data from `recv`/`read` through arithmetic operations to allocation sites.
+3. ARM32 uses a different calling convention from x86-64: r0-r3 are the first four arguments. `analyze_cfg()` tracks r0 specifically as the `malloc` size argument, and `TaintState.taint_reg("r0", "user")` seeds taint at network input call sites to trace user-controlled data from `recv`/`read` through arithmetic operations to allocation sites.
 
 ---
 

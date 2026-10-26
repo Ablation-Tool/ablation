@@ -6,11 +6,11 @@ Multi-level call chain resolver for i386 ELF binaries. Extends `CallerArgResolve
 
 ## Why this exists
 
-1. **Gap SYNERGY-GAP-004**: `CallerArgResolver` resolves ONE level of callers and returns `UNKNOWN` when a caller passes `push mem [dword ptr [reg]]`: a struct field dereference. Tracing the struct pointer origin (is `reg` a function argument? a network recv return value? a global?) requires a separate pass that `CallerArgResolver` does not perform.
+1. Gap SYNERGY-GAP-004: `CallerArgResolver` resolves ONE level of callers and returns `UNKNOWN` when a caller passes `push mem [dword ptr [reg]]`: a struct field dereference. Tracing the struct pointer origin (is `reg` a function argument? a network recv return value? a global?) requires a separate pass that `CallerArgResolver` does not perform.
 
-2. **Manual multi-level iteration was impractical**: Upgrading a `CANDIDATE` finding to `CONFIRMED` network-injectable requires traversing multiple levels of the call graph. Calling `CallerArgResolver` manually at each level, handling `ARG_PROPAGATED` recursion, detecting `NO_CALLERS`, and stopping at static ceilings is repetitive work that belongs in a module.
+2. Manual multi-level iteration was impractical: Upgrading a `CANDIDATE` finding to `CONFIRMED` network-injectable requires traversing multiple levels of the call graph. Calling `CallerArgResolver` manually at each level, handling `ARG_PROPAGATED` recursion, detecting `NO_CALLERS`, and stopping at static ceilings is repetitive work that belongs in a module.
 
-3. **Network source detection**: `CallerArgResolver` classifies call site arguments but does not check whether any callee in the chain is a network input function `recv`, `recvfrom`, `read`, and `accept`, and so on. This module does, enabling `CANDIDATE → CONFIRMED` upgrades.
+3. Network source detection: `CallerArgResolver` classifies call site arguments but does not check whether any callee in the chain is a network input function `recv`, `recvfrom`, `read`, and `accept`, and so on. This module does, enabling `CANDIDATE → CONFIRMED` upgrades.
 
 ---
 

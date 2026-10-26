@@ -1,8 +1,47 @@
-# Encoding DAG
+# EncodingDAG
+
+  - [What is a DAG Adapter Language?](#what-is-a-dag-adapter-language)
+  - [Why this exists](#why-this-exists)
+  - [Three-layer architecture](#three-layer-architecture)
+  - [Quick start](#quick-start)
+  - [Layer 1: Raw bytes and the I24 integer](#layer-1-raw-bytes-and-the-i24-integer)
+  - [Layer 2: Encoding DAG](#layer-2-encoding-dag)
+    - [Field](#field)
+    - [Template](#template)
+    - [EncodingNode](#encodingnode)
+  - [Layer 3: Semantic DAG](#layer-3-semantic-dag)
+    - [SemanticOp](#semanticop)
+    - [DataflowEdge](#dataflowedge)
+    - [SemanticBlock](#semanticblock)
+  - [ISASpec: Round-Trip Encode and Decode](#isaspec-round-trip-encode-and-decode)
+    - [Binding and FieldBinding](#binding-and-fieldbinding)
+    - [How encode() works](#how-encode-works)
+    - [How decode() works](#how-decode-works)
+  - [ISA-24 bundled example](#isa-24-bundled-example)
+  - [Extending to a new ISA](#extending-to-a-new-isa)
+  - [Real-world usage: PEFABIClobberScanner](#real-world-usage-pefabiclobberscanner)
+  - [Exceptions](#exceptions)
+  - [How it works](#how-it-works)
+  - [Usage](#usage)
+  - [Example output](#example-output)
+  - [False positives](#false-positives)
+  - [Pipeline position](#pipeline-position)
+  - [Reading output](#reading-output)
+  - [See also](#see-also)
+
+---
+
+## What is a DAG Adapter Language? <sup>[↑](#encodingdag)</sup>
+
+A DAG (Directed Acyclic Graph) adapter language defines instruction set architecture semantics as a graph. Each instruction maps to a node in the graph. Edges between nodes represent dataflow: the output of one instruction becomes the input of another. The DAG structure makes instruction semantics composable and traversable without ad-hoc parsing.
+
+Instruction set architectures use fixed-width encodings to pack multiple fields into a single word. A 32-bit RISC instruction typically contains an opcode field, one or two register operands, and an immediate value, each occupying specific bits within the word. Decoding an instruction means extracting these bitfields and interpreting them. Most binary analysis tools do this with hand-written switch statements or regular-expression-like pattern tables: one decode function per instruction format, hundreds of formats per ISA, each written once and never reused.
+
+`EncodingDAG` replaces hand-written decode tables with a three-layer declarative model. Layer 1 extracts raw bitfields from instruction words using a common integer type (`I24`) that represents any field up to 24 bits wide. Layer 2 maps field combinations to semantic operations using `Template` nodes: a `Template` describes which fields combine to produce which semantic operation. Layer 3 connects semantic operations into `SemanticBlock` graphs through `DataflowEdge` connections, giving the analysis a basic-block representation that operates on semantics rather than raw bytes.
+
+The "adapter" term comes from the pattern: each ISA is a separate adapter that maps architecture-specific fields to the common graph representation. Writing a new ISA adapter requires defining its `Field` set, its `Template` set, and its semantic operations. The shared analysis engine then runs against the common representation without modification. This is the principle that allows Ablation to support 30+ ISAs without 30 separate analysis implementations.
 
 **File:** `ablation/analyzers/encoding_dag.py`
-
-The EncodingDAG is a bitfield-to-instruction encoding framework for fixed-width ISAs. It implements a three-layer model: raw bytes map to named bitfields, named bitfields map to semantic operations, and semantic operations link through dataflow edges into basic blocks.
 
 ---
 
@@ -38,7 +77,7 @@ The key property: before the SemanticDAG, taint results were flat sink, source p
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#encodingdag)</sup>
 
 Three things were not possible before in Ablation:
 
@@ -50,7 +89,7 @@ Three things were not possible before in Ablation:
 
 ---
 
-## Three-layer architecture
+## Three-layer architecture <sup>[↑](#encodingdag)</sup>
 
 ```mermaid
 flowchart TD
@@ -81,7 +120,7 @@ flowchart TD
 
 ---
 
-## Quick start
+## Quick start <sup>[↑](#encodingdag)</sup>
 
 ```python
 from ablation.analyzers.encoding_dag import ISA24, SemanticOp
@@ -107,7 +146,7 @@ print(node.show_layout())
 
 ---
 
-## Layer 1: Raw bytes and the I24 integer
+## Layer 1: Raw bytes and the I24 integer <sup>[↑](#encodingdag)</sup>
 
 Layer 1 is the byte representation layer. It normalizes any fixed-width instruction to an
 integer so that `Field` and `Template` arithmetic operates on a single value rather than
@@ -140,12 +179,12 @@ only the byte packing helpers in Layer 1 are width-specific.
 
 ---
 
-## Layer 2: Encoding DAG
+## Layer 2: Encoding DAG <sup>[↑](#encodingdag)</sup>
 
 Layer 2 is the structural layer. It describes how bits are arranged inside an instruction
 and how to pack or unpack them.
 
-### Field
+### Field <sup>[↑](#encodingdag)</sup>
 
 A `Field` represents one named bit range inside an instruction word.
 
@@ -169,7 +208,7 @@ in order until one's fixed fields all match the raw integer.
 The constraint `value < 2**width` is checked at encode time; a value that does not fit
 raises `EncodingError`.
 
-### Template
+### Template <sup>[↑](#encodingdag)</sup>
 
 A Template is a named, MSB-first sequence of Fields representing one instruction form.
 The Fields are listed from the most-significant bit to the least-significant bit; the
@@ -236,7 +275,7 @@ Values:      000100   11       0000     0001    00000000
 Hex: 0x130100  I=1245440
 ```
 
-### EncodingNode
+### EncodingNode <sup>[↑](#encodingdag)</sup>
 
 An `EncodingNode` is an instantiated `Template` and serves as the DAG root. It bundles
 the Template with a concrete set of field values so that the same encoded instruction can
@@ -262,12 +301,12 @@ instruction encoding to a unique integer, making sorted search and clustering ef
 
 ---
 
-## Layer 3: Semantic DAG
+## Layer 3: Semantic DAG <sup>[↑](#encodingdag)</sup>
 
 Layer 3 is the meaning layer. It names what an instruction does and records how the
 result of one instruction flows into the operands of another.
 
-### SemanticOp
+### SemanticOp <sup>[↑](#encodingdag)</sup>
 
 A `SemanticOp` represents one instruction at the semantic level: an operation name, a
 dictionary of typed operands, and an optional node ID that uniquely identifies this
@@ -301,7 +340,7 @@ SemanticOp("ADD",   {"dst": "r0", "src": "r1", "imm": 4},   "n2")
 SemanticOp("STORE", {"src": "r0", "addr": MemRef("r5", 12)}, "n3")
 ```
 
-### DataflowEdge
+### DataflowEdge <sup>[↑](#encodingdag)</sup>
 
 A `DataflowEdge` is an explicit producer-consumer dependency between two `SemanticOp`
 nodes. It records which register carries the value.
@@ -319,7 +358,7 @@ you know which operations exist but not in what order their values depend on eac
 A taint tracker uses edges to propagate taint from source to sink without re-analysing
 register liveness. A lifter uses them to produce correct SSA form.
 
-### SemanticBlock
+### SemanticBlock <sup>[↑](#encodingdag)</sup>
 
 A `SemanticBlock` is a basic block: a named, ordered list of `SemanticOp` nodes plus a
 set of `DataflowEdge` connections.
@@ -375,12 +414,12 @@ except ValueError:
 
 ---
 
-## ISASpec: Round-Trip Encode and Decode
+## ISASpec: Round-Trip Encode and Decode <sup>[↑](#encodingdag)</sup>
 
 `ISASpec` owns a template registry plus `Binding` objects that map semantic op names to
 template names and semantic operand keys to template field names.
 
-### Binding and FieldBinding
+### Binding and FieldBinding <sup>[↑](#encodingdag)</sup>
 
 A `Binding` connects one semantic op name to one `Template`. It lists a `FieldBinding`
 for each variable field, declaring which semantic operand key maps to which template
@@ -426,7 +465,7 @@ spec = ISASpec(
 )
 ```
 
-### How encode() works
+### How encode() works <sup>[↑](#encodingdag)</sup>
 
 `ISASpec.encode(sop)` finds the `Binding` whose op name matches `sop.op`, then:
 
@@ -436,7 +475,7 @@ spec = ISASpec(
 3. Calls `Template.encode(values)` to get the integer.
 4. Returns an `EncodingNodetemplate, values`.
 
-### How decode() works
+### How decode() works <sup>[↑](#encodingdag)</sup>
 
 `ISASpec.decoderaw_bytes` converts bytes to an integer and tries each registered
 `Template` in order:
@@ -463,7 +502,7 @@ enode, sop = spec.decode(node.to_bytes())
 
 ---
 
-## ISA-24 bundled example
+## ISA-24 bundled example <sup>[↑](#encodingdag)</sup>
 
 `ISA24` is a pre-built `ISASpec` for a 24-bit toy ISA bundled with Ablation for testing
 and examples:
@@ -511,7 +550,7 @@ distinguishable by color at a glance.
 
 ---
 
-## Extending to a new ISA
+## Extending to a new ISA <sup>[↑](#encodingdag)</sup>
 
 ```mermaid
 flowchart LR
@@ -582,7 +621,7 @@ references; the root template aggregates sub-templates by concatenating their en
 
 ---
 
-## Real-world usage: PEFABIClobberScanner
+## Real-world usage: PEFABIClobberScanner <sup>[↑](#encodingdag)</sup>
 
 `PEFABIClobberScanner` uses the EncodingDAG to verify PPC32 PEF ABI register usage at
 call sites for `OTStrCat`, `OTStrCopy`, and `OTMemcpy`. The scanner reconstructs each
@@ -599,7 +638,7 @@ instruction encoding.
 
 ---
 
-## Exceptions
+## Exceptions <sup>[↑](#encodingdag)</sup>
 
 | Exception | When raised |
 |---|---|
@@ -608,13 +647,13 @@ instruction encoding.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#encodingdag)</sup>
 
 `EncodingDAG` represents ISA instruction encodings as a three-layer DAG for fixed-width architectures. Layer 1: raw bytes / hex / RGB-integer B0, B1, B2. Layer 2: bitfield template: each node is a named field with width and position, extracted via mask-and-shift. Layer 3: semantic IR: field values mapped to symbolic operands registers, immediates, targets. The DAG structure allows the same bitfield template to be shared across opcodes that differ only in one field, reducing the encoding table size for dense ISAs.
 
 ---
 
-## Usage
+## Usage <sup>[↑](#encodingdag)</sup>
 
 ```python
 from ablation.analyzers.encoding_dag import ISASpec, SemanticOp, SemanticBlock
@@ -623,7 +662,7 @@ from ablation.analyzers.encoding_dag import ISASpec, SemanticOp, SemanticBlock
 op = SemanticOp("LOAD", {"dst": "r0", "base": "r5", "offset": 4}, node_id="n1")
 node = ISA24.encode(op)        # ISA24 is a bundled 24-bit example ISASpec
 print(node.to_hex())           # 0x060504
-print(node.to_rgb())           # (6, 5, 4) — RGB packing matches ISA-24 layout
+print(node.to_rgb())           # (6, 5, 4): RGB packing matches ISA-24 layout
 
 enode, sop = ISA24.decode(bytes.fromhex("060504"))
 print(sop)                     # n1: LOAD dst=r0, base=r5, offset=4
@@ -641,7 +680,7 @@ for op in block.dag_nodes():   # topological order
 
 ---
 
-## Example output
+## Example output <sup>[↑](#encodingdag)</sup>
 
 ```
 # SemanticOp.__str__() per node in the DAG:
@@ -656,13 +695,13 @@ for op in block.dag_nodes():   # topological order
 
 ---
 
-## False positives
+## False positives <sup>[↑](#encodingdag)</sup>
 
 **Fixed-width ISAs only.** `EncodingDAG` assumes all instructions are the same width set at construction time. It does not handle variable-length encodings like x86, nanoMIPS, or ARM Thumb2. Use `NanoMIPSDecoder` for nanoMIPS, Capstone for x86.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#encodingdag)</sup>
 
 **Before this module:** Build the bitfield template table from the ISA reference for example IBM SPU ISA v1.2 for SPU, LoongArch ABI for LA64.
 
@@ -670,7 +709,7 @@ for op in block.dag_nodes():   # topological order
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#encodingdag)</sup>
 
 `ISASpec.encode(sop)` returns an `EncodingNode`:
 
@@ -689,7 +728,7 @@ for op in block.dag_nodes():   # topological order
 
 ---
 
-## See also
+## See also <sup>[↑](#encodingdag)</sup>
 
 - [BinaryContext](binary-context.md): session state and function/import index
 - [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions

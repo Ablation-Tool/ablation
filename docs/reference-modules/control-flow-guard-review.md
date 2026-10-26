@@ -8,7 +8,7 @@ Analyze Windows PE binaries for Control Flow Guard (CFG) bypass opportunities: d
 
 1. **CFG validates indirect call targets against a compiler-built bitmap of valid function entry points: a target not in the bitmap triggers a CFG violation.** When CFG is not enabled at all (`CFGConfig.instrumented() == False`), every `CALL [reg]` and `JMP [reg]` in the binary is unprotected and an attacker can redirect execution to any gadget. `CFGBypassDetector` identifies this condition immediately from the PE's `IMAGE_LOAD_CONFIG_DIRECTORY` flags.
 
-2. **When CFG is enabled but export suppression is missing, all exported functions are automatically added to the valid-target bitmap**: even functions that were never intended as indirect call targets. This expands the attacker's gadget surface from the minimal set of legitimate virtual dispatch targets to the entire export table, which in `ntdll.dll` can be hundreds of useful gadgets.
+2. When CFG is enabled but export suppression is missing, all exported functions are automatically added to the valid-target bitmap: even functions that were never intended as indirect call targets. This expands the attacker's gadget surface from the minimal set of legitimate virtual dispatch targets to the entire export table, which in `ntdll.dll` can be hundreds of useful gadgets.
 
 3. **XFG (eXtended Flow Guard) is a superset of CFG that adds type hashes to call sites and target addresses: `CFGConfig.xfg_enabled()` checks for XFG instrumentation.** Binaries with XFG provide stronger protection than CFG-only binaries; the presence of XFG reduces the exploitability of CFG bypass findings.
 

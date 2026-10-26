@@ -6,11 +6,11 @@ Convert a basic-block CFG into a tree of structured nodes: `SequenceNode`, `IfNo
 
 ## Why this exists
 
-1. **All compiled automotive firmware AUTOSAR classic, plain-C ECU code produces reducible CFGs**: every loop is a natural loop with a single entry. A dominator-driven Relooper variant correctly reconstructs the structured control flow for all such binaries without the arbitrary `goto` insertion that makes naive liftings unreadable to human analysts.
+1. All compiled automotive firmware AUTOSAR classic, plain-C ECU code produces reducible CFGs: every loop is a natural loop with a single entry. A dominator-driven Relooper variant correctly reconstructs the structured control flow for all such binaries without the arbitrary `goto` insertion that makes naive liftings unreadable to human analysts.
 
-2. **`IfNode`, `WhileNode`, `BreakNode`, and `ContinueNode` each carry the controlling condition and the branch targets**: enabling an analyst to read the reconstructed tree as a structured program trace rather than a flat basic-block graph. This is the output consumed by `FuncProfiler.profile()` when generating human-readable function summaries for session documentation.
+2. `IfNode`, `WhileNode`, `BreakNode`, and `ContinueNode` each carry the controlling condition and the branch targets: enabling an analyst to read the reconstructed tree as a structured program trace rather than a flat basic-block graph. This is the output consumed by `FuncProfiler.profile()` when generating human-readable function summaries for session documentation.
 
-3. **`Structurizer` operates on the same CFG representation used by `TaintTracker`**: basic blocks with predecessor/successor edges. Any binary that can be analyzed with `TaintTracker` can have its control flow structured by `Structurizer` without additional preprocessing, using the same `BinaryContext` data.
+3. `Structurizer` operates on the same CFG representation used by `TaintTracker`: basic blocks with predecessor/successor edges. Any binary that can be analyzed with `TaintTracker` can have its control flow structured by `Structurizer` without additional preprocessing, using the same `BinaryContext` data.
 
 ---
 

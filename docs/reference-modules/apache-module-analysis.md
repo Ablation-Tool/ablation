@@ -4,7 +4,7 @@ Analyze Apache 2.x C module binaries (`.so`) for authentication bypass surfaces:
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#apache-module-analysis)</sup>
 
 1. **FortiAnalyzer ships custom Apache modules that bypass MFA via a session skip flag, and no ablation tool could reconstruct the handler call graph before this module existed.** `mod_extension.so` in FortiAnalyzer v7.6.3 contains a `register_hooks()` function that calls `ap_hook_handler()` to register a request handler. That handler reads the `Cookie` header, calls `session_from_string()` → `decrypt_and_auth()` → `session_get_adminuser_skip()`, and skips MFA if the flag is set. Without a tool that can trace `ap_hook_handler` registration → handler function → APR table reads → skip flag calls, this pattern requires full manual disassembly of the `.text` section.
 
@@ -14,7 +14,7 @@ Analyze Apache 2.x C module binaries (`.so`) for authentication bypass surfaces:
 
 ---
 
-## How it works
+## How it works <sup>[↑](#apache-module-analysis)</sup>
 
 ```mermaid
 flowchart TD
@@ -39,7 +39,7 @@ flowchart TD
     linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
-### Symbol sets
+### Symbol sets <sup>[↑](#apache-module-analysis)</sup>
 
 | Set | Symbols |
 |---|---|
@@ -49,7 +49,7 @@ flowchart TD
 | `_SESSION_SKIP_PATTERNS` | `session_get_adminuser_skip`, `session_get_user_is_admin`, `session_get_admin_prof`, `session_skip`, `admin_skip`, `bypass_mfa`, `skip_auth`, `noauth` regex, case-insensitive |
 | `_AUTH_HEADERS` | `Cookie`, `Authorization`, `X-Auth-Token`, `X-Session-Token`, `X-Forwarded-User`, `X-Remote-User`, `X-API-Key`, `CURRENT_SESSION`, `Session` |
 
-### Finding classes
+### Finding classes <sup>[↑](#apache-module-analysis)</sup>
 
 | Class | Severity | CWE | Description |
 |---|---|---|---|
@@ -61,7 +61,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#apache-module-analysis)</sup>
 
 ```python
 from ablation.analyzers.apache_module_analyzer import ApacheModuleAnalyzer, ApacheFinding
@@ -96,7 +96,7 @@ for f in findings:
 
 ---
 
-## Example output
+## Example output <sup>[↑](#apache-module-analysis)</sup>
 
 ```
 [apache_module_analyzer] 7 finding(s)  CRITICAL=1  HIGH=2  INFO=1  LOW=1  MEDIUM=2
@@ -131,7 +131,7 @@ for f in findings:
 
 ---
 
-## False positives
+## False positives <sup>[↑](#apache-module-analysis)</sup>
 
 **`AUTH_BYPASS_SURFACE` fires when all three flags are set, but the skip flag call may be in a path that is only reached via a legitimate code flow.** The composite check does not verify that the skip flag read is reachable from the Cookie table read within the same control-flow path. A module that reads the Cookie header for logging one function path and checks a skip flag in a completely separate conditional another path will trigger `AUTH_BYPASS_SURFACE` because both are in the same 4096-byte disassembly window. Confirm with `PathSolver.solve_path()` from the Cookie read to the skip flag check before escalating.
 
@@ -141,7 +141,7 @@ for f in findings:
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#apache-module-analysis)</sup>
 
 **Before this module:** Run `BinaryContext.load_or_build()` on the `.so` file to build the symbol index. Confirm that `lief` and `capstone` are installed `import lief; import capstone`: if either is missing, `analyze(` returns `[]` silently). Verify the binary is an Apache module by checking for `ap_hook_handler` or `register_hooks` in the dynamic symbol table: `[s.name for s in lief.parse(path).dynamic_symbols]`.
 
@@ -149,7 +149,7 @@ for f in findings:
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#apache-module-analysis)</sup>
 
 | Field | Content |
 |:---|:---|
@@ -163,7 +163,7 @@ for f in findings:
 
 ---
 
-## See also
+## See also <sup>[↑](#apache-module-analysis)</sup>
 
 - [API Authorization Checks](api-authorization-checks.md): HTTP-level authorization probes for the same endpoints this module exposes
 - [Taint Tracking](taint-analysis.md): trace Cookie header data through decrypt → skip flag write to confirm exploitability

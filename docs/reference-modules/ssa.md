@@ -1,6 +1,6 @@
 # SSABuilder
 
-## Why this exists
+## Why this exists <sup>[↑](#ssabuilder)</sup>
 
 1. `trace_arg()` stops with `BSR_RETVAL` when the target register was set by a
    prior call. It cannot follow the taint across a basic block boundary because
@@ -14,7 +14,7 @@
    "what value is in r0 at this RET?" requires traversing the dominator tree and
    tracking phi functions at merge points. This is exactly what SSA provides.
 
-## Constructor
+## Constructor <sup>[↑](#ssabuilder)</sup>
 
 ```python
 SSABuilder(cfg: CFG, arch: ArchConfig)
@@ -33,7 +33,7 @@ cfg  = CFGBuilder(arch, data, base).build(func_va)
 ssa  = SSABuilder(cfg, arch).build()
 ```
 
-## `build()` → `SSAForm`
+## `build()` → `SSAForm` <sup>[↑](#ssabuilder)</sup>
 
 Runs three phases (Cytron et al. 1991):
 
@@ -48,7 +48,7 @@ Runs three phases (Cytron et al. 1991):
    stacks. Assigns a fresh version at each definition; fills phi arguments by
    looking up the current version on entry to each successor.
 
-## `SSAForm` methods
+## `SSAForm` methods <sup>[↑](#ssabuilder)</sup>
 
 ```python
 ssa.reaching_def(reg: str, use_va: int) -> Optional[SSAName]
@@ -73,7 +73,7 @@ ssa.report() -> str
 Human-readable phi summary: block VA, phi result, incoming (pred_va, SSA_name)
 pairs.
 
-## `SSAName`
+## `SSAName` <sup>[↑](#ssabuilder)</sup>
 
 ```python
 @dataclass(frozen=True)
@@ -84,7 +84,7 @@ class SSAName:
 str(SSAName('r0', 3))  # → 'r0_3'
 ```
 
-## Typical usage for DX-001 class findings
+## Typical usage for DX-001 class findings <sup>[↑](#ssabuilder)</sup>
 
 ```python
 from ablation.analyzers.insn_alpha import AlphaEcoffScanner
@@ -111,7 +111,7 @@ for va, block in cfg.blocks.items():
                 print(f'  defined at: {[hex(v) for v in ssa.defs_of(name)]}')
 ```
 
-## Known limitations
+## Known limitations <sup>[↑](#ssabuilder)</sup>
 
 - Version 0 (`r0_0`) means "defined before the function entry" — i.e., a
   function argument or an uninitialized register. Treat it as an external source.

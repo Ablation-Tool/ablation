@@ -8,9 +8,9 @@ Run Ablation's vulnerability detector suite on a freshly compiled binary before 
 
 1. **Address-sanitizers and undefined-behavior-sanitizers run on instrumented builds before optimization: they miss vulnerabilities introduced by optimization passes such as inlined string functions, vectorized memory copies, and dead-code elimination that removes safety checks.** `CompilerSecurityGate.scan()` runs on the optimized release binary, after linking, catching the vulnerabilities that the sanitizer build would not expose.
 
-2. **`CompilerSecurityGate` supports 11 architectures**: x86_64, x86_32, arm32, arm64, MIPS32, MIPS64, PPC32, PPC64, RISC-V 32, RISC-V 64, LoongArch64: with taint analysis adapted to each ISA's calling convention and register set. Additional x86_64-only scanners format string, heap corruption, length underflow run alongside the cross-architecture taint analysis when the binary is x86_64.
+2. `CompilerSecurityGate` supports 11 architectures: x86_64, x86_32, arm32, arm64, MIPS32, MIPS64, PPC32, PPC64, RISC-V 32, RISC-V 64, LoongArch64: with taint analysis adapted to each ISA's calling convention and register set. Additional x86_64-only scanners format string, heap corruption, length underflow run alongside the cross-architecture taint analysis when the binary is x86_64.
 
-3. **Exit code 0 no HIGH/CRITICAL findings or 1 findings present enables CI/CD pipeline integration**: `check(strict=False)` returns the exit code directly. In non-strict mode, MEDIUM and LOW findings do not block the build; in strict mode, any finding blocks. `GateFinding.fmt()` produces a single-line human-readable finding suitable for build log output.
+3. Exit code 0 no HIGH/CRITICAL findings or 1 findings present enables CI/CD pipeline integration: `check(strict=False)` returns the exit code directly. In non-strict mode, MEDIUM and LOW findings do not block the build; in strict mode, any finding blocks. `GateFinding.fmt()` produces a single-line human-readable finding suitable for build log output.
 
 ---
 

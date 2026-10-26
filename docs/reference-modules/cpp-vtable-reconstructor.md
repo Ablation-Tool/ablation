@@ -25,11 +25,11 @@ through the decompiler. There was no batch automation for this.
 
 `CppVtableReconstructorAnalyzer` resolves all three with a single Python call:
 
-1. **VtableScanner**: finds vtables in any ELF using RELA relocations (dynamic) or
+1. VtableScanner: finds vtables in any ELF using RELA relocations (dynamic) or
  code-pointer scanning (static)
-2. **VtableNamer**: names each slot from export symbols, BinaryContext function names,
+2. VtableNamer: names each slot from export symbols, BinaryContext function names,
  string literals, and callee patterns
-3. **CppTypeTracker**: finds every call site that dispatches through any named slot;
+3. CppTypeTracker: finds every call site that dispatches through any named slot;
  groups by enclosing function
 
 Output: a JSON-serialisable result object **and** an IDAPython script that emits
@@ -106,11 +106,11 @@ Each `VtableSpec` records:
 
 Names each slot in place. Attempts in order:
 
-1. **Export / symtab symbol**: direct match on `func_va`
-2. **BinaryContext confirmed name**: from prior RE session `ctx.set_name()` calls
-3. **String literal xref**: if the function body references a string like `"modexp"`,
+1. Export / symtab symbol: direct match on `func_va`
+2. BinaryContext confirmed name: from prior RE session `ctx.set_name()` calls
+3. String literal xref: if the function body references a string like `"modexp"`,
  the slot is named `"modexp"` filtered: no spaces, no `%`, 3–32 chars
-4. **Named callee**: if the function calls e.g. `BN_mod_exp`, the slot is named
+4. Named callee: if the function calls e.g. `BN_mod_exp`, the slot is named
    `"mod_exp"` after stripping the `BN_` prefix
 
 The vtable type name is inferred from the longest common prefix of all named slots,

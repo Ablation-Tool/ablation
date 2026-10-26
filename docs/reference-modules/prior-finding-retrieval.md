@@ -8,9 +8,9 @@ Retrieve relevant prior RE findings from `func_id.db` to inject into the LLM ana
 
 1. **LLM analysis quality degrades significantly without relevant context: a model analyzing an unnamed function called `fn_0x1234` with no prior evidence produces generic output, while the same model given three prior confirmed findings from similar functions in the same product family produces targeted, accurate hypotheses.** `RAGRetriever` bridges the gap by automatically retrieving the most relevant prior records from `func_id.db` before each `AgentLoop.run()` call.
 
-2. **Four retrieval strategies ranked by signal strength ensure the highest-quality context is always retrieved first**: exact VA + binary match the same function confirmed before, highest signal, callee-set overlap for functions in the same family by import usage, role-based match same functional role class, and name fuzzy match LIKE search on the name column. Results from stronger strategies take priority and weaker strategies fill remaining context budget.
+2. Four retrieval strategies ranked by signal strength ensure the highest-quality context is always retrieved first: exact VA + binary match the same function confirmed before, highest signal, callee-set overlap for functions in the same family by import usage, role-based match same functional role class, and name fuzzy match LIKE search on the name column. Results from stronger strategies take priority and weaker strategies fill remaining context budget.
 
-3. **`RAGRetriever` operates entirely on SQLite queries with no vector database requirement**: retrieval runs in milliseconds on `func_id.db` even with thousands of records. This keeps the RE workflow offline-capable and eliminates the operational overhead of running a vector store.
+3. `RAGRetriever` operates entirely on SQLite queries with no vector database requirement: retrieval runs in milliseconds on `func_id.db` even with thousands of records. This keeps the RE workflow offline-capable and eliminates the operational overhead of running a vector store.
 
 ---
 

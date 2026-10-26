@@ -8,9 +8,9 @@ Classify `fork()` callers in x86-64 ELF binaries as `WORKER`, `EXEC_AFTER_FORK`,
 
 1. **Many network daemons fork a child process to handle a connection, then the child enters an event loop that never calls `exec*()`.** `SinkArgClassifier` and `TaintTracker` report `exec*()` sinks in these worker processes as `ARG_PROPAGATED` findings, but the sink is in the parent's code path and the forked child never loads a new image: the finding is not exploitable as a command injection. `ForkExecClassifier.classify()` identifies these as `WORKER` and marks them `ELIMINATED`.
 
-2. **`EXEC_AFTER_FORK` verdict identifies the security-relevant pattern**: child processes that call `exec*()` immediately after `fork()` can be injection vectors if the `exec*()` argument is tainted. The `ForkCallerResult.exec_target` field names the specific `exec` function and `exec_call_va` gives its VA for direct handoff to `TaintTracker`.
+2. `EXEC_AFTER_FORK` verdict identifies the security-relevant pattern: child processes that call `exec*()` immediately after `fork()` can be injection vectors if the `exec*()` argument is tainted. The `ForkCallerResult.exec_target` field names the specific `exec` function and `exec_call_va` gives its VA for direct handoff to `TaintTracker`.
 
-3. **`EXIT_IN_CHILD` verdict identifies `fork()` callers used only for daemonization**: the child calls `exit()` immediately after `fork()` double-fork daemonization pattern. These callers are `ELIMINATED` as injection vectors. Distinguishing them from `WORKER` requires BFS across the child branch, which `ForkExecClassifier.classify_caller()` performs up to its block-walk budget.
+3. `EXIT_IN_CHILD` verdict identifies `fork()` callers used only for daemonization: the child calls `exit()` immediately after `fork()` double-fork daemonization pattern. These callers are `ELIMINATED` as injection vectors. Distinguishing them from `WORKER` requires BFS across the child branch, which `ForkExecClassifier.classify_caller()` performs up to its block-walk budget.
 
 ---
 

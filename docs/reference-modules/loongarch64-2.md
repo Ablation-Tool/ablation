@@ -8,9 +8,9 @@ Detect the GCC 12.3.1.7 LoongArch64 `min`-to-`max` code generation bug: identify
 
 1. **GCC 12.3.1.7-1.tl4 for LoongArch64 emits `maxa, b` when the source calls `mina, b`.** The branchless min/max pattern uses `masknez`/`maskeqz` to select one of two values; correct `min` requires `maskeqz` to select `Ra` when `Ra < Rb` and `masknez` to select `Rb` otherwise. GCC 12.3.1.7 emits the inverted order, producing `max`. This bug appears in TencentOS 4.6 kernel 6.6.119-52.9.tl4 and any other LoongArch64 target compiled with this GCC version.
 
-2. **A second variant uses immediate-compare instructions (`sltui`/`slti`) with a constant**: `minx, CONSTANT` where the bug produces `maxx, CONSTANT`. This is the higher-severity variant: when `CONSTANT` is a buffer size or allocation limit, the wrong (larger) value passed to a memory sink produces a heap overflow. `LA64MaxNotMinScanner.scan()` detects both the register-compare and immediate-compare variants.
+2. A second variant uses immediate-compare instructions (`sltui`/`slti`) with a constant: `minx, CONSTANT` where the bug produces `maxx, CONSTANT`. This is the higher-severity variant: when `CONSTANT` is a buffer size or allocation limit, the wrong (larger) value passed to a memory sink produces a heap overflow. `LA64MaxNotMinScanner.scan()` detects both the register-compare and immediate-compare variants.
 
-3. **`LA64MaxNotMinScanner.from_pe32plus()` supports PE32+ (Windows on LoongArch)**: enabling analysis of LoongArch64 Windows kernel drivers compiled with the same buggy GCC toolchain. This covers LoongArch64 IoT and industrial targets that ship Windows-based firmware.
+3. `LA64MaxNotMinScanner.from_pe32plus()` supports PE32+ (Windows on LoongArch): enabling analysis of LoongArch64 Windows kernel drivers compiled with the same buggy GCC toolchain. This covers LoongArch64 IoT and industrial targets that ship Windows-based firmware.
 
 ---
 

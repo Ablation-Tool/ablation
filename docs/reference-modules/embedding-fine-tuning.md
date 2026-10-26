@@ -10,7 +10,7 @@ Match unknown stripped functions against a behavioral signature library: using t
 
 2. **`SigLibrary` reuses the BERT model already loaded for `SemanticSearcher`**, it calls `SigLibrary.load_model()` which shares the `BAAI/bge-small-en-v1.5` instance if `SemanticSearcher` was already loaded, adding zero startup cost when both tools are used in the same session. All signature descriptions are encoded once at load time (`SigLibrary.load()`), not per-query.
 
-3. **`SigMatch.label()` returns `likely:<name>` rather than just `<name>`**: the `likely:` prefix distinguishes signature-matched names from confirmed symbol names or manually set names in `BinaryContext`. This distinction propagates through all downstream output: `FuncProfiler` CALLS sections show `likely:memcpy` vs confirmed `memcpy`, enabling analysts to assess confidence at a glance.
+3. `SigMatch.label()` returns `likely:<name>` rather than just `<name>`: the `likely:` prefix distinguishes signature-matched names from confirmed symbol names or manually set names in `BinaryContext`. This distinction propagates through all downstream output: `FuncProfiler` CALLS sections show `likely:memcpy` vs confirmed `memcpy`, enabling analysts to assess confidence at a glance.
 
 ---
 

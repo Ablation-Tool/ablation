@@ -4,7 +4,7 @@ Every confirmed finding becomes a search pattern. Every new engagement runs all 
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#the-flywheel)</sup>
 
 Two things went wrong before the flywheel existed:
 
@@ -14,7 +14,7 @@ Two things went wrong before the flywheel existed:
 
 ---
 
-## How it works
+## How it works <sup>[↑](#the-flywheel)</sup>
 
 The flywheel has two halves: storage and replay.
 
@@ -44,9 +44,9 @@ flowchart LR
 
 ---
 
-## The pipeline
+## The pipeline <sup>[↑](#the-flywheel)</sup>
 
-### Step 1: Register a confirmed finding
+### Step 1: Register a confirmed finding <sup>[↑](#the-flywheel)</sup>
 
 ```python
 from ablation.analyzers.finding_registry import FindingRegistry
@@ -68,7 +68,7 @@ reg.register(
 )
 ```
 
-### Step 2: Load confirmed patterns at engagement start
+### Step 2: Load confirmed patterns at engagement start <sup>[↑](#the-flywheel)</sup>
 
 ```python
 from ablation.analyzers.finding_registry import FindingRegistry
@@ -96,7 +96,7 @@ for tag, hits in results.items():
 
 `ingest_from_registry()` is idempotent. Calling it again at the start of a later session adds only findings registered since the previous call.
 
-### Step 3: Find structurally similar prior findings
+### Step 3: Find structurally similar prior findings <sup>[↑](#the-flywheel)</sup>
 
 ```python
 # Query the registry directly for a function embedding
@@ -108,19 +108,19 @@ for h in hits:
 
 ---
 
-## Cross-architecture normalization
+## Cross-architecture normalization <sup>[↑](#the-flywheel)</sup>
 
 BinFuse maps opcodes to 11 behavioral categories before encoding. The category sequence for a heap overflow confirmation in ARM32 (`ARITHMETIC_OP->COMPARISON_OP->CONDITIONAL_OP->MEMORY_OP`) is the same as the sequence for the same class in x86-64 BMC firmware. The BERT embedding trained on these normalized sequences produces similar vectors for structurally similar functions regardless of ISA, so `find_similar()` returns cross-architecture matches without any ISA-specific handling.
 
 ---
 
-## Seed corpus
+## Seed corpus <sup>[↑](#the-flywheel)</sup>
 
 `ablation/data/seed_corpus.json` ships pre-loaded with patterns derived from published CVEs. These seed the flywheel on first install so the pattern library is not empty on a fresh engagement. Confirmed findings from your own work layer on top of the seeds.
 
 ---
 
-## Storage
+## Storage <sup>[↑](#the-flywheel)</sup>
 
 | Path | Contents |
 |---|---|
@@ -130,7 +130,7 @@ BinFuse maps opcodes to 11 behavioral categories before encoding. The category s
 
 ---
 
-## API reference
+## API reference <sup>[↑](#the-flywheel)</sup>
 
 | Call | Description |
 |---|---|
@@ -147,7 +147,7 @@ See [Registry Modules](registry.md) for the full `FindingRegistry` and `NameRegi
 
 ---
 
-## Usage
+## Usage <sup>[↑](#the-flywheel)</sup>
 
 ```python
 from ablation.analyzers.engine_pattern_library import EnginePatternLibrary
@@ -161,7 +161,7 @@ for va, label in sorted(labels.items()):
 
 ---
 
-## Example output
+## Example output <sup>[↑](#the-flywheel)</sup>
 
 ```
 pl.ingest_from_registry(reg)
@@ -185,7 +185,7 @@ reg.find_similar(embedding, top_k=3, min_sim=0.60)
 
 ---
 
-## False positives
+## False positives <sup>[↑](#the-flywheel)</sup>
 
 **Patterns that flood every sweep**: a confirmed finding with a very generic description for example "processes network input" will score above 0.30 against most functions in any network-facing binary. The pattern produces high recall but low precision. Improve it by editing the stored description in `findings.db` to include the specific error condition: memory operation type, size field behavior, and call chain.
 
@@ -193,7 +193,7 @@ reg.find_similar(embedding, top_k=3, min_sim=0.60)
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#the-flywheel)</sup>
 
 **Before this module:** `FindingRegistry` must have at least one confirmed finding for `ingest_from_registry()` to add anything beyond the seed corpus. `SemanticSearcher.build_corpus()` must be called so `sweep()` has an embedding matrix to query against.
 
@@ -201,7 +201,7 @@ reg.find_similar(embedding, top_k=3, min_sim=0.60)
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#the-flywheel)</sup>
 
 The flywheel has no single output type. It is an operational loop between three modules:
 
@@ -213,7 +213,7 @@ See [Finding Validation](finding-validation.md) and [Registry](registry.md) for 
 
 ---
 
-## See also
+## See also <sup>[↑](#the-flywheel)</sup>
 
 - [BinaryContext](binary-context.md): session foundation for all analysis
 - [SemanticSearch](semantic-search.md): function candidate identification

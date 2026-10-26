@@ -8,7 +8,7 @@ Decode Synopsys DesignWare ARC 700 / ARC HS variable-length firmware: discrimina
 
 1. **Capstone 5.x does not support `CS_ARCH_ARC`.** The ARC architecture (Synopsys DesignWare ARC 700/HS) is used in embedded IoT devices, network processors, and automotive ECUs. Without `arc_decoder.py`, ARC firmware cannot be disassembled at all in the standard pipeline.
 
-2. **ARC uses a mixed 16/32-bit encoding**: `op5 = hw0 >> 11 & 0x1f`; values ≥ 24 (0x18) indicate 16-bit "compact" instructions. This single-check width discriminant is O(1) per instruction, enabling fast sequential decode of large ARC firmware images. `ARCDecoder.decode_frames()` implements this discriminant along with control-flow hints for `BL`, `J`, and branch groups.
+2. ARC uses a mixed 16/32-bit encoding: `op5 = hw0 >> 11 & 0x1f`; values ≥ 24 (0x18) indicate 16-bit "compact" instructions. This single-check width discriminant is O(1) per instruction, enabling fast sequential decode of large ARC firmware images. `ARCDecoder.decode_frames()` implements this discriminant along with control-flow hints for `BL`, `J`, and branch groups.
 
 3. **`ARCDecoder.has_full_decode()` transparently upgrades to full Capstone decoding** when `capstone` with `CS_ARCH_ARC` is available capstone next branch, providing complete operand-level disassembly without requiring changes to calling code. This future-proofs the API: callers always call `decode_frames()`, and the level of detail improves automatically when the dependency becomes available.
 

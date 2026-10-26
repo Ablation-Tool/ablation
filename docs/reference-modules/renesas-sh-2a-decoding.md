@@ -10,7 +10,7 @@ Decode Renesas SH-2A firmware for SH7058/SH7059 MCUs: distinguishing 16-bit fixe
 
 2. **SH-2A is the core in Renesas SH7058/SH7059 MCUs found in Honda CBR250RR ECU type 38770-K87-J01 and Subaru targets in the EcuFlash corpus.** `EcuSH2aDecoder` provides the same `function_starts()` interface as `EcuM68kDecoder` and `EcuVLEDecoder`: allowing the same downstream taint analysis pipeline to process SH-2A targets without ISA-specific dispatch.
 
-3. **SH-2A instruction width discrimination is first-halfword-based**: the upper 4 bits of the first 16-bit halfword identify whether the full instruction is 32-bit. `EcuSH2aDecoder.insn_length(offset)` performs this check in O(1), enabling efficient sequential decoding of large flat ROM images.
+3. SH-2A instruction width discrimination is first-halfword-based: the upper 4 bits of the first 16-bit halfword identify whether the full instruction is 32-bit. `EcuSH2aDecoder.insn_length(offset)` performs this check in O(1), enabling efficient sequential decoding of large flat ROM images.
 
 ---
 

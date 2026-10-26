@@ -4,7 +4,7 @@ Recover function entry points in stripped ARM32 ELF binaries: where `.eh_frame`,
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#stripped-function-discovery)</sup>
 
 1. **Stripped ARM32 firmware has no reliable function boundary information.** On x86-64, `.eh_frame` records unwind information for every function, and `BinaryContext` uses it to recover function starts even in stripped binaries. On ARM32, `.eh_frame` is frequently absent in embedded firmware Fortinet switches, older Cisco routers, embedded IoT devices. Without it, `func_starts` is populated only from export symbols and call targets: missing many internal functions entirely.
 
@@ -14,7 +14,7 @@ Recover function entry points in stripped ARM32 ELF binaries: where `.eh_frame`,
 
 ---
 
-## How it works
+## How it works <sup>[↑](#stripped-function-discovery)</sup>
 
 The scanner determines the instruction set mode from the binary's entry point: if bit 0 of the entry point is set, the binary starts in Thumb mode; if clear, ARM32 mode. Two distinct scan paths follow:
 
@@ -50,7 +50,7 @@ flowchart TD
     linkStyle 10 stroke:#2e7d32,stroke-width:3px
 ```
 
-### ARM32 prologue pattern
+### ARM32 prologue pattern <sup>[↑](#stripped-function-discovery)</sup>
 
 ARM32 `STMFD r13!, {rN.., lr}` Push multiple registers including LR onto the stack encodes as:
 
@@ -60,11 +60,11 @@ ARM32 `STMFD r13!, {rN.., lr}` Push multiple registers including LR onto the sta
 
 In little-endian memory, bytes 2–3 are always `\x2d\xe9`. The LR bit register 14, bit 14 of the register list field lives in bit 6 of byte 1 (`text[insn_start + 1] & 0x40`). The scanner searches for the `\x2d\xe9` sentinel, steps back 2 bytes to the instruction start, checks 4-byte alignment, and checks the LR bit.
 
-### Thumb-2 prologue pattern
+### Thumb-2 prologue pattern <sup>[↑](#stripped-function-discovery)</sup>
 
 Thumb-2 `STMDB SP!, {rN.., lr}` is a 32-bit Thumb-2 instruction. The first halfword is `0xE92D` (encoded as `\x2d\xe9` in little-endian), identical to the sentinel used in ARM32 scanning. The register list is in the second halfword; the LR bit is bit 14 of that halfword, which lands at `text[pos + 3] & 0x40`. Alignment is 2 bytes (Thumb) rather than 4 (ARM32).
 
-### Thumb-1 prologue pattern
+### Thumb-1 prologue pattern <sup>[↑](#stripped-function-discovery)</sup>
 
 Thumb-1 `PUSH {rlist, lr}` is a 16-bit instruction encoded as:
 ```
@@ -74,7 +74,7 @@ The `0xB5` byte bit 8 = LR, bits 13–15 = `101` for the PUSH opcode is the high
 
 ---
 
-## ARM32FunctionScanner
+## ARM32FunctionScanner <sup>[↑](#stripped-function-discovery)</sup>
 
 ```python
 from ablation.analyzers.arm32_function_scanner import ARM32FunctionScanner
@@ -97,7 +97,7 @@ print(f"Added {added} new function starts to BinaryContext")
 
 ---
 
-## Usage
+## Usage <sup>[↑](#stripped-function-discovery)</sup>
 
 ```python
 from ablation.analyzers.arm32_function_scanner import ARM32FunctionScanner
@@ -124,7 +124,7 @@ findings = heap.scan()
 
 ---
 
-## Example output
+## Example output <sup>[↑](#stripped-function-discovery)</sup>
 
 ```
 ARM32FunctionScanner: 843 function starts found
@@ -137,7 +137,7 @@ Injection: added 312 new function starts to BinaryContext
 
 ---
 
-## False positives
+## False positives <sup>[↑](#stripped-function-discovery)</sup>
 
 **Non-function PUSH prologues.** Compiler-generated code occasionally emits `PUSH {rN.., lr}` inside switch statement jump tables or initializer blocks that are not function entries. These produce valid PUSH encodings at the right alignment but are not actual function starts. The count will be slightly inflated typically 1–5% above the true function count. Manual disassembly of suspicious entries quickly confirms whether they are entry points.
 
@@ -147,7 +147,7 @@ Injection: added 312 new function starts to BinaryContext
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#stripped-function-discovery)</sup>
 
 **Before this module:** `BinaryContext.load_or_build()` to establish the baseline `func_starts` from `.eh_frame` and export symbols. Check `lenctx.func_starts`: if it is low relative to binary size for example fewer than 100 functions in a 1MB ARM32 binary, prologue scanning is needed.
 
@@ -155,7 +155,7 @@ Injection: added 312 new function starts to BinaryContext
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#stripped-function-discovery)</sup>
 
 | Field | Content |
 |:---|:---|
@@ -165,7 +165,7 @@ Injection: added 312 new function starts to BinaryContext
 
 ---
 
-## See also
+## See also <sup>[↑](#stripped-function-discovery)</sup>
 
 - [Binary Context](binary-context.md): provides baseline `func_starts`; inject results here
 - [Stripped Go x86-64 Boundaries](stripped-go-x86-64-boundaries.md): equivalent for stripped Go x86-64 binaries pclntab recovery

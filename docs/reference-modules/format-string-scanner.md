@@ -1,10 +1,30 @@
-# Format String Scanner
+# FormatStringScanner
 
-Detect printf-family call sites where the format argument is not a string literal, flagging attacker-controlled format strings in x86-64 ELF firmware binaries.
+  - [What is format string analysis?](#what-is-format-string-analysis)
+  - [Why this exists](#why-this-exists)
+  - [How it works](#how-it-works)
+  - [FormatStringScanner](#formatstringscanner-1)
+    - [Covered format functions](#covered-format-functions)
+  - [Usage](#usage)
+  - [Example output](#example-output)
+  - [False positives](#false-positives)
+  - [Pipeline position](#pipeline-position)
+  - [Reading findings](#reading-findings)
+  - [See also](#see-also)
+
+**File:** `ablation/analyzers/format_string_scanner.py`
 
 ---
 
-## Why this exists
+## What is format string analysis? <sup>[↑](#formatstringscanner)</sup>
+
+A format string vulnerability (CWE-134) occurs when an attacker-controlled string reaches a `printf`-family function as the format argument rather than as a value argument. The format argument controls the number and types of values read from or written to memory. An attacker who controls it can read arbitrary stack memory with `%x` specifiers and write to arbitrary addresses with `%n`. Unlike buffer overflows, format string bugs are often pre-authentication, require no heap spray, and are exploitable without knowing the binary's base address.
+
+The critical fact that makes format string bugs tractable to detect statically: the format argument and value arguments occupy different positions in the ABI. For `printf(fmt, ...)`, `fmt` is in `rdi`. For `snprintf(buf, n, fmt, ...)`, `fmt` is in `rdx`. Whether a particular call site is safe depends on whether `fmt` holds a pointer into `.rodata` (a string constant the attacker cannot control) or a register value that traces back to attacker-supplied input. This is a backward-dataflow question over the single function containing the call site.
+
+`FormatStringScanner` answers that question at scale. It walks every `func_starts` entry in `BinaryContext`, disassembles up to 4096 bytes, identifies every `CALL` instruction whose target is a format-string sink, and walks backward up to 20 instructions to classify the format register's provenance. The result is a list of `FmtStringFinding` records sorted by severity so the analyst can triage HIGH findings (entry-argument passthrough) before spending time on MEDIUM findings (stack loads or unresolved origins).
+
+## Why this exists <sup>[↑](#formatstringscanner)</sup>
 
 1. **Format string vulnerabilities are invisible to import-list audits.** Seeing `printf` or `syslog` in a binary's import table tells you nothing about whether those calls are safe. The only thing that matters is whether the format argument is a string literal from `.rodata` or a value the attacker can influence. There was no tool in Ablation that answered that question automatically across an entire firmware image.
 
@@ -14,7 +34,7 @@ Detect printf-family call sites where the format argument is not a string litera
 
 ---
 
-## How it works
+## How it works <sup>[↑](#formatstringscanner)</sup>
 
 The scanner operates in three stages: **sink enumeration**, **per-function disassembly**, and **backwards register tracing**.
 
@@ -86,7 +106,7 @@ flowchart TD
 
 ---
 
-## FormatStringScanner
+## FormatStringScanner <sup>[↑](#formatstringscanner)</sup>
 
 ```python
 from ablation.analyzers.format_string_scanner import FormatStringScanner
@@ -103,7 +123,7 @@ findings = scanner.scan()
 print(scanner.report(findings))
 ```
 
-### Covered format functions
+### Covered format functions <sup>[↑](#formatstringscanner)</sup>
 
 | Function | fmt register | Notes |
 |---|---|---|
@@ -119,7 +139,7 @@ To add a custom logging function: extend `_build_fmt_funcs()` in the source or s
 
 ---
 
-## Usage
+## Usage <sup>[↑](#formatstringscanner)</sup>
 
 ```python
 from ablation.analyzers.format_string_scanner import FormatStringScanner
@@ -141,7 +161,7 @@ for f in findings:
 
 ---
 
-## Example output
+## Example output <sup>[↑](#formatstringscanner)</sup>
 
 ```
 [format_string_scanner] 3 finding(s)  HIGH=1  MED=2
@@ -153,7 +173,7 @@ for f in findings:
 
 ---
 
-## False positives
+## False positives <sup>[↑](#formatstringscanner)</sup>
 
 **Stack loads that are always constants.** The scanner flags `rbp-0x20` loads as MEDIUM regardless of whether the value stored there is always a string literal. When the containing function writes a constant string into a stack buffer and then passes it to printf, the scanner raises MEDIUM even though the call is safe. Verify by disassembling the function and checking what writes to that stack slot.
 
@@ -163,7 +183,7 @@ for f in findings:
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#formatstringscanner)</sup>
 
 **Before this module:** `BinaryContext.load_or_build()` to supply `func_starts` and the PLT symbol map.
 
@@ -171,7 +191,7 @@ for f in findings:
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#formatstringscanner)</sup>
 
 | Field | Content |
 |:---|:---|
@@ -186,7 +206,7 @@ for f in findings:
 
 ---
 
-## See also
+## See also <sup>[↑](#formatstringscanner)</sup>
 
 - [Taint Analysis](taint-analysis.md): confirm HIGH findings are reachable from attacker-controlled network input
 - [Sink Arg Classifier](sink-arg-classifier.md): pre-classify all sink call sites as RODATA_CONST / ARG_PROPAGATED before running the full scanner

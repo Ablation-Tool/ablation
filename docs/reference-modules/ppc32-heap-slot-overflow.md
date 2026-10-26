@@ -10,7 +10,7 @@ Detect argument register clobber in PPC32 PEF/CFM binaries: finding call sites w
 
 2. **PEF CFM binaries use the Mac Classic PPC32 ABI where r3–r10 are volatile caller-saved argument registers.** An intermediate `bl` call is permitted to clobber any of these registers. Compilers ensure the outer arguments are reloaded before the outer call, but handwritten or decompiler-produced code sometimes omits the reload. `PEFABIClobberScanner.scan()` finds every site where the reload is missing.
 
-3. **`ABIClobberFinding.fmt()` includes the clobbered register, the clobbering instruction VA, and the outer call target**: providing the exact three-way triple needed for a confirmation byte-trace: write-VA → clobber-VA → outer-call-VA. This is sufficient to generate a PoC payload that exploits the clobbered argument.
+3. `ABIClobberFinding.fmt()` includes the clobbered register, the clobbering instruction VA, and the outer call target: providing the exact three-way triple needed for a confirmation byte-trace: write-VA → clobber-VA → outer-call-VA. This is sufficient to generate a PoC payload that exploits the clobbered argument.
 
 ---
 

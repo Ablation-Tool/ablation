@@ -8,9 +8,9 @@ Build a unified import/export graph for all ELF binaries in a firmware directory
 
 1. **`TaintTracker` and `CrossBinaryTaintTracker` need to know which binaries import a given symbol to perform cross-binary taint analysis.** Without `LibGraph`, identifying all callers of `ssl_read()` across 80 firmware libraries requires running `BinaryContext.load_or_build()` on each library separately. `LibGraph.from_dir()` builds the full import/export matrix for all libraries in one call: subsequent `callers_of()` queries are O(1) lookups.
 
-2. **`LibGraph.from_dir()` caches `BinaryContext` hits at ~110ms per binary**: enabling fast re-use across sessions without rebuilding the full context for each library. The cache hit rate for a stable firmware image is ~100%, making the second and subsequent `LibGraph.from_dir()` calls near-instant.
+2. `LibGraph.from_dir()` caches `BinaryContext` hits at ~110ms per binary: enabling fast re-use across sessions without rebuilding the full context for each library. The cache hit rate for a stable firmware image is ~100%, making the second and subsequent `LibGraph.from_dir()` calls near-instant.
 
-3. **`LibGraph` is the resolution layer used by `CrossBinaryTaintTracker`**: when a taint path exits one binary via a PLT stub, `CrossBinaryTaintTracker` calls `lib_graph.callers_of()` to find the implementing binary and VA, then continues taint propagation there. `LibGraph` is not optional for cross-binary taint analysis; it is the mandatory dependency.
+3. `LibGraph` is the resolution layer used by `CrossBinaryTaintTracker`: when a taint path exits one binary via a PLT stub, `CrossBinaryTaintTracker` calls `lib_graph.callers_of()` to find the implementing binary and VA, then continues taint propagation there. `LibGraph` is not optional for cross-binary taint analysis; it is the mandatory dependency.
 
 ---
 

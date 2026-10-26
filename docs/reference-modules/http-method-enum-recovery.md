@@ -10,7 +10,7 @@ Analyze Apache C module binaries (`.so` files built against APR/APRUTIL) for sec
 
 2. **Apache modules export hook registration functions `register_hooks`, `module_name_module` and register callbacks via `ap_hook_check_access`/`ap_hook_check_access_ex`/`ap_hook_auth_checker`.** `ApacheModuleAnalyzer.from_path()` identifies these registration sites and maps each hook to its handler function VA, enabling `FuncProfiler` to analyze exactly the handler function, not the full module.
 
-3. **`ApacheModuleAnalyzer.scan()` looks for authentication skip patterns in hook handlers**: `DECLINED` returns (-1) before any credential validation, `r->notes` flag checks that bypass the authentication flow, and `apr_table_get(r->notes, "skip_auth")` patterns. These patterns are the structural signature of auth bypass vulnerabilities in Apache C modules.
+3. `ApacheModuleAnalyzer.scan()` looks for authentication skip patterns in hook handlers: `DECLINED` returns (-1) before any credential validation, `r->notes` flag checks that bypass the authentication flow, and `apr_table_get(r->notes, "skip_auth")` patterns. These patterns are the structural signature of auth bypass vulnerabilities in Apache C modules.
 
 ---
 

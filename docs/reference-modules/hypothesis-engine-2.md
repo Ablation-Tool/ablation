@@ -4,7 +4,7 @@ Coordinate the analysis session lifecycle for a single binary: accepting typed h
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#hypothesis-engine)</sup>
 
 1. **Binary RE sessions on stripped firmware accumulate evidence from many analyzers, and without a structured way to associate evidence with competing hypotheses, analysts either over-rely on a single tool's output or lose track of which observations support or contradict each other.** `HypothesisEngine` models competing hypotheses as first-class objects with Bayesian confidence scores. Evidence from `ARM64TaintTracker`, `SemanticSearcher`, `CFGBuilder`, and `XRefGraph` all update the same hypothesis pool via `add_evidence()`, so the confidence scores reflect the full evidence base rather than any single analyzer's finding.
 
@@ -14,7 +14,7 @@ Coordinate the analysis session lifecycle for a single binary: accepting typed h
 
 ---
 
-## How it works
+## How it works <sup>[↑](#hypothesis-engine)</sup>
 
 ```mermaid
 flowchart TD
@@ -39,7 +39,7 @@ flowchart TD
     linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
-### ConfidenceState transitions
+### ConfidenceState transitions <sup>[↑](#hypothesis-engine)</sup>
 
 | Status | Confidence threshold | Description |
 |---|---|---|
@@ -52,7 +52,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#hypothesis-engine)</sup>
 
 ```python
 from ablation.analyzers.hypothesis_engine import HypothesisEngine
@@ -124,7 +124,7 @@ engine2 = HypothesisEngine.load('/tmp/firmware_session.json')
 
 ---
 
-## Example output
+## Example output <sup>[↑](#hypothesis-engine)</sup>
 
 ```
 plan() output:
@@ -149,7 +149,7 @@ report() excerpt:
 
 ---
 
-## False positives
+## False positives <sup>[↑](#hypothesis-engine)</sup>
 
 **`ConfidenceState.CONFIRMED` at `confidence ≥ 0.90` does not guarantee correctness, it reflects evidence quality, not ground truth.** A hypothesis reaches CONFIRMED when sufficient supporting evidence accumulates. If the supporting evidence comes from analyzers with high reliability scores but the underlying observation is wrong for example a semantic search returning a false positive, the hypothesis can be CONFIRMED incorrectly. Always byte-verify CONFIRMED indirect call targets with `data[off:off+n] == expected_bytes` before recording findings.
 
@@ -159,7 +159,7 @@ report() excerpt:
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#hypothesis-engine)</sup>
 
 **Before this module:** Run initial triage tools: `BinaryContext.summary()`, `SemanticSearcher.query()`: to form initial hypotheses. `HypothesisEngine.from_binary()` should be created before committing to a hypothesis direction; seeding early with multiple competing claims prevents confirmation bias in the subsequent probe selection.
 
@@ -167,7 +167,7 @@ report() excerpt:
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#hypothesis-engine)</sup>
 
 | Field | Content |
 |:---|:---|
@@ -180,7 +180,7 @@ report() excerpt:
 
 ---
 
-## See also
+## See also <sup>[↑](#hypothesis-engine)</sup>
 
 - [Analyzer Probe Adapters](analyzer-probe-adapters.md): concrete adapters that execute probes against BinaryContext Milestone 3
 - [Evidence Scorer](evidence-scorer.md): Bayesian scoring model that maps evidence strength × reliability → confidence update

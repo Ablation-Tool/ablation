@@ -2,11 +2,11 @@
 
 ## Why this exists
 
-1. **Capstone linear scan failure**: Capstone `cs.disasm()` stops at any embedded trap instruction or NULL-word function table in `.text`. For `yppasswd` (AIX 4.3.3 ML11, 15226 bytes), Capstone returned 43 of 2658 instructions; the embedded `tweq r1,r1` + NULL-word function table at 0x100001ac was the root cause. All callers-of() results from that session were wrong.  Gap ID: **AIX-XCOFF32-GAP-001**.
+1. Capstone linear scan failure: Capstone `cs.disasm()` stops at any embedded trap instruction or NULL-word function table in `.text`. For `yppasswd` (AIX 4.3.3 ML11, 15226 bytes), Capstone returned 43 of 2658 instructions; the embedded `tweq r1,r1` + NULL-word function table at 0x100001ac was the root cause. All callers-of() results from that session were wrong.  Gap ID: **AIX-XCOFF32-GAP-001**.
 
-2. **XCOFF32Info coupling**: `XCOFF32Info.callers_of()` (aix_bff_extractor.py) already uses a stride scan but couples it to `XCOFF32Info`'s own parse path. It doesn't integrate with `XcoffBinary` (xcoff_parser.py) or `BinaryContext`.
+2. XCOFF32Info coupling: `XCOFF32Info.callers_of()` (aix_bff_extractor.py) already uses a stride scan but couples it to `XCOFF32Info`'s own parse path. It doesn't integrate with `XcoffBinary` (xcoff_parser.py) or `BinaryContext`.
 
-3. **Auto stub naming**: After LDREL classification (`classify_toc_slots()`), stub VAs can be auto-named and all import call sites found in a single `.text` pass.
+3. Auto stub naming: After LDREL classification (`classify_toc_slots()`), stub VAs can be auto-named and all import call sites found in a single `.text` pass.
 
 ## Usage
 

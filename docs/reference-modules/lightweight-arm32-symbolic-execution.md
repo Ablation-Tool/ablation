@@ -8,9 +8,9 @@ Classify exec-class sink argument provenance in ARM32 ELF binaries: producing th
 
 1. **`SinkArgClassifier` hardcodes x86-64 registers `rdi`, `rsi`, `rdx`.** ARM32 AAPCS passes the first four arguments in `r0`–`r3`. The gap was documented as `ARM-SNMP-GAP-001`: running `SinkArgClassifier` on ARM32 targets produced `UNKNOWN` for all sinks because the classification logic looked for `rdi` assignments and found none. `SinkArgClassifierARM32` resolves this.
 
-2. **AAPCS `r0`–`r3` follow the same four-verdict model**: `RODATA_CONST` argument is a PC-relative literal pool load or immediate, `SNPRINTF_RODATA` (argument is a stack buffer written by `snprintf` with RODATA format string), `ARG_PROPAGATED` (traces back to the function's own `r0`–`r3` entry), `UNKNOWN` provenance not resolved within look-back window. This matches the x86-64 verdict semantics exactly.
+2. AAPCS `r0`–`r3` follow the same four-verdict model: `RODATA_CONST` argument is a PC-relative literal pool load or immediate, `SNPRINTF_RODATA` (argument is a stack buffer written by `snprintf` with RODATA format string), `ARG_PROPAGATED` (traces back to the function's own `r0`–`r3` entry), `UNKNOWN` provenance not resolved within look-back window. This matches the x86-64 verdict semantics exactly.
 
-3. **`SinkArgClassifierARM32.classify_all()` returns one `SinkClassification` per exec-class sink call site**: enabling `TaintTracker` to skip `RODATA_CONST` findings before running the full taint analysis. This is the mandatory pre-filtering step for ARM32 firmware: running `TaintTracker` without pre-filtering wastes analysis time on confirmed-safe sinks.
+3. `SinkArgClassifierARM32.classify_all()` returns one `SinkClassification` per exec-class sink call site: enabling `TaintTracker` to skip `RODATA_CONST` findings before running the full taint analysis. This is the mandatory pre-filtering step for ARM32 firmware: running `TaintTracker` without pre-filtering wastes analysis time on confirmed-safe sinks.
 
 ---
 

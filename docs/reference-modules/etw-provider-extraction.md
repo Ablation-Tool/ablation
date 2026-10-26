@@ -8,9 +8,9 @@ Enumerate Event Tracing for Windows (ETW) provider registrations and event write
 
 1. **Security products, EDRs, and Windows kernel telemetry pipelines use ETW as their primary event feed: a binary performing security-relevant operations without ETW writes is invisible to these products.** `ETWProviderExtractor.scan()` cross-references functions that perform dangerous operations file write, registry modification, process creation, network connection against nearby ETW `EventWrite` call sites, reporting functions with no ETW coverage as detection gaps.
 
-2. **`ETWProviderExtractor.providers()` extracts all ETW provider registrations from `EventRegister` call sites**: reading the provider GUID from the first argument and matching against a table of known security-relevant ETW providers Microsoft-Windows-Security-Auditing, Microsoft-Antimalware-Scan-Interface, and similar. A binary that re-registers a known security provider GUID or uses `EventUnregister` immediately after registration may be evading telemetry collection.
+2. `ETWProviderExtractor.providers()` extracts all ETW provider registrations from `EventRegister` call sites: reading the provider GUID from the first argument and matching against a table of known security-relevant ETW providers Microsoft-Windows-Security-Auditing, Microsoft-Antimalware-Scan-Interface, and similar. A binary that re-registers a known security provider GUID or uses `EventUnregister` immediately after registration may be evading telemetry collection.
 
-3. **`write_site_count()` returns the total number of `EventWrite` call sites**: a binary with many security-relevant operations and zero `EventWrite` calls is a strong indicator of intentional telemetry evasion or an unmonitored attack surface that security products cannot observe.
+3. `write_site_count()` returns the total number of `EventWrite` call sites: a binary with many security-relevant operations and zero `EventWrite` calls is a strong indicator of intentional telemetry evasion or an unmonitored attack surface that security products cannot observe.
 
 ---
 

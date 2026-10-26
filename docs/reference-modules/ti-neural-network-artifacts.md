@@ -8,7 +8,7 @@ Detect TVM-generated `tvmgen_*` inference symbols in TI MCU firmware compiled by
 
 1. **Firmware that runs embedded ML inference has a larger attack surface than firmware without ML.** A `tvmgen_*` symbol indicates that the binary includes a compiled ML model. The inference operator `tvmgen_default_fused_nn_conv2d`, `tvmgen_default_fused_nn_dense` names the operation type and indirectly the input tensor shape: both relevant for assessing the firmware's input handling complexity and the attack surface of the inference path.
 
-2. **TI NNC targets both ELF and COFF2 binary formats**: Cortex-M33/M4/R5 and C29x targets produce ELF; C28x F28P55x targets produce COFF2. `TiNNCScanner` handles both through a unified `NormSymbol` interface: ELF via `lief`, COFF2 via `TiCoffLoader`. This single API covers all TI NNC target architectures without requiring the caller to know the binary format.
+2. TI NNC targets both ELF and COFF2 binary formats: Cortex-M33/M4/R5 and C29x targets produce ELF; C28x F28P55x targets produce COFF2. `TiNNCScanner` handles both through a unified `NormSymbol` interface: ELF via `lief`, COFF2 via `TiCoffLoader`. This single API covers all TI NNC target architectures without requiring the caller to know the binary format.
 
 3. **`TiNNCScanResult.modules`** lists all detected `TiNNCModule` entries: each with the operator name, symbol VA, and inferred tensor dimensions from operator name parsing. `TiNNCScanFinding` records security-relevant observations: large tensor sizes that require heap allocation, extern data symbols that indicate off-chip tensor storage, and mismatched operator/symbol-name patterns.
 

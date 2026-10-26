@@ -6,11 +6,11 @@ Lift native binary functions to annotated C pseudocode across 18 ISA variants: p
 
 ## Why this exists
 
-1. **ARM64 and x86-64 are supported with register-tracking state machines**: `BinaryLifter.lift_function()` on an ARM64 or x86-64 target produces C pseudocode with named registers, argument propagation, and calling convention annotations. This is the output consumed by `FuncProfiler.profile()` when generating human-readable function summaries for session documentation.
+1. ARM64 and x86-64 are supported with register-tracking state machines: `BinaryLifter.lift_function()` on an ARM64 or x86-64 target produces C pseudocode with named registers, argument propagation, and calling convention annotations. This is the output consumed by `FuncProfiler.profile()` when generating human-readable function summaries for session documentation.
 
 2. **Structural pseudocode for the remaining 16 ISAs** resolves calls, returns, and branches with correct target names from `BinaryContext.name()`, and emits arithmetic as comments. This provides navigable pseudocode for PPC32/64, MIPS32/64, ARM32, Thumb, x86-32, and others without requiring a full decompiler: sufficient for confirming a taint path or verifying a sink call argument.
 
-3. **`BinaryLifter.with_taintfindings` annotates the lifted pseudocode with taint findings**: inserting inline comments at the exact lines where `TaintTracker` findings were confirmed, combining the human-readable pseudocode with machine-generated taint evidence into a single artifact for finding documentation.
+3. `BinaryLifter.with_taintfindings` annotates the lifted pseudocode with taint findings: inserting inline comments at the exact lines where `TaintTracker` findings were confirmed, combining the human-readable pseudocode with machine-generated taint evidence into a single artifact for finding documentation.
 
 ---
 

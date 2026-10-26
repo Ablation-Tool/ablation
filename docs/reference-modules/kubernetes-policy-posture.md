@@ -8,7 +8,7 @@ Enumerate Kubernetes RBAC wildcard bindings, cluster-admin grants, privileged po
 
 1. **RBAC misconfiguration is the primary lateral movement vector in Kubernetes clusters.** `check_rbac_clusteradmin()` lists all `ClusterRoleBinding` and `RoleBinding` entries that grant `cluster-admin` or use wildcard verbs/resources (`"*"`). Wildcard grants are frequently introduced by Helm charts or operators that use convenience RBAC for deployment and are never tightened after installation.
 
-2. **`check_network_policies()` identifies namespaces with no `NetworkPolicy` objects**: the default Kubernetes behavior with no network policy is to allow all pod-to-pod traffic across all namespaces. This means a compromised pod in a namespace without network policies can reach any other pod in the cluster. A namespace with zero `NetworkPolicy` objects is a flat network.
+2. `check_network_policies()` identifies namespaces with no `NetworkPolicy` objects: the default Kubernetes behavior with no network policy is to allow all pod-to-pod traffic across all namespaces. This means a compromised pod in a namespace without network policies can reach any other pod in the cluster. A namespace with zero `NetworkPolicy` objects is a flat network.
 
 3. **`check_pod_security_admission()` and `check_privileged_pods()`** identify the two privilege escalation paths that survive RBAC hardening: pods that run as root (`runAsNonRoot: false` or absent), pods with `privileged: true` in their `securityContext`, and namespaces configured with `pod-security.kubernetes.io/enforce: privileged`. A privileged pod with `hostPID: true` provides root on the underlying node.
 

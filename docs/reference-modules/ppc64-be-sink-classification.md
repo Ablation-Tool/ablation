@@ -10,7 +10,7 @@ Classify PPC64 big-endian ELFv1 `bl` branch-link call sites to dangerous sinks: 
 
 2. **PPC64 uses `r3`/`r4`/`r5` for arguments 0–2 (not `rdi`/`rsi`/`rdx`).** `Ppc64BeSinkClassifier` tracks backward from `bl <sink>` using the PPC64 BE register convention, correctly reading `r3` as arg 0 dest buffer, `r4` as arg 1 source or format string, and `r5` as arg 2 length/size. The `add_sink()` API allows specifying which argument position holds the dangerous input for each sink.
 
-3. **`Ppc64SinkSite` carries the same verdict taxonomy as `SinkArgClassifier`'s x86 output**: `RODATA_CONST` (safe), `SNPRINTF_RODATA` safe snprintf with constant format, `ARG_PROPAGATED` caller-controlled, taint-worthy, `UNKNOWN` uncertain, requires manual review. This means the same triage rule applies: eliminate `RODATA_CONST` first, then run `TaintTracker` only on `ARG_PROPAGATED`/`UNKNOWN` sites.
+3. `Ppc64SinkSite` carries the same verdict taxonomy as `SinkArgClassifier`'s x86 output: `RODATA_CONST` (safe), `SNPRINTF_RODATA` safe snprintf with constant format, `ARG_PROPAGATED` caller-controlled, taint-worthy, `UNKNOWN` uncertain, requires manual review. This means the same triage rule applies: eliminate `RODATA_CONST` first, then run `TaintTracker` only on `ARG_PROPAGATED`/`UNKNOWN` sites.
 
 ---
 

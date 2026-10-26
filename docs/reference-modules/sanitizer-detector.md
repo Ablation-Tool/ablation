@@ -38,10 +38,10 @@ for p in profiles:
 ### `audit_coverage` / `SanitizerDetector.coverage` arch-agnostic targeted audit
 
 Given a *specific* function VA, extracts all ASCII character values from:
-1. **Call-arg pattern**: `li`/`mov`-immediate with ASCII value appearing within
+1. Call-arg pattern: `li`/`mov`-immediate with ASCII value appearing within
    `call_window` instructions before a call/branch.
  *Covers:* `li r3, 0x20; bl string::find()`, IBM LoadLeveler style.
-2. **Inline-compare pattern**: any compare/test instruction with an ASCII immediate.
+2. Inline-compare pattern: any compare/test instruction with an ASCII immediate.
  *Covers:* `cmpwi r0, 0x2d; bne`, both PPC64 and x86.
 
 Reports `chars_checked ∩ SHELL_METACHARACTERS` and which metachars are missing.

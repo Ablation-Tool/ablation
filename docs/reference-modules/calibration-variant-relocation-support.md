@@ -8,9 +8,9 @@ Locate open_damos.json calibration tables in any firmware variant of a Bosch ECU
 
 1. **Fixed-address calibration table lookups break across firmware variants.** Bosch EDC-family ECUs EDC16C34, EDC17, MED17 have dozens of software generations; a calibration table found at `0x3E8000` in one build may appear at `0x3E9200` in the next. `EcuOpenDamosParser` uses the numeric axis fingerprints embedded in the open_damos.json to find each table in any variant without maintaining per-version address maps.
 
-2. **open_damos.json is the output format of the open-car-reprog project Poisson48**: a community-maintained calibration definition file for PSA/Bosch ECU families. Each axis entry carries expected physical breakpoint values for example RPM axis = `[800, 1200, 1600, 2000, ...]`. `locate_in_rom()` XORs a search window against these fingerprints to find the table's location in any ROM variant, not just the baseline image used to build the JSON.
+2. open_damos.json is the output format of the open-car-reprog project Poisson48: a community-maintained calibration definition file for PSA/Bosch ECU families. Each axis entry carries expected physical breakpoint values for example RPM axis = `[800, 1200, 1600, 2000, ...]`. `locate_in_rom()` XORs a search window against these fingerprints to find the table's location in any ROM variant, not just the baseline image used to build the JSON.
 
-3. **`label_map(rom)` returns `{file_offset: label}` directly usable with `ctx.set_name()`**: after calling `locate_in_rom()`, `label_map()` generates human-readable table names for example `inj_duration_vs_rpm_load`, `boost_target_map` keyed by file offset. This populates the `BinaryContext` name registry with calibration-domain labels in one call, enabling SemanticSearcher to find code that accesses specific tables by name.
+3. `label_map(rom)` returns `{file_offset: label}` directly usable with `ctx.set_name()`: after calling `locate_in_rom()`, `label_map()` generates human-readable table names for example `inj_duration_vs_rpm_load`, `boost_target_map` keyed by file offset. This populates the `BinaryContext` name registry with calibration-domain labels in one call, enabling SemanticSearcher to find code that accesses specific tables by name.
 
 ---
 

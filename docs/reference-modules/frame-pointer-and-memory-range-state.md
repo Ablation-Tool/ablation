@@ -10,7 +10,7 @@ Enumerate the COM attack surface of a Windows PE binary: detecting self-register
 
 2. **`COMAttackSurfaceMapper.referenced_clsids()` finds all CLSIDs in the binary**, not just registered ones. CLSIDs appear as strings (formatted as `{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`) in `.rdata`, PE string tables, and embedded XML manifests. A CLSID in `.rdata` that is not registered by `DllRegisterServer` may indicate a hardcoded activation target for `CoCreateInstance`: a privileged object the binary can create without user interaction.
 
-3. **`COMAttackSurfaceMapper.cocreate_sites()` returns every `CoCreateInstance`/`CoCreateInstanceEx` call site**: with the CLSID argument if it is a compile-time constant. This enables CLSID-to-activation-target tracing: given a CLSID and the binary that creates it, find the registered COM server for that CLSID and its privilege level, completing the privilege escalation chain.
+3. `COMAttackSurfaceMapper.cocreate_sites()` returns every `CoCreateInstance`/`CoCreateInstanceEx` call site: with the CLSID argument if it is a compile-time constant. This enables CLSID-to-activation-target tracing: given a CLSID and the binary that creates it, find the registered COM server for that CLSID and its privilege level, completing the privilege escalation chain.
 
 ---
 

@@ -6,11 +6,11 @@ Probe Nginx web server instances for version disclosure, CVE-exploitable configu
 
 ## Why this exists
 
-1. **Nginx alias traversal is a distinct attack class not detected by general web scanners**: when a `location /static/` block uses `alias /var/www/static` missing trailing slash, a request for `/static../secret` resolves to `/var/www/secret`. `NginxEnumerator.probe_alias_traversal()` sends crafted requests targeting this off-by-one and checks responses for directory contents or file data that would be inaccessible through the intended path.
+1. Nginx alias traversal is a distinct attack class not detected by general web scanners: when a `location /static/` block uses `alias /var/www/static` missing trailing slash, a request for `/static../secret` resolves to `/var/www/secret`. `NginxEnumerator.probe_alias_traversal()` sends crafted requests targeting this off-by-one and checks responses for directory contents or file data that would be inaccessible through the intended path.
 
-2. **`stub_status` and `NX-API` endpoints are disabled by default but commonly left enabled in production**: `probe_stub_status()` checks `/nginx_status`, `/_status`, and `/status` for the nginx stub_status module output active connections, accepted requests, handled requests. `enum_nxapi()` probes for Cisco NX-OS NX-API endpoints `/ins` and `/api/aaaLogin.json` that may coexist with an Nginx reverse proxy. Both surfaces are information disclosure findings that seed further enumeration.
+2. `stub_status` and `NX-API` endpoints are disabled by default but commonly left enabled in production: `probe_stub_status()` checks `/nginx_status`, `/_status`, and `/status` for the nginx stub_status module output active connections, accepted requests, handled requests. `enum_nxapi()` probes for Cisco NX-OS NX-API endpoints `/ins` and `/api/aaaLogin.json` that may coexist with an Nginx reverse proxy. Both surfaces are information disclosure findings that seed further enumeration.
 
-3. **CVE-2021-23017 off-by-one in Nginx resolver requires confirmation against the specific version and configuration**: `check_cve_2021_23017()` extracts the server version from the `Server:` header and checks if it falls in the affected range 1.17.6–1.21.0. It additionally verifies whether `resolver` is configured by probing DNS resolution behavior. A version-positive finding without a configured `resolver` directive is a false positive; the check differentiates these cases.
+3. CVE-2021-23017 off-by-one in Nginx resolver requires confirmation against the specific version and configuration: `check_cve_2021_23017()` extracts the server version from the `Server:` header and checks if it falls in the affected range 1.17.6–1.21.0. It additionally verifies whether `resolver` is configured by probing DNS resolution behavior. A version-positive finding without a configured `resolver` directive is a false positive; the check differentiates these cases.
 
 ---
 

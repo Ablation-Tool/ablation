@@ -4,17 +4,17 @@ Scan Python bytecode (`.pyc`) files for dangerous patterns: parsing code object 
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#python-pyc-scanning)</sup>
 
 1. **FortiSwitch and similar appliances ship only compiled `.pyc` bytecode on the management plane: no `.py` source files.** `PycBytecodeScanner` was built to close `FSW-PYC-GAP`: without it, the entire Python layer of FortiSwitch firmware was opaque to static analysis. `xdis` parses the marshalled code object tree across Python versions 3.4–3.12+, which Python's built-in `marshal.loads()` cannot do when the `.pyc` was compiled by a different Python version than the analysis host.
 
 2. **Every `.pyc` file stores `co_names` in each code object: the list of all attribute and global names referenced by `LOAD_ATTR`, `LOAD_GLOBAL`, and `STORE_ATTR` opcodes.** If a module calls `os.system()`, the string `"system"` appears in `co_names` and `"os"` appears in `co_names`. This provides reliable signal without decompilation, no AST reconstruction, no control-flow analysis, just co_names inspection. The approach is version-agnostic and handles all Python bytecode formats including 3.12's new opcode encoding.
 
-3. **`PycBytecodeScanner.scan_dir()` processes an entire directory tree of `.pyc` files in a single pass**: the typical firmware structure places `.pyc` files in `/opt/pyc/` or alongside application code. Scanning the directory produces a `List[PycScanResult]` that can be filtered by confidence and finding type without individual per-file invocations.
+3. `PycBytecodeScanner.scan_dir()` processes an entire directory tree of `.pyc` files in a single pass: the typical firmware structure places `.pyc` files in `/opt/pyc/` or alongside application code. Scanning the directory produces a `List[PycScanResult]` that can be filtered by confidence and finding type without individual per-file invocations.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#python-pyc-scanning)</sup>
 
 ```mermaid
 flowchart TD
@@ -38,7 +38,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#python-pyc-scanning)</sup>
 
 ```python
 from ablation.analyzers.pyc_bytecode_scanner import PycBytecodeScanner
@@ -67,7 +67,7 @@ result_raw = scanner.scan_raw(pyc_bytes, name='module.pyc')
 
 ---
 
-## Example output
+## Example output <sup>[↑](#python-pyc-scanning)</sup>
 
 The following illustrates the scan report format. Actual findings are firmware-specific.
 
@@ -83,7 +83,7 @@ PycBytecodeScanner report:
 
 ---
 
-## False positives
+## False positives <sup>[↑](#python-pyc-scanning)</sup>
 
 **`co_names` inspection detects the presence of attribute names, not confirmed call sites.** A module that imports `os` and uses `os.path.system` unlikely but possible would trigger `os.system` detection even if it never calls `os.system()`. Confirm with decompilation (`uncompyle6`) or bytecode inspection (`dis`) on flagged files before reporting.
 
@@ -91,13 +91,13 @@ PycBytecodeScanner report:
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#python-pyc-scanning)</sup>
 
 Run `PycBytecodeScanner.scan_dir()` as the first pass on any firmware with a Python management layer: before source auditing or dynamic analysis. The scan completes in seconds and identifies which modules need deeper analysis. For flagged modules, proceed to `uncompyle6` decompilation or manual bytecode inspection with `dis`.
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#python-pyc-scanning)</sup>
 
 `PycBytecodeScannerdangerous_names.scan_file(path)` returns a `PycScanResult` not a list of findings. See [pyc-bytecode-scanner](pyc-bytecode-scanner.md) for the full field reference.
 
@@ -116,7 +116,7 @@ Use `scan_dir(path)` to scan a directory tree and return `List[PycScanResult]`.
 
 ---
 
-## See also
+## See also <sup>[↑](#python-pyc-scanning)</sup>
 
 - [Source Code Auditing](source-code-auditing.md): for `.py` source; complement to .pyc scanning
 - [Fortinet Build Track Classification](fortinet-build-track-classification.md): FortiSwitch firmware analysis context

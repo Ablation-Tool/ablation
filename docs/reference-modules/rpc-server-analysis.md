@@ -10,7 +10,7 @@ Enumerate Windows RPC server interfaces registered in a PE binary: extracting in
 
 2. **`RPCServerAnalyzer.interfaces()` returns all registered interfaces with their UUID and auth level, enabling differential analysis between service versions.** A patch that raises the auth level from `NONE` to `PKT_PRIVACY` closes a pre-auth RPC attack vector, this is verifiable statically across versions by comparing `RPCInterface.auth_level_name()` output.
 
-3. **`RPCServerAnalyzer.endpoint_strings()` extracts transport endpoint strings from `RpcServerUseProtseqEp` call sites**: returning named pipe paths (`\\pipe\\svcname`), TCP port numbers, and ALPC endpoint names. Combined with interface UUID and auth level, this provides the complete pre-auth attack surface: which interface, over which transport, with which authentication requirement.
+3. `RPCServerAnalyzer.endpoint_strings()` extracts transport endpoint strings from `RpcServerUseProtseqEp` call sites: returning named pipe paths (`\\pipe\\svcname`), TCP port numbers, and ALPC endpoint names. Combined with interface UUID and auth level, this provides the complete pre-auth attack surface: which interface, over which transport, with which authentication requirement.
 
 ---
 

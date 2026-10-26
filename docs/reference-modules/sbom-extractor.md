@@ -44,7 +44,7 @@ Three complementary sources are combined in priority order:
 
 2. **Byte signatures** (from `ThirdPartyLibraryIdentifier`): 19 patterns matching algorithm constants and marker bytes. Used only for libraries not already found by version string. Source confidence: HIGH/MEDIUM.
 
-3. **ELF/PE metadata**: `DT_NEEDED` shared library entries and `.comment` build toolchain strings.
+3. ELF/PE metadata: `DT_NEEDED` shared library entries and `.comment` build toolchain strings.
 
 ## Library coverage
 

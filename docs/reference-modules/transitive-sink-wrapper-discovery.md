@@ -4,17 +4,17 @@ Compute the transitive closure of passthrough wrappers around known exec sinks: 
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#transitive-sink-wrapper-discovery)</sup>
 
 1. **When a binary wraps `system()` behind `doSystem(string)` which is called by `systemLog(char*)`: three levels deep: `TaintTracker` finds zero injection sites while the vulnerability is reachable.** `SinkPropagator.propagate()` discovers all three wrapper functions by iterating to a fixed point: if `addUser()` passes its arg to `doSystem()`, and `doSystem()` passes its arg to `systemLog()`, and `systemLog()` calls `system()`: all three are returned as `SinkWrapper` findings with their full call chain lineage.
 
-2. **The expanded wrapper list enables a single `TaintTracker` run to trace injection from the entry point to the ultimate exec sink**: without wrapper discovery, the analyst must manually identify wrapper chains by reading call graphs, a process that takes 20–60 minutes per wrapper level. `SinkPropagator` completes this in under 10 seconds on typical firmware binaries.
+2. The expanded wrapper list enables a single `TaintTracker` run to trace injection from the entry point to the ultimate exec sink: without wrapper discovery, the analyst must manually identify wrapper chains by reading call graphs, a process that takes 20–60 minutes per wrapper level. `SinkPropagator` completes this in under 10 seconds on typical firmware binaries.
 
-3. **`SinkPropagator` handles multi-parameter wrappers**: some wrappers forward argument 1 (`rsi`) to the sink rather than argument 0 (`rdi`). `SinkWrapper.wrapper_arg_pos` records which argument of the wrapper corresponds to the sink's dangerous argument, so `TaintTracker.add_sinkname, arg_pos=wrapper_arg_pos` is called with the correct position.
+3. `SinkPropagator` handles multi-parameter wrappers: some wrappers forward argument 1 (`rsi`) to the sink rather than argument 0 (`rdi`). `SinkWrapper.wrapper_arg_pos` records which argument of the wrapper corresponds to the sink's dangerous argument, so `TaintTracker.add_sinkname, arg_pos=wrapper_arg_pos` is called with the correct position.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#transitive-sink-wrapper-discovery)</sup>
 
 ```mermaid
 flowchart TD
@@ -38,7 +38,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#transitive-sink-wrapper-discovery)</sup>
 
 ```python
 from ablation.analyzers.sink_propagator import SinkPropagator
@@ -64,7 +64,7 @@ results = clf.classify_all()
 
 ---
 
-## Example output
+## Example output <sup>[↑](#transitive-sink-wrapper-discovery)</sup>
 
 The following illustrates the wrapper discovery output format. Actual wrapper names and chain depths are binary-specific.
 
@@ -87,7 +87,7 @@ Total: <N> wrappers at depth 1-3
 
 ---
 
-## False positives
+## False positives <sup>[↑](#transitive-sink-wrapper-discovery)</sup>
 
 **`SinkPropagator` detects argument passthrough by checking whether the wrapper's call to the sink uses the wrapper's own entry argument register**: a wrapper that modifies the argument before passing it for example adds a prefix string will be classified as a wrapper even though it is partially safe. `SinkWrapper.chain` shows the full call path for manual verification.
 
@@ -95,13 +95,13 @@ Total: <N> wrappers at depth 1-3
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#transitive-sink-wrapper-discovery)</sup>
 
 Run `SinkPropagator.propagate()` before `SinkArgClassifier.classify_all()` on any binary where the initial `SinkArgClassifier` run returns few `ARG_PROPAGATED` results but the `SemanticSearcher` sweep suggests exec sinks in handler functions. Wrapper discovery unblocks the taint analysis when direct sink detection produces no results.
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#transitive-sink-wrapper-discovery)</sup>
 
 `SinkPropagator.propagate()` returns `List[SinkWrapper]`: one entry per discovered wrapper function:
 
@@ -119,7 +119,7 @@ Add wrapper names to `SinkArgClassifier` by calling `SinkPropagator.add_sinkname
 
 ---
 
-## See also
+## See also <sup>[↑](#transitive-sink-wrapper-discovery)</sup>
 
 - [Sink Argument Classifier](sink-argument-classifier.md): consumes the expanded sink list from `SinkPropagator`
 - [Vendor Sink Profiles](vendor-sink-profiles.md): vendor-specific wrappers registered explicitly via YAML profile

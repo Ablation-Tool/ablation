@@ -6,7 +6,7 @@ Maps a firmware binary by Shannon entropy before any analysis begins, classifyin
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#entropy-mapper)</sup>
 
 Three gaps existed before this module:
 
@@ -18,7 +18,7 @@ Three gaps existed before this module:
 
 ---
 
-## Classification thresholds
+## Classification thresholds <sup>[↑](#entropy-mapper)</sup>
 
 | Class | Entropy range | Typical content |
 |---|---|---|
@@ -29,7 +29,7 @@ Three gaps existed before this module:
 
 ---
 
-## Detection algorithm
+## Detection algorithm <sup>[↑](#entropy-mapper)</sup>
 
 `EntropyMapper` slides a window of `window_size` bytes default 256 across the binary at `step_size` intervals. For each window it computes Shannon entropy:
 
@@ -43,7 +43,7 @@ When `numpy` is installed the mapper uses a vectorized path; it falls back to pu
 
 ---
 
-## Usage
+## Usage <sup>[↑](#entropy-mapper)</sup>
 
 ```python
 from ablation.analyzers.entropy_mapper import EntropyMapper
@@ -74,9 +74,9 @@ for t in transitions:
 
 ---
 
-## Result fields
+## Result fields <sup>[↑](#entropy-mapper)</sup>
 
-### `EntropyRegion`
+### `EntropyRegion` <sup>[↑](#entropy-mapper)</sup>
 
 | Field | Description |
 |---|---|
@@ -88,7 +88,7 @@ for t in transitions:
 | `max_entropy` | Maximum window entropy in the region |
 | `size` | `offset_end - offset_start` in bytes |
 
-### `EntropyTransition`
+### `EntropyTransition` <sup>[↑](#entropy-mapper)</sup>
 
 | Field | Description |
 |---|---|
@@ -101,7 +101,7 @@ for t in transitions:
 
 ---
 
-## Integration with firmware extraction
+## Integration with firmware extraction <sup>[↑](#entropy-mapper)</sup>
 
 Run `EntropyMapper` before `FortiOSHardwareExtractor` or any taint tracker. The encrypted ranges identify partitions that need decryption before analysis proceeds. The code ranges provide the plaintext `.text` boundaries where taint sources start.
 
@@ -119,13 +119,13 @@ for start, end in enc_ranges:
 
 ---
 
-## How it works
+## How it works <sup>[↑](#entropy-mapper)</sup>
 
 `EntropyMapper.scan(path)` reads the binary and slides a configurable window default 256 bytes, step 64 across every byte. Shannon entropy is computed for each window. Consecutive windows above a high threshold are merged into `EntropyRegion` objects; transitions between high and low entropy are recorded as `EntropyTransition` objects. No disassembly occurs. No function starts are required.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#entropy-mapper)</sup>
 
 **Before:** No prerequisites. Run on any binary file or section.
 
@@ -133,7 +133,7 @@ for start, end in enc_ranges:
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#entropy-mapper)</sup>
 
 `EntropyMapper(path).scan()` returns an `EntropyMapResult`:
 
@@ -160,7 +160,7 @@ Call `result.find_transitions(threshold=0.5)` to get `List[EntropyTransition]` a
 
 ---
 
-## See also
+## See also <sup>[↑](#entropy-mapper)</sup>
 
 - [BinaryContext](binary-context.md): function and import resolution before scanning
 - [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint

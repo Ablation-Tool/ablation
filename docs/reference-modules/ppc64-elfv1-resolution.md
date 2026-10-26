@@ -8,7 +8,7 @@ Resolve PPC64 big-endian ELFv1 OPD Official Procedure Descriptor entries and pat
 
 1. **PPC64 ELFv1 big-endian, used by IBM POWER5–9 Linux and AIX uses OPD Official Procedure Descriptor tables: each "function pointer" is a 3-word descriptor containing the actual code address, TOC pointer, and environment pointer.** A call to `0x10001234` calls the OPD descriptor at that address, not the code directly. `BinaryContext.load_or_build()` builds `ctx.plt` using direct VA-to-symbol mapping, which is empty on ELFv1 binaries because all PLT entries go through the glink stubs and OPD descriptors. `Ppc64ElfV1Resolver.patch_context()` fixes this.
 
-2. **Without `patch_context()`, every `BinaryContext.plt_name(va)` call on an ELFv1 binary returns `None`**: `FuncProfiler`, `SinkArgClassifier`, `TaintTracker`, and `WindowAnalyzer` all show blank call targets instead of symbol names. This was the root cause of zero PLT-name annotations on all POWER Linux binaries until the gap PPC64-GAP-ELFv1 was closed.
+2. Without `patch_context()`, every `BinaryContext.plt_name(va)` call on an ELFv1 binary returns `None`: `FuncProfiler`, `SinkArgClassifier`, `TaintTracker`, and `WindowAnalyzer` all show blank call targets instead of symbol names. This was the root cause of zero PLT-name annotations on all POWER Linux binaries until the gap PPC64-GAP-ELFv1 was closed.
 
 3. **`Ppc64ElfV1Resolver` is documented in `ppc32-ppc476-dedicated-lifting.md` as well**, that page covers the full PPC32/PPC476/PPC64 lifting stack including the OPD resolver. This page exists as a targeted reference specifically for the ELFv1 PLT patching use case, providing the minimal recipe for analysts encountering blank PLT annotations.
 

@@ -4,7 +4,7 @@ KASAN/KCOV-aware LoongArch64 instruction decoder that tags and strips instrument
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#loongarch64-kasankcov-v2-decoder)</sup>
 
 1. **A TencentOS 4.6 kernel built with `CONFIG_KASAN=y` / `CONFIG_KCOV=y` injects a 4–6 instruction shadow-check preamble before virtually every memory access.** The sequence is `srli.d` / `lu12i.w` / `addi.d` / `ld.b` / conditional branch / `bl __asan_load8`, and it is pure instrumentation overhead. Running the V1 decoder or `LoongArch64TaintTracker` directly against such a binary produces thousands of false call edges into `__asan_load8_noabort`, `__sanitizer_cov_trace_pc`, and similar KASAN/KCOV stubs. Roughly 40% of instructions in `kvm_eiointc_write` and similar hot functions are ghosts.
 
@@ -15,7 +15,7 @@ KASAN/KCOV-aware LoongArch64 instruction decoder that tags and strips instrument
 
 ---
 
-## How it works
+## How it works <sup>[↑](#loongarch64-kasankcov-v2-decoder)</sup>
 
 ```mermaid
 flowchart TD
@@ -46,7 +46,7 @@ flowchart TD
 
 ---
 
-## Class: LoongArchDecoderV2
+## Class: LoongArchDecoderV2 <sup>[↑](#loongarch64-kasankcov-v2-decoder)</sup>
 
 Extends `LoongArchDecoder` (V1). Constructor and key methods:
 
@@ -70,7 +70,7 @@ for frame in dec.decode_frames_clean(section_bytes, base_addr):
 stats = dec.count_instrumentation(section_bytes, base_addr)
 ```
 
-### Constructor
+### Constructor <sup>[↑](#loongarch64-kasankcov-v2-decoder)</sup>
 
 `LoongArchDecoderV2(instrumentation_vas=None, max_preamble=6)`
 
@@ -79,13 +79,13 @@ stats = dec.count_instrumentation(section_bytes, base_addr)
 | `instrumentation_vas` | `Set[int]` or `None` | `None` | VAs of KASAN/KCOV functions. Empty set disables tagging (V1 behavior). |
 | `max_preamble` | `int` | `6` | Max instructions to walk back from a tagged BL when scanning for preamble. 6 covers the full TencentOS KASAN idiom. |
 
-### Class methods
+### Class methods <sup>[↑](#loongarch64-kasankcov-v2-decoder)</sup>
 
 `from_system_map(map_path, max_preamble=6)` → `LoongArchDecoderV2`
 
 Parses a kernel `System.map` file (`<hex_va> <type> <symbol>` per line). Extracts all VAs whose symbol name starts with any prefix in `KASAN_SYMBOL_PREFIXES` or `KCOV_SYMBOL_PREFIXES`.
 
-### Instance methods
+### Instance methods <sup>[↑](#loongarch64-kasankcov-v2-decoder)</sup>
 
 | Method | Returns | Description |
 |:---|:---|:---|
@@ -95,7 +95,7 @@ Parses a kernel `System.map` file (`<hex_va> <type> <symbol>` per line). Extract
 
 ---
 
-## LoongArchFrameV2
+## LoongArchFrameV2 <sup>[↑](#loongarch64-kasankcov-v2-decoder)</sup>
 
 Extends `LoongArchFrame` (V1) with two fields:
 
@@ -108,7 +108,7 @@ Extends `LoongArchFrame` (V1) with two fields:
 
 ---
 
-## Usage
+## Usage <sup>[↑](#loongarch64-kasankcov-v2-decoder)</sup>
 
 ```python
 from ablation.analyzers.loongarch_decoder_v2 import LoongArchDecoderV2
@@ -134,7 +134,7 @@ print(stats)
 # {"total": 208, "instrumentation": 84, "real": 124, "pct_instrumentation": 40.4}
 ```
 
-### Integrating with analysis modules
+### Integrating with analysis modules <sup>[↑](#loongarch64-kasankcov-v2-decoder)</sup>
 
 `LoongArch64TaintTracker.from_path_full()` does not accept a decoder parameter. Run V2 stripping as a separate inspection step to identify which VAs are real program logic, then run the taint tracker against the same binary with the System.map-sourced findings as context. The `decode_frames_clean()` output is the authoritative list of real instruction VAs for manual boundary checks and for feeding lower-level CFG APIs directly:
 
@@ -155,7 +155,7 @@ print(tt.report(findings))
 
 ---
 
-## Example output
+## Example output <sup>[↑](#loongarch64-kasankcov-v2-decoder)</sup>
 
 ```
 # decode_frames_v2 with is_instrumentation visible:
@@ -173,7 +173,7 @@ print(tt.report(findings))
 
 ---
 
-## False positives
+## False positives <sup>[↑](#loongarch64-kasankcov-v2-decoder)</sup>
 
 **Shadow-check preamble sequences that precede a non-instrumentation branch are not tagged.** The backward walk stops at any branch instruction to prevent mis-tagging control flow that belongs to real program logic. A KASAN sequence that contains an internal conditional branch will be partially tagged: the `bl` is marked but some preamble instructions before the branch remain real. This is the safe side because under-stripping produces no false positives, only retained noise.
 
@@ -183,7 +183,7 @@ print(tt.report(findings))
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#loongarch64-kasankcov-v2-decoder)</sup>
 
 **Before this module:** confirm `e_machine == 0x102` (LoongArch) in the ELF header. Obtain `System.map` from the matching kernel-debug-core RPM or build directory.
 
@@ -191,7 +191,7 @@ print(tt.report(findings))
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#loongarch64-kasankcov-v2-decoder)</sup>
 
 `count_instrumentation()` return value:
 
@@ -213,7 +213,7 @@ print(tt.report(findings))
 
 ---
 
-## See also
+## See also <sup>[↑](#loongarch64-kasankcov-v2-decoder)</sup>
 
 - [LoongArch64 Analysis Stack](loongarch64.md): full taint tracker and CFG builder that consumes clean V2 frames
 - [LoongArch64 Compiler Bug Detection](loongarch64-2.md): `LA64MaxNotMinScanner` for GCC 12.3.1.7 min/max inversion on LoongArch64

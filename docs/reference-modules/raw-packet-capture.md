@@ -8,7 +8,7 @@ Capture live network traffic with a raw socket (`AF_PACKET` / `AF_INET` + `SOCK_
 
 1. **`RawSniffer` operates without any external network capture dependency.** Using `socket.socketsocket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003)` (Linux) or `socket.socketsocket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW` (macOS), `RawSniffer` captures all Ethernet frames on the specified interface in pure Python. `tcpdump`, `Wireshark`, and `libpcap` are not required: only root privileges and a network interface name.
 
-2. **`CredentialExtractor` performs pattern-based credential extraction from live TCP streams**: HTTP Basic Auth `Authorization: Basic` headers, FTP `USER`/`PASS` sequences, and SMTP `AUTH PLAIN` values are identified in real-time as packets are captured. This is suitable for post-compromise network monitoring without installing additional tools.
+2. `CredentialExtractor` performs pattern-based credential extraction from live TCP streams: HTTP Basic Auth `Authorization: Basic` headers, FTP `USER`/`PASS` sequences, and SMTP `AUTH PLAIN` values are identified in real-time as packets are captured. This is suitable for post-compromise network monitoring without installing additional tools.
 
 3. **`MDNSDiscovery` and `SSDPDiscovery`** listen on multicast addresses mDNS: `224.0.0.251:5353`, SSDP: `239.255.255.250:1900` and parse service announcements passively. `MDNSDiscovery` returns `PTR` records with service instance names; `SSDPDiscovery` returns device type, friendly name, and USN from `M-SEARCH` responses. Both run without sending probe packets.
 

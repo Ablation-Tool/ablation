@@ -80,12 +80,12 @@ When the terminator has a delay slot, the delay-slot instruction is the last ent
 
 Three-pass construction:
 
-1. **Leader scan**: discovers all block-start VAs: entry, all branch targets, all
+1. Leader scan: discovers all block-start VAs: entry, all branch targets, all
  fall-through-after-terminator addresses. Delay-slot instructions are not leaders;
  the instruction two steps after the branch is the next-block leader.
-2. **Partition**: assigns each instruction to a block. Delay-slot instructions are
+2. Partition: assigns each instruction to a block. Delay-slot instructions are
  appended to the terminating block, consuming two steps in a single pass iteration.
-3. **Edge fill**: for each block, computes `succs` from the block's terminator type.
+3. Edge fill: for each block, computes `succs` from the block's terminator type.
  Sets `preds` from the inverse.
 
 ### `Block`
@@ -130,9 +130,9 @@ Three-pass construction:
 
 `build_cfg` is a three-pass algorithm over a flat `Sequence[SH2aInsn]` (already decoded by `EcuSH2aDecoder`):
 
-1. **Leader scan**: discovers all block-start VAs: the entry point, all branch targets extracted from `insn.target_va`, and the fall-through address immediately after each terminator or two instructions after when the terminator has a delay slot. Delay-slot instructions are explicitly excluded from the leader set.
-2. **Partition**: assigns each instruction to the current block. When a terminator with a delay slot is encountered, the next instruction is consumed into the same block as the delay slot; the block is then closed. Without a delay slot, the block closes at the terminator itself.
-3. **Edge fill**: iterates over all blocks; for each block's terminator type `rts`, `bra`, `bt`/`bf`, and `jsr`, and so on the `succs` list is populated from the delay-slot-adjusted successor VA. `preds` is built as the inverse.
+1. Leader scan: discovers all block-start VAs: the entry point, all branch targets extracted from `insn.target_va`, and the fall-through address immediately after each terminator or two instructions after when the terminator has a delay slot. Delay-slot instructions are explicitly excluded from the leader set.
+2. Partition: assigns each instruction to the current block. When a terminator with a delay slot is encountered, the next instruction is consumed into the same block as the delay slot; the block is then closed. Without a delay slot, the block closes at the terminator itself.
+3. Edge fill: iterates over all blocks; for each block's terminator type `rts`, `bra`, `bt`/`bf`, and `jsr`, and so on the `succs` list is populated from the delay-slot-adjusted successor VA. `preds` is built as the inverse.
 
 Indirect branches `braf` and `jmp @Rn` cannot be resolved statically, these produce open blocks with no successors.
 

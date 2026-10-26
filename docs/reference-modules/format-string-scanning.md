@@ -8,7 +8,7 @@ Detect format string vulnerabilities in x86-64 ELF binaries by identifying call 
 
 1. **Format string vulnerabilities arise when user-controlled data reaches the format argument of a printf-family function: the format argument is safe only when it is a string literal (RIP-relative load from `.rodata`).** `FormatStringScanner` applies the TAOSSA Ch8 detection algorithm to every `printf`/`fprintf`/`snprintf`/`syslog`/`err`/`warn` call site in the binary, walking backward from the call to find the last instruction that defined the format register. If that definition is a `.rodata` LEA, the site is safe. Otherwise it is a finding.
 
-2. **`FormatStringScanner` handles all printf-family format argument positions correctly**: `rdi` for `printf`, `rsi` for `fprintf` and `dprintf`, `rdx` for `snprintf` and `sprintf`, and `r8` for `__snprintf_chk`. Using a wrong register assumption such as always checking `rdi` would produce false negatives on every `fprintf` call site.
+2. `FormatStringScanner` handles all printf-family format argument positions correctly: `rdi` for `printf`, `rsi` for `fprintf` and `dprintf`, `rdx` for `snprintf` and `sprintf`, and `r8` for `__snprintf_chk`. Using a wrong register assumption such as always checking `rdi` would produce false negatives on every `fprintf` call site.
 
 3. **Severity is determined by the format argument's provenance: HIGH when the format comes directly from a function argument register at function entry the caller passed a format string, MEDIUM when the provenance is unclear.** A `HIGH` finding means there exists a direct code path from an external input network, file, environment to the format argument without a string literal interception.
 

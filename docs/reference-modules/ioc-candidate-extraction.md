@@ -10,7 +10,7 @@ Detect shell injection vulnerabilities in Perl source code: finding `qx//`, `sys
 
 2. **Perl codebases use sanitization idioms that a generic grep cannot recognize.** `quotemeta()` escapes all shell metacharacters; single-quote wrapping `"'" . join("' '", @args . "'"`) ensures no word splitting; `s/'/ /g` removes single quotes before interpolation. `PerlTaintScanner` recognizes all three and reports `SANITIZED` rather than false-positiving on them.
 
-3. **Cross-file caller resolution for `PARAM` sources**: when a sink variable comes from `shift(@_)` a function parameter, the scanner identifies the calling function across files to determine whether the parameter receives user-controlled input or a trusted internal value, avoiding the false-positive class where internal helpers are flagged as injection points.
+3. Cross-file caller resolution for `PARAM` sources: when a sink variable comes from `shift(@_)` a function parameter, the scanner identifies the calling function across files to determine whether the parameter receives user-controlled input or a trusted internal value, avoiding the false-positive class where internal helpers are flagged as injection points.
 
 ---
 

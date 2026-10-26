@@ -83,10 +83,10 @@ CWE: CWE-693 Protection Mechanism Failure on all HIGH/MEDIUM findings.
 
 `CFGBypassDetector.from_path()` opens the PE with LIEF and reads `IMAGE_LOAD_CONFIG.GuardFlags`. The flags are tested against four masks:
 
-1. **`IMAGE_GUARD_CF_INSTRUMENTED` (0x100)**: if absent, emits a HIGH `cfg_disabled` finding immediately; no further CFG checks apply.
-2. **`IMAGE_GUARD_CF_FUNCTION_TABLE_PRESENT` (0x400)**: if absent, emits HIGH `cfg_table_absent` the runtime check passes every address regardless of the table.
-3. **`IMAGE_GUARD_CF_ENABLE_EXPORT_SUPPRESSION` (0x8000)**: if absent, emits MEDIUM `no_export_suppression`; all exported functions are valid indirect call targets.
-4. **Export-vs-table cross-reference**: when export suppression is enabled, reads all named exports from `PE.exports` and checks each against the CFG function table. Exports absent from the table emit individual MEDIUM `export_not_in_cfg_table` findings.
+1. `IMAGE_GUARD_CF_INSTRUMENTED` (0x100): if absent, emits a HIGH `cfg_disabled` finding immediately; no further CFG checks apply.
+2. `IMAGE_GUARD_CF_FUNCTION_TABLE_PRESENT` (0x400): if absent, emits HIGH `cfg_table_absent` the runtime check passes every address regardless of the table.
+3. `IMAGE_GUARD_CF_ENABLE_EXPORT_SUPPRESSION` (0x8000): if absent, emits MEDIUM `no_export_suppression`; all exported functions are valid indirect call targets.
+4. Export-vs-table cross-reference: when export suppression is enabled, reads all named exports from `PE.exports` and checks each against the CFG function table. Exports absent from the table emit individual MEDIUM `export_not_in_cfg_table` findings.
 
 The `entry_stride` for the CFG function table is `4 + (GuardFlags >> 28)`: standard CFG uses 4 bytes per entry, XFG uses 8 bytes. Entries are read at stride intervals from the table RVA.
 

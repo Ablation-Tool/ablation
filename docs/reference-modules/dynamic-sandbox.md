@@ -6,7 +6,7 @@ Executes leaf functions in a Unicorn emulator with controlled register inputs an
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#dynamic-sandbox)</sup>
 
 Two things were not possible before this module:
 
@@ -16,7 +16,7 @@ Two things were not possible before this module:
 
 ---
 
-## Safety contract
+## Safety contract <sup>[↑](#dynamic-sandbox)</sup>
 
 The sandbox only executes functions that pass `LeafFunctionChecker`. A function is probe-safe if it has no calls to PLT stubs and no indirect calls outside the binary's load range. Four additional guards prevent runaway execution:
 
@@ -27,7 +27,7 @@ The sandbox only executes functions that pass `LeafFunctionChecker`. A function 
 
 ---
 
-## Usage
+## Usage <sup>[↑](#dynamic-sandbox)</sup>
 
 ```python
 from ablation.analyzers.dynamic_sandbox import DynamicSandbox, LeafFunctionChecker
@@ -40,7 +40,7 @@ if checker.is_leaf(va, ctx):
     print(result)
 ```
 
-### Multi-run behavioral fingerprinting
+### Multi-run behavioral fingerprinting <sup>[↑](#dynamic-sandbox)</sup>
 
 ```python
 sandbox = DynamicSandbox.from_context(ctx)
@@ -61,7 +61,7 @@ Each `SandboxResult.behavioral_signature()` is a compact string `ret=0x1,writes=
 
 ---
 
-## Architecture support
+## Architecture support <sup>[↑](#dynamic-sandbox)</sup>
 
 | Arch | Status |
 |:---|:---|
@@ -73,7 +73,7 @@ Both ELF and PE binaries are supported. PE binaries use the IAT range as the abo
 
 ---
 
-## API reference
+## API reference <sup>[↑](#dynamic-sandbox)</sup>
 
 | Call | Description |
 |:---|:---|
@@ -88,7 +88,7 @@ Both ELF and PE binaries are supported. PE binaries use the IAT range as the abo
 
 ---
 
-## SandboxResult fields
+## SandboxResult fields <sup>[↑](#dynamic-sandbox)</sup>
 
 | Field | Description |
 |:---|:---|
@@ -103,7 +103,7 @@ Both ELF and PE binaries are supported. PE binaries use the IAT range as the abo
 
 ---
 
-## Hypothesis Engine integration
+## Hypothesis Engine integration <sup>[↑](#dynamic-sandbox)</sup>
 
 `DynamicProbeAdapter` wires the sandbox into the Hypothesis Engine's `probe_multiple` dispatch. When the engine schedules a `dynamic` probe, the adapter runs the function with four auto-generated input sets and returns an `EvidenceRecord` with family `behavioral`.
 
@@ -119,13 +119,13 @@ The adapter is registered automatically. Invoke it by scheduling a `dynamic` pro
 
 ---
 
-## How it works
+## How it works <sup>[↑](#dynamic-sandbox)</sup>
 
 Parses the runtime-specific binary format APK, DEX, `.mpy`, BEAM, Go ELF to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
 
 ---
 
-## Example output
+## Example output <sup>[↑](#dynamic-sandbox)</sup>
 
 ```
 [HIGH] DANGEROUS_CALL   Runtime.exec() in com.example.CommandHandler:42
@@ -138,13 +138,13 @@ Parses the runtime-specific binary format APK, DEX, `.mpy`, BEAM, Go ELF to extr
 
 ---
 
-## False positives
+## False positives <sup>[↑](#dynamic-sandbox)</sup>
 
 Standard library calls that resemble dangerous patterns for example `exec` used for shell completions, `eval` used for template rendering with static input are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code Garble-compiled Go, ProGuard-stripped Android produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#dynamic-sandbox)</sup>
 
 **Before this module:** Confirm the target binary format APK, `.mpy`, BEAM, Go ELF before loading. `BinaryContext` is not required for all runtime analyzers.
 
@@ -152,7 +152,7 @@ Standard library calls that resemble dangerous patterns for example `exec` used 
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#dynamic-sandbox)</sup>
 
 `DynamicSandbox.from_context(ctx).probeva, input_regs` returns a `SandboxResult`:
 
@@ -170,7 +170,7 @@ Standard library calls that resemble dangerous patterns for example `exec` used 
 
 ---
 
-## See also
+## See also <sup>[↑](#dynamic-sandbox)</sup>
 
 - [BinaryContext](binary-context.md): native binary context when the runtime wraps a native library
 - [TaintAnalysis](taint-analysis.md): trace dangerous calls found in the runtime layer

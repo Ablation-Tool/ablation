@@ -312,7 +312,7 @@ Scans a single function for exec-class sink calls with tainted arguments.
    - Runs `_transfer(va, insn, state, callee_results)` over every instruction in the block.
    - Propagates the resulting exit state to each successor via `join()` (label-set union per register).
    - If the successor's stored state changed, re-enqueues it. Continues until the worklist is empty.
-4. **Finding sweep**: re-executes transfer over each block, checking every BSR instruction. If the BSR target is a known exec-class sink and any of r16–r21 are tainted at that point, emits an `AlphaTaintFinding`.
+4. Finding sweep: re-executes transfer over each block, checking every BSR instruction. If the BSR target is a known exec-class sink and any of r16–r21 are tainted at that point, emits an `AlphaTaintFinding`.
 
 **Parameters:**
 

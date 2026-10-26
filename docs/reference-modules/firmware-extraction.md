@@ -8,9 +8,9 @@ Extract FortiOS hardware firmware images using a two-stage pipeline: outer 64-by
 
 1. **FortiOS hardware firmware FortiGate physical appliances, FortiWiFi uses a layered encryption scheme: an outer 64-byte repeating XOR applied to a NAND flash partition image, plus an inner stream cipher on individual partitions.** `FortiOSHardwareExtractor` handles the outer XOR layer using index-of-coincidence and frequency analysis against the NAND 0xFF assumption. Without this, the firmware bytes are uninterpretable noise, no ELF headers, no filesystem magic bytes, no strings.
 
-2. **`FirmwareContainerKeyExtractor` handles the inner partition encryption**: inner `rootfs.gz` and `datafs.tar.gz` partitions have a second encryption flag (`FENCRYPT`) set in the partition table. Fortinet embeds per-container encryption keys in the PKCS#1 v1.5 padding of the firmware's RSA signature block FGT7K-2 finding. `_scan_pkcs1_blocks()` locates those blocks and `_attempt_inner_decryption()` tests RC4 decryption with recovered candidate keys against known gzip magic bytes (`1f 8b`).
+2. `FirmwareContainerKeyExtractor` handles the inner partition encryption: inner `rootfs.gz` and `datafs.tar.gz` partitions have a second encryption flag (`FENCRYPT`) set in the partition table. Fortinet embeds per-container encryption keys in the PKCS#1 v1.5 padding of the firmware's RSA signature block FGT7K-2 finding. `_scan_pkcs1_blocks()` locates those blocks and `_attempt_inner_decryption()` tests RC4 decryption with recovered candidate keys against known gzip magic bytes (`1f 8b`).
 
-3. **Both extractors generalize across FortiGate ARM (IPQ4019) and x86-64 hardware targets across firmware versions v5.0.9 through v8.0.0.F**: the outer XOR cipher characteristics 64-byte key, NAND 0xFF assumption are confirmed stable across this entire version range, meaning recovered key derivation applies to all builds in the Fortinet firmware collection.
+3. Both extractors generalize across FortiGate ARM (IPQ4019) and x86-64 hardware targets across firmware versions v5.0.9 through v8.0.0.F: the outer XOR cipher characteristics 64-byte key, NAND 0xFF assumption are confirmed stable across this entire version range, meaning recovered key derivation applies to all builds in the Fortinet firmware collection.
 
 ---
 

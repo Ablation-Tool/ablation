@@ -8,9 +8,9 @@ Annotate ARM32/Thumb function call sites with AAPCS argument register values: tr
 
 1. **`RegAnnotator` (x86-64) and `ARM32RegAnnotator` share the same output types `CallSite`, `AnnotationResult`: `FuncProfiler` dispatches to the correct annotator based on architecture and calls the same downstream analysis regardless of ISA.** This design means every scanner and classifier written against `RegAnnotator` output works automatically on ARM32/Thumb targets. `ARM32RegAnnotator` closes the gap that previously required manual disassembly for ARM32 call site annotation.
 
-2. **ARM32/Thumb literal pool loads `LDR r0, [PC, #N]` are the primary mechanism for passing string arguments to function calls**: in Thumb2 code, string pointers are almost never formed from `MOV`/`MOVT` immediates. `ARM32RegAnnotator` correctly resolves `LDR [PC, #off]` to the actual string value from the `.rodata` section, enabling `SinkArgClassifier.from_context()` to classify ARM32 call sites with the same accuracy as x86-64.
+2. ARM32/Thumb literal pool loads `LDR r0, [PC, #N]` are the primary mechanism for passing string arguments to function calls: in Thumb2 code, string pointers are almost never formed from `MOV`/`MOVT` immediates. `ARM32RegAnnotator` correctly resolves `LDR [PC, #off]` to the actual string value from the `.rodata` section, enabling `SinkArgClassifier.from_context()` to classify ARM32 call sites with the same accuracy as x86-64.
 
-3. **AAPCS register roles `r0`–`r3` caller-saved argument/return, `r4`–`r11` callee-saved differ from System V AMD64 ABI (`rdi`/`rsi`/`rdx`/`rcx`/`r8`/`r9`)**: ARM32 functions use only 4 argument registers where x86-64 uses 6. `ARM32RegAnnotator.annotate_calls()` applies the AAPCS convention, correctly identifying `r0` as the destination argument for `strcpy` and `r0`/`r1` as dest/src for `memcpy`.
+3. AAPCS register roles `r0`–`r3` caller-saved argument/return, `r4`–`r11` callee-saved differ from System V AMD64 ABI (`rdi`/`rsi`/`rdx`/`rcx`/`r8`/`r9`): ARM32 functions use only 4 argument registers where x86-64 uses 6. `ARM32RegAnnotator.annotate_calls()` applies the AAPCS convention, correctly identifying `r0` as the destination argument for `strcpy` and `r0`/`r1` as dest/src for `memcpy`.
 
 ---
 

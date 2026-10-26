@@ -6,11 +6,11 @@ Automate the four-step process of identifying pre-authentication attack surface 
 
 ## Why this exists
 
-1. **Pre-authentication routes are the highest-priority attack surface in firmware web interfaces**: they are reachable without any credential and represent the shortest path to unauthenticated RCE. The four-step manual process (route scan → handler class extraction → factory cross-reference → FuncProfiler) was performed by hand across multiple sessions before `PreAuthRouteAuditor` automated it.
+1. Pre-authentication routes are the highest-priority attack surface in firmware web interfaces: they are reachable without any credential and represent the shortest path to unauthenticated RCE. The four-step manual process (route scan → handler class extraction → factory cross-reference → FuncProfiler) was performed by hand across multiple sessions before `PreAuthRouteAuditor` automated it.
 
 2. **`WorkflowLockWithoutSessionPermit` is the specific route permission class used in flatui-based frameworks to mark routes that do not require an authenticated session.** Routes registered with only this permission class: without `WorkflowLock` or `RequireLogin`: are pre-auth. `PreAuthRouteAuditor.audit()` finds all such routes in the route initialization function and returns their handler VAs in one call.
 
-3. **`PreAuthAuditResult.preauth_with_sinks()` returns only routes where the handler function contains a sink**: filtering out the majority of pre-auth routes that serve static resources, login pages, or health-check endpoints. This focuses the analyst's attention on the routes where a pre-auth finding is exploitable.
+3. `PreAuthAuditResult.preauth_with_sinks()` returns only routes where the handler function contains a sink: filtering out the majority of pre-auth routes that serve static resources, login pages, or health-check endpoints. This focuses the analyst's attention on the routes where a pre-auth finding is exploitable.
 
 ---
 

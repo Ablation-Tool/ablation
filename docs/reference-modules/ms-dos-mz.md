@@ -8,9 +8,9 @@ Classify exec-class sink argument provenance in x86-32 ELF and PE binaries: prod
 
 1. **`SinkArgClassifier` hardcodes x86-64 registers `rdi`, `rsi`, `rdx`.** x86-32 cdecl passes all arguments on the stack via `PUSH` before the `CALL`, not in registers. Running `SinkArgClassifier` on x86-32 targets produced `UNKNOWN` for all sinks. `SinkArgClassifierX86_32` resolves `RMC-GAP-002` RSM/COMMSVR, `COMMSVR-GAP-004`, and `HACMP-GAP-001`.
 
-2. **x86-32 cdecl stack argument classification looks for `PUSH` sequences before each `CALL`**: the last `PUSH` before a `CALL sink_func` is argument `arg0`, the second-to-last is `arg1`, and so on. For each `PUSH`, the source operand is traced backward to its definition: `.rodata`-relative address `LEA eax, [ebx+N]` → `RODATA_CONST`; `MOV eax, [ebp+N]` positive offset from frame pointer → `ARG_PROPAGATED`.
+2. x86-32 cdecl stack argument classification looks for `PUSH` sequences before each `CALL`: the last `PUSH` before a `CALL sink_func` is argument `arg0`, the second-to-last is `arg1`, and so on. For each `PUSH`, the source operand is traced backward to its definition: `.rodata`-relative address `LEA eax, [ebx+N]` → `RODATA_CONST`; `MOV eax, [ebp+N]` positive offset from frame pointer → `ARG_PROPAGATED`.
 
-3. **`EBP+N` positive offset from frame pointer indicates a function argument**: x86-32 cdecl callee accesses its arguments at `[EBP+8]`, `[EBP+12]`, etc. A `PUSH [EBP+N]` where N ≥ 8 is therefore `ARG_PROPAGATED`. This is structurally different from x86-64 where arguments are in `rdi`/`rsi`/`rdx` and `ARG_PROPAGATED` is detected by tracing register assignments.
+3. `EBP+N` positive offset from frame pointer indicates a function argument: x86-32 cdecl callee accesses its arguments at `[EBP+8]`, `[EBP+12]`, etc. A `PUSH [EBP+N]` where N ≥ 8 is therefore `ARG_PROPAGATED`. This is structurally different from x86-64 where arguments are in `rdi`/`rsi`/`rdx` and `ARG_PROPAGATED` is detected by tracing register assignments.
 
 ---
 

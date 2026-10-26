@@ -8,9 +8,9 @@ Extend `RegAnnotator`'s single-function forward symbolic pass to follow call cha
 
 1. **`RegAnnotator` stops at function boundaries.** When a tainted register is passed as an argument to a callee, `RegAnnotator` tracks it inside that callee separately from the caller: losing the chain of provenance back to the original source. `IPRegAnnotator` re-seeds the callee's entry registers with the caller's live values, maintaining the full provenance chain across the call.
 
-2. **`ChainCallSite` records the call VA, callee name, and live argument registers at each hop**: enabling `ChainResult.all_sinks()` to find every sink call site reachable from the root function's tainted arguments, regardless of how many intermediate functions the tainted value passes through. This is the mechanism that confirms a multi-hop injection chain: `user_input → handler → validator → exec_wrapper → system()`.
+2. `ChainCallSite` records the call VA, callee name, and live argument registers at each hop: enabling `ChainResult.all_sinks()` to find every sink call site reachable from the root function's tainted arguments, regardless of how many intermediate functions the tainted value passes through. This is the mechanism that confirms a multi-hop injection chain: `user_input → handler → validator → exec_wrapper → system()`.
 
-3. **`IPRegAnnotator` is the required tool for cross-library call chains**: when a tainted value crosses a PLT boundary into another library, `RegAnnotator` alone cannot continue the trace. `IPRegAnnotator` uses `LibGraph` to resolve the callee's binary and continues the forward symbolic pass into the external library's function, producing a complete cross-binary argument provenance chain.
+3. `IPRegAnnotator` is the required tool for cross-library call chains: when a tainted value crosses a PLT boundary into another library, `RegAnnotator` alone cannot continue the trace. `IPRegAnnotator` uses `LibGraph` to resolve the callee's binary and continues the forward symbolic pass into the external library's function, producing a complete cross-binary argument provenance chain.
 
 ---
 

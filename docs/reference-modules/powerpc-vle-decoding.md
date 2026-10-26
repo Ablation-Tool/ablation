@@ -8,9 +8,9 @@ Decode PowerPC VLE Variable Length Encoding firmware for NXP e200z4/z6/z7 ECU co
 
 1. **VLE is a mixed-width ISA used by NXP e200z4/z6/z7 cores on GM E39, E39a, E54, and E92 PCMs.** Capstone has no VLE support, and the standard PPC32 decoder does not handle the SE instruction encoding. Without `EcuVLEDecoder`, VLE ECU firmware appears as undisassemblable binary data: `EcuArchDetector` detects the architecture, but there is no decoder to provide `function_starts()` for downstream analysis.
 
-2. **VLE instruction width discrimination uses a single-byte check**: `(byte0 & 0x90) == 0x10` → 32-bit VLE or Book E instruction; otherwise → 16-bit SE instruction. This makes `EcuVLEDecoder.insn_length(offset)` O(1), enabling fast sequential decode of large ROM images without per-instruction disassembly.
+2. VLE instruction width discrimination uses a single-byte check: `(byte0 & 0x90) == 0x10` → 32-bit VLE or Book E instruction; otherwise → 16-bit SE instruction. This makes `EcuVLEDecoder.insn_length(offset)` O(1), enabling fast sequential decode of large ROM images without per-instruction disassembly.
 
-3. **`VLEInsn` uses the same field conventions as `M68kInsn`**: `address`, `mnemonic`, `op_str`, `size`: enabling the same downstream pipeline stages CFG building, taint seed identification to consume VLE output without ISA-specific dispatch. This was a deliberate design choice to allow unified ECU analysis pipelines.
+3. `VLEInsn` uses the same field conventions as `M68kInsn`: `address`, `mnemonic`, `op_str`, `size`: enabling the same downstream pipeline stages CFG building, taint seed identification to consume VLE output without ISA-specific dispatch. This was a deliberate design choice to allow unified ECU analysis pipelines.
 
 ---
 

@@ -4,7 +4,7 @@ Full taint-analysis, syscall labeling, and structural lifting support for LoongA
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#loongarch64-isa-support)</sup>
 
 1. **TencentOS 4.6 ships a LoongArch64 architecture across its full software stack: glibc, OpenSSL, QEMU, kernel modules, and EDK2/GRUB2 EFI images: none of which are supported by ARM64 or x86-64 analysis pipelines.** LoongArch64 uses a distinct ISA Loongson Technology, released 2021 with 32 general-purpose registers, a 4-wide issue pipeline, lp64 ABI $a0-$a7 args, and LASX/LSX vector extensions. Without dedicated instruction decoding and register-state modeling, taint propagation stalls at the first LoongArch-specific mnemonic: `amswap`, `ldgt`, `ld.d`, `pcaddu12i`, and produces no findings. `taint_tracker_loongarch64.py` provides full labeled-taint coverage for the lp64 ABI.
 
@@ -14,7 +14,7 @@ Full taint-analysis, syscall labeling, and structural lifting support for LoongA
 
 ---
 
-## How it works
+## How it works <sup>[↑](#loongarch64-isa-support)</sup>
 
 ```mermaid
 flowchart TD
@@ -42,7 +42,7 @@ flowchart TD
     linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
-### Module inventory
+### Module inventory <sup>[↑](#loongarch64-isa-support)</sup>
 
 | Module | Role |
 |:---|:---|
@@ -60,7 +60,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#loongarch64-isa-support)</sup>
 
 ```python
 from ablation.analyzers.taint_tracker_loongarch64 import LoongArch64TaintTracker
@@ -88,7 +88,7 @@ is_dangerous = 220 in dangerous_syscalls  # → True
 
 ---
 
-## Example output
+## Example output <sup>[↑](#loongarch64-isa-support)</sup>
 
 The following illustrates the format for representative taint findings. Actual function names, virtual addresses, and call chains will reflect the specific binary.
 
@@ -106,7 +106,7 @@ The following illustrates the format for representative taint findings. Actual f
 
 ---
 
-## False positives
+## False positives <sup>[↑](#loongarch64-isa-support)</sup>
 
 **`andi` instruction bounds the taint range: a tainted value masked with `andi $t0, $t0, 0xff` is reported with `bound=0xff`, which means it can only represent values 0-255.** This bound is used to gate out-of-bounds array index findings: a tainted byte masked to 0xff cannot index a buffer larger than 256 bytes with a resulting out-of-bounds write. If the finding is `buffer_overflow` via an `andi`-bounded index, verify that the destination buffer is at least 256 bytes before escalating.
 
@@ -114,7 +114,7 @@ The following illustrates the format for representative taint findings. Actual f
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#loongarch64-isa-support)</sup>
 
 **Before this module:** `BinaryContext.load_or_build()` for PLT symbol resolution. Confirm the binary is LoongArch64 ELF with `readelf -h binary | grep Machine` (should show `LoongArch`). For TencentOS targets, check `/media/cowboy/research/TencentOS/` for available images.
 
@@ -122,7 +122,7 @@ The following illustrates the format for representative taint findings. Actual f
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#loongarch64-isa-support)</sup>
 
 `scan_sources_to_sinks(ctx)` returns `List[TaintFindingLA64]`.
 
@@ -138,7 +138,7 @@ The following illustrates the format for representative taint findings. Actual f
 
 ---
 
-## See also
+## See also <sup>[↑](#loongarch64-isa-support)</sup>
 
 - [LoongArch64 Syscall Labeling](loongarch-syscall-labeling.md): syscall table, dangerous-syscall set, and kernel-interface analysis
 - [Binary Lifter](binary-lifter.md): `arch='la64'` structural lifting for LoongArch64 functions

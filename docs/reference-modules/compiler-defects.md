@@ -4,7 +4,7 @@ Finds security vulnerabilities the compiler introduced through miscompilation. T
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#compiler-defect-detection)</sup>
 
 One class of vulnerability was completely invisible before this module:
 
@@ -13,11 +13,11 @@ A developer writes correct C++: `size_t n = std::maxinput_len, min_len`. The com
 
 ---
 
-## The GCC 12.3.1.7 max-not-min bug
+## The GCC 12.3.1.7 max-not-min bug <sup>[↑](#compiler-defect-detection)</sup>
 
 GCC 12.3.1.7 for LoongArch64 miscompiles comparison operations that feed into size calculations. The compiler emits a correct-looking four-instruction sequence but swaps the operands in the final combination step. The result is that `maxa, b` returns `mina, b`.
 
-### The four-instruction sequence
+### The four-instruction sequence <sup>[↑](#compiler-defect-detection)</sup>
 
 ```
   Source intent: n = std::max(input_len, min_len)
@@ -35,7 +35,7 @@ GCC 12.3.1.7 for LoongArch64 miscompiles comparison operations that feed into si
 
 The LA64 `masknez` and `maskeqz` instructions are branchless select primitives: `masknez dst, src, cond` writes `src` to `dst` if `cond != 0`, otherwise writes zero. The correct `max` implementation uses `masknez` to select the LARGER operand. GCC inverts the selection: it uses `masknez` on `a` when `a < b` is true, so it selects `a` the smaller value. The `or` then combines the two conditional slots and delivers the minimum.
 
-### Security impact
+### Security impact <sup>[↑](#compiler-defect-detection)</sup>
 
 When `rd` flows into a `malloc` size argument, the allocation is smaller than the code expects. Any subsequent write of `maxinput_len, min_len` bytes into that buffer is a heap overflow because the actual allocation is only `mininput_len, min_len` bytes.
 
@@ -52,7 +52,7 @@ When `rd` flows into a `malloc` size argument, the allocation is smaller than th
 
 ---
 
-## How the scanner works
+## How the scanner works <sup>[↑](#compiler-defect-detection)</sup>
 
 ```mermaid
 flowchart TD
@@ -94,13 +94,13 @@ flowchart TD
     linkStyle 12 stroke:#2e7d32,stroke-width:3px
 ```
 
-### Why forward tracking stops at 20 instructions
+### Why forward tracking stops at 20 instructions <sup>[↑](#compiler-defect-detection)</sup>
 
 GCC places the size calculation immediately before the allocation call. Twenty instructions covers any intervening register moves or address computations while keeping the false-positive rate low. A result register that travels more than 20 instructions before reaching a sink is almost certainly consumed for a different purpose in between.
 
 ---
 
-## Confirmed impact
+## Confirmed impact <sup>[↑](#compiler-defect-detection)</sup>
 
 | Target | Format | Findings |
 |---|---|---|
@@ -112,7 +112,7 @@ Total confirmed: 172 2 CRITICAL, 55 HIGH, 115 MEDIUM.
 
 ---
 
-## Usage
+## Usage <sup>[↑](#compiler-defect-detection)</sup>
 
 ELF binary:
 
@@ -131,19 +131,19 @@ data = open('TlsDxe.efi', 'rb').read()
 findings = LA64MaxNotMinScanner.from_pe32plus(data).scan()
 ```
 
-### False positive class
+### False positive class <sup>[↑](#compiler-defect-detection)</sup>
 
 Rust `Vec` append patterns use `bltu remaining_cap,...` to guard the write. These have a conditional branch between the `or` instruction and the sink call that guards against the wrong result. The branch means the minimum is never actually used as an allocation size without first checking capacity. Verify manually before reporting any finding where a conditional branch on the result register appears within the 20-instruction tracking window.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#compiler-defect-detection)</sup>
 
 `LA64MaxNotMinScanner.scan()` disassembles the entire `.text` section with a pure-Python LoongArch64 decoder, not Capstone, no func_starts iteration. For each instruction, it detects the GCC-generated `masknez rd, ra, cond + maskeqz rd2, rb, cond + or rd, rd, rd2` pattern that emits `mina,b` when the source code called `maxa,b`. On a match, looks ahead for a sink call malloc/memcpy/recv using the result register. Returns `List[LA64MaxNotMinFinding]` with `pattern_va`, `result_reg`, `sink_va`, `sink_name`, `sink_arg`.
 
 ---
 
-## Example output
+## Example output <sup>[↑](#compiler-defect-detection)</sup>
 
 ```
 [HIGH] TAINT_FLOW  0x00401234 in handle_request (0x004010c0)
@@ -157,13 +157,13 @@ Rust `Vec` append patterns use `bltu remaining_cap,...` to guard the write. Thes
 
 ---
 
-## False positives
+## False positives <sup>[↑](#compiler-defect-detection)</sup>
 
 `TAINT_FLOW` may fire when the compiler defect pattern for example signed/unsigned mismatch is present but the specific value range cannot satisfy the exploit condition. Verify the actual range of the length or pointer source before reporting. `LENGTH_UNDERFLOW` may fire on sanity checks intentionally coded as signed comparisons with no actual underflow path.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#compiler-defect-detection)</sup>
 
 **Before this module:** `BinaryContext.load_or_build()` to resolve func_starts. `SemanticSearcher.query()` to identify candidate functions near allocation and length-processing patterns.
 
@@ -171,7 +171,7 @@ Rust `Vec` append patterns use `bltu remaining_cap,...` to guard the write. Thes
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#compiler-defect-detection)</sup>
 
 `CompilerSecurityGate.from_context(ctx).scan()` returns `List[GateFinding]`. See [compiler-security-gate](compiler_security_gate.md) for full field reference.
 
@@ -186,7 +186,7 @@ Rust `Vec` append patterns use `bltu remaining_cap,...` to guard the write. Thes
 
 ---
 
-## See also
+## See also <sup>[↑](#compiler-defect-detection)</sup>
 
 - [BinaryContext](binary-context.md): function and import resolution before scanning
 - [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint

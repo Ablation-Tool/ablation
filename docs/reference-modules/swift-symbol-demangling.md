@@ -6,11 +6,11 @@ Decode Swift 5+ (`$s` prefix) and legacy Swift 3/4 (`_T` prefix) mangled symbol 
 
 ## Why this exists
 
-1. **Swift binaries on iOS, macOS, and tvOS use mangled symbol names that encode the module, type, function, and parameter types**: `$s8SwiftCore7UIViewC9setOriginyyF` is unreadable without demangling. Without `swift_demangle.py`, Swift function names in stripped binaries remain opaque, blocking semantic search and function identification. `is_swift_symbol()` provides a fast prefix check to separate Swift symbols from ObjC and C symbols before applying the demangler.
+1. Swift binaries on iOS, macOS, and tvOS use mangled symbol names that encode the module, type, function, and parameter types: `$s8SwiftCore7UIViewC9setOriginyyF` is unreadable without demangling. Without `swift_demangle.py`, Swift function names in stripped binaries remain opaque, blocking semantic search and function identification. `is_swift_symbol()` provides a fast prefix check to separate Swift symbols from ObjC and C symbols before applying the demangler.
 
-2. **`_has_swift_demangle()` checks for the `swift-demangle` binary at import time and uses it when available**: the binary produces correct output for all valid Swift 5 symbols, including complex generic specializations that the pure-Python demangler may not handle. The pure-Python path handles the common cases modules, types, methods, computed properties and is always available without any macOS SDK installation.
+2. `_has_swift_demangle()` checks for the `swift-demangle` binary at import time and uses it when available: the binary produces correct output for all valid Swift 5 symbols, including complex generic specializations that the pure-Python demangler may not handle. The pure-Python path handles the common cases modules, types, methods, computed properties and is always available without any macOS SDK installation.
 
-3. **`@lru_cache` on `demangle()`**: Swift binaries often have thousands of symbols, many of which are compiler-generated variants of a small number of user-defined names. Cache hit rate is typically 60-80% on real iOS frameworks, reducing demangling time from O(n) serial calls to O(k) where k is the number of unique symbol forms.
+3. `@lru_cache` on `demangle()`: Swift binaries often have thousands of symbols, many of which are compiler-generated variants of a small number of user-defined names. Cache hit rate is typically 60-80% on real iOS frameworks, reducing demangling time from O(n) serial calls to O(k) where k is the number of unique symbol forms.
 
 ---
 

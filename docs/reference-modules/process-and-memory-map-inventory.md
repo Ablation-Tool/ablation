@@ -6,7 +6,7 @@ Enumerate running processes, loaded shared libraries, executable/RWX memory regi
 
 ## Why this exists
 
-1. **`ProcessEnumerator` reads `/proc/<pid>/maps`, `/proc/<pid>/environ`, and `/proc/<pid>/fd/`**: providing the complete memory layout and open file descriptors for every process the current user can read. RWX memory regions (`rwx` in `/proc/pid/maps` without a backing file) are flagged as potential shellcode injection targets: a process with an anonymous RWX region may be a shellcode host or JIT compiler.
+1. `ProcessEnumerator` reads `/proc/<pid>/maps`, `/proc/<pid>/environ`, and `/proc/<pid>/fd/`: providing the complete memory layout and open file descriptors for every process the current user can read. RWX memory regions (`rwx` in `/proc/pid/maps` without a backing file) are flagged as potential shellcode injection targets: a process with an anonymous RWX region may be a shellcode host or JIT compiler.
 
 2. **`scan_dll_hijacking_candidates()`** enumerates processes with shared library loads from writable directories: a common misconfiguration where a privileged process `root`, SUID loads a `.so` from `/tmp/` or a user-writable path. If the calling user can write to the load path, they can substitute a malicious library and execute code at the privilege level of the target process.
 

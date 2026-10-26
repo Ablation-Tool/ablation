@@ -6,11 +6,11 @@ Track data flow through LoongArch64 binaries using a labeled taint model: propag
 
 ## Why this exists
 
-1. **LoongArch64 uses the LP64 ABI with eight argument registers (`$a0`–`$a7`)**: significantly more than the four registers used by ARM64 AAPCS or x86-64 SystemV. Without a LoongArch64-specific taint tracker, sinks with more than four arguments common in complex kernel call sites cannot be analyzed: the standard tracker would not know which register holds the fifth argument.
+1. LoongArch64 uses the LP64 ABI with eight argument registers (`$a0`–`$a7`): significantly more than the four registers used by ARM64 AAPCS or x86-64 SystemV. Without a LoongArch64-specific taint tracker, sinks with more than four arguments common in complex kernel call sites cannot be analyzed: the standard tracker would not know which register holds the fifth argument.
 
-2. **`andi` on LoongArch64 zeroes the upper bits of the result**: if `$a0` holds a tainted value and `andi $t0, $a0, 0xff` is executed, the result is bounded to `[0, 255]`. `LoongArch64TaintTracker` internal `Taint.bound` records this upper bound, enabling `SinkArgClassifier`-equivalent reasoning: a tainted byte that is bounded to `0xff` cannot cause a heap overflow via a size argument to `malloc`.
+2. `andi` on LoongArch64 zeroes the upper bits of the result: if `$a0` holds a tainted value and `andi $t0, $a0, 0xff` is executed, the result is bounded to `[0, 255]`. `LoongArch64TaintTracker` internal `Taint.bound` records this upper bound, enabling `SinkArgClassifier`-equivalent reasoning: a tainted byte that is bounded to `0xff` cannot cause a heap overflow via a size argument to `malloc`.
 
-3. **`addi.d $sp, $sp, -N` tracks frame-offset rebases**: stack allocations on LoongArch64 are expressed as subtractions from `$sp`. When `$sp` is used as a base for address computation, `LoongArch64TaintTracker` rebases taint labels to the new frame offset, maintaining correct stack-slot tracking across function prologues and mid-function allocations.
+3. `addi.d $sp, $sp, -N` tracks frame-offset rebases: stack allocations on LoongArch64 are expressed as subtractions from `$sp`. When `$sp` is used as a base for address computation, `LoongArch64TaintTracker` rebases taint labels to the new frame offset, maintaining correct stack-slot tracking across function prologues and mid-function allocations.
 
 ---
 

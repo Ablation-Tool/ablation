@@ -4,17 +4,17 @@ Path-insensitive, flow-sensitive dataflow analysis over an AArch64 CFG: propagat
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#arm64-symbolic-slicing)</sup>
 
 1. **ARM64 is the dominant architecture for modern network appliance firmware: Fortinet ARM64 builds, Cisco IOS-XE ARM64, and ARM-based firewall appliances all run on AArch64.** `analyze_cfg()` from `analysis_arm64.py` provides the flow-sensitive dataflow backbone for the ARM64 taint pipeline. Unlike `taint_tracker_arm64.py`'s intraprocedural linear scan, `analyze_cfg()` propagates taint state across basic-block boundaries using CFG DFS, tracking join-point state merges correctly.
 
 2. **"Symbolic slicing" on ARM64 means following `TaintState` across the full CFG, including through loop back-edges and conditional branches, while maintaining the register state at every basic-block boundary.** `CFGResult.final_state` gives the taint state at function exit; intermediate states at each block boundary can be read from the CFG's `dfs()` traversal. This enables backward slicing from a finding back to its origin: given a finding at a specific `BLR` call site, the taint state at that point identifies exactly which registers carry user-controlled data and which instructions produced their current values.
 
-3. **`analyze_cfg()` implements the same API as the RISC-V and MIPS labeled-taint `analyze_cfg()` variants**: the `insns, initial_state` → `CFGResult` signature is consistent across ISAs, allowing the same driver code to analyze ARM64, RISC-V, and MIPS targets by swapping only the `TaintState` import and `from_listing()` decoder.
+3. `analyze_cfg()` implements the same API as the RISC-V and MIPS labeled-taint `analyze_cfg()` variants: the `insns, initial_state` → `CFGResult` signature is consistent across ISAs, allowing the same driver code to analyze ARM64, RISC-V, and MIPS targets by swapping only the `TaintState` import and `from_listing()` decoder.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#arm64-symbolic-slicing)</sup>
 
 ```mermaid
 flowchart TD
@@ -38,7 +38,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#arm64-symbolic-slicing)</sup>
 
 ```python
 from ablation.analyzers.analysis_arm64 import analyze_cfg
@@ -78,7 +78,7 @@ for reg in ['x0', 'x1', 'x2']:
 
 ---
 
-## Example output
+## Example output <sup>[↑](#arm64-symbolic-slicing)</sup>
 
 The following illustrates the finding output format. Actual addresses and registers are binary-specific.
 
@@ -92,7 +92,7 @@ Finding at <va>:
 
 ---
 
-## False positives
+## False positives <sup>[↑](#arm64-symbolic-slicing)</sup>
 
 **`analyze_cfg()` is path-insensitive: taint merged at join points is conservative.** A finding may fire on a path where sanitization occurs on the other branch. Confirm with manual CFG inspection whether there exists a path from the taint source to the sink without traversing a sanitizing branch. Use `SanitizerDetector` to identify likely sanitizing functions on the path.
 
@@ -100,13 +100,13 @@ Finding at <va>:
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#arm64-symbolic-slicing)</sup>
 
 Run `analyze_cfg()` after `SemanticSearcher` identifies handler candidates and before `PathSolver` confirms feasibility. The `findings` output feeds `FindingRegistry` and the `final_state` enables call-chain seeding: the exit state from function A becomes the initial state for the function that calls A.
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#arm64-symbolic-slicing)</sup>
 
 `ARM64TaintTracker.from_path(path).run()` returns `List[TaintFindingARM64]`:
 
@@ -122,7 +122,7 @@ Run `analyze_cfg()` after `SemanticSearcher` identifies handler candidates and b
 
 ---
 
-## See also
+## See also <sup>[↑](#arm64-symbolic-slicing)</sup>
 
 - [RISC-V](risc-v.md): same `analyze_cfg()` API for RISC-V 32/64 targets
 - [MIPS](mips.md): MIPS-32/64 labeled-taint with delay-slot awareness

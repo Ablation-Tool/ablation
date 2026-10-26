@@ -6,9 +6,9 @@ Probe Cisco DCNM Data Center Network Manager and VXLAN VTEP infrastructure: iden
 
 ## Why this exists
 
-1. **DCNM `/rest/dcnm-version` returns the software version without authentication**: `probe_dcnm()` sends `GET /rest/dcnm-version` to ports 443 and 9443, which returns the exact DCNM version string without requiring login. DCNM version directly maps to known CVEs; version disclosure is confirmed unauthenticated regardless of whether the DCNM web console requires authentication.
+1. DCNM `/rest/dcnm-version` returns the software version without authentication: `probe_dcnm()` sends `GET /rest/dcnm-version` to ports 443 and 9443, which returns the exact DCNM version string without requiring login. DCNM version directly maps to known CVEs; version disclosure is confirmed unauthenticated regardless of whether the DCNM web console requires authentication.
 
-2. **VXLAN VTEP discovery via BGP EVPN NLRIs**: `probe_vxlan_vteps()` sends BGP OPEN and UPDATE messages to discover EVPN routes that carry VTEP IP addresses and VNI assignments. This provides the full VXLAN fabric topology from any host that is routable to the BGP reflector, without requiring management plane access.
+2. VXLAN VTEP discovery via BGP EVPN NLRIs: `probe_vxlan_vteps()` sends BGP OPEN and UPDATE messages to discover EVPN routes that carry VTEP IP addresses and VNI assignments. This provides the full VXLAN fabric topology from any host that is routable to the BGP reflector, without requiring management plane access.
 
 3. **DCNM has been superseded by NDFC on Nexus Dashboard**, but DCNM deployments port 9443 remain common in older data center environments. `probe_dcnm()` checks both the legacy DCNM port (9443) and the NDFC path (443), returning whichever responds, so the same function works against both deployment models.
 

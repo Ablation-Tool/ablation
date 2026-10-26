@@ -10,7 +10,7 @@ Build dominator tree, post-dominator tree, and identify natural loops from a CFG
 
 2. **Loop natural analysis identifies back edges edges where the successor dominates the predecessor, these are the loop headers for Relooper `WhileNode` construction.** Identifying back edges from the dominator tree rather than cycle detection is more reliable for reducible CFGs: a function with multiple natural loops produces a correct `WhileNode` for each loop header, while a cycle detector may merge nested loops incorrectly.
 
-3. **`CFG.dominator_tree()` and `CFG.reaching_defs()` are the two structural analysis methods on `CFG`**: dominator tree provides structural shape, reaching definitions (used by `ReachingDefsAnalysis`) provide the data-flow lattice required for `ConstPropAnalysis` and `SCCPAnalysis`. Together they enable the MFP worklist to terminate at the correct fixpoint without over-approximation.
+3. `CFG.dominator_tree()` and `CFG.reaching_defs()` are the two structural analysis methods on `CFG`: dominator tree provides structural shape, reaching definitions (used by `ReachingDefsAnalysis`) provide the data-flow lattice required for `ConstPropAnalysis` and `SCCPAnalysis`. Together they enable the MFP worklist to terminate at the correct fixpoint without over-approximation.
 
 ---
 

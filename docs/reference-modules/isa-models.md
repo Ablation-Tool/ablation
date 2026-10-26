@@ -4,7 +4,7 @@ Per-architecture ISA constant tables and ABI models used internally by instructi
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#isa-and-abi-models)</sup>
 
 1. **Every taint tracker and CFG builder needs the same ABI facts.** Register names, argument registers, return registers, stack pointer, frame pointer, and calling convention conventions differ by architecture and by mode within an architecture. Duplicating these tables across 14 arch-specific modules would make them drift. The ISA model files are the single source of truth.
 
@@ -14,7 +14,7 @@ Per-architecture ISA constant tables and ABI models used internally by instructi
 
 ---
 
-## Modules
+## Modules <sup>[↑](#isa-and-abi-models)</sup>
 
 | Module | Arch | Modes | ABI |
 |:---|:---|:---|:---|
@@ -25,7 +25,7 @@ Per-architecture ISA constant tables and ABI models used internally by instructi
 
 ---
 
-## Common interface
+## Common interface <sup>[↑](#isa-and-abi-models)</sup>
 
 Every ISA module provides at minimum:
 
@@ -43,7 +43,7 @@ SP: str                     # stack pointer canonical name
 
 ---
 
-## Usage
+## Usage <sup>[↑](#isa-and-abi-models)</sup>
 
 These modules are not called directly from user code. They are imported by:
 
@@ -67,7 +67,7 @@ print(arm64_canon("lr"))   # ('x30', 64)
 
 ---
 
-## ARM32 `Mode.pc_value()`
+## ARM32 `Mode.pc_value()` <sup>[↑](#isa-and-abi-models)</sup>
 
 ARM32 has a non-trivial PC-relative behavior that affects literal pool loads and `adr`:
 
@@ -80,7 +80,7 @@ Thumb state (T32): PC reads as instruction_address + 4; literal loads use Align(
 
 ---
 
-## Sources
+## Sources <sup>[↑](#isa-and-abi-models)</sup>
 
 | Module | Primary source |
 |:---|:---|
@@ -91,7 +91,7 @@ Thumb state (T32): PC reads as instruction_address + 4; literal loads use Align(
 
 ---
 
-## See also
+## See also <sup>[↑](#isa-and-abi-models)</sup>
 
 - [Insn Models](insn-models.md): instruction representation layer that imports these ISA models
 - [Analysis Engine](analysis-engine.md): CFG dataflow engine that uses these ABI constants

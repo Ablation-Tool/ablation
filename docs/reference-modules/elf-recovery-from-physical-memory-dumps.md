@@ -6,7 +6,7 @@ Decrypt PS3 SELF Signed ELF files programmatically inside a Python pipeline: aut
 
 ## Why this exists
 
-1. **`lief`, `capstone`, and `BinaryContext.load_or_build()` all fail silently on encrypted SELF format**: they see garbage or raise exceptions on the non-ELF magic bytes `0x53434500` (`SCE\0`). Before `PS3SELFDecryptor`, decryption required the external `scetool` binary C, manual build, not importable as a Python library, invoked manually before each analysis session with the correct keyset flags.
+1. `lief`, `capstone`, and `BinaryContext.load_or_build()` all fail silently on encrypted SELF format: they see garbage or raise exceptions on the non-ELF magic bytes `0x53434500` (`SCE\0`). Before `PS3SELFDecryptor`, decryption required the external `scetool` binary C, manual build, not importable as a Python library, invoked manually before each analysis session with the correct keyset flags.
 
 2. **Auto-detection from `key_rev` eliminates manual keyset lookup.** The `key_rev` field at bytes 6–7 of the SCE header selects the master keyset (ERK/RIV). `PS3SELFDecryptor.from_path()` reads `key_rev` and selects the correct keyset automatically. Without this, matching `key_rev` to the right ERK/RIV required manual lookup in `scetool`'s `keys.h` for every new SELF file.
 

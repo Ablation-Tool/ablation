@@ -6,11 +6,11 @@ Detect Windows kernel pool buffer overflow candidates in driver PE binaries: tra
 
 ## Why this exists
 
-1. **Windows kernel pool overflows via IOCTL size parameters are a well-known privilege escalation vector**: an attacker passes an oversized `InputBufferLength` to trigger an under-allocated pool buffer, then overflows it with subsequent data. `WindowsPoolTaintTracker` automates the detection that was previously done by manually tracing every `ExAllocatePool*` call site to its size argument origin.
+1. Windows kernel pool overflows via IOCTL size parameters are a well-known privilege escalation vector: an attacker passes an oversized `InputBufferLength` to trigger an under-allocated pool buffer, then overflows it with subsequent data. `WindowsPoolTaintTracker` automates the detection that was previously done by manually tracing every `ExAllocatePool*` call site to its size argument origin.
 
-2. **`PoolTaintFinding.severity` reflects the quality of bounds checking before the allocation**: a size argument that reaches `ExAllocatePool*` with no comparison or mask operation is `HIGH`; a size with a single bounds check that may be bypassable for example `if (size > MAX size = MAX` without type coercion check) is `MEDIUM`. This saves triage time by pre-scoring findings.
+2. `PoolTaintFinding.severity` reflects the quality of bounds checking before the allocation: a size argument that reaches `ExAllocatePool*` with no comparison or mask operation is `HIGH`; a size with a single bounds check that may be bypassable for example `if (size > MAX size = MAX` without type coercion check) is `MEDIUM`. This saves triage time by pre-scoring findings.
 
-3. **`WindowsPoolTaintTracker` handles both `METHOD_BUFFERED` and `METHOD_NEITHER` IOCTL transfer types**: `METHOD_NEITHER` provides direct userspace buffer pointers (`Type3InputBuffer`) that bypass the kernel's I/O manager input validation, making them a higher-priority taint source. Findings from `METHOD_NEITHER` IOCTLs are annotated in the `PoolTaintFinding` output.
+3. `WindowsPoolTaintTracker` handles both `METHOD_BUFFERED` and `METHOD_NEITHER` IOCTL transfer types: `METHOD_NEITHER` provides direct userspace buffer pointers (`Type3InputBuffer`) that bypass the kernel's I/O manager input validation, making them a higher-priority taint source. Findings from `METHOD_NEITHER` IOCTLs are annotated in the `PoolTaintFinding` output.
 
 ---
 

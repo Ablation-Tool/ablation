@@ -8,9 +8,9 @@ Classify `fgets`-sourced `TaintFindingARM64` results by whether the `FILE*` argu
 
 1. **`TaintTracker` treats all `fgets()` calls identically as sources of tainted data, but `fgets` reading from a local config file is not exploitable from the network, while `fgets` reading from a socket-backed `FILE*` is.** `ARM64FgetsFdDiscriminator.classify()` post-processes `fgets`-sourced findings by backtracking the `FILE*` argument to its origin, reclassifying findings as `file` config read, lower severity or `network` socket read, higher severity or `unknown` origin indeterminate.
 
-2. **The three-class taxonomy prevents false positive escalation**: a firmware binary with 40 config-parser uses of `fgets` and 2 socket-handler uses of `fgets` would produce 42 taint findings without discrimination; with discrimination, 40 are classified as `file` filtered out of the taint queue and 2 are classified as `network` retained for full analysis. This reduces manual review from 42 findings to 2.
+2. The three-class taxonomy prevents false positive escalation: a firmware binary with 40 config-parser uses of `fgets` and 2 socket-handler uses of `fgets` would produce 42 taint findings without discrimination; with discrimination, 40 are classified as `file` filtered out of the taint queue and 2 are classified as `network` retained for full analysis. This reduces manual review from 42 findings to 2.
 
-3. **`FgetsClassifiedFinding.severity()` adjusts severity based on FD class**: `network` class findings retain their original taint severity; `file` class findings are downgraded to `INFORMATIONAL`; `unknown` are MEDIUM. This enables severity-based filtering without discarding unknown findings entirely.
+3. `FgetsClassifiedFinding.severity()` adjusts severity based on FD class: `network` class findings retain their original taint severity; `file` class findings are downgraded to `INFORMATIONAL`; `unknown` are MEDIUM. This enables severity-based filtering without discarding unknown findings entirely.
 
 ---
 

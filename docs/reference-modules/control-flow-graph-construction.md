@@ -4,7 +4,7 @@ Per-function control-flow graph construction for x86-64 ELF binaries using itera
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#control-flow-graph-construction)</sup>
 
 1. **Flow-sensitive taint analysis (`analyze_function_flow_sensitive()`) and dominator-based loop detection both require a correctly built CFG: without it, all analysis treats a function's instructions as a flat sequence, missing the semantics of conditional branches and loop back-edges.** `CFGBuilder.build_function()` constructs the CFG using iterative recursive disassembly Andriesse, "Practical Binary Analysis" §8.2.4: follow direct branches from each basic block, stop at `ret`/`jmp`/`hlt`, push both sides of a conditional branch. The result is a `CFG` with correct successor edges across all paths.
 
@@ -14,7 +14,7 @@ Per-function control-flow graph construction for x86-64 ELF binaries using itera
 
 ---
 
-## How it works
+## How it works <sup>[↑](#control-flow-graph-construction)</sup>
 
 ```mermaid
 flowchart TD
@@ -39,7 +39,7 @@ flowchart TD
     linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
-### ISA-specific CFG builders
+### ISA-specific CFG builders <sup>[↑](#control-flow-graph-construction)</sup>
 
 | Module | ISA | Special handling |
 |:---|:---|:---|
@@ -57,7 +57,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#control-flow-graph-construction)</sup>
 
 ```python
 from ablation.analyzers.cfg_builder import CFGBuilder
@@ -92,7 +92,7 @@ print(f"Total CFGs built: {len(all_cfgs)}")
 
 ---
 
-## Example output
+## Example output <sup>[↑](#control-flow-graph-construction)</sup>
 
 The following illustrates the CFG stats and block structure format. Actual values are function-specific.
 
@@ -108,7 +108,7 @@ CFG for <func-va>:
 
 ---
 
-## False positives
+## False positives <sup>[↑](#control-flow-graph-construction)</sup>
 
 **`build_function()` stops at `jmp` unconditional jump without following jump-table targets.** Functions with switch statements that use a `jmp [rax*8+table]` pattern will have their jump-table cases appear as unreachable blocks in the CFG. The `stats()` field `has_indirect_branch: True` flags this. Flow-sensitive analysis on such functions may miss paths through switch cases.
 
@@ -116,13 +116,13 @@ CFG for <func-va>:
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#control-flow-graph-construction)</sup>
 
 Build CFGs after `XRefGraph` provides function boundaries and PLT mapping. `CFGBuilder` is a prerequisite for `analyze_function_flow_sensitive()`, `SubsequenceSearcher` which uses op-category sequences derived from CFG blocks, and `StructureRecovery` which reads dominator trees. Build once per session and cache: `BinaryContext.load_or_build()` handles this automatically.
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#control-flow-graph-construction)</sup>
 
 `CFGBuilder.build(va)` returns a `CFG` object:
 
@@ -146,7 +146,7 @@ Build CFGs after `XRefGraph` provides function boundaries and PLT mapping. `CFGB
 
 ---
 
-## See also
+## See also <sup>[↑](#control-flow-graph-construction)</sup>
 
 - [XRefGraph](xref-graph.md): provides function starts and PLT map; required for `CFGBuilder`
 - [Taint Analysis](taint-analysis.md): `analyze_function_flow_sensitive()` uses CFG basic blocks

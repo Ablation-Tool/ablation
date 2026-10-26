@@ -4,7 +4,7 @@ Traverses the control flow graph from the network entry point and identifies eve
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#pre-authentication-exposure)</sup>
 
 One thing blocked pre-auth surface mapping before `PreAuthRouteAuditor`:
 
@@ -13,11 +13,11 @@ Web framework route tables in compiled firmware binaries are initialized at runt
 
 ---
 
-## How it works
+## How it works <sup>[↑](#pre-authentication-exposure)</sup>
 
 The auditor targets flatui-style web frameworks FortiManager, FortiAnalyzer web management backends but the control flow graph traversal approach applies to any route-registration framework where the authentication check is expressed as a middleware parameter at registration time.
 
-### Full pipeline
+### Full pipeline <sup>[↑](#pre-authentication-exposure)</sup>
 
 ```mermaid
 flowchart TD
@@ -47,7 +47,7 @@ flowchart TD
     linkStyle 6 stroke:#2e7d32,stroke-width:3px
 ```
 
-### What "pre-auth" means in this framework
+### What "pre-auth" means in this framework <sup>[↑](#pre-authentication-exposure)</sup>
 
 ```mermaid
 flowchart TD
@@ -79,7 +79,7 @@ Flatui-style frameworks encode the middleware list as a bitfield or a set of str
 
 ---
 
-## Usage
+## Usage <sup>[↑](#pre-authentication-exposure)</sup>
 
 VA constants must be updated per firmware version. Read the route init function VA from the binary before calling:
 
@@ -108,7 +108,7 @@ Each result in `results.routes` has:
 
 ---
 
-## PocGenerator
+## PocGenerator <sup>[↑](#pre-authentication-exposure)</sup>
 
 Once pre-auth routes are confirmed, `PocGenerator` produces minimal curl commands that reproduce each finding at the protocol level.
 
@@ -133,7 +133,7 @@ The PoC output is paste-ready for a disclosure report. The curl command reproduc
 
 ---
 
-## Example output
+## Example output <sup>[↑](#pre-authentication-exposure)</sup>
 
 ```
 === PreAuthRouteAuditor Results ===
@@ -147,13 +147,13 @@ The PoC output is paste-ready for a disclosure report. The curl command reproduc
 
 ---
 
-## False positives
+## False positives <sup>[↑](#pre-authentication-exposure)</sup>
 
 Routes registered with auth middleware at the app level not as a decorator on the handler function appear as unauthenticated. The scanner only detects per-route auth decorators; verify app-level middleware before reporting. Informational endpoints version, health that are intentionally unauthenticated are expected findings.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#pre-authentication-exposure)</sup>
 
 **Before this module:** No binary analysis required: `from_pathsource_root` operates on Python/JS source files.
 
@@ -161,7 +161,7 @@ Routes registered with auth middleware at the app level not as a decorator on th
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#pre-authentication-exposure)</sup>
 
 This page describes a CFG reachability workflow. Individual tools return different types:
 
@@ -171,7 +171,7 @@ This page describes a CFG reachability workflow. Individual tools return differe
 
 ---
 
-## See also
+## See also <sup>[↑](#pre-authentication-exposure)</sup>
 
 - [BinaryContext](binary-context.md): function and import resolution before scanning
 - [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint

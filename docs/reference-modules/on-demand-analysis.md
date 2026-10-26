@@ -1,12 +1,42 @@
-# On-Demand Analysis
+# BinaryContext
 
-Every session with a binary starts by loading `BinaryContext`. It builds a lightweight index of the binary once and reloads that index in under 200 milliseconds on every subsequent session. The cost of analyzing a new binary falls to a few seconds the first time and becomes nearly instant after that.
+  - [What is BinaryContext?](#what-is-binarycontext)
+  - [Why this exists](#why-this-exists)
+    - [The startup time problem](#the-startup-time-problem)
+    - [The GUI dependency problem](#the-gui-dependency-problem)
+  - [Build phase](#build-phase)
+    - [Step 1: Format parse and symbol extraction](#step-1-format-parse-and-symbol-extraction)
+    - [Step 2: Function start recovery](#step-2-function-start-recovery)
+    - [Step 3: Call graph construction](#step-3-call-graph-construction)
+    - [Step 4: String cross-reference index](#step-4-string-cross-reference-index)
+    - [Step 5: Serialization](#step-5-serialization)
+  - [Reload phase](#reload-phase)
+  - [What is indexed](#what-is-indexed)
+  - [The name overlay](#the-name-overlay)
+  - [callers_of and callees_of](#callers_of-and-callees_of)
+  - [Pipeline position](#pipeline-position)
+  - [Usage](#usage)
+  - [How it works](#how-it-works)
+  - [Example output](#example-output)
+  - [False positives](#false-positives)
+  - [Reading output](#reading-output)
+  - [See also](#see-also)
 
 ---
 
-## Why this exists
+## What is BinaryContext? <sup>[↑](#binarycontext)</sup>
 
-### The startup time problem
+`BinaryContext` is Ablation's session cache and binary index. It parses a binary once, builds a function-start list, call graph, import table, and string cross-reference index, then serializes the result keyed on the binary's SHA-256 hash. Every subsequent session deserializes that index in about 130 milliseconds rather than repeating the full parse.
+
+Every Ablation analysis tool accepts a `BinaryContext` as its primary input. `TaintTracker`, `SemanticSearcher`, `SinkArgClassifier`, and `FuncProfiler` all query it for function starts, call graph data, and import names. The object holds no mutable state after the build phase: every analysis tool reads it as a read-only index.
+
+The session cache eliminates the binary analysis startup cost that makes iterative RE workflows impractical in GUI-based tools. IDA Pro and Ghidra each require 5 to 20 minutes of autoanalysis before a 50 MB firmware binary is interactive. `BinaryContext` pays that cost once, serializes the result, and reloads in 130 milliseconds on every subsequent session.
+
+---
+
+## Why this exists <sup>[↑](#binarycontext)</sup>
+
+### The startup time problem <sup>[↑](#binarycontext)</sup>
 
 IDA Pro's autoanalysis on a 50 MB firmware binary runs for 5 to 20 minutes before the UI is interactive. Ghidra's analysis pipeline is similar. Every session restart pays that full cost again. If you are iterating on a taint tracker or testing a new semantic query, that wait becomes a serious obstacle to experimentation.
 
@@ -14,13 +44,13 @@ BinaryContext solves this by separating the expensive work from the repeatable w
 
 The SHA-256 key ensures the cache never goes stale. Any change to the binary produces a different hash and triggers a full rebuild. There is no version tag, no timestamp, no partial invalidation. The binary itself is the truth, and the hash is the gate.
 
-### The GUI dependency problem
+### The GUI dependency problem <sup>[↑](#binarycontext)</sup>
 
 Getting "which functions call `strcpy`?" in IDA requires the GUI to be open, analyzed, and holding a license seat. `ctx.callers_of('strcpy')` answers the same question from the command line, in a script, or inside a taint tracker. No GUI. No license. The call graph lives in memory as a flat Python list, so filtering it is a single linear scan in Python.
 
 ---
 
-## Build phase
+## Build phase <sup>[↑](#binarycontext)</sup>
 
 The build phase runs once per binary. Understanding each of the five steps tells you what the index can and cannot give you.
 
@@ -46,7 +76,7 @@ flowchart TD
 
 ---
 
-### Step 1: Format parse and symbol extraction
+### Step 1: Format parse and symbol extraction <sup>[↑](#binarycontext)</sup>
 
 The first step uses `lief` to parse the binary format and extract three symbol tables: PLT imports, exported symbols, and `.rodata` strings.
 
@@ -80,7 +110,7 @@ PE binaries use the IAT Import Address Table with the same concept: a table of f
 
 ---
 
-### Step 2: Function start recovery
+### Step 2: Function start recovery <sup>[↑](#binarycontext)</sup>
 
 Recovering function starts in a stripped binary is a two-pass process. The first pass reads the binary's own unwind data. The second pass fills the gaps.
 
@@ -158,7 +188,7 @@ The pass runs once. Newly discovered callees are added to `func_starts` but thei
 
 ---
 
-### Step 3: Call graph construction
+### Step 3: Call graph construction <sup>[↑](#binarycontext)</sup>
 
 With function boundaries established, BinaryContext disassembles each function body and extracts every direct call it makes. The result is a flat list of `caller_va, callee_va, label` tuples. Indirect calls are skipped because the callee address is not statically determinable. VtableResolver handles C++ virtual dispatch separately.
 
@@ -173,7 +203,7 @@ With function boundaries established, BinaryContext disassembles each function b
 
 ---
 
-### Step 4: String cross-reference index
+### Step 4: String cross-reference index <sup>[↑](#binarycontext)</sup>
 
 Strings in `.rodata` are inert until something loads their address. The cross-reference index connects function bodies to the strings they reference, so `ctx.strings_in_func(va)` is a simple dict lookup rather than a full rescan.
 
@@ -201,7 +231,7 @@ If the resolved address falls in `strings_map`, it is recorded as `str_xref_idx[
 
 ---
 
-### Step 5: Serialization
+### Step 5: Serialization <sup>[↑](#binarycontext)</sup>
 
 | Field | JSON type | Content |
 |---|---|---|
@@ -230,7 +260,7 @@ Build timing for a 50 MB stripped ELF with 19,000 functions:
 
 ---
 
-## Reload phase
+## Reload phase <sup>[↑](#binarycontext)</sup>
 
 ```mermaid
 flowchart TD
@@ -264,7 +294,7 @@ A "stored sha256 doesn't match" case happens when two different binaries share a
 
 ---
 
-## What is indexed
+## What is indexed <sup>[↑](#binarycontext)</sup>
 
 | Attribute | Type | Content |
 |---|---|---|
@@ -277,7 +307,7 @@ A "stored sha256 doesn't match" case happens when two different binaries share a
 
 ---
 
-## The name overlay
+## The name overlay <sup>[↑](#binarycontext)</sup>
 
 `ctx.name(va)` returns a human-readable name for any VA. Always use it rather than printing raw hex. Function names accumulate over time, so using `ctx.name(va)` consistently means every confirmed name propagates everywhere automatically.
 
@@ -322,7 +352,7 @@ Renaming or moving the binary does not lose the overlay because names are keyed 
 
 ---
 
-## callers_of and callees_of
+## callers_of and callees_of <sup>[↑](#binarycontext)</sup>
 
 Both methods walk `call_edges` in memory. The graph is a flat Python list because the query patterns Ablation needs are both linear scans, and 200,000 entries cost about 2 ms in CPython.
 
@@ -352,7 +382,7 @@ callers_idx['strcpy']   # O(1) lookup
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#binarycontext)</sup>
 
 BinaryContext is the foundation every other Ablation tool builds on.
 
@@ -382,7 +412,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#binarycontext)</sup>
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
@@ -413,13 +443,13 @@ ctx.set_name(0x4000, 'parse_radius_packet', source='confirmed')
 
 ---
 
-## How it works
+## How it works <sup>[↑](#binarycontext)</sup>
 
 `load_or_build(path)` hashes the binary with SHA-256, checks `~/.ablation/cache/<sha256[:16]>_<basename>.json`, and returns the deserialized `BinaryContext` in ~130 ms on a hit. On a miss it runs the five-step build pipeline described in the sections above: format parse, FDE unwind scan, callee augmentation, call graph construction, string xref indexing: then serializes to the cache file. The SHA-256 key guarantees cache correctness: any byte change in the binary produces a different hash and forces a rebuild. No version tag, no timestamp. See **Build phase** above for the full step-by-step description.
 
 ---
 
-## Example output
+## Example output <sup>[↑](#binarycontext)</sup>
 
 ```
 BinaryContext: libservice.so
@@ -443,13 +473,13 @@ BinaryContext: libservice.so
 
 ---
 
-## False positives
+## False positives <sup>[↑](#binarycontext)</sup>
 
 `BinaryContext.load_or_build()` does not emit security findings. The most common failure mode is a cache hit returning a stale context after the binary has been modified: the SHA-256 key prevents this for the binary itself, but the NameRegistry overlay is separate. If a function name registered in a prior session has since been determined incorrect, call `ctx.delete_name(va)` and `ctx.set_name(va, corrected_name, source='confirmed')` to update both the in-memory overlay and the persistent `NameRegistry`.
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#binarycontext)</sup>
 
 `BinaryContext.load_or_build(path)` returns a `BinaryContext`: the session object that all analysis modules operate on. It has no findings output; it is the input handle. See [BinaryContext](binary-context.md) for the full method reference.
 
@@ -457,7 +487,7 @@ For PLT resolution specifically: `ctx.imports()` returns `Dict[str, int]`: impor
 
 ---
 
-## See also
+## See also <sup>[↑](#binarycontext)</sup>
 
 - [BinaryContext](binary-context.md): session foundation for all analysis
 - [SemanticSearch](semantic-search.md): function candidate identification

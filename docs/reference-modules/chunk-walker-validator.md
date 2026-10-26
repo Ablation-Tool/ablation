@@ -22,10 +22,10 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `Path.stat().st_size` guard befo
 
 `ChunkWalkerValidator.scan()` runs a Capstone linear sweep over the `.text` section. For each instruction, it applies a two-phase pattern match:
 
-1. **Chunk header read**: a `movzwl` or `movzbl` instruction reading from a memory operand into a register (the `length_reg`). This matches the typical 16-bit or 8-bit TLV length field read.
-2. **Pointer advance**: within a lookahead window (`ADVANCE_LOOKAHEAD` instructions), an `add` or `lea` that advances a pointer register (`advance_reg`) by exactly `length_reg`. This is `ptr += raw_length`.
-3. **Alignment check**: between steps 1 and 2, the scanner looks for the `length + 3 & ~3` rounding pattern: either an `add reg, 3; and reg, ~3` sequence or an equivalent `lea`. If found, `aligned=True`.
-4. **Next field read**: within `READ_LOOKAHEAD` instructions after the advance, the scanner looks for the next chunk header read (a memory dereference through `advance_reg`). If found, its VA is stored in `read_va`.
+1. Chunk header read: a `movzwl` or `movzbl` instruction reading from a memory operand into a register (the `length_reg`). This matches the typical 16-bit or 8-bit TLV length field read.
+2. Pointer advance: within a lookahead window (`ADVANCE_LOOKAHEAD` instructions), an `add` or `lea` that advances a pointer register (`advance_reg`) by exactly `length_reg`. This is `ptr += raw_length`.
+3. Alignment check: between steps 1 and 2, the scanner looks for the `length + 3 & ~3` rounding pattern: either an `add reg, 3; and reg, ~3` sequence or an equivalent `lea`. If found, `aligned=True`.
+4. Next field read: within `READ_LOOKAHEAD` instructions after the advance, the scanner looks for the next chunk header read (a memory dereference through `advance_reg`). If found, its VA is stored in `read_va`.
 
 A finding is emitted when an unaligned advance is detected (`aligned=False`). Aligned advances are also reported (`aligned=True`) to confirm correct protocol implementations.
 

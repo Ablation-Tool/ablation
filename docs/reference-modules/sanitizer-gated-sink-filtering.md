@@ -10,7 +10,7 @@ Post-process `ARG_PROPAGATED` `SinkArgClassifier` results to detect sanitizer-va
 
 2. **Three structural conditions must all be true for a site to be reclassified as `SANITIZER_VALIDATED`:** (1) A `SHELL_SAFE` function (detected by `SanitizerDetector`) is called on the same argument as the exec sink within `_SANITIZER_SCAN_WINDOW` instructions before the sink; (2) the sanitizer's return value is used in a conditional branch `test eax, eax / jz <error>`; and (3) the conditional branch's false edge leads to an error path, not to the exec sink. All three conditions together mean that the exec sink is unreachable without passing the shell-safe allowlist check.
 
-3. **`SinkSanitizerFilter.apply()` modifies the `SinkClassification` list in-place**: `ARG_PROPAGATED` sites that pass all three conditions are upgraded to `SANITIZER_VALIDATED` and removed from the taint analysis queue. The remaining `ARG_PROPAGATED` sites are the ones that genuinely require `TaintTracker` analysis.
+3. `SinkSanitizerFilter.apply()` modifies the `SinkClassification` list in-place: `ARG_PROPAGATED` sites that pass all three conditions are upgraded to `SANITIZER_VALIDATED` and removed from the taint analysis queue. The remaining `ARG_PROPAGATED` sites are the ones that genuinely require `TaintTracker` analysis.
 
 ---
 

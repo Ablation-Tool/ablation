@@ -10,7 +10,7 @@ Fingerprint the instruction set architecture of a flat ECU ROM image from raw by
 
 2. **`EcuArchDetector` uses three independent detection signals: reset vector pointer validity, instruction density signatures, and byte-level statistical patterns: producing a confidence-ranked list of candidates.** `ArchDetectResult.is_confident()` returns `True` when the top candidate has a significant confidence margin over the second candidate, enabling automated pipeline decisions without analyst intervention for common ECU types.
 
-3. **Once the ISA is identified, ISA-specific decoders `EcuC28xDecoder`, `EcuM68kDecoder`, `V850Decoder`, `ARCDecoder` provide `function_starts()` via prologue pattern scanning**: finding function boundaries without symbols in flat binaries that have no `.eh_frame` or DWARF.
+3. Once the ISA is identified, ISA-specific decoders `EcuC28xDecoder`, `EcuM68kDecoder`, `V850Decoder`, `ARCDecoder` provide `function_starts()` via prologue pattern scanning: finding function boundaries without symbols in flat binaries that have no `.eh_frame` or DWARF.
 
 ---
 

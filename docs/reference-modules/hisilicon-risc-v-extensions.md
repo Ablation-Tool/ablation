@@ -8,9 +8,9 @@ Extend LoongArch64 decoding with a two-pass semantic layer that identifies and s
 
 1. **TencentOS 4.6 kernel `6.6.119-52.9.tl4.loongarch64+debug` injects KASAN ghost calls before virtually every memory access.** Each real memory access is preceded by a multi-instruction shadow-address preamble that computes the KASAN shadow region address and a `bl __asan_load*`/`__asan_store*` call. Without stripping these, `TaintTrackerLA64` follows KASAN paths instead of real memory access paths: producing phantom taint chains.
 
-2. **`LoongArchDecoderV2` is grounded in Cifuentes & Sendall 1998 SSL: Semantic Specification Language**: V1 is the SLED pass encoding → operands; V2 is the SSL pass instruction windows → named semantic units. KASAN shadow-address idioms and KCOV trace idioms are recognized as semantic units via fixed instruction-window patterns, then tagged on the `LoongArchFrameV2.ghost_class` field.
+2. `LoongArchDecoderV2` is grounded in Cifuentes & Sendall 1998 SSL: Semantic Specification Language: V1 is the SLED pass encoding → operands; V2 is the SSL pass instruction windows → named semantic units. KASAN shadow-address idioms and KCOV trace idioms are recognized as semantic units via fixed instruction-window patterns, then tagged on the `LoongArchFrameV2.ghost_class` field.
 
-3. **`decode_frames_clean()` yields only non-ghost frames**: callers can use it as a drop-in replacement for V1 `decode_frames()`, receiving a clean instruction stream with no KASAN/KCOV noise. `count_instrumentation()` reports the noise density ghost calls per 1000 real instructions for a given binary, documenting how much instrumentation was stripped.
+3. `decode_frames_clean()` yields only non-ghost frames: callers can use it as a drop-in replacement for V1 `decode_frames()`, receiving a clean instruction stream with no KASAN/KCOV noise. `count_instrumentation()` reports the noise density ghost calls per 1000 real instructions for a given binary, documenting how much instrumentation was stripped.
 
 ---
 

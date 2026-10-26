@@ -10,7 +10,7 @@ Persist scanner results as JSON-serializable dicts with automatic invalidation w
 
 2. **Automatic invalidation from scanner source changes prevents stale results from persisting after a bug fix.** When a scanner is updated for example a false-positive fix in `LengthUnderflowScanner`, the cached results from the old version are invalid: they may report findings that the fixed version would not find. `ScanResultVersionCache` uses a hash of the scanner's source file to detect this: if the source has changed, the cache is invalidated automatically.
 
-3. **`scan_batch()` enables efficient multi-binary sweeps with per-file caching**: for a firmware image with 40 shared libraries, `scan_batch()` scans all 40 files in sequence, using the cache for files it has seen before and invoking the scanner only for new or changed files. The net effect is that a firmware sweep that took 10 minutes on first run takes under 30 seconds on subsequent runs if no files changed.
+3. `scan_batch()` enables efficient multi-binary sweeps with per-file caching: for a firmware image with 40 shared libraries, `scan_batch()` scans all 40 files in sequence, using the cache for files it has seen before and invoking the scanner only for new or changed files. The net effect is that a firmware sweep that took 10 minutes on first run takes under 30 seconds on subsequent runs if no files changed.
 
 ---
 

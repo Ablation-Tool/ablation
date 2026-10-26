@@ -1,10 +1,43 @@
-# Knowledge Graph
+# KnowledgeGraph
 
-Query the full Ablation capability set, known analysis gaps, and prior RE session history by architecture and format in one call, before reading any individual reference document.
+  - [What is Agentic GraphRAG?](#what-is-agentic-graphrag)
+  - [Why this exists](#why-this-exists)
+  - [How it works](#how-it-works)
+    - [Node schema](#node-schema)
+    - [Edge schema](#edge-schema)
+    - [Workflow stage ordering](#workflow-stage-ordering)
+    - [Semantic recommendation pipeline](#semantic-recommendation-pipeline)
+    - [Pre-disclosure security](#pre-disclosure-security)
+  - [API reference](#api-reference)
+    - [Write API](#write-api)
+    - [Query API](#query-api)
+    - [Phase 3: GraphSession](#phase-3-graphsession)
+    - [Phase 4: Vector retrieval](#phase-4-vector-retrieval)
+    - [Self-evolution loop](#self-evolution-loop)
+    - [Gap documentation API](#gap-documentation-api)
+    - [Stats](#stats)
+  - [Usage](#usage)
+  - [Example output](#example-output)
+  - [False positives](#false-positives)
+  - [Pipeline position](#pipeline-position)
+  - [Reading output](#reading-output)
+  - [See also](#see-also)
 
 ---
 
-## Why this exists
+## What is Agentic GraphRAG? <sup>[↑](#knowledgegraph)</sup>
+
+GraphRAG (Graph Retrieval-Augmented Generation) combines a knowledge graph with a retrieval-augmented generation pipeline. A conventional RAG pipeline stores text chunks as dense vectors and retrieves the chunks most similar to a query by cosine distance. GraphRAG stores entities and their relationships as nodes and edges, then retrieves by traversing graph connections rather than by similarity alone. This allows multi-hop queries: "which ARM64 taint tracker covers CWE-78 and was used in a session where the format string scanner found confirmed findings?" is a graph traversal, not a vector lookup.
+
+"Agentic GraphRAG" adds an agent loop on top: instead of answering in one retrieval, the agent iterates. It queries the graph, examines the results, decides what additional information would help, queries again, and arrives at a recommendation. This is the mode `KnowledgeGraph.get_recommendations_for_task()` uses when vector embeddings are available: it embeds the task description, finds candidate modules by cosine similarity, then retrieves graph-structured context about each candidate (architecture support, failure modes, confirmed-finding history) before ranking.
+
+The underlying graph uses SQLite with four tables: `Module` (analysis tools and their capabilities), `Architecture` (supported ISA variants), `AnalysisEvent` (recorded tool outcomes per binary), and `Finding` (confirmed vulnerabilities from RE sessions). Edges connect modules to architectures via `SUPPORTS` relationships, modules to known gaps via `KNOWN_GAP` relationships, and sessions to findings via `PRODUCED` relationships. SQL expresses point lookups; graph traversal is expressed as JOINs over the edge tables.
+
+GraphRAG originates in the 2023 Microsoft Research paper "From Local to Global: A Graph RAG Approach to Query-Focused Summarization" (Edge et al.). The Ablation implementation applies the same principle at engagement scale: the graph holds one vendor's product family rather than a document corpus, and the agent loop targets tool selection and failure-mode avoidance rather than question answering.
+
+---
+
+## Why this exists <sup>[↑](#knowledgegraph)</sup>
 
 1. **Tool selection at session start required reading 3 to 5 reference files before picking the first tool.** `BinaryContext` tells you what the binary is. It says nothing about which Ablation tool to run next, which tools fail on that architecture, or whether a similar target has been analyzed before. The analyst had to reconstruct this context from memory or from a grep across the docs directory every session.
 
@@ -16,7 +49,7 @@ Query the full Ablation capability set, known analysis gaps, and prior RE sessio
 
 ---
 
-## How it works
+## How it works <sup>[↑](#knowledgegraph)</sup>
 
 ```mermaid
 flowchart TD
@@ -74,7 +107,7 @@ flowchart TD
     linkStyle 22 stroke:#2e7d32,stroke-width:3px
 ```
 
-### Node schema
+### Node schema <sup>[↑](#knowledgegraph)</sup>
 
 | Type | ID pattern | Key props |
 |---|---|---|
@@ -89,7 +122,7 @@ flowchart TD
 | `AnalysisEvent` | `event://uuid12` | session_id, module, arch, candidates, confirmed, fp_rate, root_cause |
 | `Doc` | `doc://binary-context.md#usage` | module_id, section, text, source_file |
 
-### Edge schema
+### Edge schema <sup>[↑](#knowledgegraph)</sup>
 
 | Edge | Meaning |
 |---|---|
@@ -108,7 +141,7 @@ flowchart TD
 | `Finding EXPLOITS VulnClass` | This finding is an instance of that vuln class |
 | `AnalysisEvent RECORDS Session` | This event belongs to that session |
 
-### Workflow stage ordering
+### Workflow stage ordering <sup>[↑](#knowledgegraph)</sup>
 
 `get_recommendations_for_task()` sorts fill entries (and the fallback path) by this sequence:
 
@@ -118,7 +151,7 @@ triage → sweep → corpus → profile → classify → taint → confirm → a
 
 Modules with unknown `workflow_stage` sort last.
 
-### Semantic recommendation pipeline
+### Semantic recommendation pipeline <sup>[↑](#knowledgegraph)</sup>
 
 When Doc node embeddings exist, `get_recommendations_for_task()` runs the following pipeline:
 
@@ -162,18 +195,18 @@ stage-sorted fill           if len(semantic_ranked) < top_k, pad with arch modul
 
 **DOCUMENTED_BY coverage.** The `sync --embed` run wires DOCUMENTED_BY edges from Module nodes to H2-chunked Doc nodes using two-pass matching:
 
-1. LIKE query on `Module.props.reference_docs` — matches modules that explicitly list their doc file
-2. Normalized stem match — strips all non-alphanumeric characters and lowercases both the md filename stem and the module name; catches e.g. `x86-32-taint-tracker.md` → `X86_32TaintTracker`
+1. LIKE query on `Module.props.reference_docs`: matches modules that explicitly list their doc file
+2. Normalized stem match: strips all non-alphanumeric characters and lowercases both the md filename stem and the module name; catches e.g. `x86-32-taint-tracker.md` → `X86_32TaintTracker`
 
-381 of 540 reference docs are concept guides, multi-module overviews, or platform analysis docs that don't map to a single module. These remain unlinked intentionally — they still influence cosine ranking but don't resolve to a specific module recommendation.
+381 of 540 reference docs are concept guides, multi-module overviews, or platform analysis docs that don't map to a single module. These remain unlinked intentionally; they still influence cosine ranking but don't resolve to a specific module recommendation.
 
-### Pre-disclosure security
+### Pre-disclosure security <sup>[↑](#knowledgegraph)</sup>
 
 `record_finding()` accepts a `disclosure_status` field. Findings with `disclosure_status='pre-disclosure'` are stored in the graph but are not returned by `get_context_for_binary()` when `access_level='public'` (the default). Pass `access_level='internal'` to retrieve pre-disclosure findings.
 
 ---
 
-## KnowledgeGraph
+## API reference <sup>[↑](#knowledgegraph)</sup>
 
 ```python
 from ablation.analyzers.knowledge_graph import KnowledgeGraph
@@ -182,7 +215,7 @@ g = KnowledgeGraph.open()                     # default: ~/.ablation/knowledge_g
 g = KnowledgeGraph.open('/custom/path.db')    # explicit path
 ```
 
-### Write API
+### Write API <sup>[↑](#knowledgegraph)</sup>
 
 ```python
 g.add_node(node_type, node_id, props)         # INSERT OR REPLACE on id
@@ -192,7 +225,7 @@ g.record_finding(finding_id, cwe, va, status, byte_verified, disclosure_status, 
 g.add_run(module_name, binary_path, arch, results)   # preferred write path in sessions
 ```
 
-### Query API
+### Query API <sup>[↑](#knowledgegraph)</sup>
 
 ```python
 ctx  = g.get_context_for_binary(arch, fmt, vuln_class=None, access_level='public', intent='sweep')
@@ -207,7 +240,7 @@ gaps = g.get_gap_candidates(fp_threshold=0.3, min_events=5)
 
 `get_recommendations_for_task()` returns up to `top_k=15` modules in two tiers. When Doc embeddings exist: semantically matched modules first (with `score=X.XXX`), then stage-sorted fills to reach `top_k`. Without embeddings: pure stage-sort fallback. See **Semantic recommendation pipeline** above for the full retrieval flow.
 
-### Phase 3: GraphSession
+### Phase 3: GraphSession <sup>[↑](#knowledgegraph)</sup>
 
 ```python
 gs = g.session(session_id, arch, binary_path='')  # -> GraphSession
@@ -230,7 +263,7 @@ gs.record_finding('finding://IBM-001', 'CWE-78', 0x1234, 'CONFIRMED', True, 'pre
 
 `GraphSession` is also a context manager: `with g.session(...) as gs: ...`.
 
-### Phase 4: Vector retrieval
+### Phase 4: Vector retrieval <sup>[↑](#knowledgegraph)</sup>
 
 ```python
 count = g.embed_doc_nodes(model_name='BAAI/bge-small-en-v1.5')  # one-time; or via --embed
@@ -245,9 +278,9 @@ python3 -I sweeps/build_ablation_graph.py --sync --embed
 
 **Embedding details.** Model: `BAAI/bge-small-en-v1.5` (384 dimensions, L2-normalised at output). Storage: one 1,536-byte float32 BLOB per Doc node in the `embeddings` table (~8.6 MB total for 5,587 nodes). Cosine similarity is computed as a matrix-vector dot product (`matrix @ query_vec`) because BGE vectors are unit-length, making dot product equal cosine similarity with no division. Total inference pass: ~11 seconds on CPU for 5,587 chunks; model weights cached in fastembed's local directory after first run.
 
-The `embeddings` table is gated — `get_recommendations_for_task()` checks `SELECT 1 FROM embeddings LIMIT 1` before switching paths. Existing sessions without `fastembed` installed see no behavior change until `--embed` is run.
+The `embeddings` table is gated: `get_recommendations_for_task()` checks `SELECT 1 FROM embeddings LIMIT 1` before switching paths. Existing sessions without `fastembed` installed see no behavior change until `--embed` is run.
 
-### Self-evolution loop
+### Self-evolution loop <sup>[↑](#knowledgegraph)</sup>
 
 AnalysisEvent nodes accumulate across sessions. `get_gap_candidates()` aggregates them to surface patterns that warrant a new ablation module:
 
@@ -290,12 +323,12 @@ The analyst sees the gap before running the tool and skips it or reaches for the
 
 **Suppression has two independent mechanisms:**
 
-1. **SUPERSEDES edges** — explicit event IDs passed to `add_gap_node()`. Those events are excluded from all future `get_gap_candidates()` scoring regardless of root_cause.
-2. **root_cause string match** — any future AnalysisEvent with a `root_cause` matching a documented KnownGap for the same arch is also excluded. Covers future sessions automatically without needing per-event SUPERSEDES edges.
+1. SUPERSEDES edges: explicit event IDs passed to `add_gap_node()`. Those events are excluded from all future `get_gap_candidates()` scoring regardless of root_cause.
+2. root_cause string match: any future AnalysisEvent with a `root_cause` matching a documented KnownGap for the same arch is also excluded. Covers future sessions automatically without needing per-event SUPERSEDES edges.
 
 **Recency weighting.** `get_gap_candidates()` applies time-decay to events before averaging fp_rate: events older than 30 days get 50% weight; older than 90 days get 10%. A module that was broken six months ago but has been running cleanly on recent targets does not stay flagged as a gap candidate.
 
-### Gap documentation API
+### Gap documentation API <sup>[↑](#knowledgegraph)</sup>
 
 ```python
 g.add_gap_node(gap_id, arch, description, root_cause='', workaround='',
@@ -304,7 +337,7 @@ g.add_gap_node(gap_id, arch, description, root_cause='', workaround='',
 
 Creates a KnownGap node and optionally adds SUPERSEDES edges from the gap to specific AnalysisEvent IDs. Events that are superseded, or whose `root_cause` matches a documented KnownGap for the same arch, are excluded from `get_gap_candidates()` scoring. Use this when you have documented a gap and want prior failing events to stop appearing as candidates.
 
-### Stats
+### Stats <sup>[↑](#knowledgegraph)</sup>
 
 ```python
 g.node_count()                    # total nodes
@@ -314,7 +347,7 @@ g.edge_count('SUPPORTS')          # edges of specific type
 
 ---
 
-## Usage
+## Usage <sup>[↑](#knowledgegraph)</sup>
 
 ```python
 from ablation.analyzers.knowledge_graph import KnowledgeGraph
@@ -371,7 +404,7 @@ python3 -I sweeps/build_ablation_graph.py --bootstrap --embed
 
 ---
 
-## Example output
+## Example output <sup>[↑](#knowledgegraph)</sup>
 
 ```
 >>> ctx = g.get_context_for_binary(arch='ppc32', fmt='xcoff32')
@@ -420,11 +453,11 @@ python3 -I sweeps/build_ablation_graph.py --bootstrap --embed
      CommandTableScanner.from_context(ctx); .scan()
 ```
 
-Entries 1–2 carry `score=` — they were ranked by cosine similarity of their documentation chunks against the task description. Entries 3–15 have no score — they are stage-sorted fills drawn from the x86_32 arch module set to pad the list to `top_k=15`.
+Entries 1 and 2 carry `score=` values: they were ranked by cosine similarity of their documentation chunks against the task description. Entries 3 through 15 have no score; they are stage-sorted fills drawn from the x86_32 arch module set to pad the list to `top_k=15`.
 
 ---
 
-## False positives
+## False positives <sup>[↑](#knowledgegraph)</sup>
 
 **`get_context_for_binary` returns no modules for a valid arch.** This happens when the bootstrap has not been run or when the arch identifier passed by the caller does not match the canonical form in the graph. The canonical forms are: `ppc32`, `ppc64`, `arm64`, `arm32`, `x86_64`, `x86_32`, `mips32`, `mips64`, `riscv32`, `riscv64`, `m88k`, `m68k`, `sh2a`, `sh4`, `loongarch64`. Run `--bootstrap` first, then confirm the arch string matches one of these.
 
@@ -436,7 +469,7 @@ Entries 1–2 carry `score=` — they were ranked by cosine similarity of their 
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#knowledgegraph)</sup>
 
 **Before this module:** Run `build_ablation_graph.py --bootstrap` once to seed the graph from `capabilities.json`. Requires `docs/capability-audit/capabilities.json` and `docs/reference-modules/*.md` in the repo.
 
@@ -458,7 +491,7 @@ print(ctx.summary())
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#knowledgegraph)</sup>
 
 `get_context_for_binary()` returns a plain string. `get_recommendations_for_task()` returns a plain string. `get_gap_candidates()` returns a list of dicts:
 
@@ -483,7 +516,7 @@ print(ctx.summary())
 
 ---
 
-## See also
+## See also <sup>[↑](#knowledgegraph)</sup>
 
 - [Binary Context](binary-context.md): session foundation that KnowledgeGraph context feeds into
 - [Semantic Code Search](semantic-search.md): run after KnowledgeGraph selects candidates

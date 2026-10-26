@@ -6,7 +6,7 @@ Enumerate Cisco ACI fabric via the APIC REST API: extracting tenants, contracts,
 
 ## Why this exists
 
-1. **`probe_apic_unauthenticated()` returns the APIC software version and authentication domain list without credentials**: `GET /api/aaaListDomains.json` is unauthenticated on all APIC versions. The response includes configured authentication domains local, TACACS+, LDAP and the exact APIC software version string, which directly maps to known CVEs without requiring login.
+1. `probe_apic_unauthenticated()` returns the APIC software version and authentication domain list without credentials: `GET /api/aaaListDomains.json` is unauthenticated on all APIC versions. The response includes configured authentication domains local, TACACS+, LDAP and the exact APIC software version string, which directly maps to known CVEs without requiring login.
 
 2. **`apic_cobra_bulk_extract()` downloads the full APIC policy database snapshot** via the COBRA API export endpoint: a single authenticated call that produces a JSON snapshot of all tenants, bridge domains, EPGs, contracts, and VMM domain configurations. This is substantially more efficient than enumerating each object class individually and provides the complete fabric topology for offline analysis.
 

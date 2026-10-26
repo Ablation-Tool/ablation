@@ -31,11 +31,11 @@ Batch vulnerability sweep over a TI TIREX SDK package directory or a single zip 
 
 Phase order per package:
 
-1. **Phase 0 (Triage)**: extract zip, classify binaries by magic/extension, filter ELFs with no PLT exec-class sinks (via `batch_plt_intersect`).
-2. **Phase 1 NNC scan**: run `TiNNCScanner` on every COFF/AR and ELF binary. Fast symbol table only.
-3. **Phase 2 ELF taint**: arch-routed `ARM32TaintTracker` / `ARM64TaintTracker` on PLT-passing ELFs.
-4. **Phase 3 C28x disasm**: `EcuC28xDecoder.function_starts()` on COFF archives, then `EcuSecurityAccessScanner` on flat ROM `.bin` images.
-5. **Phase 4 (Crypto)**: `HashAlgoDiscriminator` on ARM32 ELFs first 1 MB.
+1. Phase 0 (Triage): extract zip, classify binaries by magic/extension, filter ELFs with no PLT exec-class sinks (via `batch_plt_intersect`).
+2. Phase 1 NNC scan: run `TiNNCScanner` on every COFF/AR and ELF binary. Fast symbol table only.
+3. Phase 2 ELF taint: arch-routed `ARM32TaintTracker` / `ARM64TaintTracker` on PLT-passing ELFs.
+4. Phase 3 C28x disasm: `EcuC28xDecoder.function_starts()` on COFF archives, then `EcuSecurityAccessScanner` on flat ROM `.bin` images.
+5. Phase 4 (Crypto): `HashAlgoDiscriminator` on ARM32 ELFs first 1 MB.
 
 Results are written to `reports/sweep_ti_<package>_<ts>.md` and a master summary to `reports/sweep_ti_master_<ts>.md`.
 

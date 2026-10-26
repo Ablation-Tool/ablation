@@ -4,17 +4,17 @@ Recover function boundaries, names, and type information from `.eh_frame` CFI re
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#debug-metadata-recovery)</sup>
 
 1. **Stripped ELF binaries drop `.symtab` but typically retain `.eh_frame` CFI records emitted by GCC/Clang for C++ exception unwinding, these records contain precise function start VAs as FDE Frame Description Entry entries.** `extract_eh_frame_starts(path)` extracts all FDE start addresses, providing function boundaries without the noise of prologue-scan heuristics. On a typical stripped firmware binary, `.eh_frame` yields function start accuracy of 99%+ versus prologue scan's ~85%.
 
-2. **`.debug_info` sections (present in `-g` builds) provide `name, low_pc, high_pc` triples via `DW_TAG_subprogram`**: `high_pc` eliminates the "next-function-start" approximation that `.eh_frame` alone requires. When `.debug_info` is present common in development firmware images or partial debug builds, `extract_debug_funcs(path)` yields precise function end addresses, enabling accurate function-size calculations and loop detection.
+2. `.debug_info` sections (present in `-g` builds) provide `name, low_pc, high_pc` triples via `DW_TAG_subprogram`: `high_pc` eliminates the "next-function-start" approximation that `.eh_frame` alone requires. When `.debug_info` is present common in development firmware images or partial debug builds, `extract_debug_funcs(path)` yields precise function end addresses, enabling accurate function-size calculations and loop detection.
 
-3. **Linux kernel modules stripped of `.symtab` often retain `.BTF` and `.BTF.ext` sections**: BTF maps section offsets to function names even without symbol tables, enabling name recovery for kernel modules and eBPF programs where DWARF is absent. `extract_btf_funcs(path)` parses the BTF string and type sections without external dependencies pure struct parsing, no libbpf required.
+3. Linux kernel modules stripped of `.symtab` often retain `.BTF` and `.BTF.ext` sections: BTF maps section offsets to function names even without symbol tables, enabling name recovery for kernel modules and eBPF programs where DWARF is absent. `extract_btf_funcs(path)` parses the BTF string and type sections without external dependencies pure struct parsing, no libbpf required.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#debug-metadata-recovery)</sup>
 
 ```mermaid
 flowchart TD
@@ -45,7 +45,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#debug-metadata-recovery)</sup>
 
 ```python
 from ablation.analyzers.dwarf_loongarch64 import (
@@ -84,7 +84,7 @@ print(result.report())
 
 ---
 
-## Example output
+## Example output <sup>[↑](#debug-metadata-recovery)</sup>
 
 The following illustrates the recovery output format. Actual counts and names are binary-specific.
 
@@ -105,7 +105,7 @@ I386AbsoluteXrefScanner:
 
 ---
 
-## False positives
+## False positives <sup>[↑](#debug-metadata-recovery)</sup>
 
 **`.eh_frame` FDE start addresses include exception landing pads that are not function entry points.** These appear as spurious starts within function bodies. Filter by checking whether the FDE start is within an existing known-function interval i.e., it would overlap a function already in `ctx.func_starts`.
 
@@ -113,13 +113,13 @@ I386AbsoluteXrefScanner:
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#debug-metadata-recovery)</sup>
 
 Run debug metadata recovery immediately after `BinaryContext.load_or_build()` on any target binary: before `CorpusBuilder`, `SemanticSearcher`, or taint analysis. Better function boundaries and more string xrefs improve all downstream analyses. Add recovered starts to `ctx.func_starts` and set names via `ctx.set_name()` before any analysis pass.
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#debug-metadata-recovery)</sup>
 
 `extract_eh_frame_starts(path)` returns `Set[int]`: VA of every function start found in `.eh_frame` FDE records. Returns an empty set if `.eh_frame` is absent.
 
@@ -142,7 +142,7 @@ Run debug metadata recovery immediately after `BinaryContext.load_or_build()` on
 
 ---
 
-## See also
+## See also <sup>[↑](#debug-metadata-recovery)</sup>
 
 - [ARM32 Allocation Arithmetic Overflow](arm32-allocation-arithmetic-overflow.md): `ARM32FunctionScanner` prologue scan for ARM32 stripped binaries
 - [Function Corpus Builder](function-corpus-builder.md): uses function starts recovered here for corpus population

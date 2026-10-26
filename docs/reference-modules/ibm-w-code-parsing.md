@@ -8,9 +8,9 @@ Parse IBM XLC compiler W-Code internal IR binary records embedded in XLC-compile
 
 1. **IBM XLC's W-Code IR records encode references to POWER-specific compiler builtins: `__vec_op`, `__maths_pow`, MASS library intrinsics, that appear in stripped object files as call sites to internal symbols that cannot be resolved from ELF symbol tables.** Without `WCodeParser`, these call sites appear as blank function calls in `BinaryContext.plt` and `FuncProfiler` output, making it impossible to determine whether a function uses vectorized operations or math library calls.
 
-2. **`WCodeBuiltinCatalog.from_binaryxlcentry_path` extracts the builtin descriptor table from the `xlCentry` compiler binary**: `xlCentry` contains the canonical mapping from W-Code record IDs to builtin names, argument counts, and calling conventions. This makes the catalog authoritative rather than hand-maintained: updating `xlCentry` automatically updates the catalog.
+2. `WCodeBuiltinCatalog.from_binaryxlcentry_path` extracts the builtin descriptor table from the `xlCentry` compiler binary: `xlCentry` contains the canonical mapping from W-Code record IDs to builtin names, argument counts, and calling conventions. This makes the catalog authoritative rather than hand-maintained: updating `xlCentry` automatically updates the catalog.
 
-3. **`WCodeBuiltinCatalog.lookup(rec)` returns the `WCBEntry` for a parsed `WCodeRecord`**: enabling downstream analysis to substitute meaningful names for opaque POWER intrinsic call sites in disassembly output. Combined with `BinaryContext.set_name()`, identified builtins appear in `FuncProfiler` and `WindowAnalyzer` output with their actual names.
+3. `WCodeBuiltinCatalog.lookup(rec)` returns the `WCBEntry` for a parsed `WCodeRecord`: enabling downstream analysis to substitute meaningful names for opaque POWER intrinsic call sites in disassembly output. Combined with `BinaryContext.set_name()`, identified builtins appear in `FuncProfiler` and `WindowAnalyzer` output with their actual names.
 
 ---
 

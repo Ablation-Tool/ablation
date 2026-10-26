@@ -8,9 +8,9 @@ Detect raw SQL injection in C/C++ ELF binaries that call the MySQL C API or SQLi
 
 1. **`FormatStringScanner` identifies dangerous format strings at `printf`-family call sites but does not understand SQL sinks.** An `snprintfbuf, sizeof(buf, "SELECT ... WHERE login='%s'", username)` followed by `mysql_queryconn, buf` is SQL injection, but `FormatStringScanner` sees a safe-sized `snprintf` and stops. `SqlSinkScanner` specifically chains these two call sites and reports the combined pattern as SQL injection.
 
-2. **MySQL C API and SQLite3 are the primary SQL libraries used in embedded network device firmware**: Fortinet, Cisco, and Juniper device management planes commonly use SQLite3 for configuration persistence. `SqlSinkScanner` includes both `mysql_query`/`mysql_real_query` (MySQL C API) and `sqlite3_exec`/`sqlite3_prepare` (SQLite3) sink catalogs.
+2. MySQL C API and SQLite3 are the primary SQL libraries used in embedded network device firmware: Fortinet, Cisco, and Juniper device management planes commonly use SQLite3 for configuration persistence. `SqlSinkScanner` includes both `mysql_query`/`mysql_real_query` (MySQL C API) and `sqlite3_exec`/`sqlite3_prepare` (SQLite3) sink catalogs.
 
-3. **`SqlFinding.severity()` adjusts for prepared-statement protection**: if `sqlite3_prepare_v2` is called before the sink, the finding is downgraded from `HIGH` to `MEDIUM`. If the format string contains only `%d` or `%f` specifiers no string interpolation, severity is downgraded to `LOW`. This reduces false-positive triage time from integer-format SQL builds.
+3. `SqlFinding.severity()` adjusts for prepared-statement protection: if `sqlite3_prepare_v2` is called before the sink, the finding is downgraded from `HIGH` to `MEDIUM`. If the format string contains only `%d` or `%f` specifiers no string interpolation, severity is downgraded to `LOW`. This reduces false-positive triage time from integer-format SQL builds.
 
 ---
 

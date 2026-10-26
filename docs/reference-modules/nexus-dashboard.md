@@ -10,7 +10,7 @@ Enumerate Cisco Nexus Dashboard (ND), NDI Network Data & Infrastructure, NDFC Ne
 
 2. **Single SSO on Nexus Dashboard means one credential set grants access to APIC, NDFC, NDO, and Data Broker simultaneously.** `probe_nexus_dashboard()` and `probe_nexus_dashboard_api()` identify the ND login endpoint and software version; `_nd_login()` authenticates against the ND SSO token endpoint, after which the returned token is valid across all ND-integrated services without separate login.
 
-3. **`probe_guestshell()` tests whether the NX-OS guestshell container is accessible via the Nexus Dashboard management API**: a guestshell that is accessible remotely and runs as root provides OS-level access on the NX-OS switch without requiring CLI/SSH credentials. `probe_nxos_poap()` tests POAP (port 80) which, on unpatched NX-OS, allows unauthenticated configuration injection during device boot.
+3. `probe_guestshell()` tests whether the NX-OS guestshell container is accessible via the Nexus Dashboard management API: a guestshell that is accessible remotely and runs as root provides OS-level access on the NX-OS switch without requiring CLI/SSH credentials. `probe_nxos_poap()` tests POAP (port 80) which, on unpatched NX-OS, allows unauthenticated configuration injection during device boot.
 
 ---
 

@@ -10,7 +10,7 @@ Enumerate `os/exec.Command` and `exec.Cmd.Start/Run` call sites in stripped Go b
 
 2. **The `path` type is the highest-risk finding: a bare command name like `ping` is resolved via `$PATH` at runtime.** If the attacker controls `$PATH` through a prior privilege escalation, environment injection, or a web interface that sets process environment, they can replace `ping` with an arbitrary executable. `GoSubprocessScanner` surfaces every `path`-type site with the command name, providing the exact strings needed to verify PATH hijackability in a target deployment.
 
-3. **ARM64 Go binaries are partially supported**: `BL imm` call detection works, but `GoStringResolver`'s `lea rax/mov ebx` pattern is x86-64 specific. ARM64 ADRP+ADD string loading is a known gap; all ARM64 subprocess sites are classified as `DYNAMIC/MEDIUM` until the resolver is extended.
+3. ARM64 Go binaries are partially supported: `BL imm` call detection works, but `GoStringResolver`'s `lea rax/mov ebx` pattern is x86-64 specific. ARM64 ADRP+ADD string loading is a known gap; all ARM64 subprocess sites are classified as `DYNAMIC/MEDIUM` until the resolver is extended.
 
 ---
 

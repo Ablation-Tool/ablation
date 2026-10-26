@@ -8,9 +8,9 @@ Find every call site that calls a named imported symbol in a PPC32 BE position-i
 
 1. **PPC32 PIC `.so` files do not call imported symbols with a direct `BL symbol` instruction.** Instead, they call a PLT thunk: `LWZ rx,d(r30)` load GOT entry from r30-relative offset → `MTCTR rx` → `BCTR`. Two compilation units can share the same thunk VA but reach different PLT slots if their `r30` values differ. A naive thunk-VA matcher produces false positives for every such shared thunk.
 
-2. **`PPC32PLTTracer` verifies each caller's active `r30` against `implied_r30` for the target symbol**: eliminating the false-positive class entirely. The active `r30` is tracked backward from the call site to the `bl _init_r30` or `mflr r30` that establishes the GOT base for that compilation unit. Only callers whose `r30` matches the implied slot offset are reported.
+2. `PPC32PLTTracer` verifies each caller's active `r30` against `implied_r30` for the target symbol: eliminating the false-positive class entirely. The active `r30` is tracked backward from the call site to the `bl _init_r30` or `mflr r30` that establishes the GOT base for that compilation unit. Only callers whose `r30` matches the implied slot offset are reported.
 
-3. **`PPC32ELF.dangerous_imports()` provides the pre-filtered target symbol list**: the same list used by `PPC32TaintTracker` for sink identification. `PPC32PLTTracer` uses this list to restrict tracing to security-relevant imports, avoiding the noise of tracing all 200+ imported symbols in a typical FortiGate `.so`.
+3. `PPC32ELF.dangerous_imports()` provides the pre-filtered target symbol list: the same list used by `PPC32TaintTracker` for sink identification. `PPC32PLTTracer` uses this list to restrict tracing to security-relevant imports, avoiding the noise of tracing all 200+ imported symbols in a typical FortiGate `.so`.
 
 ---
 

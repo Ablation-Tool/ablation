@@ -4,17 +4,17 @@ Fast approximate nearest-neighbor function lookup using SAX (Symbolic Aggregate 
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#sax-approximate-indexing)</sup>
 
 1. **`SemanticSearcher` runs BERT-class embedding inference: each query takes 50-200ms per function scored, which is acceptable for a shortlist of 10-50 candidates but prohibitive for full-corpus scanning of a 10,000-function binary.** `SAXIndex` encodes each function's operation-category sequence as a short symbolic word 8 characters from an 8-symbol alphabet, then uses edit-distance lookup to find approximate matches in microseconds. The SAX pre-filter narrows the 10,000-function corpus to a 10-100 function shortlist before `SemanticSearcher` runs.
 
 2. **SAX encoding produces the same or nearby words for similar sequences: two functions that both do `[cmp, jmp, call, mov, ret]` with minor variations will produce identical or 1-edit-distance SAX words.** This property enables approximate matching: `query_seq()` returns all functions within a configurable edit distance of the query word. Unlike exact substring matching, SAX tolerates small insertions and deletions that appear when the same algorithm is compiled with different optimization levels.
 
-3. **`SAXIndex.add_binary()` indexes all functions in a binary in a single pass using `OpSeqEncoder`**: the operation-category sequence for every function is computed once during indexing, not at query time. The index can be saved to disk (`save()`) and reloaded (`load()`) for reuse across sessions, avoiding re-computation on large firmware collections.
+3. `SAXIndex.add_binary()` indexes all functions in a binary in a single pass using `OpSeqEncoder`: the operation-category sequence for every function is computed once during indexing, not at query time. The index can be saved to disk (`save()`) and reloaded (`load()`) for reuse across sessions, avoiding re-computation on large firmware collections.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#sax-approximate-indexing)</sup>
 
 ```mermaid
 flowchart TD
@@ -43,7 +43,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#sax-approximate-indexing)</sup>
 
 ```python
 from ablation.analyzers.sax_index import SAXIndex
@@ -75,7 +75,7 @@ results2 = idx2.query_va('/firmware/lib/libcmdb_plugin.so', 0x401200, top_k=10)
 
 ---
 
-## Example output
+## Example output <sup>[↑](#sax-approximate-indexing)</sup>
 
 The following illustrates the SAX query result format. Actual addresses and words are binary/function-specific.
 
@@ -89,7 +89,7 @@ SAXIndex query for <func-va> (sax_word='<word>'):
 
 ---
 
-## False positives
+## False positives <sup>[↑](#sax-approximate-indexing)</sup>
 
 **SAX edit distance 1 includes both similar and incidentally similar functions: two functions that happen to map to the same SAX word may be structurally unrelated for example a hash function and a sort function that both have many comparison operations.** SAX results are candidates for embedding scoring, not confirmed matches. Always pass SAX results through `SemanticSearcher` before treating them as similar functions.
 
@@ -97,13 +97,13 @@ SAXIndex query for <func-va> (sax_word='<word>'):
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#sax-approximate-indexing)</sup>
 
 Use `SAXIndex` as the first filter in a corpus-scale similarity search: index all binaries in the firmware collection, then use `query_va()` to find functions similar to a confirmed candidate across the entire corpus. The SAX shortlist (top_k=20-50) feeds `SemanticSearcher` for final embedding-based ranking. This reduces `SemanticSearcher` inference calls by 100-1000x on large firmware collections.
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#sax-approximate-indexing)</sup>
 
 `SAXIndex.query_vactx, func_va` and `SAXIndex.query_seq(seq)` both return `List[SAXMatch]`:
 
@@ -120,7 +120,7 @@ Results are ordered by ascending `mindist`. Use `str(match)` for a formatted one
 
 ---
 
-## See also
+## See also <sup>[↑](#sax-approximate-indexing)</sup>
 
 - [Semantic Search](semantic-search.md): embedding-based similarity; consumes SAX shortlist
 - [Behavioral Subsequence Search](behavioral-subsequence-search.md): DTW-based structural matching; complementary to SAX pre-filter

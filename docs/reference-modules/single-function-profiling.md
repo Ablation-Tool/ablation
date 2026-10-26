@@ -4,7 +4,7 @@ Produce a complete analysis report for one function in a single call: combining 
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#single-function-profiling)</sup>
 
 1. **Manual triage of a candidate function requires four separate tool calls: enumerate callees, dump disassembly, annotate call arguments, and look up string cross-references.** `FuncProfiler.profile()` collapses these into a single call that returns a `FuncProfile` with all four outputs in one structured block, formatted for immediate reading. On a function with 10 calls and 4 string references, this saves roughly 15 minutes of manual assembly.
 
@@ -14,7 +14,7 @@ Produce a complete analysis report for one function in a single call: combining 
 
 ---
 
-## How it works
+## How it works <sup>[↑](#single-function-profiling)</sup>
 
 ```mermaid
 flowchart TD
@@ -39,7 +39,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#single-function-profiling)</sup>
 
 ```python
 from ablation.analyzers.func_profiler import FuncProfiler
@@ -75,7 +75,7 @@ sinks = fp.sinks_in_region(va=0x401000, end_va=0x420000, window=4096)
 
 ---
 
-## Example output
+## Example output <sup>[↑](#single-function-profiling)</sup>
 
 ```
 [FUNC 0x1000..0x1200]  357B  11 calls  4 strings  2 SINKS
@@ -94,19 +94,19 @@ CALLS:
 
 ---
 
-## False positives
+## False positives <sup>[↑](#single-function-profiling)</sup>
 
 **`is_sink` classification uses callee name matching: a callee named `exec_result_handler` matches the `exec` prefix in some catalog configurations.** Review `profile.fmt()` output to confirm that `[SINK]`-tagged calls are genuine exec sinks and not name-collision matches. Extend the catalog with full function names rather than prefixes for vendor-specific wrappers.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#single-function-profiling)</sup>
 
 Step 6 in the RE workflow CLAUDE.md: `FuncProfiler.profile()` on top candidates from `SemanticSearcher`. This is the standard triage step before `SinkArgClassifier`: the profile gives the human analyst enough context strings, call pattern, sink presence to decide whether to proceed to taint analysis or discard the candidate.
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#single-function-profiling)</sup>
 
 `FuncProfiler.profile(va)` returns a `FuncProfile` object:
 
@@ -123,7 +123,7 @@ Step 6 in the RE workflow CLAUDE.md: `FuncProfiler.profile()` on top candidates 
 
 ---
 
-## See also
+## See also <sup>[↑](#single-function-profiling)</sup>
 
 - [Call Argument Annotation](call-argument-annotation.md): `RegAnnotator` underlying the CALLS section
 - [Sink Argument Classifier](sink-argument-classifier.md): next step after profiling confirms a sink

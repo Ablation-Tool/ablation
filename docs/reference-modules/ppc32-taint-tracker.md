@@ -184,14 +184,14 @@ treated as clobbering r3–r10.
 
 ## Known limitations <sup>[↑](#ppc32tainttracker)</sup>
 
-1. **Memory taint**: stack buffers are not modelled. Any flow that routes tainted
+1. Memory taint: stack buffers are not modelled. Any flow that routes tainted
  data through a local buffer before the sink call is invisible to the tracker.
 
-2. **Unresolved GOT2 entries**: only PLT stubs SHN_UNDEF dynsym entries are
+2. Unresolved GOT2 entries: only PLT stubs SHN_UNDEF dynsym entries are
  in `_got2_va_to_name`. GOT2 entries pointing to internal function pointers or
  data constants appear as `??` and clobber r3.
 
-3. **LIEF relocation bug Huawei-specific**: LIEF silently discards relocations
+3. LIEF relocation bug Huawei-specific: LIEF silently discards relocations
  with vendor-specific types. `_load_plt_from_dynsym_raw()` works around this
  for Huawei GOT2-PIC binaries (triggered by `if not self._plt:` guard).
  SYSV PIC binaries (glibc `.so`) are not affected; LIEF handles their

@@ -4,17 +4,17 @@ Find dangerous code patterns across a source repository: detecting `eval`/`vm.ru
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#source-dangerous-sink-detection)</sup>
 
 1. **Source RE requires the same sink-to-taint discipline as binary RE, but at the AST level.** `SourceSinkScanner` is the source-code equivalent of `SinkArgClassifier` + `FormatStringScanner`, it identifies every dangerous sink in a repository and classifies each by severity and CWE, providing the starting point for `SourceTaintTracker` dataflow analysis.
 
-2. **Guard-condition detection reduces `HIGH` findings to `MEDIUM` for gated sinks**: `vm.runInContext` gated by `LANGFUSE_CODE_EVAL_DISPATCHER=insecure-local` is a `MEDIUM` requires explicit misconfiguration, not a `HIGH` always reachable. This was the LFG-CODEEVAL-1 pattern: the sink was present, dangerous in the abstract, but not exploitable without the env-var gate. `SourceSinkScanner` detects the gate and adjusts severity.
+2. Guard-condition detection reduces `HIGH` findings to `MEDIUM` for gated sinks: `vm.runInContext` gated by `LANGFUSE_CODE_EVAL_DISPATCHER=insecure-local` is a `MEDIUM` requires explicit misconfiguration, not a `HIGH` always reachable. This was the LFG-CODEEVAL-1 pattern: the sink was present, dangerous in the abstract, but not exploitable without the env-var gate. `SourceSinkScanner` detects the gate and adjusts severity.
 
-3. **`SinkHit.as_dict()` provides structured output for `AgentLoop` integration**: findings include file path, line number, sink function, CWE, severity, and the snippet. `AgentLoop` can consume these as pre-analyzed candidates for generating vulnerability hypothesis reports, referencing the exact file and line without re-running the scanner.
+3. `SinkHit.as_dict()` provides structured output for `AgentLoop` integration: findings include file path, line number, sink function, CWE, severity, and the snippet. `AgentLoop` can consume these as pre-analyzed candidates for generating vulnerability hypothesis reports, referencing the exact file and line without re-running the scanner.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#source-dangerous-sink-detection)</sup>
 
 ```mermaid
 flowchart TD
@@ -34,7 +34,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#source-dangerous-sink-detection)</sup>
 
 ```python
 from ablation.analyzers.source_sink_scanner import SourceSinkScanner
@@ -54,7 +54,7 @@ for f in critical:
 
 ---
 
-## Example output
+## Example output <sup>[↑](#source-dangerous-sink-detection)</sup>
 
 The following illustrates source sink scanner output format. Actual paths and sinks are codebase-specific.
 
@@ -74,7 +74,7 @@ Files scanned: <N>  Findings: <M>
 
 ---
 
-## False positives
+## False positives <sup>[↑](#source-dangerous-sink-detection)</sup>
 
 **Pattern matching without AST analysis may fire on string literals**: a `eval("safe_constant")` call where the argument is a string literal will be flagged as `CODE_EVAL`. Verify the `snippet` to confirm the sink argument is not a compile-time constant before escalating.
 
@@ -82,13 +82,13 @@ Files scanned: <N>  Findings: <M>
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#source-dangerous-sink-detection)</sup>
 
 Run `SourceSinkScanner` immediately after `SourceContext.from_path()` as the first scan on any source repository. This is the source-RE equivalent of Phase 0.5 triage. Feed `CRITICAL` and `HIGH` unguarded findings to `SourceTaintTracker` for full dataflow analysis.
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#source-dangerous-sink-detection)</sup>
 
 `SourceSinkScanner.from_context(ctx).scan()` returns `List[SinkHit]`:
 
@@ -108,7 +108,7 @@ Run `SourceSinkScanner` immediately after `SourceContext.from_path()` as the fir
 
 ---
 
-## See also
+## See also <sup>[↑](#source-dangerous-sink-detection)</sup>
 
 - [Source Code Analysis Pipeline](bare-integration.md): `SourceContext` that `SourceSinkScanner` consumes
 - [Tenant Isolation Checking](container-isolation-escape-surface.md): `SourceIsolationChecker` for IDOR complement scan

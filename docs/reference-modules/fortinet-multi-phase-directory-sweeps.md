@@ -10,7 +10,7 @@ Track a specific function across binary versions using a three-stage homolog mat
 
 2. **Stripped firmware has no symbol names: homolog matching cannot rely on function names.** Stage 1 structural pre-filter: basic block count ±2, edge count ±30% eliminates candidates quickly. Stage 2 mnemonic 4-gram Jaccard similarity on the top-10 structural matches identifies the best match by instruction sequence. Stage 3 (SemanticSearcher tiebreaker when top-2 candidates are within 0.05 Jaccard) uses semantic embeddings to break ties that mnemonic similarity cannot distinguish.
 
-3. **`HomologMatch.callee_changed` identifies when a patch introduced a new safety callee**: for example, a stack overflow patch that adds a call to `check_buffer_size()` before the dangerous `strcpy()`. This is a higher-confidence signal of a real patch than instruction-sequence changes alone, because adding a callee is a structural change that cannot be coincidental.
+3. `HomologMatch.callee_changed` identifies when a patch introduced a new safety callee: for example, a stack overflow patch that adds a call to `check_buffer_size()` before the dangerous `strcpy()`. This is a higher-confidence signal of a real patch than instruction-sequence changes alone, because adding a callee is a structural change that cannot be coincidental.
 
 ---
 

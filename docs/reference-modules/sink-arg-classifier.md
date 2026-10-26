@@ -4,7 +4,7 @@ Classify the provenance of command-string arguments at every exec-class sink cal
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#sink-arg-classifier)</sup>
 
 1. **TaintTracker wastes effort on sinks that cannot be exploited.** A `system("/bin/ls")` call is a sink in name only: the argument originates from `.rodata`, not from user input. Passing every exec-class call site to `TaintTracker` means tracing dozens of unreachable sinks for every real one. `SinkArgClassifier` runs first and stamps `RODATA_CONST` on every hardcoded-literal sink, removing them from the taint queue entirely.
 
@@ -14,7 +14,7 @@ Classify the provenance of command-string arguments at every exec-class sink cal
 
 ---
 
-## How it works
+## How it works <sup>[↑](#sink-arg-classifier)</sup>
 
 ```mermaid
 flowchart TD
@@ -60,7 +60,7 @@ flowchart TD
     linkStyle 16 stroke:#00695c,stroke-width:2px
 ```
 
-### The four verdicts
+### The four verdicts <sup>[↑](#sink-arg-classifier)</sup>
 
 | Verdict | Severity | Meaning | Action |
 |---|---|---|---|
@@ -69,7 +69,7 @@ flowchart TD
 | `ARG_PROPAGATED` | HIGH | Argument came from a caller-supplied entry register | Taint-trace: confirm caller-control depth |
 | `UNKNOWN` | MEDIUM | Backward trace exhausted lookback without resolving | Manual trace required |
 
-### Snprintf format positions by variant
+### Snprintf format positions by variant <sup>[↑](#sink-arg-classifier)</sup>
 
 | Function | Arg position | Register |
 |---|---|---|
@@ -82,7 +82,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#sink-arg-classifier)</sup>
 
 ```python
 from ablation.analyzers.sink_arg_classifier import SinkArgClassifier
@@ -120,7 +120,7 @@ results = clf.classify_all()
 
 ---
 
-## Integration in the RE workflow
+## Integration in the RE workflow <sup>[↑](#sink-arg-classifier)</sup>
 
 ```python
 # Recommended sequence: SinkArgClassifier before TaintTracker
@@ -148,7 +148,7 @@ for r in results:
 
 ---
 
-## Example output
+## Example output <sup>[↑](#sink-arg-classifier)</sup>
 
 ```
   HIGH    ARG_PROPAGATED       0x22ccc0  call@0x22d090  fadcsystem(arg1)  rsi <- rsi@entry (direct propagation)
@@ -161,7 +161,7 @@ Total: 47  RODATA_CONST: 31  ARG_PROPAGATED: 8  SNPRINTF_RODATA: 5  UNKNOWN: 3
 
 ---
 
-## False positives
+## False positives <sup>[↑](#sink-arg-classifier)</sup>
 
 **`RODATA_CONST` on pointer-chasing code.** When the argument register receives a `.rodata` address that is then further processed for example the value is incremented past a prefix, then the incremented pointer reaches the sink, the classifier still returns `RODATA_CONST` because it saw a `.rodata` LEA in the backward trace. Verify by checking whether any arithmetic modifies the register between the LEA and the call.
 
@@ -171,7 +171,7 @@ Total: 47  RODATA_CONST: 31  ARG_PROPAGATED: 8  SNPRINTF_RODATA: 5  UNKNOWN: 3
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#sink-arg-classifier)</sup>
 
 **Before this module:** `BinaryContext.load_or_build()`: PLT and func_starts accelerate classification. Register vendor sinks with `add_sink()` before calling `classify_all()`.
 
@@ -179,7 +179,7 @@ Total: 47  RODATA_CONST: 31  ARG_PROPAGATED: 8  SNPRINTF_RODATA: 5  UNKNOWN: 3
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#sink-arg-classifier)</sup>
 
 | Field | Content |
 |:---|:---|
@@ -193,7 +193,7 @@ Total: 47  RODATA_CONST: 31  ARG_PROPAGATED: 8  SNPRINTF_RODATA: 5  UNKNOWN: 3
 
 ---
 
-## See also
+## See also <sup>[↑](#sink-arg-classifier)</sup>
 
 - [Taint Analysis](taint-analysis.md): run on `ARG_PROPAGATED` and `UNKNOWN` results
 - [Function Profiler](function-profiler.md): integrates sink detection with argument annotation

@@ -6,11 +6,11 @@ Network traffic analysis and active enumeration: PCAP parsing for credential ext
 
 ## Why this exists
 
-1. **PCAP-based credential extraction without Wireshark**: `PCAPAnalyzer.parse()` then `extract_credentials()` parses a PCAP file and extracts: HTTP Basic Auth credentials (decoded from `Authorization:` headers), FTP `USER`/`PASS` sequences, Telnet command sequences, and DNS query names. This enables offline credential triage from captured traffic without requiring Wireshark or tshark.
+1. PCAP-based credential extraction without Wireshark: `PCAPAnalyzer.parse()` then `extract_credentials()` parses a PCAP file and extracts: HTTP Basic Auth credentials (decoded from `Authorization:` headers), FTP `USER`/`PASS` sequences, Telnet command sequences, and DNS query names. This enables offline credential triage from captured traffic without requiring Wireshark or tshark.
 
-2. **Host network state enumeration from `/proc/net/`**: `NetworkAnalyzer.enumerate_all()` reads `/proc/net/tcp`, `/proc/net/tcp6`, `/proc/net/udp`, and `/proc/net/dev` directly. All reads are bounded by `_MAX_PROC_BYTES=4MB`. Returns `{interfaces, connections, listening, firewall}` with connection dicts as `{protocol, local_ip, local_port, remote_ip, remote_port, state, uid}`.
+2. Host network state enumeration from `/proc/net/`: `NetworkAnalyzer.enumerate_all()` reads `/proc/net/tcp`, `/proc/net/tcp6`, `/proc/net/udp`, and `/proc/net/dev` directly. All reads are bounded by `_MAX_PROC_BYTES=4MB`. Returns `{interfaces, connections, listening, firewall}` with connection dicts as `{protocol, local_ip, local_port, remote_ip, remote_port, state, uid}`.
 
-3. **Active scanning without nmap**: `run_network_analysis(target)` probes a target with ICMP and HTTP using `ICMPScanner.scan()` and `WebDirBrute.scan()`. Returns `{target, icmp, web, findings}`.
+3. Active scanning without nmap: `run_network_analysis(target)` probes a target with ICMP and HTTP using `ICMPScanner.scan()` and `WebDirBrute.scan()`. Returns `{target, icmp, web, findings}`.
 
 ---
 

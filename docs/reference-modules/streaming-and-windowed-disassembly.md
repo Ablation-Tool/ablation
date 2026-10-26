@@ -4,17 +4,17 @@ Dump a configurable-size disassembly window centered on any target VA: annotatin
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#streaming-and-windowed-disassembly)</sup>
 
 1. **Per-instruction disassembly calls fragment LLM context across dozens of round trips: each call to `get_disassembly` in the `AgentLoop` tool registry returns a small slice, requiring the model to accumulate context across many calls to understand a function.** `WindowAnalyzer.dump_text()` returns a single annotated disassembly block default 1536 bytes that the LLM can pattern-match in one pass, reducing round trips from ON instructions / page_size to 1 for typical function analysis.
 
-2. **Inline annotation of PLT call targets and `.rodata` strings makes the disassembly immediately readable**: instead of `call 0x3000`, the output shows `call 0x3000  ; PLT -> recv`, and instead of `lea rdi, [rip+0x1234]`, the output shows `lea rdi, [rip+0x1234]  ; "==diff==> %s:%d loading cli context fail"`. An analyst (or LLM) can read the annotated dump and immediately understand the function's behavior without cross-referencing the PLT or string tables.
+2. Inline annotation of PLT call targets and `.rodata` strings makes the disassembly immediately readable: instead of `call 0x3000`, the output shows `call 0x3000  ; PLT -> recv`, and instead of `lea rdi, [rip+0x1234]`, the output shows `lea rdi, [rip+0x1234]  ; "==diff==> %s:%d loading cli context fail"`. An analyst (or LLM) can read the annotated dump and immediately understand the function's behavior without cross-referencing the PLT or string tables.
 
-3. **`WindowAnalyzer.find_func_starts()` heuristically identifies function starts within the window**: detecting `endbr64` CET entry point markers and push-rbp prologues in the window, providing function boundary hints in stripped binaries where `.eh_frame` FDE entries are absent.
+3. `WindowAnalyzer.find_func_starts()` heuristically identifies function starts within the window: detecting `endbr64` CET entry point markers and push-rbp prologues in the window, providing function boundary hints in stripped binaries where `.eh_frame` FDE entries are absent.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#streaming-and-windowed-disassembly)</sup>
 
 ```mermaid
 flowchart TD
@@ -38,7 +38,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#streaming-and-windowed-disassembly)</sup>
 
 ```python
 from ablation.analyzers.window_analyzer import WindowAnalyzer
@@ -68,7 +68,7 @@ for call_va, target_va, name in calls:
 
 ---
 
-## Example output
+## Example output <sup>[↑](#streaming-and-windowed-disassembly)</sup>
 
 The following illustrates annotated disassembly output format. Actual instructions and strings are binary-specific.
 
@@ -85,7 +85,7 @@ The following illustrates annotated disassembly output format. Actual instructio
 
 ---
 
-## False positives
+## False positives <sup>[↑](#streaming-and-windowed-disassembly)</sup>
 
 **`find_func_starts()` is heuristic, it detects `endbr64` and `PUSH RBP` patterns that may appear as instruction data sequences, not actual function prologues.** Confirm heuristic starts against `ctx.func_starts` or `.eh_frame` FDE entries before using them as analysis entry points.
 
@@ -93,13 +93,13 @@ The following illustrates annotated disassembly output format. Actual instructio
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#streaming-and-windowed-disassembly)</sup>
 
 `WindowAnalyzer.dump_text()` is the standard manual disassembly tool in the RE workflow (CLAUDE.md step 9: "WindowAnalyzer.dump_text() for manual disasm only when automated tools don't have the sink"). Use automated tools `TaintTracker`, `SinkArgClassifier` first; `dump_text()` is for the cases where a finding needs manual confirmation or the automated tool has no configured sink for the observed pattern.
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#streaming-and-windowed-disassembly)</sup>
 
 `WindowAnalyzer.dump_textva, window, align_back, header` returns an annotated disassembly string with a header line and separator. Each disassembly line has the form:
 
@@ -115,7 +115,7 @@ Annotations are added for PLT call targets, string references, and named VAs reg
 
 ---
 
-## See also
+## See also <sup>[↑](#streaming-and-windowed-disassembly)</sup>
 
 - [LLM Analyst Loop](llm-analyst-loop.md): `get_disassembly` tool calls `WindowAnalyzer.dump_text()` internally
 - [Persistent Analysis Context](persistent-analysis-context.md): `BinaryContext` that provides PLT and string tables to `WindowAnalyzer`

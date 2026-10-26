@@ -8,7 +8,7 @@ Propose and apply function names for stripped binaries using the LLM analyst loo
 
 1. **Stripped firmware binaries have thousands of unnamed functions: manually naming even the most important ones is a significant time cost, and an unnamed function appearing in a TaintTracker finding is harder to reason about than one named `parse_http_request`.** The assisted naming pipeline runs `AgentLoop.run()` on each candidate function with a naming task, using the LLM to suggest a name based on the function's disassembly, string xrefs, callee names, and any matching prior evidence from `func_id.db` via `RAGRetriever`.
 
-2. **`RAGRetriever` grounds the LLM's naming in prior confirmed RE work**: before generating a name, it retrieves existing `func_id.db` records that share callee sets or roles with the target function, injecting them as context. A function that calls `recv()`, `strncmp()`, and `send()` with a prior record showing `"role": "http_dispatcher"` will receive a well-grounded name rather than a generic one.
+2. `RAGRetriever` grounds the LLM's naming in prior confirmed RE work: before generating a name, it retrieves existing `func_id.db` records that share callee sets or roles with the target function, injecting them as context. A function that calls `recv()`, `strncmp()`, and `send()` with a prior record showing `"role": "http_dispatcher"` will receive a well-grounded name rather than a generic one.
 
 3. **Names are annotated with the source LLM_INFERRED and can be batch-applied via `ctx.set_name()` only after analyst review.** Assisted naming proposals are never auto-committed: they are presented as a ranked list for approval, preventing noisy LLM suggestions from polluting the confirmed name space.
 

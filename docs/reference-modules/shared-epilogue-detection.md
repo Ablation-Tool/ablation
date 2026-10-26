@@ -8,9 +8,9 @@ Detect functions that share a tail block epilogue via unconditional jump: markin
 
 1. **Some compilers merge the epilogue of multiple functions into a single shared block** reached via unconditional `JMP` or `B`: a size optimization common in MSVC for x86 PE targets, GCC for ARM thumb, and NXP VLE for ECU firmware. When `run_interprocedural()` encounters the shared block's address in `ctx.func_starts`, it treats it as an independent function entry and follows the taint path from there, producing a phantom result with no real source.
 
-2. **The phantom taint path is not a false positive that TaintTracker can filter internally**: from TaintTracker's perspective, it is analyzing a real function entry with valid instructions. The only fix is to prevent the shared block from appearing in `func_starts` before the interprocedural loop starts. `EpilogueShareScanner.inject(ctx)` removes shared-epilogue entries from `ctx.func_starts` in place, upstream of TaintTracker.
+2. The phantom taint path is not a false positive that TaintTracker can filter internally: from TaintTracker's perspective, it is analyzing a real function entry with valid instructions. The only fix is to prevent the shared block from appearing in `func_starts` before the interprocedural loop starts. `EpilogueShareScanner.inject(ctx)` removes shared-epilogue entries from `ctx.func_starts` in place, upstream of TaintTracker.
 
-3. **`EpilogueShareHit` records the function that jumps to the shared block, the shared block VA, and the reason the unconditional jump was classified as an epilogue share**: distinguishing tail calls different callee signature from epilogue shares (same frame teardown sequence: `POP RBP / RET` or `LDM SP!,{...,PC}`). This distinction is needed for accurate `report()` output and for manual review of ambiguous cases.
+3. `EpilogueShareHit` records the function that jumps to the shared block, the shared block VA, and the reason the unconditional jump was classified as an epilogue share: distinguishing tail calls different callee signature from epilogue shares (same frame teardown sequence: `POP RBP / RET` or `LDM SP!,{...,PC}`). This distinction is needed for accurate `report()` output and for manual review of ambiguous cases.
 
 ---
 

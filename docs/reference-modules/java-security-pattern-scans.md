@@ -8,9 +8,9 @@ Detect Python-to-Lua code injection vulnerabilities: finding `str.format()`, f-s
 
 1. **No Ablation module detected FAZ-SIEM-001 CRITICAL: an unsanitized `description` field embedded in a Lua comment via `.format()`, where `\n` in the description breaks the comment and injects arbitrary Lua code, achieving RCE via `LuaRuntime.execute()`.** Manual source code review was required. `LuaInjectionAnalyzer` automates detection of this pattern class.
 
-2. **Python format operations `str.format()`, f-strings, and `%-formatting` that embed a string in Lua source have no equivalent to HTML escaping or SQL parameterization**: a `--` comment delimiter is broken by a newline in the embedded string, and a closing `]]` breaks a `[[ ]]` Lua string literal. `LuaInjectionAnalyzer` detects all three embedding contexts: comment (`-- {field}`), string literal (`[[ {field} ]]`), and bare expression (`{field}`).
+2. Python format operations `str.format()`, f-strings, and `%-formatting` that embed a string in Lua source have no equivalent to HTML escaping or SQL parameterization: a `--` comment delimiter is broken by a newline in the embedded string, and a closing `]]` breaks a `[[ ]]` Lua string literal. `LuaInjectionAnalyzer` detects all three embedding contexts: comment (`-- {field}`), string literal (`[[ {field} ]]`), and bare expression (`{field}`).
 
-3. **`LuaInjectionFinding.as_dict()` provides the full Python function scope, the format operation line, and the Lua template string**: giving analysts everything needed to reproduce the injection without navigating the source manually. The `escape_needed` field documents what sanitization would fix the finding.
+3. `LuaInjectionFinding.as_dict()` provides the full Python function scope, the format operation line, and the Lua template string: giving analysts everything needed to reproduce the injection without navigating the source manually. The `escape_needed` field documents what sanitization would fix the finding.
 
 ---
 

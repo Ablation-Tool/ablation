@@ -33,10 +33,10 @@ analysis across sessions without re-decrypting.
 
 Three decryption stages (naehrwert/scetool `sce.cpp`):
 
-1. **AES-256-CBC**: decrypt the 64-byte `metadata_info` block using the master ERK/RIV.
+1. AES-256-CBC: decrypt the 64-byte `metadata_info` block using the master ERK/RIV.
  Yields a 16-byte per-file key and 16-byte per-file IV.
-2. **AES-128-CTR**: decrypt the metadata header + section headers + key table.
-3. **AES-128-CTR per section**: decrypt each segment whose `encrypted` field == 3,
+2. AES-128-CTR: decrypt the metadata header + section headers + key table.
+3. AES-128-CTR per section: decrypt each segment whose `encrypted` field == 3,
  using the per-section key/IV from the decrypted key table.
 
 After decryption, the inner ELF is extracted from the SELF container and written with

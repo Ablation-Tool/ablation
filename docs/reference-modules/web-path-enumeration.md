@@ -8,9 +8,9 @@ Decode flatui framework HTTP method integer IDs to HTTP verb sets: scanning rout
 
 1. **The flatui framework encodes HTTP methods as integer IDs in `RouteMethodData`.** Without decoding, `PreAuthRouteAuditor` cannot determine whether a pre-auth route accepts only `GET` requests lower risk: information disclosure at worst or also accepts `POST`/`PUT`/`DELETE` higher risk: state mutation and command injection paths. `FlatuiMethodDecoder` resolves the method ID to the actual HTTP verb set.
 
-2. **Three-stage decoding with fallback**: the decoder first scans known-operation routes `*Import` handlers → `POST`, read-only resource handlers → `GET` to anchor the ID→verb mapping, then probes the `RouterHandler` vtable for the method-string comparison code to extract the full mapping, then falls back to a built-in calibration table derived from FortiManager 8.0.0 binary analysis. The three-stage approach ensures correctness even when the binary is stripped.
+2. Three-stage decoding with fallback: the decoder first scans known-operation routes `*Import` handlers → `POST`, read-only resource handlers → `GET` to anchor the ID→verb mapping, then probes the `RouterHandler` vtable for the method-string comparison code to extract the full mapping, then falls back to a built-in calibration table derived from FortiManager 8.0.0 binary analysis. The three-stage approach ensures correctness even when the binary is stripped.
 
-3. **`FlatuiMethodDecoder.is_likely_writemethod_ids` returns `True` if any method in the set is `POST`, `PUT`, `PATCH`, or `DELETE`**: enabling `PreAuthRouteAuditor` to immediately flag pre-auth routes that accept write methods as higher priority than `GET`-only routes.
+3. `FlatuiMethodDecoder.is_likely_writemethod_ids` returns `True` if any method in the set is `POST`, `PUT`, `PATCH`, or `DELETE`: enabling `PreAuthRouteAuditor` to immediately flag pre-auth routes that accept write methods as higher priority than `GET`-only routes.
 
 ---
 

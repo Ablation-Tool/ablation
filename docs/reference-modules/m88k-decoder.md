@@ -140,14 +140,14 @@ See `re/lotus/moto_gen_re.py` for the full findings module.
 
 ## Extension points <sup>[↑](#m88kdecoder)</sup>
 
-1. **Triadic ops (0x3A–0x3C)**: expand `TRIADIC_OPS` in `isa_m88k.py` with
+1. Triadic ops (0x3A–0x3C): expand `TRIADIC_OPS` in `isa_m88k.py` with
  the full function-code table from the MC88100 PRM shift, rotate, cmp, …
-2. **DataExplorer AViiON corpus**: larger 88K target set for validating coverage
+2. DataExplorer AViiON corpus: larger 88K target set for validating coverage
  of additional instruction encodings
 3. **CFG builder** (`cfg_m88k.py`): block-level control flow graph using the
  existing `function_starts()` + branch target detection; follow `cfg_ppc.py`
  as the template
-4. **BinaryLifter integration**: add `arch='m88k'` to `BinaryLifter`'s ISA
+4. BinaryLifter integration: add `arch='m88k'` to `BinaryLifter`'s ISA
  dispatch table once a CFG builder exists
 
 ---

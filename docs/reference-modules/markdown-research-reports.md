@@ -6,11 +6,11 @@ Render sweep results as a structured markdown research report: ranked candidates
 
 ## Why this exists
 
-1. **`PatternLibrary.sweep()` output is a raw dict keyed by tag with lists of `va, score` pairs**: useful for programmatic processing but not readable as a findings report. `generate_report()` transforms this into a per-vuln-class ranked table with candidate VAs, scores, and the top-k hits per class, sorted by `_SEVERITY_RANK` (`CRITICAL → HIGH → MEDIUM → LOW → INFO`). This is the report format used in the manual verification step.
+1. `PatternLibrary.sweep()` output is a raw dict keyed by tag with lists of `va, score` pairs: useful for programmatic processing but not readable as a findings report. `generate_report()` transforms this into a per-vuln-class ranked table with candidate VAs, scores, and the top-k hits per class, sorted by `_SEVERITY_RANK` (`CRITICAL → HIGH → MEDIUM → LOW → INFO`). This is the report format used in the manual verification step.
 
 2. **`registry_hits` correlation surfaces prior confirmed findings with similar embeddings.** When an RE session has a `FindingRegistry` with prior work, `generate_report()` renders a second section showing which current candidates match known-confirmed findings from earlier binaries: allowing the analyst to fast-track candidates that match a pattern confirmed in a prior engagement rather than treating every hit as new.
 
-3. **The `xref` parameter (`XRefGraph` instance) adds cross-reference context**: for each top candidate, the report includes the immediate callers and callees from the XRefGraph. This removes the need to manually run `xref.callers_of(va)` during the verification checklist phase, since the report includes that context inline with each candidate.
+3. The `xref` parameter (`XRefGraph` instance) adds cross-reference context: for each top candidate, the report includes the immediate callers and callees from the XRefGraph. This removes the need to manually run `xref.callers_of(va)` during the verification checklist phase, since the report includes that context inline with each candidate.
 
 ---
 

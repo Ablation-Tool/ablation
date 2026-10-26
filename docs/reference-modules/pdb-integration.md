@@ -6,11 +6,11 @@ Parse Windows PDB Program Database symbol files and integrate function names, ty
 
 ## Why this exists
 
-1. **MSVC-compiled PE binaries ship without symbols in the binary**: function names, type information, and source file paths live in a separate `.pdb` file. Without PDB integration, every function in the binary is anonymous, making `SemanticSearcher` queries ineffective and `ctx.names_table()` empty. `PDBSymbolIntegrator.load_pdb()` populates `NameRegistry` with all function names from the PDB, enabling the full Ablation analysis pipeline on Windows targets.
+1. MSVC-compiled PE binaries ship without symbols in the binary: function names, type information, and source file paths live in a separate `.pdb` file. Without PDB integration, every function in the binary is anonymous, making `SemanticSearcher` queries ineffective and `ctx.names_table()` empty. `PDBSymbolIntegrator.load_pdb()` populates `NameRegistry` with all function names from the PDB, enabling the full Ablation analysis pipeline on Windows targets.
 
 2. **The PDB GUID embedded in the PE's CodeView debug directory entry identifies the exact matching PDB on Microsoft's symbol server.** `PDBSymbolIntegrator.fetch_pdb()` uses this GUID to download the matching PDB via `symsrv.dll` protocol (`https://msdl.microsoft.com/download/symbols/`), enabling on-demand symbol resolution for any Microsoft-signed binary.
 
-3. **`PDBFinding` captures mismatches**: when the PE's embedded PDB GUID does not match the PDB file's own GUID for example a patched binary paired with an old PDB, `PDBSymbolIntegrator` reports this as a `guid_mismatch` finding. A patched binary with a mismatched PDB cannot be reliably analyzed with those symbols.
+3. `PDBFinding` captures mismatches: when the PE's embedded PDB GUID does not match the PDB file's own GUID for example a patched binary paired with an old PDB, `PDBSymbolIntegrator` reports this as a `guid_mismatch` finding. A patched binary with a mismatched PDB cannot be reliably analyzed with those symbols.
 
 ---
 

@@ -8,9 +8,9 @@ Enumerate exported Binder service interfaces from Android APK DEX class definiti
 
 1. **Binder is Android's primary IPC mechanism: exported services are the first-hop attack surface for privilege escalation.** An app or system service that exports a `Stub` class via `onBind()` exposes its AIDL interface to any caller with the matching permission or no permission at all, if `android:exported="true"` without `android:permission`. `BinderScanner` maps the complete surface systematically.
 
-2. **DEX class hierarchy traversal is required to identify Binder servers**: a class becomes a Binder server by extending `Binder` (or `IInterface.Stub`) and overriding `onTransact()`. `BinderScanner.scan()` traverses DEX `ClassDef` superclass chains to find all `Service`/`IntentService` subclasses, then resolves their `IBinder` return type in `onBind()` to identify which ones export a Binder interface.
+2. DEX class hierarchy traversal is required to identify Binder servers: a class becomes a Binder server by extending `Binder` (or `IInterface.Stub`) and overriding `onTransact()`. `BinderScanner.scan()` traverses DEX `ClassDef` superclass chains to find all `Service`/`IntentService` subclasses, then resolves their `IBinder` return type in `onBind()` to identify which ones export a Binder interface.
 
-3. **`BinderFinding` includes the service class name, the declared permission (if any), the `android:exported` flag, and the list of AIDL transaction codes**: providing the exact permission requirements and the transaction surface in a single structured result. A `BinderFinding` with `permission=None` and `exported=True` is an unauthenticated IPC endpoint reachable by any installed app.
+3. `BinderFinding` includes the service class name, the declared permission (if any), the `android:exported` flag, and the list of AIDL transaction codes: providing the exact permission requirements and the transaction surface in a single structured result. A `BinderFinding` with `permission=None` and `exported=True` is an unauthenticated IPC endpoint reachable by any installed app.
 
 ---
 

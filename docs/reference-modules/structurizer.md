@@ -31,7 +31,7 @@ without writing an ISA-specific structurizer.
 All compiled automotive firmware AUTOSAR classic, bare-metal ECU C produces reducible
 CFGs: every back edge has a unique dominating header. The structurizer exploits this:
 
-1. **Compute**: DomTree Cooper-Harvey-Kennedy, LoopInfo natural loops from back edges,
+1. Compute: DomTree Cooper-Harvey-Kennedy, LoopInfo natural loops from back edges,
  PostDomTree (reversed-CFG DomTree).
 2. **Walk RPO** dominators before dominated nodes:
  - Block is a loop header → emit `WhileNode`, recurse into loop body, skip past exit.

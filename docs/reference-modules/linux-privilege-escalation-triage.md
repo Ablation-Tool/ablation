@@ -6,9 +6,9 @@ Enumerate SUID/SGID binaries, `sudo` rules, Linux capabilities `cap_net_raw`, `c
 
 ## Why this exists
 
-1. **`PrivescEnumerator.enumerate_all()` provides a single-call survey of every common Linux privilege escalation vector**: SUID binary enumeration, `sudo -l` access checks, Linux capabilities (`getcap -r /` equivalent), and writable paths in `$PATH`. Running this once establishes which category of escalation is likely to succeed before spending time on individual techniques.
+1. `PrivescEnumerator.enumerate_all()` provides a single-call survey of every common Linux privilege escalation vector: SUID binary enumeration, `sudo -l` access checks, Linux capabilities (`getcap -r /` equivalent), and writable paths in `$PATH`. Running this once establishes which category of escalation is likely to succeed before spending time on individual techniques.
 
-2. **`check_capabilities()` finds granular privilege abuse surfaces**: capabilities like `cap_net_raw` raw socket abuse, `cap_setuid` UID switching, `cap_dac_override` file permission bypass, and `cap_sys_ptrace` ptrace arbitrary process injection are misunderstood mitigations: administrators add them to avoid running processes as root but the capabilities are exploitable just as root access is. `PrivescEnumerator` reads `/proc/<pid>/status` for per-process capabilities and runs `getcap` on filesystem binaries.
+2. `check_capabilities()` finds granular privilege abuse surfaces: capabilities like `cap_net_raw` raw socket abuse, `cap_setuid` UID switching, `cap_dac_override` file permission bypass, and `cap_sys_ptrace` ptrace arbitrary process injection are misunderstood mitigations: administrators add them to avoid running processes as root but the capabilities are exploitable just as root access is. `PrivescEnumerator` reads `/proc/<pid>/status` for per-process capabilities and runs `getcap` on filesystem binaries.
 
 3. **`check_wtmp_utmp_anomalies()` and `check_adversary_tool_indicators()`** detect prior compromise indicators: `wtmp`/`utmp` log gaps sessions with no login record, `check_adversary_tool_indicators()` scans for known post-exploitation tool artifacts `linpeas.sh`, `pspy64`, `mimikatz`, exploit binary patterns in `/tmp/` and `/dev/shm/`. This is the forensic counterpart to the live exploitation surface checks.
 

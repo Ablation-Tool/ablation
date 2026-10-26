@@ -6,11 +6,11 @@ Parse ECU calibration definition files: ASAM/ASAP2 A2L industry standard for Bos
 
 ## Why this exists
 
-1. **A2L files ASAM MCD-2 MC standard, ASAP2 v1.31+ contain the ground-truth mapping from ROM addresses to calibration variable names**: a single EDC16 A2L covers 3,999 `CHARACTERISTIC` definitions; a large EDC17 covers 25,000+. `EcuA2LParser.calibration_tables()` parses these and returns typed `CalibrationTable` objects with axis and value ROM addresses, enabling `BinaryContext.set_name()` annotation of fuel maps, injection timing tables, and safety limits that are directly adjacent to security-relevant code.
+1. A2L files ASAM MCD-2 MC standard, ASAP2 v1.31+ contain the ground-truth mapping from ROM addresses to calibration variable names: a single EDC16 A2L covers 3,999 `CHARACTERISTIC` definitions; a large EDC17 covers 25,000+. `EcuA2LParser.calibration_tables()` parses these and returns typed `CalibrationTable` objects with axis and value ROM addresses, enabling `BinaryContext.set_name()` annotation of fuel maps, injection timing tables, and safety limits that are directly adjacent to security-relevant code.
 
-2. **`EcuOpenDamosParser` handles `open_damos.json` format with fingerprint relocation**: rather than using fixed ROM addresses which differ between firmware variants, the parser scans for axis breakpoint value fingerprints in the ROM bytes and adjusts table addresses accordingly. The same `open_damos.json` file works for every PSA/Bosch EDC16C34 firmware variant regardless of minor address differences between software generations.
+2. `EcuOpenDamosParser` handles `open_damos.json` format with fingerprint relocation: rather than using fixed ROM addresses which differ between firmware variants, the parser scans for axis breakpoint value fingerprints in the ROM bytes and adjusts table addresses accordingly. The same `open_damos.json` file works for every PSA/Bosch EDC16C34 firmware variant regardless of minor address differences between software generations.
 
-3. **Calibration context is essential for security analysis**: a buffer write to a ROM address that appears to be a vulnerability may be a legitimate calibration update path, or a calibration variable read may be an attacker-controllable input. Annotating calibration addresses in `BinaryContext` allows `FuncProfiler` and `TaintTracker` to correctly label these as calibration reads/writes rather than unknown data accesses.
+3. Calibration context is essential for security analysis: a buffer write to a ROM address that appears to be a vulnerability may be a legitimate calibration update path, or a calibration variable read may be an attacker-controllable input. Annotating calibration addresses in `BinaryContext` allows `FuncProfiler` and `TaintTracker` to correctly label these as calibration reads/writes rather than unknown data accesses.
 
 ---
 

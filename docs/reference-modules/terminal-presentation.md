@@ -6,7 +6,7 @@ Render colored terminal output, section headers, and structured boxes for Ablati
 
 ## Why this exists
 
-1. **All terminal output in Ablation goes through `render.py`**: without it, every module would need its own color detection logic and ANSI escape sequence management. `render.py` exports color constants `CYAN`, `RED`, `BOLD`, etc. as empty strings in plain mode, so calling code works correctly in both colored and non-colored terminals without any mode checks.
+1. All terminal output in Ablation goes through `render.py`: without it, every module would need its own color detection logic and ANSI escape sequence management. `render.py` exports color constants `CYAN`, `RED`, `BOLD`, etc. as empty strings in plain mode, so calling code works correctly in both colored and non-colored terminals without any mode checks.
 
 2. **Capability detection at import time prevents ANSI escape contamination in redirected output.** `_detect_mode()` checks `TERM`, `COLORTERM`, and `NO_COLOR` environment variables, and whether `sys.stdout.isatty()` returns true. When output is piped to a file or another process, `TERM` is unset or `isatty()` returns false, so plain mode is selected automatically. This makes `render.py` output safe for shell pipelines.
 

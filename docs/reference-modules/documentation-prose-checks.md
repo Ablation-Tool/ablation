@@ -6,7 +6,7 @@ Provide schema-validated stage output and deterministic routing for the Ablation
 
 ## Why this exists
 
-1. **`SESSION.md` is human-maintained flat markdown with no schema validation**: a `finding_confirmation` missing `byte_proof` is not caught until `FORGE.audit_module()` runs at commit time. `WorkflowDocument.validate()` catches schema violations immediately when a stage is completed, before the analyst proceeds to the next stage.
+1. `SESSION.md` is human-maintained flat markdown with no schema validation: a `finding_confirmation` missing `byte_proof` is not caught until `FORGE.audit_module()` runs at commit time. `WorkflowDocument.validate()` catches schema violations immediately when a stage is completed, before the analyst proceeds to the next stage.
 
 2. **Stage routing is implicit in prose**, there is no machine-checkable transition rule between triage, sweep, profile, taint, confirmation, and registration. `WorkflowDocument.advance()` enforces that each stage transition follows the defined `StageTransition` graph: `triage → sweep → profile → taint → confirmation → registration`. Attempting to skip a stage raises a `WorkflowError` with the required intermediate step.
 

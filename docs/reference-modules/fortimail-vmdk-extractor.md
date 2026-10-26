@@ -11,11 +11,11 @@ and `FirmwareContainerKeyExtractor` do not handle.
 
 Three gaps this closes:
 
-1. **OVF zip → VMDK**: FortiMail distribution zips contain a `.vmdk` disk image
+1. OVF zip → VMDK: FortiMail distribution zips contain a `.vmdk` disk image
  alongside an OVF descriptor. `from_zip()` identifies and extracts the disk image.
-2. **VMDK → raw → P2**: `qemu-img convert` flattens the streamOptimized VMDK to
+2. VMDK → raw → P2: `qemu-img convert` flattens the streamOptimized VMDK to
  a raw byte-addressable image; MBR parsing locates P2's byte offset dynamically.
-3. **Root-free ext4 access**: `dd` extracts the P2 partition to a flat image
+3. Root-free ext4 access: `dd` extracts the P2 partition to a flat image
  (`p2.img`), then `debugfs p2.img` dumps `datafs.tar.gz` without a loop
  mount. (`debugfs -o offset=` was removed in 1.47.x; the dd approach works
  on all versions.)

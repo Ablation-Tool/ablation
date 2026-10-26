@@ -4,7 +4,7 @@ Parse Java `.class` files and JAR archives, scan the JVM constant pool for secur
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#java-class-and-jar-analysis)</sup>
 
 1. **Java `.class` files store every method name, class reference, and string literal in an unobfuscated constant pool.** `parse_class_file()` reads the pool directly so dangerous patterns like `Runtime.exec`, `ObjectInputStream`, and `InvokerTransformer` are visible without decompiling any bytecode. This works on any Java version because the pool format has been stable since JDK 1.0.
 
@@ -14,7 +14,7 @@ Parse Java `.class` files and JAR archives, scan the JVM constant pool for secur
 
 ---
 
-## How it works
+## How it works <sup>[↑](#java-class-and-jar-analysis)</sup>
 
 ```mermaid
 flowchart TD
@@ -38,7 +38,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#java-class-and-jar-analysis)</sup>
 
 ```python
 from modules.java_re import parse_class_file, analyze_jar, scan_java_artifacts, synthesize_findings
@@ -69,7 +69,7 @@ print(report_java_findings(findings))
 
 ---
 
-## Example output
+## Example output <sup>[↑](#java-class-and-jar-analysis)</sup>
 
 ```
 [CRITICAL] Deserialization gadget chain
@@ -93,7 +93,7 @@ print(report_java_findings(findings))
 
 ---
 
-## False positives
+## False positives <sup>[↑](#java-class-and-jar-analysis)</sup>
 
 **`InvokerTransformer` in test or utility JARs is not always exploitable.** The constant pool scanner flags any class that references the gadget symbol. Confirm that the class is reachable from a deserialization entry point before reporting CRITICAL.
 
@@ -101,7 +101,7 @@ print(report_java_findings(findings))
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#java-class-and-jar-analysis)</sup>
 
 **Before this module:** no prerequisites for `.class` files. For JAR files, confirm the archive is not encrypted or nested inside another container format.
 
@@ -109,7 +109,7 @@ print(report_java_findings(findings))
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#java-class-and-jar-analysis)</sup>
 
 `synthesize_findings()` returns `List[dict]`:
 
@@ -123,7 +123,7 @@ print(report_java_findings(findings))
 
 ---
 
-## See also
+## See also <sup>[↑](#java-class-and-jar-analysis)</sup>
 
 - [DEX](dex.md): Android Dalvik bytecode analysis
 - [ARK](harmonyos.md): HarmonyOS ArkTS bytecode analysis

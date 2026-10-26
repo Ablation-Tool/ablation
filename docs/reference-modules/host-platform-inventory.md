@@ -6,11 +6,11 @@ Detect OS family, kernel version, CPU architecture, libc variant, and security c
 
 ## Why this exists
 
-1. **Exploit primitive selection depends on exact platform details**: a kernel heap overflow exploit requires knowing whether the host runs glibc or musl, whether ASLR is enabled (`/proc/sys/kernel/randomize_va_space`), and whether the kernel was compiled with SMEP/SMAP. `PlatformDetector` extracts these facts from `/proc/version`, `/proc/sys/`, `/etc/os-release`, and `uname` without requiring root.
+1. Exploit primitive selection depends on exact platform details: a kernel heap overflow exploit requires knowing whether the host runs glibc or musl, whether ASLR is enabled (`/proc/sys/kernel/randomize_va_space`), and whether the kernel was compiled with SMEP/SMAP. `PlatformDetector` extracts these facts from `/proc/version`, `/proc/sys/`, `/etc/os-release`, and `uname` without requiring root.
 
 2. **`PlatformDetector` is architecture-aware**, it distinguishes x86-64, ARM64, ARMv7, MIPS32, PPC64, and RISC-V from `uname -m` and the ELF header of `/proc/self/exe`. This is relevant when the compromised host is an embedded Linux device ARM-based network equipment, IoT gateway where x86-64 shellcode will fail silently.
 
-3. **Security capability detection**: ASLR level (0/1/2), NX (`/sys/devices/system/cpu/cpu0/topology/`), SELinux mode (`/sys/fs/selinux/enforce`), AppArmor status (`/sys/module/apparmor/parameters/enabled`), and seccomp filter status from `/proc/self/status`: all without executing privileged commands. This determines whether a found exploit is directly executable or requires a mitigation bypass step.
+3. Security capability detection: ASLR level (0/1/2), NX (`/sys/devices/system/cpu/cpu0/topology/`), SELinux mode (`/sys/fs/selinux/enforce`), AppArmor status (`/sys/module/apparmor/parameters/enabled`), and seccomp filter status from `/proc/self/status`: all without executing privileged commands. This determines whether a found exploit is directly executable or requires a mitigation bypass step.
 
 ---
 

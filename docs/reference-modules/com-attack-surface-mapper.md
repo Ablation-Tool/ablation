@@ -73,11 +73,11 @@ COM hijacking works when a DLL is loaded via a CLSID registered under `HKCU\Soft
 
 `COMAttackSurfaceMapper.from_path()` opens the PE with LIEF. The five analysis steps match the "What it does" section above:
 
-1. **Export scan**: checks the PE export table for `DllGetClassObject`, `DllRegisterServer`, `DllUnregisterServer`, `DllCanUnloadNow` using LIEF's `binary.exported_functions`. Any of these marks the DLL as a COM server.
-2. **GUID string scan**: walks `.rdata` and `.data` sections for the regex `{[0-9A-F]{8}-[0-9A-F]{4}-...}` to collect CLSID string references. Each unique GUID is stored in the CLSID inventory.
-3. **CoCreateInstance call site scan**: Capstone disassembles each code section; for each `call CoCreateInstance*` instruction, the preceding `lea` or `mov` loading the first argument `rcx` on x64 and stack push on x86 is backtracked to extract the CLSID binary value (16 bytes at the pointed-to address in `.rdata`).
-4. **IAT import scan**: checks the PE import table for `CoMarshalInterface`, `CoUnmarshalInterface`, `CoMarshalInterThreadInterfaceInStream`, `Invoke`, `GetIDsOfNames` using LIEF `binary.imports`.
-5. **Finding emission**: emits a `COMFinding` per category. `com_hijack_risk` is emitted only when both COM server exports AND CLSID references are found together.
+1. Export scan: checks the PE export table for `DllGetClassObject`, `DllRegisterServer`, `DllUnregisterServer`, `DllCanUnloadNow` using LIEF's `binary.exported_functions`. Any of these marks the DLL as a COM server.
+2. GUID string scan: walks `.rdata` and `.data` sections for the regex `{[0-9A-F]{8}-[0-9A-F]{4}-...}` to collect CLSID string references. Each unique GUID is stored in the CLSID inventory.
+3. CoCreateInstance call site scan: Capstone disassembles each code section; for each `call CoCreateInstance*` instruction, the preceding `lea` or `mov` loading the first argument `rcx` on x64 and stack push on x86 is backtracked to extract the CLSID binary value (16 bytes at the pointed-to address in `.rdata`).
+4. IAT import scan: checks the PE import table for `CoMarshalInterface`, `CoUnmarshalInterface`, `CoMarshalInterThreadInterfaceInStream`, `Invoke`, `GetIDsOfNames` using LIEF `binary.imports`.
+5. Finding emission: emits a `COMFinding` per category. `com_hijack_risk` is emitted only when both COM server exports AND CLSID references are found together.
 
 ---
 

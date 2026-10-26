@@ -4,7 +4,7 @@ Finds every network-reachable dangerous exec sink in a binary by cross-referenci
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#networksinkfinder)</sup>
 
 1. High-SAC binaries 100+ sinks require cross-referencing network entry points with dangerous sinks. Doing this manually takes 30-50 lines per session because `callers_of`, `reachable_from`, and `SinkArgClassifier` are separate tools with incompatible outputs.
 2. `SinkArgClassifier.classify_all()` returns results by call site, not by network reachability. A binary with 363 ARG_PROPAGATED results requires further filtering before any finding is meaningful.
@@ -12,7 +12,7 @@ Finds every network-reachable dangerous exec sink in a binary by cross-referenci
 
 ---
 
-## How it works
+## How it works <sup>[↑](#networksinkfinder)</sup>
 
 ```
 PLT network sources (recv, read, fgets, …)
@@ -30,7 +30,7 @@ Verdict priority: `ARG_PROPAGATED` > `UNKNOWN` > `SNPRINTF_RODATA`. `RODATA_CONS
 
 ---
 
-## NetworkSinkFinder
+## NetworkSinkFinder <sup>[↑](#networksinkfinder)</sup>
 
 ```python
 from ablation.analyzers.network_sink_finder import NetworkSinkFinder
@@ -41,7 +41,7 @@ for r in results.values():
     print(r.fmt())
 ```
 
-### Constructor
+### Constructor <sup>[↑](#networksinkfinder)</sup>
 
 ```python
 NetworkSinkFinder(ctx, depth=3, net_source_names=None, extra_sinks=None)
@@ -54,7 +54,7 @@ NetworkSinkFinder(ctx, depth=3, net_source_names=None, extra_sinks=None)
 | `net_source_names` | `Set[str]` | Additional PLT source names beyond `recv/read/fgets/accept/…` |
 | `extra_sinks` | `Dict[str, int]` | Additional sink names + arg positions beyond SAC defaults |
 
-### Methods
+### Methods <sup>[↑](#networksinkfinder)</sup>
 
 | Method | Returns | Description |
 |:---|:---|:---|
@@ -63,7 +63,7 @@ NetworkSinkFinder(ctx, depth=3, net_source_names=None, extra_sinks=None)
 
 ---
 
-## Usage
+## Usage <sup>[↑](#networksinkfinder)</sup>
 
 ```python
 # Minimal — depth-3 BFS, all default sources and sinks
@@ -85,7 +85,7 @@ dangerous = NetworkSinkFinder.from_context(ctx).find(depth=3)
 
 ---
 
-## Example output
+## Example output <sup>[↑](#networksinkfinder)</sup>
 
 ```
 NetworkSinkFinder: 7 network-reachable dangerous sinks
@@ -96,7 +96,7 @@ NetworkSinkFinder: 7 network-reachable dangerous sinks
 
 ---
 
-## False positives
+## False positives <sup>[↑](#networksinkfinder)</sup>
 
 **Reachability without data flow.** A function that calls recv and also calls strcpy on unrelated data will appear in results. Verify with `WindowAnalyzer.dump_text()` that the strcpy argument actually comes from the recv buffer.
 
@@ -106,7 +106,7 @@ NetworkSinkFinder: 7 network-reachable dangerous sinks
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#networksinkfinder)</sup>
 
 **Before this module:** `BinaryContext.load_or_build` + `SinkArgClassifier.from_context`. NetworkSinkFinder runs both internally, but running SAC first lets you see the total sink count before filtering by reachability.
 
@@ -114,7 +114,7 @@ NetworkSinkFinder: 7 network-reachable dangerous sinks
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#networksinkfinder)</sup>
 
 | Field | Content |
 |:---|:---|
@@ -127,7 +127,7 @@ NetworkSinkFinder: 7 network-reachable dangerous sinks
 
 ---
 
-## See also
+## See also <sup>[↑](#networksinkfinder)</sup>
 
 - [Sink Arg Classifier](sink-arg-classifier.md): provides the ARG_PROPAGATED results NetworkSinkFinder filters
 - [Window Analyzer](window-analyzer.md): use after NetworkSinkFinder to confirm the argument chain

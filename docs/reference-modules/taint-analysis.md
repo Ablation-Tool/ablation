@@ -4,7 +4,7 @@ Forward-propagate attacker-controlled data through a function's instruction stre
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#taint-analysis)</sup>
 
 1. **A finding from a scanner is a hypothesis: taint analysis converts it to a verdict.** When the `HeapVulnScanner` reports an integer overflow before `malloc`, or the `FormatStringScanner` reports that a format register originates from a function argument, neither tool has answered the critical question: does that value come from attacker-controlled network input? `TaintTracker` takes those findings as starting points and traces the data forward through the function body, answering precisely which instruction paths are reachable from tainted data.
 
@@ -14,7 +14,7 @@ Forward-propagate attacker-controlled data through a function's instruction stre
 
 ---
 
-## How it works
+## How it works <sup>[↑](#taint-analysis)</sup>
 
 The tracker executes a single forward pass through the disassembled function body, maintaining a live taint set of canonical register names and named stack slots.
 
@@ -94,7 +94,7 @@ flowchart TD
     linkStyle 32 stroke:#2e7d32,stroke-width:3px
 ```
 
-### Register canonicalization
+### Register canonicalization <sup>[↑](#taint-analysis)</sup>
 
 Every register reference in the instruction stream is normalized to its 64-bit canonical form before any taint operation:
 
@@ -110,7 +110,7 @@ Every register reference in the instruction stream is normalized to its 64-bit c
 
 This means `movzx eax, byte [rsp+8]; test rax, rax` is correctly handled: the `movzx` write to `eax` is tracked on `rax`, and the subsequent `test rax, rax` sees the correct taint state.
 
-### Sink detection
+### Sink detection <sup>[↑](#taint-analysis)</sup>
 
 The five sink types and their detection conditions:
 
@@ -122,7 +122,7 @@ The five sink types and their detection conditions:
 | `branch_cond` | Tainted operand in a `CMP` or `TEST` instruction controls a conditional branch |
 | `call_arg` | Any tainted argument register at any `CALL` not already classified as alloc/copy |
 
-### Conservative propagation semantics
+### Conservative propagation semantics <sup>[↑](#taint-analysis)</sup>
 
 The tracker is **path-insensitive**: it does not branch-fork the taint state at conditional jumps. Instead, it assumes all code paths execute the union of all paths. This means:
 
@@ -134,7 +134,7 @@ The tracker is **path-insensitive**: it does not branch-fork the taint state at 
 
 ---
 
-## TaintTracker
+## TaintTracker <sup>[↑](#taint-analysis)</sup>
 
 ```python
 from ablation.analyzers.taint_tracker import TaintTracker
@@ -152,7 +152,7 @@ for sink in sinks:
     print(sink)
 ```
 
-### Integration with BinaryContext
+### Integration with BinaryContext <sup>[↑](#taint-analysis)</sup>
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
@@ -178,7 +178,7 @@ for f in [x for x in heap_findings if x.severity == 'HIGH']:
             print(f"  {s}")
 ```
 
-### Extending allocator and copy function sets
+### Extending allocator and copy function sets <sup>[↑](#taint-analysis)</sup>
 
 ```python
 from ablation.analyzers.taint_tracker import TaintTracker
@@ -195,7 +195,7 @@ for va, name in ctx.plt.items():
 
 ---
 
-## Usage
+## Usage <sup>[↑](#taint-analysis)</sup>
 
 ```python
 from ablation.analyzers.taint_tracker import TaintTracker
@@ -216,7 +216,7 @@ for sink in sinks:
 
 ---
 
-## Example output
+## Example output <sup>[↑](#taint-analysis)</sup>
 
 ```
 0x40a214  [call_arg]  call 0x401050  (tainted: rdi): arg1 at call
@@ -228,7 +228,7 @@ for sink in sinks:
 
 ---
 
-## False positives
+## False positives <sup>[↑](#taint-analysis)</sup>
 
 **Path-insensitive analysis on guarded code.** A function that validates user input at the top and returns early on invalid input will still show taint reaching sinks on the guarded fast path: the tracker does not model the fact that the early return prevents the tainted value from ever reaching the allocation on the valid-input path. Manually verify that the branch at the `branch_cond` sink does not guard the `alloc_size` sink.
 
@@ -240,7 +240,7 @@ for sink in sinks:
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#taint-analysis)</sup>
 
 **Before this module:** `HeapVulnScanner`, `FormatStringScanner`, or any other scanner that identifies candidate functions and initial tainted registers. `BinaryContext` supplies the PLT for allocator and copy function resolution.
 
@@ -248,7 +248,7 @@ for sink in sinks:
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#taint-analysis)</sup>
 
 | Field | Content |
 |:---|:---|
@@ -260,7 +260,7 @@ for sink in sinks:
 
 ---
 
-## See also
+## See also <sup>[↑](#taint-analysis)</sup>
 
 - [Heap Vulnerability Scanner](heap-vulnerability-scanner.md): generates the function candidates that `TaintTracker` confirms
 - [Format String Scanner](format-string-scanner.md): produces `arg_passthrough` candidates for taint confirmation

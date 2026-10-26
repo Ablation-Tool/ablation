@@ -6,11 +6,11 @@ Capture volatile host state running processes, network connections, kernel modul
 
 ## Why this exists
 
-1. **Volatile data must be captured before any other analysis activity**: running processes, network connection state, kernel modules, and ARP tables are modified by every subsequent command. `enumerate_volatile_forensics()` in `process_enum.py` captures all of these to a timestamped output directory in a single call, establishing the ground-truth state of the host before any analysis tools interact with it.
+1. Volatile data must be captured before any other analysis activity: running processes, network connection state, kernel modules, and ARP tables are modified by every subsequent command. `enumerate_volatile_forensics()` in `process_enum.py` captures all of these to a timestamped output directory in a single call, establishing the ground-truth state of the host before any analysis tools interact with it.
 
 2. **`analyze_elf_binary_indicators()` performs a broad static analysis pass on a Linux ELF binary**, it detects `LD_PRELOAD` injection strings referencing `/etc/ld.so.preload`, `putenv("LD_PRELOAD=``, GOT overwrite patterns, `dlopen`/`dlsym` dynamic loading of unusual paths, and `ptracePTRACE_ATTACH` calls in non-debugger context. These patterns appear in Linux userspace rootkits, shared library injectors, and credential-harvesting implants.
 
-3. **`detect_elf_runtime_injection_techniques()` identifies process injection methods**: `PTRACE_POKETEXT` code injection into running process, `/proc/<pid>/mem` write memory write without ptrace, `memfd_create` + `fexecve` fileless execution, and `syscall()` with raw `execve` number syscall obfuscation. These are the Linux equivalents of Windows process hollowing and reflective DLL injection.
+3. `detect_elf_runtime_injection_techniques()` identifies process injection methods: `PTRACE_POKETEXT` code injection into running process, `/proc/<pid>/mem` write memory write without ptrace, `memfd_create` + `fexecve` fileless execution, and `syscall()` with raw `execve` number syscall obfuscation. These are the Linux equivalents of Windows process hollowing and reflective DLL injection.
 
 ---
 

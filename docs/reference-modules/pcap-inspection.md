@@ -8,7 +8,7 @@ Extract DNS queries with NXDOMAIN/domain-flux detection, cleartext credentials F
 
 1. **`PCAPAnalyzer` extracts cleartext credentials from PCAP files without external tools.** `extract_credentials()` scans TCP payloads for FTP `USER`/`PASS` command sequences (port 21), Telnet `login:` and `Password:` prompts (port 23), and HTTP Basic Auth `Authorization: Basic <base64>` headers ports 80/8080. Credentials are returned as `[{'proto', 'src', 'dst', 'cred'}]` dicts where `cred` is the decoded plaintext string.
 
-2. **`analyze_pcap()` provides a single-call PCAP summary**: credential extraction, DNS query enumeration, and HTTP request logging combined in one pass. DNS extraction (`extract_dns()`) returns `[{'query', 'type', 'src', 'rcode', 'qr'}]` dicts; NXDOMAIN responses (rcode=3) are included as domain-flux indicators per the Conficker analysis pattern from Violent Python chapter 4.
+2. `analyze_pcap()` provides a single-call PCAP summary: credential extraction, DNS query enumeration, and HTTP request logging combined in one pass. DNS extraction (`extract_dns()`) returns `[{'query', 'type', 'src', 'rcode', 'qr'}]` dicts; NXDOMAIN responses (rcode=3) are included as domain-flux indicators per the Conficker analysis pattern from Violent Python chapter 4.
 
 3. **`PCAPAnalyzer` is dependency-free**, it parses the libpcap global header `magic 0xA1B2C3D4` or `0xD4C3B2A1` LE, `snaplen`, `linktype`, Ethernet frame extraction (`linktype=1`), and IPv4/TCP/UDP header fields in pure Python `struct.unpack`. `LINKTYPE_ETHERNET = 1` and `LINKTYPE_RAW = 101` are the two supported link types. No Scapy, dpkt, or system libpcap is required.
 

@@ -1,12 +1,12 @@
-# ecu-c28x-decoder
+# EcuC28xDecoder
 
-## What this is
+## What this is <sup>[↑](#ecuc28xdecoder)</sup>
 
 TI TMS320C28x MCUs power EV/HEV traction-inverter controllers and motor-drive ECUs. Capstone has no C28x support. C28x uses three distinct calling conventions and word-addressed program memory where PC-relative branch offsets are word counts, not byte counts. `EcuC28xDecoder` decodes C28x instructions from raw bytes, handles all three call/return forms, and computes branch targets correctly in word addresses.
 
 ---
 
-## Where it's used
+## Where it's used <sup>[↑](#ecuc28xdecoder)</sup>
 
 - **EV/HEV traction inverters**: TI F28x-series motor-drive ECUs
 - **TMS320F2803x / F2806x / F2833x**: TI Piccolo and Delfino controller firmware
@@ -14,7 +14,7 @@ TI TMS320C28x MCUs power EV/HEV traction-inverter controllers and motor-drive EC
 
 ---
 
-## Safe usage
+## Safe usage <sup>[↑](#ecuc28xdecoder)</sup>
 
 **Pass `base_va` as a word address.** C28x program memory is word-addressed. Passing a byte address doubles every computed branch target and function start address.
 
@@ -26,7 +26,7 @@ TI TMS320C28x MCUs power EV/HEV traction-inverter controllers and motor-drive EC
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#ecuc28xdecoder)</sup>
 
 Four things were not possible before in Ablation:
 
@@ -50,7 +50,7 @@ Four things were not possible before in Ablation:
 
 ---
 
-## What it does
+## What it does <sup>[↑](#ecuc28xdecoder)</sup>
 
 `EcuC28xDecoder` decodes TMS320C28x instructions from a raw byte buffer using the
 encodings in SPRU430F TMS320C28x CPU and Instruction Set Reference Guide, April 2015.
@@ -63,7 +63,7 @@ where `TiCoffLoader` has extracted a code section.
 
 ---
 
-## Usage
+## Usage <sup>[↑](#ecuc28xdecoder)</sup>
 
 ```python
 from ablation.analyzers.ecu_c28x_decoder import EcuC28xDecoder
@@ -91,7 +91,7 @@ starts = dec.function_starts()   # list of word VAs, sorted
 
 ---
 
-## C28xInsn fields
+## C28xInsn fields <sup>[↑](#ecuc28xdecoder)</sup>
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -106,12 +106,12 @@ starts = dec.function_starts()   # list of word VAs, sorted
 
 ---
 
-## Instruction encoding reference
+## Instruction encoding reference <sup>[↑](#ecuc28xdecoder)</sup>
 
 All encodings from SPRU430F. `w1` = first instruction word, `w2` = second word (for
 32-bit instructions). Little-endian byte order: bytes 0-1 = w1, bytes 2-3 = w2.
 
-### Branch instructions 32-bit, 2 words
+### Branch instructions 32-bit, 2 words <sup>[↑](#ecuc28xdecoder)</sup>
 
 | Instruction | w1 pattern | w2 | Notes |
 |---|---|---|---|
@@ -122,7 +122,7 @@ All encodings from SPRU430F. `w1` = first instruction word, `w2` = second word (
 | `BAR #off, ARn, ARm, NEQ` | `0x8FC0 \| (n<<3) \| m` | signed offset16 | |
 | `LB 22bit` | `0x0040 \| addr[21:16]` | `addr[15:0]` | Long branch, absolute word addr |
 
-### Call instructions 32-bit, 2 words
+### Call instructions 32-bit, 2 words <sup>[↑](#ecuc28xdecoder)</sup>
 
 | Instruction | w1 pattern | w2 | Notes |
 |---|---|---|---|
@@ -132,7 +132,7 @@ All encodings from SPRU430F. `w1` = first instruction word, `w2` = second word (
 
 22-bit extraction: `addr22 = ((w1 & 0x3F) << 16) | w2`
 
-### Indirect branches and calls 16-bit, 1 word
+### Indirect branches and calls 16-bit, 1 word <sup>[↑](#ecuc28xdecoder)</sup>
 
 | Instruction | Encoding | insn_type |
 |---|---|---|
@@ -140,7 +140,7 @@ All encodings from SPRU430F. `w1` = first instruction word, `w2` = second word (
 | `LC *XAR7` | `0x7604` | CALL |
 | `LCR *XARn` | `0x3E60 \| n` | CALL |
 
-### Return instructions 16-bit, 1 word
+### Return instructions 16-bit, 1 word <sup>[↑](#ecuc28xdecoder)</sup>
 
 | Instruction | Encoding | Notes |
 |---|---|---|
@@ -149,7 +149,7 @@ All encodings from SPRU430F. `w1` = first instruction word, `w2` = second word (
 | `LRETR` | `0x0006` | Long Return from RPC register pairs with LCR |
 | `IRET` | `0x7602` | Interrupt Return |
 
-### Condition codes COND field, 4 bits
+### Condition codes COND field, 4 bits <sup>[↑](#ecuc28xdecoder)</sup>
 
 ```
 0x0=NEQ  0x1=EQ   0x2=GT   0x3=GEQ
@@ -158,7 +158,7 @@ All encodings from SPRU430F. `w1` = first instruction word, `w2` = second word (
 0xC=NTC  0xD=TC   0xE=NBIO 0xF=UNC
 ```
 
-### Branch target computation
+### Branch target computation <sup>[↑](#ecuc28xdecoder)</sup>
 
 For 2-word (32-bit) instructions: `target_word_va = word_va + 2 + signed_offset`
 
@@ -166,7 +166,7 @@ For absolute 22-bit instructions: `target_word_va = addr22`
 
 ---
 
-## Word addressing vs byte offsets
+## Word addressing vs byte offsets <sup>[↑](#ecuc28xdecoder)</sup>
 
 C28x program memory is word-addressed. The `base_va` parameter is a **word address**
 the program address of the first instruction word in the buffer. All `word_va` and
@@ -177,7 +177,7 @@ into the raw data buffer not word addresses. Conversion: `byte_off = word_va - b
 
 ---
 
-## Reference
+## Reference <sup>[↑](#ecuc28xdecoder)</sup>
 
 SPRU430F: TMS320C28x CPU and Instruction Set Reference Guide, April 2015.
 Per-instruction encoding pages used: 163 (B), 167 (BF), 162 (BANZ), 162 (BAR),
@@ -187,13 +187,13 @@ Per-instruction encoding pages used: 163 (B), 167 (BF), 162 (BANZ), 162 (BAR),
 
 ---
 
-## How it works
+## How it works <sup>[↑](#ecuc28xdecoder)</sup>
 
 Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns UDS handler tables, seed/key routines, calibration write paths are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
 
 ---
 
-## Example output
+## Example output <sup>[↑](#ecuc28xdecoder)</sup>
 
 ```
 [CRITICAL] WEAK_SEED   UDS 0x27 0x01 at ROM:0x8004A0
@@ -206,13 +206,13 @@ Reads the ROM image at the specified base address and applies the ISA decoder to
 
 ---
 
-## False positives
+## False positives <sup>[↑](#ecuc28xdecoder)</sup>
 
 Calibration data regions contain byte sequences that decode as valid instructions in some ISAs. Confirm candidate function VAs against the ROM layout from `ECURomLayoutAnalyzer` before treating them as code. Security Access sequences in boot ROM are expected and not findings unless the seed/key algorithm is cryptographically weak.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#ecuc28xdecoder)</sup>
 
 **Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
@@ -220,7 +220,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#ecuc28xdecoder)</sup>
 
 `EcuC28xDecoder.from_bytesdata, base_va=0.decode_all()` returns `List[C28xInsn]`:
 
@@ -237,7 +237,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## See also
+## See also <sup>[↑](#ecuc28xdecoder)</sup>
 
 - [ECUArchDetector](ecu-arch-detector.md): identify processor family before choosing a decoder
 - [ECURomLayoutAnalyzer](ecu-rom-layout-analyzer.md): map ROM sections before decoding

@@ -10,7 +10,7 @@ Extract and enumerate files from Tandem NonStop Guardian PAK archives: the propr
 
 2. **Guardian PAK files are distributed with a `.ZIP` extension but are not ZIP archives.** `unzip`, `file`, `binwalk`, and every standard archive tool reject these files: they contain Tandem's proprietary PAK format (zlib-compressed chunks wrapping the Guardian BACKUP(8) on-tape format), not ZIP records. Without `guardian_pak_extractor.py`, the analyst has no means to access the binary content at all.
 
-3. **`iter_files()` resolves Guardian paths to `GuardianFile` entries**: each entry includes the Guardian-format path (`volume.subvolume.filename`), file size, and extracted bytes. The MIPS32 big-endian binaries inside are NRL object format files that can be disassembled directly with Capstone `CS_ARCH_MIPS` + `CS_MODE_MIPS32` + `CS_MODE_BIG_ENDIAN`.
+3. `iter_files()` resolves Guardian paths to `GuardianFile` entries: each entry includes the Guardian-format path (`volume.subvolume.filename`), file size, and extracted bytes. The MIPS32 big-endian binaries inside are NRL object format files that can be disassembled directly with Capstone `CS_ARCH_MIPS` + `CS_MODE_MIPS32` + `CS_MODE_BIG_ENDIAN`.
 
 ---
 

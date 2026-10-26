@@ -10,7 +10,7 @@ Identify PowerPC64/PPC32 functions with high concentrations of VMX (AltiVec) vec
 
 2. **VMX instructions use primary opcode 4 0b000100 in the PowerPC ISA: in big-endian PPC64/PPC32 encoding, byte[0] of any word-aligned VMX instruction is one of {0x10, 0x11, 0x12, 0x13}.** This single-byte check is extremely fast: `VMXDensityScanner` processes 885 functions in approximately 35 seconds on a typical Cell PPU binary without capstone disassembly, making it practical as an early pre-filter.
 
-3. **`VMXFunctionResult.label()` integrates with `BinaryContext.set_name()`**: functions labeled `vector_math` at density ≥ threshold are excluded from the taint analysis queue, and their names are set in the context so they appear as labeled in `FuncProfiler` output.
+3. `VMXFunctionResult.label()` integrates with `BinaryContext.set_name()`: functions labeled `vector_math` at density ≥ threshold are excluded from the taint analysis queue, and their names are set in the context so they appear as labeled in `FuncProfiler` output.
 
 ---
 

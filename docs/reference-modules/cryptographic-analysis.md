@@ -1,20 +1,45 @@
-# Cryptographic Pattern Detection
+# HashAlgoDiscriminator / XorSolver / CryptoAudit
 
-Identify cryptographic algorithm implementations in compiled ARM32/Thumb2 firmware: discriminating hash algorithms MD5, SHA-1, SHA-256, SHA-512, CRC32 from K-table constants and detecting hand-rolled AES-128-CBC through BSS-tracked block pointer and XOR-with-previous-ciphertext chaining patterns.
+  - [What is cryptographic binary analysis?](#what-is-cryptographic-binary-analysis)
+  - [Why this exists](#why-this-exists)
+  - [How it works](#how-it-works)
+  - [Usage](#usage)
+  - [Example output](#example-output)
+  - [False positives](#false-positives)
+  - [Pipeline position](#pipeline-position)
+  - [Reading findings](#reading-findings)
+  - [XorSolver](#xorsolver)
+    - [Usage](#usage-1)
+    - [XorSolverResult fields](#xorsolverresult-fields)
+  - [CryptoAudit](#cryptoaudit)
+    - [Usage](#usage-2)
+  - [See also](#see-also)
+
+**Files:** `ablation/analyzers/crypto_pattern_detector.py` · `ablation/analyzers/xor_solver.py` · `modules/crypto_audit.py`
 
 ---
 
-## Why this exists
+## What is cryptographic binary analysis? <sup>[↑](#hashalgodiscriminator--xorsolver--cryptoaudit)</sup>
+
+Stripped firmware rarely documents its own cryptography. A binary may implement MD5 for authentication tokens, AES-128-CBC for VPN payloads, or a custom XOR cipher for configuration blob obfuscation, with no symbol names or comments identifying which is which. Audit starts with identifying what cryptographic algorithms are present, then determining whether the key material is recoverable, and finally confirming that the implementation has no critical weaknesses (weak secrets, nonce reuse, TOCTOU in key generation).
+
+`HashAlgoDiscriminator` identifies hash algorithm implementations by matching K-table constants embedded in `.rodata` or as immediate loads in code. Round constants for SHA-256, SHA-1, and MD5 are globally unique 32-bit values; their presence in a function's immediate operands identifies the function without disassembling the round logic. `CustomCBCDetector` finds hand-rolled AES-128-CBC by three structural signatures: a BSS-tracked block pointer pair, an XOR-with-previous-ciphertext back-edge loop, and an `.rodata` IV load at function entry.
+
+`XorSolver` recovers the key from XOR-encrypted firmware blobs. It attempts three attacks in order: a known-plaintext attack (KPA) against ELF/gzip/squashfs magic bytes at known file offsets, an index-of-coincidence key-length estimation followed by per-column frequency analysis, and a Hamming-distance key-length estimator. The `solve()` method tries all three and returns the highest-confidence result.
+
+`CryptoAudit` covers live-endpoint and post-compromise host analysis: JWT decode, forge, and weak-secret testing; SAML XML wrapping and injection; PEM and environment key material extraction; TLS cipher and protocol audit.
+
+## Why this exists <sup>[↑](#hashalgodiscriminator--xorsolver--cryptoaudit)</sup>
 
 1. **Compiled hash implementations leave algorithm-specific K-table constants round constants, magic numbers embedded in `.rodata` or as immediate loads in code: `HashAlgoDiscriminator` identifies these constants against known algorithm fingerprints without requiring disassembly of the full hash round loop.** For example, SHA-256 round constants `0x428a2f98`, `0x71374491`, ... appear as distinct 32-bit values that cannot be misidentified as another algorithm, enabling instant hash algorithm identification from static data.
 
 2. **Hand-rolled AES-128-CBC in ARM32/Thumb2 has a characteristic BSS-tracked block pointer, XOR-with-previous-ciphertext chaining loop, and IV loaded from `.rodata`.** `CustomCBCDetector` identifies these structural patterns without requiring the AES S-box to be present: critical for implementations that use hardware AES acceleration for the block cipher but implement the CBC chaining mode in software. The Fortinet ARM32 pattern was the original motivation.
 
-3. **`HashAlgoDiscriminator.scan_function()` and `CustomCBCDetector.scan_function()` integrate directly with `BinaryContext` function boundaries**: the same `func_starts` that drive `SemanticSearcher` and `FuncProfiler` drive crypto pattern detection, enabling batch scan of all functions in a binary to identify all crypto implementations in a single pass.
+3. `HashAlgoDiscriminator.scan_function()` and `CustomCBCDetector.scan_function()` integrate directly with `BinaryContext` function boundaries: the same `func_starts` that drive `SemanticSearcher` and `FuncProfiler` drive crypto pattern detection, enabling batch scan of all functions in a binary to identify all crypto implementations in a single pass.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#hashalgodiscriminator--xorsolver--cryptoaudit)</sup>
 
 ```mermaid
 flowchart TD
@@ -37,7 +62,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#hashalgodiscriminator--xorsolver--cryptoaudit)</sup>
 
 ```python
 from ablation.analyzers.crypto_pattern_detector import HashAlgoDiscriminator, CustomCBCDetector
@@ -66,7 +91,7 @@ print(f"Found {len(patterns)} CBC patterns in range")
 
 ---
 
-## Example output
+## Example output <sup>[↑](#hashalgodiscriminator--xorsolver--cryptoaudit)</sup>
 
 The following illustrates crypto detection output. Actual addresses and constants are firmware-specific.
 
@@ -86,7 +111,7 @@ CustomCBCDetector:
 
 ---
 
-## False positives
+## False positives <sup>[↑](#hashalgodiscriminator--xorsolver--cryptoaudit)</sup>
 
 **K-table constant matching may fire on coincidental constant sequences**: data structures that happen to contain hash K-values for example test vectors or lookup tables may produce false `HashAlgoMatch` results. Validate by inspecting the surrounding disassembly for the characteristic round-function structure bitwise rotate, and, or, xor operations on 4–8 registers.
 
@@ -94,13 +119,13 @@ CustomCBCDetector:
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#hashalgodiscriminator--xorsolver--cryptoaudit)</sup>
 
 Run `HashAlgoDiscriminator` and `CustomCBCDetector` during initial binary triage to identify crypto implementations before vulnerability analysis. Identified crypto functions should be excluded from taint tracking to avoid alert fatigue from crypto internals, and named in `BinaryContext` with `ctx.set_name()` for reference in findings.
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#hashalgodiscriminator--xorsolver--cryptoaudit)</sup>
 
 `HashAlgoDiscriminator.scan()` returns a list of `HashAlgoMatch` objects:
 
@@ -125,7 +150,81 @@ Run `HashAlgoDiscriminator` and `CustomCBCDetector` during initial binary triage
 
 ---
 
-## See also
+## XorSolver <sup>[↑](#hashalgodiscriminator--xorsolver--cryptoaudit)</sup>
+
+`XorSolver` recovers the repeating-XOR key from an encrypted firmware blob. It does not require knowing the key length in advance.
+
+### Usage <sup>[↑](#hashalgodiscriminator--xorsolver--cryptoaudit)</sup>
+
+```python
+from ablation.analyzers.xor_solver import XorSolver
+
+solver = XorSolver('/path/to/encrypted.bin')
+
+# Automated: tries KPA → frequency analysis → Hamming distance, returns best result
+result = solver.solve()
+print(result.fmt())
+
+if result.key:
+    decrypted = result.decrypt(open('/path/to/encrypted.bin', 'rb').read())
+    open('/path/to/decrypted.bin', 'wb').write(decrypted)
+    # Or:
+    solver.decrypt_file('/path/to/decrypted.bin')
+
+# Manual: known-plaintext attack only (fastest, highest confidence if magic matches)
+result = solver.kpa_attack(max_probe=64)
+
+# Manual: index-of-coincidence key length estimation
+key_len = solver.ic_key_length()
+result = solver.freq_attack()   # frequency-based column-by-column recovery
+```
+
+### XorSolverResult fields <sup>[↑](#hashalgodiscriminator--xorsolver--cryptoaudit)</sup>
+
+| Field | Type | Description |
+|:------|:-----|:------------|
+| `key` | `Optional[bytes]` | Recovered key bytes; `None` if recovery failed |
+| `key_length` | `Optional[int]` | Key length in bytes |
+| `method` | `str` | Attack that succeeded: `'kpa'`, `'hamming+freq'`, or `'manual'` |
+| `magic_matched` | `Optional[str]` | KPA magic label (e.g. `'ELF'`, `'gzip'`) if KPA succeeded |
+| `confidence` | `float` | 0.0–1.0 confidence estimate |
+| `notes` | `str` | Additional diagnostic text |
+
+---
+
+## CryptoAudit <sup>[↑](#hashalgodiscriminator--xorsolver--cryptoaudit)</sup>
+
+`CryptoAudit` in `modules/crypto_audit.py` covers JWT and SAML weakness testing against live endpoints or captured tokens, plus key material extraction from a post-compromise host.
+
+### Usage <sup>[↑](#hashalgodiscriminator--xorsolver--cryptoaudit)</sup>
+
+```python
+from modules.crypto_audit import CryptoAudit
+
+audit = CryptoAudit()
+
+# JWT: decode, test alg:none, test empty secret, test known-weak secrets
+result = audit.analyze_jwt("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.XXXX")
+print(result['alg'], result['vulns'])
+
+# Forged JWT with alg:none
+forged = audit.forge_jwt_alg_none(result['payload'])
+
+# Key material extraction from a process or config file
+keys = audit.extract_key_material('/proc/self/environ')
+keys += audit.extract_key_material('/etc/ssl/private/server.key')
+
+# TLS audit: cipher suite and protocol version check
+tls = audit.tls_audit('target.example.com', 443)
+print(tls)
+
+# Full host audit
+report = audit.run_host_audit('/etc/ssl', '/proc/self/environ')
+```
+
+---
+
+## See also <sup>[↑](#hashalgodiscriminator--xorsolver--cryptoaudit)</sup>
 
 - [Firmware Signature and Secret Triage](firmware-signature-and-secret-triage.md): key and credential discovery in firmware
 - [Generic Vulnerability Profile Sweeps](generic-vulnerability-profile-sweeps.md): `SemanticSearcher` for identifying crypto-adjacent vulnerability patterns

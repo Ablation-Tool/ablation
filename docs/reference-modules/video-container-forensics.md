@@ -6,11 +6,11 @@ Detect appended payloads, embedded binary content in metadata atoms, malformed b
 
 ## Why this exists
 
-1. **Video containers are polyglot attack vectors**: MP4 files can embed arbitrary binary content in `udta`, `free`, `skip`, or `uuid` atoms without affecting video playback. `video_container.py` detects appended or prepended non-video payloads content after `mdat`/`moov` in ISOBMFF, before the `EBML` header in MKV by walking the container structure rather than relying on file extension or MIME type.
+1. Video containers are polyglot attack vectors: MP4 files can embed arbitrary binary content in `udta`, `free`, `skip`, or `uuid` atoms without affecting video playback. `video_container.py` detects appended or prepended non-video payloads content after `mdat`/`moov` in ISOBMFF, before the `EBML` header in MKV by walking the container structure rather than relying on file extension or MIME type.
 
 2. **`udta`, `free`, `skip`, and `uuid` atoms are standard ISO/IEC 14496-12 containers for vendor-specific metadata**, but their contents are opaque to playback software. `video_container.py` checks the entropy of these atom payloads: a `uuid` atom with Shannon entropy > 7.5 bits/byte is almost certainly encrypted or compressed binary content rather than metadata.
 
-3. **EBML Matroska/MKV and RIFF (AVI) use distinct TLV encodings**: `_MP4Atom`, `_EBMLElement`, and the RIFF chunk parser each implement the format's length encoding. All three are needed because file extension is unreliable for forensic triage: a `.webm` file with an `.mp4` extension still uses EBML encoding and requires the EBML parser to walk its structure correctly.
+3. EBML Matroska/MKV and RIFF (AVI) use distinct TLV encodings: `_MP4Atom`, `_EBMLElement`, and the RIFF chunk parser each implement the format's length encoding. All three are needed because file extension is unreliable for forensic triage: a `.webm` file with an `.mp4` extension still uses EBML encoding and requires the EBML parser to walk its structure correctly.
 
 ---
 

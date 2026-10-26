@@ -6,11 +6,11 @@ Parse ARP tables and routing tables, discover adjacent subnets, harvest credenti
 
 ## Why this exists
 
-1. **`NetworkDiscovery` parses ARP and routing tables in pure Python**: reading `/proc/net/arp` and `/proc/net/route` directly, it produces a list of reachable subnets and known hosts without running `ip route` or `arp -a`. The subnet list seeds parallel TCP connect scanning via `NetworkDiscovery.scan_subnets()`, which uses Python threads to scan all 254 hosts in a /24 within seconds.
+1. `NetworkDiscovery` parses ARP and routing tables in pure Python: reading `/proc/net/arp` and `/proc/net/route` directly, it produces a list of reachable subnets and known hosts without running `ip route` or `arp -a`. The subnet list seeds parallel TCP connect scanning via `NetworkDiscovery.scan_subnets()`, which uses Python threads to scan all 254 hosts in a /24 within seconds.
 
-2. **`CredentialHarvester` extracts credentials from well-known filesystem locations**: `/etc/passwd`, `/etc/shadow`, `/home/*/.netrc`, `/home/*/.ssh/`, `/var/lib/git/.git/config`, and application configuration files in `/etc/` and `/opt/`. `SSHKeyEnumerator` enumerates all RSA/ECDSA/ED25519 private keys and `known_hosts` files found in user home directories, providing direct lateral movement material for SSH-accessible hosts.
+2. `CredentialHarvester` extracts credentials from well-known filesystem locations: `/etc/passwd`, `/etc/shadow`, `/home/*/.netrc`, `/home/*/.ssh/`, `/var/lib/git/.git/config`, and application configuration files in `/etc/` and `/opt/`. `SSHKeyEnumerator` enumerates all RSA/ECDSA/ED25519 private keys and `known_hosts` files found in user home directories, providing direct lateral movement material for SSH-accessible hosts.
 
-3. **`CloudMetadataProber` queries IMDS endpoints**: AWS (`169.254.169.254/latest/meta-data/iam/security-credentials/`), GCP (`169.254.169.254/computeMetadata/v1/instance/service-accounts/`), Azure (`169.254.169.254/metadata/instance/`), and OCI. Successful queries return temporary access credentials IAM role credentials, service account tokens that provide cloud API access from the compromised instance.
+3. `CloudMetadataProber` queries IMDS endpoints: AWS (`169.254.169.254/latest/meta-data/iam/security-credentials/`), GCP (`169.254.169.254/computeMetadata/v1/instance/service-accounts/`), Azure (`169.254.169.254/metadata/instance/`), and OCI. Successful queries return temporary access credentials IAM role credentials, service account tokens that provide cloud API access from the compromised instance.
 
 ---
 

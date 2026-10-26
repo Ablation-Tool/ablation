@@ -10,7 +10,7 @@ Scan Electron application JavaScript source for security misconfigurations: dete
 
 2. **Electron's security model is systematically different from web browsers: `nodeIntegration: true` in a renderer process gives loaded web content full Node.js system access.** Combining this with an unvalidated IPC handler that accepts renderer-initiated navigation (`webContents.loadURL(userInput)`) or a deep link without scheme validation creates a Remote Code Execution path from a malicious URL opened by the app. `ElectronSecurityScanner` detects these patterns and their combinations.
 
-3. **`scan()` returns typed `ElectronFinding` objects with CWE classification and severity**: findings map directly to standard CWE entries CWE-78 for `nodeIntegration` + `loadURL`, CWE-295 for TLS bypass, CWE-749 for exposed dangerous APIs, enabling consistent severity triage aligned with how the findings are reported downstream.
+3. `scan()` returns typed `ElectronFinding` objects with CWE classification and severity: findings map directly to standard CWE entries CWE-78 for `nodeIntegration` + `loadURL`, CWE-295 for TLS bypass, CWE-749 for exposed dangerous APIs, enabling consistent severity triage aligned with how the findings are reported downstream.
 
 ---
 

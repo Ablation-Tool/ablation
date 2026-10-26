@@ -10,7 +10,7 @@ Detect inherently unsafe deprecated functions: `gets()`, `mktemp()`, `tmpnam()`,
 
 2. **Buffer overflow offset calculation at each `gets()` call site.** For `gets()` calls where the destination buffer is at `[rbp-N]`, the module extracts `N` from the preceding `LEA rdi, [rbp-N]` instruction and reports the exact byte count needed to reach the saved return address: `N + 8` on x86-64. This converts a `HIGH` finding into a `CRITICAL` with a verified exploit offset, eliminating the manual offset-calculation step.
 
-3. **`mktemp()`/`tmpnam()` findings include the call site VA and the race-window description**: documenting the TOCTOU gap between the filename generation and the subsequent `open()` call. This is the evidence needed for a session finding entry without additional analysis.
+3. `mktemp()`/`tmpnam()` findings include the call site VA and the race-window description: documenting the TOCTOU gap between the filename generation and the subsequent `open()` call. This is the evidence needed for a session finding entry without additional analysis.
 
 ---
 

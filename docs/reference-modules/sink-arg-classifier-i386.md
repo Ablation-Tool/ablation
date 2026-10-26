@@ -6,11 +6,11 @@ Forward register-state exec-sink classifier for i386 ELF binaries.
 
 ## Why this exists
 
-1. **Gap RMC-GAP-002 / COMMSVR-GAP-004 / HACMP-GAP-001**: The main `SinkArgClassifier` hardcodes x86-64 registers `rdi`, `rsi`, and `rdx`. i386 cdecl passes all arguments on the stack (`push` or `sub esp; mov [esp+N]`). This module is the canonical i386-aware variant.
+1. Gap RMC-GAP-002 / COMMSVR-GAP-004 / HACMP-GAP-001: The main `SinkArgClassifier` hardcodes x86-64 registers `rdi`, `rsi`, and `rdx`. i386 cdecl passes all arguments on the stack (`push` or `sub esp; mov [esp+N]`). This module is the canonical i386-aware variant.
 
-2. **Forward-state vs backward-scan**: `sink_arg_classifier_x86_32.py` uses a backward push-count scan with a fixed lookback window. When the exec argument register is loaded far before the call beyond the window and aliased through several `mov reg, reg2` instructions, the backward scan returns UNKNOWN. This module uses a forward register-state pass, no lookback limit.
+2. Forward-state vs backward-scan: `sink_arg_classifier_x86_32.py` uses a backward push-count scan with a fixed lookback window. When the exec argument register is loaded far before the call beyond the window and aliased through several `mov reg, reg2` instructions, the backward scan returns UNKNOWN. This module uses a forward register-state pass, no lookback limit.
 
-3. **Register alias tracking**: When the forward pass sees `mov eax, [ebp+8]`, it records `reg_state[eax] = ARG_PROPAGATED`. A subsequent `mov edi, eax` then sets `reg_state[edi] = ARG_PROPAGATED`. This chain persists for the entire function lifetime.
+3. Register alias tracking: When the forward pass sees `mov eax, [ebp+8]`, it records `reg_state[eax] = ARG_PROPAGATED`. A subsequent `mov edi, eax` then sets `reg_state[edi] = ARG_PROPAGATED`. This chain persists for the entire function lifetime.
 
 ---
 

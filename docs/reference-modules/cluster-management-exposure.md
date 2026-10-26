@@ -6,7 +6,7 @@ Enumerate the combined Docker and Kubernetes cluster management API surface: ide
 
 ## Why this exists
 
-1. **Container orchestration management APIs are the highest-value targets in a cluster compromise**: Docker daemon TCP port 2375, Kubernetes API server port 6443, and etcd port 2379/2380 are each sufficient for full cluster control when unauthenticated. `cluster-management-exposure` combines the Docker and Kubernetes enumeration to produce a single triage of the three highest-severity exposure classes.
+1. Container orchestration management APIs are the highest-value targets in a cluster compromise: Docker daemon TCP port 2375, Kubernetes API server port 6443, and etcd port 2379/2380 are each sufficient for full cluster control when unauthenticated. `cluster-management-exposure` combines the Docker and Kubernetes enumeration to produce a single triage of the three highest-severity exposure classes.
 
 2. **`check_k8s_network_policy_gaps()` in `docker_enum.py`** probes the Kubernetes API at port 8001 from within the cluster network to identify namespaces without NetworkPolicy objects: the same flat-network finding as `kubernetes-policy-posture.md`, but accessible here from a Docker container context that may not have service account token access.
 

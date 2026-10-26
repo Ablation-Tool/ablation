@@ -10,7 +10,7 @@ Parse PowerPC PEF Preferred Executable Format binaries used by Mac Classic CFM C
 
 2. **CFM import stub resolution was manual every session.** Each session had to re-derive the RTOC-offset formula: `sym[i] → i*4 from r2`: identify which code VAs were stubs, and map them to symbol names. `PEFBinaryAnalyzer.stub_table()` produces the complete stub-to-name mapping in one call, providing the same `dangerous_imports()` interface as `PPC32ELF` for taint analysis.
 
-3. **PEF sections have semantic kinds**: code (`is_code()`), data (`is_data()`), and loader (`is_loader()`), and the loader section contains the imported library table (`PEFImportedLib`) and per-symbol import table (`PEFImport`). `PEFBinaryAnalyzer` exposes all three levels, enabling function-level analysis targeting only the code section VAs rather than the full 4 GB address space.
+3. PEF sections have semantic kinds: code (`is_code()`), data (`is_data()`), and loader (`is_loader()`), and the loader section contains the imported library table (`PEFImportedLib`) and per-symbol import table (`PEFImport`). `PEFBinaryAnalyzer` exposes all three levels, enabling function-level analysis targeting only the code section VAs rather than the full 4 GB address space.
 
 ---
 

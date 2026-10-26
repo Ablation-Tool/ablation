@@ -8,9 +8,9 @@ Forward labeled-taint tracking for x86/x86-64 instruction streams with full sub-
 
 1. **`TaintTracker` the base taint tracker tracks whether a value is tainted, but not how many attacker-controlled bytes it carries.** `taint_tracker_x86_labeled.py`'s `Taint.bound` field tracks the maximum attacker-controllable contribution to a value through arithmetic: `movzx eax, dl` gives bound=0xff; `lea rax, [rbx+rax*8]` with clean `rbx` gives bound=0xff*8; multiply by unknown or unbounded add resets bound to infinity. This enables distinguishing overflows bound > buffer_size from bounded-but-tainted values.
 
-2. **Named taint labels let multiple taint sources be tracked simultaneously**: `TaintState.taint_reg("rdi", "recv_payload")` and `TaintState.taint_reg("rsi", "config_file")` produce separate labeled `Taint` objects. At a sink, the finding identifies not just "tainted" but "tainted from recv_payload" versus "tainted from config_file", enabling precise attribution in multi-source functions.
+2. Named taint labels let multiple taint sources be tracked simultaneously: `TaintState.taint_reg("rdi", "recv_payload")` and `TaintState.taint_reg("rsi", "config_file")` produce separate labeled `Taint` objects. At a sink, the finding identifies not just "tainted" but "tainted from recv_payload" versus "tainted from config_file", enabling precise attribution in multi-source functions.
 
-3. **`TaintState.mem` tracks symbolic frame slots**: `sp_family, disp → Taint` entries track taint in stack slots across push/pop/sub rsp/leave, with aliasing on `mov rbp, rsp`. This handles the common pattern where a tainted value is spilled to the stack between the source and the sink.
+3. `TaintState.mem` tracks symbolic frame slots: `sp_family, disp → Taint` entries track taint in stack slots across push/pop/sub rsp/leave, with aliasing on `mov rbp, rsp`. This handles the common pattern where a tainted value is spilled to the stack between the source and the sink.
 
 ---
 

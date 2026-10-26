@@ -8,9 +8,9 @@ Find every `CALL [reg+disp]` indirect dispatch site in x86-64 ELF `.text`: deter
 
 1. **Virtual function tables are the primary attack surface for type confusion and use-after-free exploitation on x86-64 Windows and Linux.** Knowing which vtable slots are live dispatched by at least one call site narrows the set of slots an attacker must control to achieve code execution. Dead slots that appear in the vtable but are never dispatched cannot be hijacked for RCE.
 
-2. **x86-64 indirect call encoding is non-trivial**: `FF /2` ModRM-based calls cover `[reg]`, `[reg+disp8]`, `[reg+disp32]`, and `[SIB+disp]` forms, and REX.B extends the register field to `r8`–`r15`. `VtableDispatchScanner` handles all encoding forms by decoding the full ModRM/SIB byte sequence, avoiding the false-negative class where indirect calls to `r8`–`r15` slots are missed.
+2. x86-64 indirect call encoding is non-trivial: `FF /2` ModRM-based calls cover `[reg]`, `[reg+disp8]`, `[reg+disp32]`, and `[SIB+disp]` forms, and REX.B extends the register field to `r8`–`r15`. `VtableDispatchScanner` handles all encoding forms by decoding the full ModRM/SIB byte sequence, avoiding the false-negative class where indirect calls to `r8`–`r15` slots are missed.
 
-3. **`DispatchReport.live()` and `DispatchReport.dead()` provide slot-key indexed results**: where the key is `reg+N` for example `rax+8`, `r10+16`. `DispatchReport.is_dead('rax+8')` allows a targeted check for a specific vtable slot before investing in full vtable layout analysis.
+3. `DispatchReport.live()` and `DispatchReport.dead()` provide slot-key indexed results: where the key is `reg+N` for example `rax+8`, `r10+16`. `DispatchReport.is_dead('rax+8')` allows a targeted check for a specific vtable slot before investing in full vtable layout analysis.
 
 ---
 
