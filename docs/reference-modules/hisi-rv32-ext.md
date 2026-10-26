@@ -424,9 +424,9 @@ HiSilicon RISC-V SoCs (Hi3516EV300, Hi3518EV300 series) use a standard Linux vir
 | `0x100C0000` | 64 KB | NPU control registers (neural network engine DMA descriptors) |
 | `0x11000000` | 512 KB | Video codec registers (H.264/H.265 encoder) |
 
-The crypto engine key slot at `0x12010000` is writable only from secure boot ROM code and the trusted execution environment — or from code running as root if the peripheral access control is misconfigured. Finding a command injection vulnerability in a process running as root on a HiSilicon camera means potential access to write new keys to the crypto engine key slots.
+The crypto engine key slot at `0x12010000` is writable only from secure boot ROM code and the trusted execution environment: or from code running as root if the peripheral access control is misconfigured. Finding a command injection vulnerability in a process running as root on a HiSilicon camera means potential access to write new keys to the crypto engine key slots.
 
-`HiSiRV32Ext.scan_mmio()` (separate from the custom instruction scan) identifies patterns where a constant address in the HiSilicon peripheral range is loaded into a register and then used as a base for a load/store. This surfaces management plane code that directly accesses hardware registers — a significant finding in audit contexts.
+`HiSiRV32Ext.scan_mmio()` (separate from the custom instruction scan) identifies patterns where a constant address in the HiSilicon peripheral range is loaded into a register and then used as a base for a load/store. This surfaces management plane code that directly accesses hardware registers: a significant finding in audit contexts.
 
 ---
 
@@ -464,18 +464,18 @@ The RISC-V ISA reserves four opcode spaces for vendor-defined custom instruction
 Within each custom opcode space, the `funct3` field (bits [14:12]) and `funct7` field (bits [31:25]) identify specific operations:
 
 **`custom-0` (cryptography):**
-- `funct3=0x0, funct7=0x00`: `hisi.sm4round rd, rs1, rs2` — SM4 round function, 1 cycle
-- `funct3=0x0, funct7=0x01`: `hisi.sm4key rd, rs1, rs2` — SM4 key expansion round
-- `funct3=0x1, funct7=0x00`: `hisi.crc32c rd, rs1, rs2` — CRC32C (Castagnoli polynomial)
-- `funct3=0x1, funct7=0x01`: `hisi.crc32 rd, rs1, rs2` — standard CRC32
+- `funct3=0x0, funct7=0x00`: `hisi.sm4round rd, rs1, rs2`: SM4 round function, 1 cycle
+- `funct3=0x0, funct7=0x01`: `hisi.sm4key rd, rs1, rs2`: SM4 key expansion round
+- `funct3=0x1, funct7=0x00`: `hisi.crc32c rd, rs1, rs2`: CRC32C (Castagnoli polynomial)
+- `funct3=0x1, funct7=0x01`: `hisi.crc32 rd, rs1, rs2`: standard CRC32
 
 **`custom-3` (neural network):**
-- `funct3=0x0, funct7=0x00`: `hisi.conv2d rd, rs1, rs2` — 3x3 convolution (NPU kickoff)
-- `funct3=0x0, funct7=0x01`: `hisi.matmul rd, rs1, rs2` — matrix multiply
-- `funct3=0x1, funct7=0x00`: `hisi.relu rd, rs1` — ReLU activation (max(0, x))
-- `funct3=0x1, funct7=0x01`: `hisi.maxpool rd, rs1` — 2x2 max pooling
+- `funct3=0x0, funct7=0x00`: `hisi.conv2d rd, rs1, rs2`: 3x3 convolution (NPU kickoff)
+- `funct3=0x0, funct7=0x01`: `hisi.matmul rd, rs1, rs2`: matrix multiply
+- `funct3=0x1, funct7=0x00`: `hisi.relu rd, rs1`: ReLU activation (max(0, x))
+- `funct3=0x1, funct7=0x01`: `hisi.maxpool rd, rs1`: 2x2 max pooling
 
-For security analysis, `custom-0` crypto instructions are high-interest: they reveal the algorithm used for firmware signature verification and communication encryption. Finding `hisi.sm4round` in the boot ROM or management plane binary indicates SM4 (Chinese National Standard GB/T 32907-2016) is used, which has known timing side channels in software implementations — but the hardware-accelerated version has fixed timing. The interest is in locating the key material passed in `rs2`.
+For security analysis, `custom-0` crypto instructions are high-interest: they reveal the algorithm used for firmware signature verification and communication encryption. Finding `hisi.sm4round` in the boot ROM or management plane binary indicates SM4 (Chinese National Standard GB/T 32907-2016) is used, which has known timing side channels in software implementations: but the hardware-accelerated version has fixed timing. The interest is in locating the key material passed in `rs2`.
 
 ---
 
@@ -524,7 +524,7 @@ for insn in custom0[:5]:
 # 4. Find SM4 key load: rs2 at the first hisi.sm4round is the key register
 if custom0:
     first_sm4 = custom0[0]
-    # trace rs2 back to its source — that's the key loading VA
+    # trace rs2 back to its source: that's the key loading VA
     tracker = RISCVTaintTracker.from_context(ctx)
     findings = tracker.trace_arg(first_sm4.address, first_sm4.rs2)
     for f in findings:
@@ -570,7 +570,7 @@ The `C` (Compressed) extension creates the same disassembly ambiguity that VLE c
 
 **Custom instruction false positives:** In firmware compiled for RV32IMAC without HiSilicon custom extensions, any 32-bit word where bits [6:0] happen to equal `0x0B` (the custom-0 opcode) will be flagged by `scan_custom0()` as a potential custom instruction. This commonly occurs in data sections that are adjacent to the code section. `HiSiRV32Ext` mitigates this by only scanning confirmed code sections (from the ELF section headers or `EcuROMLayoutAnalyzer` region classification), but always verify custom instruction finds by checking the surrounding context: a `custom-0` instruction in the middle of clearly non-code data (string tables, constant arrays) is a false positive.
 
-**`funct3`/`funct7` unknown values:** HiSilicon ships multiple firmware generations and has added custom-0 operations in newer SoC revisions not in the decoder's opcode table. Unknown `funct3`/`funct7` combinations produce `insn.mnemonic = 'hisi.unknown_custom0'` or `'hisi.unknown_custom3'`. These are not false positives — they are real custom instructions with unknown semantics. Document them in the finding report as `detail='unrecognized HiSilicon custom-0 operation, funct3=0x{funct3:x} funct7=0x{funct7:x}'` and flag for manual review.
+**`funct3`/`funct7` unknown values:** HiSilicon ships multiple firmware generations and has added custom-0 operations in newer SoC revisions not in the decoder's opcode table. Unknown `funct3`/`funct7` combinations produce `insn.mnemonic = 'hisi.unknown_custom0'` or `'hisi.unknown_custom3'`. These are not false positives: they are real custom instructions with unknown semantics. Document them in the finding report as `detail='unrecognized HiSilicon custom-0 operation, funct3=0x{funct3:x} funct7=0x{funct7:x}'` and flag for manual review.
 
 **NPU operations are not security-relevant by default:** `custom-3` neural network instructions (`hisi.conv2d`, `hisi.relu`, etc.) indicate AI/ML processing code. These are only security-relevant if the NPU input buffers are sourced from network data without length validation (potential heap overflow into the NPU DMA descriptor region). Without evidence of a network-sourced input being passed to `hisi.conv2d` without bounds checking, `custom-3` findings are informational (lower priority) not critical.
 

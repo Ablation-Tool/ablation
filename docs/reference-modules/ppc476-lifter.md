@@ -333,7 +333,7 @@ Avionics and aviation infrastructure firmware on PPC476 yields distinct finding 
 
 **Example lifted function:**
 ```c
-// Function at 0x00824F10 — lifted by PPC476Lifter
+// Function at 0x00824F10: lifted by PPC476Lifter
 void sub_824F10(u32 a0, u32 a1, u32 a2) {
     u32 s0 = a0;
     u32 s1 = a1;
@@ -364,7 +364,7 @@ The pseudo-C is intentionally not compilable: it is an analysis aid, not source 
 | Command injection | CWE-78 | `system(buf)` where `buf` includes ARG_PROPAGATED string |
 | Format string | CWE-134 | `printf`/`sprintf` with first arg being ARG_PROPAGATED (not a string literal) |
 | Integer overflow leading to heap overflow | CWE-190 | `malloc(n * size)` where `n` is ARG_PROPAGATED without bounds check |
-| Use of unsafe function | CWE-676 | `gets()`, `strcpy()`, `scanf("%s", ...)` — unconditional flag |
+| Use of unsafe function | CWE-676 | `gets()`, `strcpy()`, `scanf("%s", ...)`: unconditional flag |
 
 For FindingRegistry: set `va` to the sink instruction VA (the `bl system` or `bl sprintf` instruction), `cwe` as above, `evidence_type='ppc476_lifted_pseudo_c'`, and include the relevant `PPC476Lifter.lift()` output excerpt in `detail`.
 
@@ -454,7 +454,7 @@ for f in findings:
 
 ## What is the PPC476? History and deployment context <sup>[↑](#ppc476lifter)</sup>
 
-The Power PC 476FP (PPC476) is a 32-bit RISC processor developed by IBM as part of the PowerPC 400 series embedded line. The "FP" suffix indicates the inclusion of an IEEE 754 double-precision floating-point unit — a feature absent from the standard PPC405 and PPC440 that preceded it. The PPC476 was positioned for high-reliability applications that needed both deterministic real-time behavior (for control systems) and full FP capability (for navigation and signal processing).
+The Power PC 476FP (PPC476) is a 32-bit RISC processor developed by IBM as part of the PowerPC 400 series embedded line. The "FP" suffix indicates the inclusion of an IEEE 754 double-precision floating-point unit, a feature absent from the standard PPC405 and PPC440 that preceded it. The PPC476 was positioned for high-reliability applications that needed both deterministic real-time behavior (for control systems) and full FP capability (for navigation and signal processing).
 
 **Chronology:**
 - 1997: PowerPC 405 introduced (IBM 4xx series, 32-bit, no FPU); deployed in networking (Cisco 7200 I/O processor, Juniper line cards), industrial, and early embedded Linux systems
@@ -568,8 +568,8 @@ PowerPC Book E uses a fixed 32-bit instruction format with three primary forms:
 `add` (OPCD=31, XO=266): RT = RA + RB.
 
 **`mtlr` / `mflr` (link register move):**
-`mflr r0`: OPCD=31, XO=339, RS=0, SPR=0x100 (LR). Moves LR to r0 — identifies function prologues.
-`mtlr r0`: OPCD=31, XO=467, RS=0, SPR=0x100. Restores LR from r0 — identifies function epilogues.
+`mflr r0`: OPCD=31, XO=339, RS=0, SPR=0x100 (LR). Moves LR to r0; identifies function prologues.
+`mtlr r0`: OPCD=31, XO=467, RS=0, SPR=0x100. Restores LR from r0; identifies function epilogues.
 
 ---
 
@@ -579,7 +579,7 @@ Avionics PPC476 firmware runs almost exclusively on certified real-time operatin
 
 **VxWorks on PPC476:**
 - **Flat memory model:** VxWorks uses a flat physical address space without virtual memory separation between tasks (by default in VxWorks 5.x and 6.x; VxWorks 7 adds optional MMU protection). All tasks share the same address space: a vulnerability in one task can overwrite another task's data or code.
-- **Symbol table in binary:** VxWorks application ELF images typically include a symbol table (`vxworks_symbol_table`) containing all exported function and variable names. This provides near-source-level symbol resolution — one of the few contexts where a production binary has readable function names. `BinaryContext.load_or_build()` imports these symbols automatically.
+- **Symbol table in binary:** VxWorks application ELF images typically include a symbol table (`vxworks_symbol_table`) containing all exported function and variable names. This provides near-source-level symbol resolution, one of the few contexts where a production binary has readable function names. `BinaryContext.load_or_build()` imports these symbols automatically.
 - **Task entry points as security boundary:** VxWorks tasks correspond to POSIX threads but without separate address spaces. Network-facing tasks (those calling `accept()` or `recvfrom()`) are the entry points for remote exploitation. `SemanticSearcher` targets these first.
 - **No stack canaries by default:** Older VxWorks versions (5.x) do not enable stack canaries. Buffer overflow vulnerabilities in VxWorks 5.x applications on PPC476 are directly exploitable without bypassing a canary.
 
@@ -605,7 +605,7 @@ Book E defines a large number of special purpose registers accessed via `mfspr`/
 | 272–275 | SPRG0–SPRG3 | Supervisor general-purpose SPRs |
 | 1008 | HID0 | Hardware implementation-dependent register 0 |
 
-`mfspr r3, 8` (load LR into r3) followed by a store is a common pattern in VxWorks task-switch code. If user-controlled data reaches `mtspr 9, rX` (write to CTR) followed by `bctrl` (branch to CTR), that is a CTR overwrite — equivalent to function pointer hijack. `PPC476Lifter` labels these as potential control-flow violations when `rX` trace sources are ARG_PROPAGATED.
+`mfspr r3, 8` (load LR into r3) followed by a store is a common pattern in VxWorks task-switch code. If user-controlled data reaches `mtspr 9, rX` (write to CTR) followed by `bctrl` (branch to CTR), that is a CTR overwrite, equivalent to function pointer hijack. `PPC476Lifter` labels these as potential control-flow violations when `rX` trace sources are ARG_PROPAGATED.
 
 ---
 
@@ -639,6 +639,6 @@ assert opcd == 18 and lk == 1, f"Expected bl at {system_call_va:#x}, got {word:#
 - [SemanticSearch](semantic-code-search.md): behavioral candidate search on the binary
 - [PPC32 Taint Tracker](ppc32-taint-tracker.md): the complementary taint analysis module for PPC32 targets including PPC476
 - [XCOFF32 Decompiler](xcoff32-decompiler.md): for AIX/IBM targets using XCOFF32 binary format instead of ELF
-- [ECU VLE Decoder](ecu-vle-decoder.md): for NXP MPC5500/5700 automotive PPC (different ISA extension — VLE — not Book E standard)
+- [ECU VLE Decoder](ecu-vle-decoder.md): for NXP MPC5500/5700 automotive PPC (different ISA extension, VLE, not Book E standard)
 - [SH-2A Binary Lifter](binary-lifter-sh2a.md): Renesas SH-2A (Japanese automotive ECU competitor to PPC476 in avionics/industrial markets)
 - [FindingRegistry](registry.md): record confirmed PPC476 findings; `evidence_type='ppc476_lifted_pseudo_c'`; always byte-verify the `bl` call at `sink_va` before registering

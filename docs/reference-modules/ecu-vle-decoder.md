@@ -511,7 +511,7 @@ SP             | Back chain (saved SP)            |  (se_stwu r1, -N(r1))
 
 Variable Length Encoding (VLE) is an instruction set extension developed by Freescale Semiconductor (later acquired by NXP Semiconductors in 2015) specifically for the embedded PowerPC product family used in automotive Electronic Control Units (ECUs). VLE was introduced with the MPC5500 family in the mid-2000s and became the default instruction set for NXP's e200 core series.
 
-**The problem VLE solves:** Standard PowerPC/Book E instructions are 32 bits wide — 4 bytes per instruction. Automotive ECUs have severe flash memory cost constraints: a single 512 KB flash chip costs significantly less than a 1 MB chip in high-volume production (millions of units). Early 2000s ECU firmware for powertrain (PCM/ECM) and transmission control modules filled 256 KB to 512 KB flash. As feature complexity increased, firmware grew beyond these limits. VLE was designed to reduce code size by 20–30% without requiring hardware redesign.
+**The problem VLE solves:** Standard PowerPC/Book E instructions are 32 bits wide (4 bytes per instruction). Automotive ECUs have severe flash memory cost constraints: a single 512 KB flash chip costs significantly less than a 1 MB chip in high-volume production (millions of units). Early 2000s ECU firmware for powertrain (PCM/ECM) and transmission control modules filled 256 KB to 512 KB flash. As feature complexity increased, firmware grew beyond these limits. VLE was designed to reduce code size by 20–30% without requiring hardware redesign.
 
 **VLE encoding model:** VLE uses a 16-bit Short Encoding (SE) subset for the most common operations and retains 32-bit encoding for operations that need full register access and larger immediates. The 16-bit vs. 32-bit distinction is made per-instruction by the leading bit pattern of the first halfword:
 
@@ -600,7 +600,7 @@ se_stw   r14, N-4(r1) ; save callee-save registers
 se_stw   r15, N-8(r1) ; ...
 e_stmw   r24, N-36(r1); save r24-r31 in one instruction
 e_stw    r0, N+4(r1)  ; save link register (via r0 = mflr r0 before)
-mflr     r0            ; (Book E, present in VLE region — mixed encoding)
+mflr     r0            ; (Book E, present in VLE region: mixed encoding)
 ```
 
 `EcuVLEDecoder` identifies function entry points by detecting `se_stwu r1, -N(r1)` at a 4-byte-aligned offset in the code region. The instruction pattern `insn_type == 'PROLOGUE'` on a `VLEInsn` marks a confirmed function entry.
@@ -666,7 +666,7 @@ assert insn.raw == data[off:off + len(insn.raw)], \
 - [EcuROMLayoutAnalyzer](ecu-rom-layout-analyzer.md): map ROM sections before decoding
 - [ECUSecurityAccessScanner](ecu-security-access-scanner.md): find UDS 0x27 bypass vectors in decoded code
 - [PPC32 Taint Tracker](ppc32-taint-tracker.md): for post-VLE-decode taint analysis of e200z4/z6/z7 call sites
-- [ECU M68K Decoder](ecu-m68k-decoder.md): the predecessor architecture — 1990s–2000s ECUs used Motorola 68HC11 and 68HC12 before NXP adopted PowerPC
+- [ECU M68K Decoder](ecu-m68k-decoder.md): the predecessor architecture; 1990s-2000s ECUs used Motorola 68HC11 and 68HC12 before NXP adopted PowerPC
 - [Binary Context](binary-context.md): for development ELF images of e200z firmware where symbols are present
 - [PPC476 Lifter](ppc476-lifter.md): for IBM Power 476FP embedded core (aviation avionics PowerPC, not automotive VLE); different calling convention and no VLE support
 - [Taint Analysis](taint-analysis.md): the general taint infrastructure; `EcuVLEDecoder` feeds `VLEInsn` lists into the taint tracker's CFG builder as the instruction source

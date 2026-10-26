@@ -251,7 +251,7 @@ SH-2A is a 32-bit RISC processor architecture developed by Hitachi and continued
 - **SH-2 (1994):** Added DSP instructions, on-chip multiply-accumulate unit. Used in Sega Saturn main CPUs, Yamaha sound processors, automotive body controllers.
 - **SH-3 (1996):** Added MMU for Linux support. Used in Windows CE devices, early PDAs.
 - **SH-4 (1998):** Added FPU, extended MMU. Used in Sega Dreamcast, Renesas SH7750 series. Still found in Renesas automotive MCUs.
-- **SH-2A (2004):** Redesigned 16-bit/32-bit hybrid ISA — new 32-bit instructions for larger immediates, improved 16-bit encoding. 200 MHz capable. Targets automotive (Renesas SH7201–SH7286 series).
+- **SH-2A (2004):** Redesigned 16-bit/32-bit hybrid ISA: new 32-bit instructions for larger immediates, improved 16-bit encoding. 200 MHz capable. Targets automotive (Renesas SH7201–SH7286 series).
 
 **SH-2A automotive deployment:**
 - **Toyota and Lexus ECUs:** Renesas SH7262/SH7264 and SH7286 are used in Toyota's engine management systems, transmission controllers, and ABS modules.
@@ -399,7 +399,7 @@ The SH family has several closely related variants. `BinaryLifterSH2A` handles S
 | Cache | None | Instruction cache | Full I+D cache + MMU |
 | Address space | 32-bit linear | 32-bit linear | 32-bit virtual + MMU |
 
-**Why automotive uses SH-2A over SH-4A:** Automotive ECUs prioritize deterministic real-time behavior. The SH-4A's MMU and cache add non-deterministic latency (cache miss, TLB miss). SH-2A has no cache and no MMU — every memory access takes a fixed number of cycles. This makes SH-2A WCET (Worst-Case Execution Time) analysis straightforward, which is required for AUTOSAR timing analysis.
+**Why automotive uses SH-2A over SH-4A:** Automotive ECUs prioritize deterministic real-time behavior. The SH-4A's MMU and cache add non-deterministic latency (cache miss, TLB miss). SH-2A has no cache and no MMU: every memory access takes a fixed number of cycles. This makes SH-2A WCET (Worst-Case Execution Time) analysis straightforward, which is required for AUTOSAR timing analysis.
 
 ---
 
@@ -409,10 +409,10 @@ SH-7058 and SH-7055 (common Denso ECU variants) SFR space:
 
 | Address | Register | Security relevance |
 |---|---|---|
-| `0xFFFFB004` | WDTCNT — watchdog timer counter | Write `0xA500` + reload value to service watchdog |
-| `0xFFFF8810` | CANMB0 — CAN mailbox 0 data | First CAN receive mailbox; taint source for CAN→firmware path |
-| `0xFFFF8800` | CANCTL — CAN control register | Write to enable/disable CAN receive |
-| `0xFFFF8900` | CANRMPF — CAN receive message pending flags | Read to check pending CAN frames before reading mailbox |
+| `0xFFFFB004` | WDTCNT: watchdog timer counter | Write `0xA500` + reload value to service watchdog |
+| `0xFFFF8810` | CANMB0: CAN mailbox 0 data | First CAN receive mailbox; taint source for CAN→firmware path |
+| `0xFFFF8800` | CANCTL: CAN control register | Write to enable/disable CAN receive |
+| `0xFFFF8900` | CANRMPF: CAN receive message pending flags | Read to check pending CAN frames before reading mailbox |
 | `0xFFFFFF40`–`0xFFFFFF5F` | Interrupt vector table | Overwriting with heap overflow → hijack interrupt handlers |
 
 **Watchdog DoS detection via SFR access:** `BinaryLifterSH2A.scan_sfr_writes()` returns all instructions that write to `WDTCNT`. If the CAN receive handler path can loop without reaching any `WDTCNT` write, a watchdog DoS is possible. `SH2ATaintTracker` flags this if a loop with taint-controlled exit condition is found in a function reachable from the CAN mailbox read.
@@ -446,7 +446,7 @@ Denso ECM firmware is distributed as:
 
 **Known limitations:**
 - 32-bit extended SH-2A instructions (`MOV.L #disp12, Rn` etc.) are decoded by Capstone SH but some newer SH-2A variants have undocumented extensions; conservative fallback used
-- S-record files with non-contiguous address ranges produce holes in the flat binary — `BinaryContext` marks these as uninitialized and does not decode them
+- S-record files with non-contiguous address ranges produce holes in the flat binary: `BinaryContext` marks these as uninitialized and does not decode them
 - Delay slot analysis is conservative: if the delay slot instruction cannot be decoded, the branch/call is marked INDIRECT
 - No C++ vtable analysis: SH-2A ECM firmware occasionally uses C++ virtual dispatch for the diagnostic stack; vtable entries are marked INDIRECT and excluded from taint analysis
 
@@ -459,7 +459,7 @@ Denso ECM firmware is distributed as:
 - [SemanticSearch](semantic-code-search.md): behavioral candidate search on the binary
 - [TriCore Taint Tracker](tricore-taint-tracker.md): for Infineon TriCore (competing European ECU architecture)
 - [ECU VLE Decoder](ecu-vle-decoder.md): for NXP MPC5500 automotive PPC (another SH-2A competitor in automotive)
-- [C166/C167 Decoder](c166-c167-decoding.md): Infineon C167 (the Siemens/Infineon predecessor used in European vehicles — Bosch ME7 gasoline ECU)
+- [C166/C167 Decoder](c166-c167-decoding.md): Infineon C167 (the Siemens/Infineon predecessor used in European vehicles: Bosch ME7 gasoline ECU)
 - [ECU M68K Decoder](ecu-m68k-decoder.md): for GM/Chrysler HCS12-based ECUs (North American market equivalent to the Denso/Toyota SH-2A)
 - [M88K Decoder](m88k-decoder.md): for IBM/Motorola 88k (a different 1990s RISC MCU used in some older embedded systems)
 - [FindingRegistry](registry.md): record confirmed SH-2A findings; `cwe='CWE-287'` for Security Access bypass, `cwe='CWE-121'` for stack buffer overflow via saved-PR overwrite
@@ -499,11 +499,11 @@ The SH-2A software stack is pointed to by R15 (SP) and grows downward (toward lo
    ; @(8, R15)  ... local_2
    ; @(12, R15) ... saved R9
    ; @(16, R15) ... saved R8
-   ; @(20, R15) ... saved PR  (return address — the TARGET for overflow)
+   ; @(20, R15) ... saved PR  (return address: the TARGET for overflow)
    ; @(24, R15) ... previous frame (caller's local vars)
 ```
 
-**Overflow target:** In this layout, the saved PR is at `@(N+8, R15)` where N is the local frame size. A write past the end of `local_0` (an array stored at `@(0, R15)`) that overflows `(N+20)` bytes overwrites the saved PR. On `RTS`, the SH-2A loads PR back into PC — achieving code execution.
+**Overflow target:** In this layout, the saved PR is at `@(N+8, R15)` where N is the local frame size. A write past the end of `local_0` (an array stored at `@(0, R15)`) that overflows `(N+20)` bytes overwrites the saved PR. On `RTS`, the SH-2A loads PR back into PC: achieving code execution.
 
 **`BinaryLifterSH2A.scan_stack_layout(func_va)`** returns the `StackLayout` object listing the prologue pushes and local variable allocations, making it straightforward to compute the overflow distance from any local buffer to the saved PR.
 
@@ -600,7 +600,7 @@ All SH-2A instructions are 16 bits (2 bytes). The 32-bit instruction extension (
 
 **SH-2A delay slot behavior (critical for taint analysis):**
 - `JMP @Rn`, `JSR @Rn` (standard form): the instruction immediately AFTER this instruction executes BEFORE the jump/call takes effect
-- `JMP/N @Rn`, `JSR/N @Rn` (no-delay form, SH-2A only): no delay slot — the instruction after is NOT executed before the jump
+- `JMP/N @Rn`, `JSR/N @Rn` (no-delay form, SH-2A only): no delay slot: the instruction after is NOT executed before the jump
 - `BRA disp12`, `BSR disp12`: these have a delay slot (execute one more instruction before branch)
 
 **Taint implication of delay slots:** If a taint-tracked store instruction (`MOV.L R4, @R1`) is in the delay slot of a `JSR @Rn`, it executes AFTER the callee returns to a location that is already past the call site. This means the store is part of the caller's context, not the callee's. `SH2ATaintTracker` accounts for delay slots by treating the delay slot instruction as belonging to the branch instruction's basic block, not the next block.
@@ -623,7 +623,7 @@ All SH-2A instructions are 16 bits (2 bytes). The 32-bit instruction extension (
 |---|---|---|
 | UDS Security Access bypass | CWE-287 | Static seed in `MOV #const, R0; RTS` seed generator |
 | CAN DLC buffer overflow | CWE-120 | `MOV.L @R4, R2` (load DLC); no `CMP/HI #8, R2` guard before copy loop |
-| Delay slot store to sensitive addr | CWE-787 | `JSR @Rn; MOV.L R4, @sensitive_addr` — delay slot executes tainted store |
+| Delay slot store to sensitive addr | CWE-787 | `JSR @Rn; MOV.L R4, @sensitive_addr`: delay slot executes tainted store |
 | Watchdog DoS | CWE-400 | CAN-controlled loop count with no timeout check; watchdog expires |
 | Heap overflow (calibration update) | CWE-122 | Calibration table copy: size from packet, no bounds check against allocated size |
 | Integer overflow in size computation | CWE-190 | `ADD R4, R5` (two unsigned values from CAN) overflows 32-bit; result used as copy length |

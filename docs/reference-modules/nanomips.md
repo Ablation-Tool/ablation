@@ -244,7 +244,7 @@ ctx = BinaryContext.load_or_build('/firmware/extract/usr/sbin/uhttpd')
 print(ctx.summary())
 # Expected: nanoMIPS RV32IMAC (MediaTek), little-endian, 412 functions (stripped)
 
-# Step 2: semantic sweep — find CGI/HTTP handling functions
+# Step 2: semantic sweep: find CGI/HTTP handling functions
 searcher = SemanticSearcher(ctx)
 cgi_hits = searcher.query('HTTP CGI query string parameter parsing', top_k=10)
 config_hits = searcher.query('system command execution nvram configuration', top_k=10)
@@ -290,7 +290,7 @@ for f in findings:
 | Stack buffer overflow | CWE-121 | `sprintf(local_buf, fmt, user_str)` where `local_buf` is on stack |
 | Heap buffer overflow | CWE-122 | `malloc(len)` → `memcpy(buf, src, larger_len)` without check |
 | Integer overflow → allocation undersize | CWE-190 | `len = atoi(CONTENT_LENGTH); buf = malloc(len)` with unchecked `len` |
-| Format string | CWE-134 | `printf(user_string)` — first arg is tainted, not a literal |
+| Format string | CWE-134 | `printf(user_string)`: first arg is tainted, not a literal |
 | Path traversal | CWE-22 | `open(path)` where `path` includes `../` from user input |
 
 **FindingRegistry call for a nanoMIPS command injection finding:**
@@ -387,13 +387,13 @@ nanoMIPS-based MediaTek routers have seen several vulnerability classes since th
 
 **CVE-2024-20017 (MediaTek MT7981B, CVSS 9.8):** Integer overflow in the Wi-Fi driver userspace daemon (`hostapd`). The `wlan_reason_code` parameter in the 802.11 deauthentication processing code used an unchecked 16-bit value as an array index, causing out-of-bounds write.
 
-**General pattern — UPnP service injection:** The miniupnpd service (TCP port 5000 by default on LAN interface) accepts SOAP XML requests without authentication. XML attribute values are passed to configuration commands via `system()` in some implementations. `NanoMIPSTaintTracker` with `source_name='upnp_recv'` targets these paths.
+**General pattern: UPnP service injection:** The miniupnpd service (TCP port 5000 by default on LAN interface) accepts SOAP XML requests without authentication. XML attribute values are passed to configuration commands via `system()` in some implementations. `NanoMIPSTaintTracker` with `source_name='upnp_recv'` targets these paths.
 
 ---
 
 ## What is nanoMIPS? History and design goals <sup>[↑](#nanomipstainttracker)</sup>
 
-nanoMIPS is a 16-bit/32-bit variable-length instruction set architecture introduced by MIPS Technology (now Wave Computing/MIPS IP) in 2017 as a successor to the microMIPS encoding used in MIPS32 Release 5. nanoMIPS is a full ISA redesign rather than a compressed subset of the classic MIPS32 ISA — it is not backward-compatible with MIPS32 at the binary level.
+nanoMIPS is a 16-bit/32-bit variable-length instruction set architecture introduced by MIPS Technology (now Wave Computing/MIPS IP) in 2017 as a successor to the microMIPS encoding used in MIPS32 Release 5. nanoMIPS is a full ISA redesign rather than a compressed subset of the classic MIPS32 ISA: it is not backward-compatible with MIPS32 at the binary level.
 
 **Design goals:**
 - 50% code size reduction compared to MIPS32 Release 6 (the target was embedded IoT devices and networking equipment where flash cost dominates)
@@ -421,15 +421,15 @@ nanoMIPS uses instruction width encoding in the low bits of the first halfword:
 | `111111` (0x3F) | 16-bit | More P16 short instructions |
 
 **16-bit nanoMIPS (P16 subset) key instructions:**
-- `MOVE16 rd, rs` — register copy
-- `LI16 rd, imm` — load 7-bit immediate signed
-- `ADDIU16 rd, rs, imm` — add 4-bit immediate
-- `ADDU16 rd, rs1, rs2` — add registers
-- `LW16 rd, off(rs)` — load 16-bit offset load (limited register set)
-- `SW16 rd, off(rs)` — store
-- `BC16 imm` — unconditional branch, 10-bit displacement
-- `BEQZC16 rs, imm` — branch if zero, 7-bit displacement
-- `BNEZC16 rs, imm` — branch if non-zero
+- `MOVE16 rd, rs`: register copy
+- `LI16 rd, imm`: load 7-bit immediate signed
+- `ADDIU16 rd, rs, imm`: add 4-bit immediate
+- `ADDU16 rd, rs1, rs2`: add registers
+- `LW16 rd, off(rs)`: load 16-bit offset load (limited register set)
+- `SW16 rd, off(rs)`: store
+- `BC16 imm`: unconditional branch, 10-bit displacement
+- `BEQZC16 rs, imm`: branch if zero, 7-bit displacement
+- `BNEZC16 rs, imm`: branch if non-zero
 
 **48-bit instruction format (for 32-bit immediates):**
 ```
@@ -438,7 +438,7 @@ nanoMIPS uses instruction width encoding in the low bits of the first halfword:
 | 0x3E      | opcode  || immediate[15:0] || immediate[31:16]|
 +-----------+---------++-----------------++-----------------+
 ```
-The 48-bit `LI48 rd, imm32` instruction loads a full 32-bit constant — important for loading function pointers or buffer addresses in the management plane.
+The 48-bit `LI48 rd, imm32` instruction loads a full 32-bit constant: important for loading function pointers or buffer addresses in the management plane.
 
 ---
 
@@ -464,7 +464,7 @@ nanoMIPS uses the same 32-register file as MIPS32 but defines a new ABI (the "na
 
 **Key difference from MIPS O32:** nanoMIPS expands the argument register count from 4 (a0–a3 in O32) to 8 (a0–a7). This affects `NanoMIPSTaintTracker`'s initial taint labeling: all 8 argument registers are taint sources at function call sites, not just 4.
 
-**Calling convention for RE:** For `system()` calls, trace a0 (first argument). For `sprintf(buf, fmt, ...)`, trace a0 (destination buffer pointer), a1 (format string), and a2+ (variadic arguments). For `recv()` and `read()` (network input), the received data lands in the buffer at the address in a1 (for `recv(fd, buf, len, flags)` — a1 is the buffer pointer).
+**Calling convention for RE:** For `system()` calls, trace a0 (first argument). For `sprintf(buf, fmt, ...)`, trace a0 (destination buffer pointer), a1 (format string), and a2+ (variadic arguments). For `recv()` and `read()` (network input), the received data lands in the buffer at the address in a1 (for `recv(fd, buf, len, flags)`: a1 is the buffer pointer).
 
 ---
 
@@ -475,13 +475,13 @@ nanoMIPS redesigned the branch instruction set compared to classic MIPS32. Key d
 **No delay slots:** Classic MIPS has a mandatory delay slot after every `j`, `jal`, `jr`, `jalr`, `beq`, `bne`, and related instructions. nanoMIPS eliminates delay slots entirely. Every branch takes effect immediately at the next instruction fetch after the branch. This simplifies control flow analysis: there is no "next instruction executes regardless of branch" semantic to track.
 
 **Compact branch encodings:** nanoMIPS provides a family of compact conditional branches with 14-bit signed displacement (allowing ±8 KB from the instruction):
-- `BEQC rd, rs, target` — branch if rd == rs
-- `BNEC rd, rs, target` — branch if rd != rs
-- `BLTC rd, rs, target` — branch if rd < rs (signed)
-- `BGEC rd, rs, target` — branch if rd >= rs (signed)
+- `BEQC rd, rs, target`: branch if rd == rs
+- `BNEC rd, rs, target`: branch if rd != rs
+- `BLTC rd, rs, target`: branch if rd < rs (signed)
+- `BGEC rd, rs, target`: branch if rd >= rs (signed)
 - Plus 16-bit P16 forms for common patterns: `BEQZC16 rs, disp7`, `BNEZC16 rs, disp7`
 
-**nanoMIPS call instruction:** `BALC disp26` — branch and link to PC + displacement (26-bit signed displacement in 32-bit form, or the 48-bit form for larger displacements). This replaces classic MIPS `jal addr`. `JIALC rt, offset` — jump and link via register + offset (for PLT stubs and indirect calls).
+**nanoMIPS call instruction:** `BALC disp26`: branch and link to PC + displacement (26-bit signed displacement in 32-bit form, or the 48-bit form for larger displacements). This replaces classic MIPS `jal addr`. `JIALC rt, offset`: jump and link via register + offset (for PLT stubs and indirect calls).
 
 `NanoMIPSTaintTracker` identifies function call sites by recognizing `BALC`, `JIALC`, and their P16 equivalents. Return sites are `JRC ra` (16-bit) or `JALRC.HB ra` (return with hazard barrier, used in some interrupt paths).
 
@@ -524,7 +524,7 @@ sp    | outgoing argument area (if any)   |
 Low   ─────────────────────────────────────
 ```
 
-Frame allocation: `ADDIU sp, sp, -N` — single instruction, no link of old SP (unlike PPC32's `stwu` or TriCore which link the old SP in the stack).
+Frame allocation: `ADDIU sp, sp, -N`: single instruction, no link of old SP (unlike PPC32's `stwu` or TriCore which link the old SP in the stack).
 
 Return address: saved at `sp + N - 4` (or wherever the prologue `SW ra, offset(sp)` stores it). `NanoMIPSTaintTracker` identifies the frame size from the prologue `ADDIU sp, sp, -N` and uses it to track stack-resident local variables.
 
@@ -557,7 +557,7 @@ char *qs = getenv("QUERY_STRING");
 // Pattern 2: fread from stdin (for POST)
 char body[4096];
 int len = atoi(getenv("CONTENT_LENGTH"));
-fread(body, 1, len, stdin);  // len is unvalidated — potential integer overflow
+fread(body, 1, len, stdin);  // len is unvalidated: potential integer overflow
 ```
 
 `NanoMIPSTaintTracker` recognizes `getenv` (via import name match) and labels the return value (in a0/r10) as a taint source. For `fread`, the destination buffer (a0/r4) is labeled as taint source after the call.

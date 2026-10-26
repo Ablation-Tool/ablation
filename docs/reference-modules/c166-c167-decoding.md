@@ -412,10 +412,10 @@ The Bosch ME7 firmware stores calibration data (engine maps) in a structured sec
 - **Map headers:** Each map is preceded by a small header containing the axis array pointers, the map data pointer, the number of rows and columns, and scaling factors.
 
 The Bosch MAP_DKSD (diagnostic key data set for drivability) identifies which maps affect which engine parameters. For emissions analysis, the key maps are:
-- `KFKHBDS` — lambda closed-loop correction map (fuel delivery)
-- `KFLAM` — lambda setpoint map
-- `KFNOX` — NOx characteristic map (used in the VW emissions defeat logic)
-- `KFDS` — dyno detection factor map (the defeat device map)
+- `KFKHBDS`: lambda closed-loop correction map (fuel delivery)
+- `KFLAM`: lambda setpoint map
+- `KFNOX`: NOx characteristic map (used in the VW emissions defeat logic)
+- `KFDS`: dyno detection factor map (the defeat device map)
 
 `EcuC166Decoder.find_maps()` identifies map headers using the ME7 map header signature pattern and returns their physical addresses.
 
@@ -482,7 +482,7 @@ C167 instructions are 1 to 4 words wide (2 to 8 bytes). The primary instruction 
 |  op8   |  Rd |  Rs |
 +--------+-----+-----+
 ```
-Example: `ADD R4, R5` — add R5 to R4, result in R4.
+Example: `ADD R4, R5`: add R5 to R4, result in R4.
 
 **Immediate format (2 words = 4 bytes):**
 ```
@@ -500,7 +500,7 @@ Example: `MOV R4, #0x1234`.
 |  op8   |   cond  ||   displacement  |
 +--------+---------++-----------------+
 ```
-Example: `JMPR cc_Z, label` — jump if zero flag set, displacement is signed 16-bit relative to instruction+4.
+Example: `JMPR cc_Z, label`: jump if zero flag set, displacement is signed 16-bit relative to instruction+4.
 
 `EcuC166Decoder` handles all formats; branch targets are computed and stored in `C166Insn.target`.
 
@@ -516,7 +516,7 @@ The Bosch ME7 Security Access handler is the most common target for C166-based E
 
 3. **Identify the key algorithm:** The response computation (key = f(seed)) is typically a bitwise permutation, CRC-like polynomial, or proprietary hash. The decoder output shows the arithmetic operations applied to the seed.
 
-4. **Byte verify the algorithm VA:** The C167 does not use virtual addresses — it uses a physical segmented address model. The `target_pa` field in `C166Insn` gives the full 24-bit physical address. Verify with:
+4. **Byte verify the algorithm VA:** The C167 does not use virtual addresses: it uses a physical segmented address model. The `target_pa` field in `C166Insn` gives the full 24-bit physical address. Verify with:
 ```python
 with open(rom_path, 'rb') as f:
     data = f.read()

@@ -423,8 +423,8 @@ PowerPC uses a fixed 32-bit instruction encoding. The primary formats:
 `BEQ label` → op=0x10, BO=0xC, BI=2 (eq bit of CR0). `BDNZ label` → BO=0x10 (CTR-- != 0).
 
 Security-critical encodings for sink confirmation:
-- `BL target26` (op=0x12, LK=1) — direct call. Byte-verify: `word >> 26 == 0x12` and `word & 1 == 1`.
-- `BCTRL` (op=19, XO=528, LK=1) — indirect call via CTR. PLT stub tail call or function pointer dispatch.
+- `BL target26` (op=0x12, LK=1): direct call. Byte-verify: `word >> 26 == 0x12` and `word & 1 == 1`.
+- `BCTRL` (op=19, XO=528, LK=1): indirect call via CTR. PLT stub tail call or function pointer dispatch.
 - `STW r0, saved_lr(r1)` after `MFLR r0` → saved LR on stack. A buffer overflow reaching `saved_lr` controls the return address.
 
 ---
@@ -538,7 +538,7 @@ python3 -m ablation.analyzers.xcoff32_decompiler /mnt/aix/usr/sbin/inetd
 **Estimated scan times (empirical):**
 - Single function (avg 200 instructions): < 50 ms
 - Full Cisco IOS 7200 binary (~885 functions): ~40 seconds with SemanticSearcher pre-filter + SinkArgClassifier + TaintTracker
-- Full scan without pre-filter: ~8 minutes (not recommended — too many false positives from `RODATA_CONST` sinks)
+- Full scan without pre-filter: ~8 minutes (not recommended: too many false positives from `RODATA_CONST` sinks)
 
 **Important: Cisco IOS has no `system()` in the traditional sense.** Cisco IOS Classic does not expose a POSIX shell to the management plane. Command injection in Cisco IOS must reach a Cisco-internal "exec parser" function (identifiable by calling convention: the command string is in `r3`, parsed via Cisco's TCL-like parser). `SemanticSearcher.query("exec parser command string")` identifies these call sites. Standard `SinkArgClassifier` sink names (`system`, `popen`, `execv`) do not apply to Cisco IOS Classic. Use the Cisco-specific sink list from `re/cisco/sink_list_ios.py` in the findings module.
 

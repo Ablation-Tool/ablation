@@ -44,7 +44,7 @@ The MIPS architecture has evolved through several specification generations with
 
 **MIPS32 Release 2 (2002):** Added hardware performance counters, shadow register sets, extended TLB (RI/XI bits). Cavium OCTEON uses MIPS64 Release 2 with proprietary extensions.
 
-**MIPS32 Release 6 (2014):** Breaking changes — removed delay slots, changed branch semantics, added compact branches (`BC`, `BALC`, `BEQZC`, etc.). **Critical for taint tracker**: a MIPS Release 6 binary has no delay slots and the taint tracker must be version-aware. MIPS32R6 compact branches are identified by specific opcode encodings that differ from MIPS32R1/R2.
+**MIPS32 Release 6 (2014):** Breaking changes: removed delay slots, changed branch semantics, added compact branches (`BC`, `BALC`, `BEQZC`, etc.). **Critical for taint tracker**: a MIPS Release 6 binary has no delay slots and the taint tracker must be version-aware. MIPS32R6 compact branches are identified by specific opcode encodings that differ from MIPS32R1/R2.
 
 **nanoMIPS (2017):** Variable-length 16/32/48-bit encoding (see `nanomips.md`). Used in Imagination Technologies processors for IoT targets.
 
@@ -317,7 +317,7 @@ from ablation.analyzers.finding_registry import FindingRegistry
 ctx = BinaryContext.load_or_build('/firmware/extract/usr/sbin/httpd')
 print(ctx.summary())
 
-# 2. Semantic sweep — find candidates before manual disasm
+# 2. Semantic sweep: find candidates before manual disasm
 ss = SemanticSearcher.from_context(ctx)
 candidates = ss.query("command injection via network input", top_k=20)
 for fn in candidates:

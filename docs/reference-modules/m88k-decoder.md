@@ -224,7 +224,7 @@ Helper methods on `M88kCoffBinary`: `section(name)`, `text` property, `data` pro
 
 ## What is the Motorola 88k? History and deployment <sup>[↑](#m88kdecoder)</sup>
 
-The Motorola MC88000 (88k) is a 32-bit RISC processor architecture introduced by Motorola in 1988. It was Motorola's response to the RISC revolution led by MIPS and SPARC, designed as a clean-slate RISC ISA with Harvard architecture (separate instruction and data caches) and a large register file. The 88k used a three-operand register-to-register instruction format and had no branch delay slots — a deliberate design choice to simplify software and compiler development.
+The Motorola MC88000 (88k) is a 32-bit RISC processor architecture introduced by Motorola in 1988. It was Motorola's response to the RISC revolution led by MIPS and SPARC, designed as a clean-slate RISC ISA with Harvard architecture (separate instruction and data caches) and a large register file. The 88k used a three-operand register-to-register instruction format and had no branch delay slots: a deliberate design choice to simplify software and compiler development.
 
 **Chronology:**
 - **MC88100 (1988):** First 88k; integer/FP combined processor. Used in workstations (NeXT Cube initially explored 88k; Apollo computers; BBN Technologies).
@@ -299,7 +299,7 @@ Example: `ADD r4, r5, #100`
 | op6     | ?5    |       disp21          |
 +---------+-------+-----------------------+
 ```
-`BR disp21` — unconditional branch. Target = PC + sign_extend(disp21) * 4. No delay slot. `M88kDecoder` computes absolute target addresses.
+`BR disp21`: unconditional branch. Target = PC + sign_extend(disp21) * 4. No delay slot. `M88kDecoder` computes absolute target addresses.
 
 ---
 
@@ -339,7 +339,7 @@ The MC88100/MC88110 has 32 general-purpose 32-bit registers (r0–r31) plus a se
 
 | Register | ABI role | Caller/callee | Notes |
 |---|---|---|---|
-| r0 | Always zero | — | Hardware-wired to 0; reads always return 0 |
+| r0 | Always zero |: | Hardware-wired to 0; reads always return 0 |
 | r1 | Return address (link register) | Caller | `bsr` writes return address here; callee saves to stack |
 | r2 | Return value / Arg 1 | Caller | 32-bit return in r2; 64-bit in r2:r3 |
 | r3 | Arg 2 | Caller | |
@@ -387,7 +387,7 @@ The MC88100 uses a Harvard-like bus architecture with separate instruction and d
 
 ## 88k floating-point register file (MC88110 XRF) <sup>[↑](#m88kdecoder)</sup>
 
-The MC88110 added an extended register file (XRF) with 32 80-bit registers (x0–x31). From a security RE perspective, XRF registers are rarely relevant — they are used only for FP computation and are not used as function arguments or return values in the standard ABI. However, one security-relevant pattern exists:
+The MC88110 added an extended register file (XRF) with 32 80-bit registers (x0–x31). From a security RE perspective, XRF registers are rarely relevant: they are used only for FP computation and are not used as function arguments or return values in the standard ABI. However, one security-relevant pattern exists:
 
 **FP-to-integer conversion as a type confusion path:** On MC88110, code can load a value from network input into x0 (FPU register) using `fld.d x0, r2, offset`, apply FP operations, and then convert back to integer using `flt.sw r4, x0` (floating-to-signed-word). If the conversion overflows (value > 2^31–1), the result in r4 is implementation-defined (MC88110 saturates or wraps depending on the SR.SFD bit). This is a potential integer-overflow path that `M88KDecoder` flags as a CANDIDATE when the FP conversion result is used in a memory operation.
 
@@ -525,12 +525,12 @@ When analyzing SINIX or DG/UX kernel binaries (not just userland), privileged 88
 
 **`stcr rs, crid`** (Store Control Register): Stores rs to a hardware control register. This is the 88k equivalent of `wrmsr` on x86. Accessible only in supervisor mode.
 
-**`tb0 b5, rs, vec9`** / **`tb1 b5, rs, vec9`**: Trap if bit b5 of rs is 0/1. These generate a software trap with vector number vec9 (9-bit). They implement system calls on SINIX 88k — the system call number is encoded in vec9. `M88KDecoder` identifies `tb0 0, r0, #VEC` patterns as system call invocations.
+**`tb0 b5, rs, vec9`** / **`tb1 b5, rs, vec9`**: Trap if bit b5 of rs is 0/1. These generate a software trap with vector number vec9 (9-bit). They implement system calls on SINIX 88k: the system call number is encoded in vec9. `M88KDecoder` identifies `tb0 0, r0, #VEC` patterns as system call invocations.
 
 **Common SINIX 88k syscall vectors:**
 | Vector | Syscall | Taint implication |
 |---|---|---|
-| `0x80` | `execve(path, argv, envp)` | path in r2, argv in r3 — if r2 tainted → CWE-78 |
+| `0x80` | `execve(path, argv, envp)` | path in r2, argv in r3: if r2 tainted → CWE-78 |
 | `0x84` | `write(fd, buf, n)` | data disclosure if buf tainted with kernel addresses |
 | `0x4C` | `setuid(uid)` | If uid=0 reached from network input → privilege escalation |
 | `0x13` | `open(path, flags, mode)` | path taint → arbitrary file open |
@@ -558,7 +558,7 @@ The most operationally relevant difference for taint analysis: MIPS has mandator
 
 The Motorola 88000 architecture was Motorola's entry into the RISC processor market, competing with SPARC, MIPS, and HP PA-RISC. It represents a significant but short-lived chapter in RISC history:
 
-**MC88100 (1988):** The original 88k processor. Three major design principles: fully separate integer pipeline, FPU, and data cache controller (CMMU — Cache/Memory Management Unit). The MC88100 does NOT include memory management — it relies on the separate MC88200 CMMU chip for cache and MMU. This split design (separate MMU chip) was seen as a weakness, requiring motherboard designers to add MC88200 chips. Clock speed: 20–40 MHz. Process: 1-micron CMOS.
+**MC88100 (1988):** The original 88k processor. Three major design principles: fully separate integer pipeline, FPU, and data cache controller (CMMU: Cache/Memory Management Unit). The MC88100 does NOT include memory management: it relies on the separate MC88200 CMMU chip for cache and MMU. This split design (separate MMU chip) was seen as a weakness, requiring motherboard designers to add MC88200 chips. Clock speed: 20–40 MHz. Process: 1-micron CMOS.
 
 **MC88110 (1992):** The second-generation 88k processor. Integrated MMU (no separate CMMU required). Added a superpipelined integer unit, enhanced FPU, and instruction-level parallelism (dual-issue). Introduced the 80-bit XRF (Extended Register File) for FPU operations. Clock speed: 50–88 MHz. Process: 0.6-micron BiCMOS.
 
@@ -609,7 +609,7 @@ All 88k instructions are 32 bits wide, big-endian. The primary opcode is in bits
 | `st rs1, rs2, imm16` | `0x25` | Store word |
 | `st.b rs1, rs2, imm16` | `0x21` | Store byte |
 
-**88k delay slots:** Like MIPS, some 88k branch instructions have a delay slot (the `.n` suffix means "next" — execute next instruction before branching). `M88KDecoder` tracks delay slots and assigns the delay instruction to the branching block, not the target block.
+**88k delay slots:** Like MIPS, some 88k branch instructions have a delay slot (the `.n` suffix means "next": execute next instruction before branching). `M88KDecoder` tracks delay slots and assigns the delay instruction to the branching block, not the target block.
 
 ---
 
@@ -619,7 +619,7 @@ All 88k instructions are 32 bits wide, big-endian. The primary opcode is in bits
 
 Arguments are passed in r2–r9 (first 8 GPR arguments). Additional arguments go on the stack. The return value is in r2 (or r2:r3 for 64-bit values). This is directly relevant to taint analysis:
 
-- `r2` = first argument (and return value) — highest priority taint source at call entry
+- `r2` = first argument (and return value): highest priority taint source at call entry
 - `r3` = second argument
 - ...
 - `r9` = eighth argument
@@ -630,7 +630,7 @@ Arguments are passed in r2–r9 (first 8 GPR arguments). Additional arguments go
 
 **Taint implications:**
 - On function entry, track registers r2–r9 for taint from caller
-- The callee's first instruction is often `st r1, r31, return_addr_offset` (save return address) — this address is the overflow target
+- The callee's first instruction is often `st r1, r31, return_addr_offset` (save return address): this address is the overflow target
 - For `system()` calls, r2 is the string pointer argument. Taint tracking from network input to r2 at the `bsr` to `system` is the primary finding pattern
 
 ---

@@ -62,7 +62,7 @@ Each code object encodes its bytecode behind two prelude sections decoded by `_d
 
 ### QSTRs and the interned string table <sup>[↑](#mpylifter)</sup>
 
-**QSTRs** (Quick Strings) are MicroPython's interned string system. Every identifier referenced in a module — function names, attribute names, imported module names, global variable names — is interned into the QSTR table at compile time. In a compiled `.mpy`, bytecode instructions reference strings only by their QSTR index (a vuint operand), never by inline bytes. The QSTR table is stored once in the file header and shared across all code objects in the module.
+**QSTRs** (Quick Strings) are MicroPython's interned string system. Every identifier referenced in a module: function names, attribute names, imported module names, global variable names: is interned into the QSTR table at compile time. In a compiled `.mpy`, bytecode instructions reference strings only by their QSTR index (a vuint operand), never by inline bytes. The QSTR table is stored once in the file header and shared across all code objects in the module.
 
 The security implication: even in a bytecode that has been stripped of debug information (no source filename, no line number table), all string identifiers are recoverable from the QSTR table. `IMPORT_NAME 7` with `qstrs[7] == "os"` is unambiguous. MpyLifter exploits this: `dangerous_calls()` reads the QSTR value from `insn.qstr_val` (resolved during `_decode_bytecode`) and matches it against the dangerous pattern sets, not against raw bytes.
 
@@ -312,11 +312,11 @@ Additional methods:
 
 ## What is MicroPython? <sup>[↑](#mpylifter)</sup>
 
-MicroPython is a lean implementation of Python 3, initially created by Damien George and first released in 2014 via a Kickstarter campaign for the pyboard hardware. The project's goal was to bring a full Python interpreter to microcontrollers with as little as 256 KB flash and 16 KB RAM — an environment where CPython's full runtime (typically requiring several MB of RAM) could not fit.
+MicroPython is a lean implementation of Python 3, initially created by Damien George and first released in 2014 via a Kickstarter campaign for the pyboard hardware. The project's goal was to bring a full Python interpreter to microcontrollers with as little as 256 KB flash and 16 KB RAM: an environment where CPython's full runtime (typically requiring several MB of RAM) could not fit.
 
 MicroPython achieves this compactness through several architectural compromises:
 
-- **Reduced standard library:** The standard library is a strict subset of CPython's. Modules like `re` (regex), `json`, `socket`, `struct`, `os`, and `hashlib` are present but with reduced functionality. Many CPython modules are entirely absent (no `threading`, `multiprocessing`, `asyncio` module — async is handled by the `uasyncio` shim, a MicroPython-specific implementation).
+- **Reduced standard library:** The standard library is a strict subset of CPython's. Modules like `re` (regex), `json`, `socket`, `struct`, `os`, and `hashlib` are present but with reduced functionality. Many CPython modules are entirely absent (no `threading`, `multiprocessing`, `asyncio` module: async is handled by the `uasyncio` shim, a MicroPython-specific implementation).
 - **QSTR intern pool:** All identifier strings are interned at compile time and stored as 16-bit integer IDs (QSTRs). This eliminates per-string heap allocation for identifiers during execution and is the source of the `.mpy` file's compact representation.
 - **No garbage-collected closures by default:** On bare-metal ports, MicroPython uses a simplified mark-and-sweep GC with configurable heap sizes (typically 16 KB to 512 KB). Python closures are supported but heap-allocated.
 - **`.mpy` pre-compiled bytecode:** To avoid RAM-resident compilation, applications are distributed as pre-compiled `.mpy` files rather than `.py` source. The `.mpy` file contains the raw bytecode and QSTR table without the Python source text.
@@ -380,7 +380,7 @@ When `MpyLifter` identifies a call to an unknown symbol (not in its built-in QST
 
 ## MicroPython QSTR encoding and version detection <sup>[↑](#mpylifter)</sup>
 
-**QSTR (Qualified String):** MicroPython interns all identifier strings as QSTRs — 16-bit integer IDs that map to string values. Built-in QSTR IDs (like `'exec'` = 23, `'machine'` = 2045) are defined at compile time in the MicroPython source. User-defined identifiers (local variable names, function names) are added dynamically by the compiler.
+**QSTR (Qualified String):** MicroPython interns all identifier strings as QSTRs: 16-bit integer IDs that map to string values. Built-in QSTR IDs (like `'exec'` = 23, `'machine'` = 2045) are defined at compile time in the MicroPython source. User-defined identifiers (local variable names, function names) are added dynamically by the compiler.
 
 The `.mpy` file format stores QSTRs as length-prefixed byte sequences (not as integer IDs) because the QSTR ID table is runtime-specific. When `MpyLifter` reads a `.mpy` file, it encounters QSTR bytes and reconstructs the string name directly. This makes `.mpy` files more portable across MicroPython builds than CPython `.pyc` files (which embed QSTR IDs that vary by build).
 
@@ -426,7 +426,7 @@ MicroPython bytecode is a compact, variable-length encoding. Instructions range 
 | `0x18` | `IMPORT_NAME` | Import module by QSTR. `'os'`, `'socket'`, `'machine'` indicate capability |
 | `0x34` | `CALL_FUNCTION` | Call with N args. Precedes all function calls; QSTR of the function name is in the preceding `LOAD_NAME`. |
 | `0x41` | `MAKE_FUNCTION` | Create a function from a nested code object in the constant table |
-| `0x53` | `YIELD_VALUE` | Generator yield — indicates an async pattern |
+| `0x53` | `YIELD_VALUE` | Generator yield: indicates an async pattern |
 
 `MpyLifter` scans all `LOAD_NAME`, `LOAD_GLOBAL`, `LOAD_ATTR`, and `IMPORT_NAME` instructions for their QSTR values. No bytecode execution is required: the QSTR immediately follows the opcode byte in the encoding.
 
@@ -505,4 +505,4 @@ for path, findings in all_findings:
 | C extension buffer overflow (argument validation) | CWE-120 | Buffer Copy without Checking Size of Input |
 | Unverified firmware update via `ota_update()` | CWE-494 | Download of Code Without Integrity Check |
 
-Register findings with `FindingRegistry.register()`, setting `cwe` to the appropriate CWE string from this table. For `machine.mem32` findings on industrial PLC targets, also set `severity='CRITICAL'` and add a note in `detail` identifying the specific register bank that can be corrupted (e.g., `'GPIO output register bank — can flip physical I/O pins'`).
+Register findings with `FindingRegistry.register()`, setting `cwe` to the appropriate CWE string from this table. For `machine.mem32` findings on industrial PLC targets, also set `severity='CRITICAL'` and add a note in `detail` identifying the specific register bank that can be corrupted (e.g., `'GPIO output register bank: can flip physical I/O pins'`).

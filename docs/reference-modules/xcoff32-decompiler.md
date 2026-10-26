@@ -154,7 +154,7 @@ descriptor_va:           (this is the VA in XcoffBinary.exports)
 XCOFF (eXtended Common Object File Format) is IBM's binary object file format for AIX, the IBM proprietary UNIX operating system. XCOFF is derived from the older AT&T COFF (Common Object File Format) but adds IBM-specific extensions for the POWER architecture: the Table of Contents (TOC) model for position-independent global data access, loader section for dynamic linking, and the `.stabx` extension for symbol table debugging information.
 
 **Historical context:**
-- XCOFF was first published with AIX 1.0 in 1986, initially for the IBM RT PC (using the ROMP RISC architecture — IBM's first RISC processor)
+- XCOFF was first published with AIX 1.0 in 1986, initially for the IBM RT PC (using the ROMP RISC architecture, IBM's first RISC processor)
 - With AIX 3.0 (1989), XCOFF moved to the IBM POWER architecture as the primary binary format
 - XCOFF32 is the 32-bit variant (XCOFF magic `0x01DF` or `0x01DA`); XCOFF64 is 64-bit (magic `0x01EF` or `0x01F7`)
 - AIX uses XCOFF for all compiled binaries (executables, shared libraries `.a`, and kernel extensions `.ext`)
@@ -162,7 +162,7 @@ XCOFF (eXtended Common Object File Format) is IBM's binary object file format fo
 
 **Why XCOFF in ablation's RE collection:**
 - IBM BladeCenter I/O processors (PowerPC 476 or POWER7 series) run AIX and ship XCOFF32 binaries
-- IBM Hardware Management Console (HMC) — the management interface for IBM Power Systems — runs AIX with XCOFF32 system binaries
+- IBM Hardware Management Console (HMC), the management interface for IBM Power Systems, runs AIX with XCOFF32 system binaries
 - IBM Tivoli Storage Manager and Spectrum Scale (formerly GPFS) cluster agents run as AIX XCOFF32 binaries on storage nodes
 - Older IBM AS/400 (iSeries/IBM i) system binaries use XCOFF variants for the bridge between CISC object code and the PowerPC hardware abstraction
 
@@ -209,7 +209,7 @@ XCOFF32 file:
   Standard sections: .text, .data, .bss, .loader, .stabx
 ```
 
-`XCoff32Decompiler` reads this layout directly. The TOC anchor address (from the optional header `toc` field) is the value loaded into r2 at process start — essential for resolving global variable accesses (`lwz rX, offset(r2)` patterns).
+`XCoff32Decompiler` reads this layout directly. The TOC anchor address (from the optional header `toc` field) is the value loaded into r2 at process start, essential for resolving global variable accesses (`lwz rX, offset(r2)` patterns).
 
 ---
 
@@ -293,7 +293,7 @@ The decompiler produces a linear walk, not a CFG. It does not follow both sides 
 - Complex instruction set for fixed-point operations: `MULTIPLY-ADD`, `DIVIDE-SHORT`, indexed load/store with update
 - Initial implementation: IBM RIOS1 chip set (Multi-Chip Module, 29 chips for the full CPU)
 
-**POWER vs. PowerPC:** In 1991, IBM, Apple, and Motorola formed the AIM alliance to develop PowerPC (PPC) — a simpler, more portable RISC architecture derived from POWER but pruned of complex POWER-only instructions. The key differences:
+**POWER vs. PowerPC:** In 1991, IBM, Apple, and Motorola formed the AIM alliance to develop PowerPC (PPC), a simpler, more portable RISC architecture derived from POWER but pruned of complex POWER-only instructions. The key differences:
 - POWER had 3-operand multiply-add forms not in PPC (though PPC added `fmadd` for FP)
 - POWER had string operations (not in PPC)
 - PowerPC added little-endian support (POWER was big-endian only)
@@ -380,7 +380,7 @@ if opcd == 0x12:  # bl or b
 
 For privilege escalation research on AIX systems:
 
-1. **Enumerate setuid binaries:** In a live system or from a disk image, `find / -user root -perm -4000 -type f 2>/dev/null`. In an AIX backup archive (`.tar.Z` or `.bff` — AIX BFF format): extract and check file mode bits.
+1. **Enumerate setuid binaries:** In a live system or from a disk image, `find / -user root -perm -4000 -type f 2>/dev/null`. In an AIX backup archive (`.tar.Z` or `.bff`, AIX BFF format): extract and check file mode bits.
 
 2. **Prioritize:** Focus on binaries that take user-controlled input (arguments, environment variables, stdin) and have IAC access: `lquerylv`, `lchange`, `mount`, `umount`, `installp`, `smit`.
 

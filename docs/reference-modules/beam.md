@@ -36,7 +36,7 @@ Extracts the attack surface from compiled Erlang `.beam` files and OTP release d
 
 ## What is Erlang, OTP, and the BEAM VM? <sup>[↑](#beamcontext)</sup>
 
-**Erlang** is a concurrent, functional programming language developed at Ericsson by Joe Armstrong, Robert Virding, and Mike Williams between 1986 and 1990. It was designed for telecommunication switching systems that must remain operational through hardware failures, software upgrades, and network partitions — the original requirements were nine-nines availability (99.9999999% uptime). Erlang processes are lightweight virtual-machine threads, not OS threads: a typical BEAM runtime runs millions of concurrent processes with per-process garbage collection and preemptive scheduling. The language is dynamically typed with a pattern-matching syntax that treats everything as immutable values.
+**Erlang** is a concurrent, functional programming language developed at Ericsson by Joe Armstrong, Robert Virding, and Mike Williams between 1986 and 1990. It was designed for telecommunication switching systems that must remain operational through hardware failures, software upgrades, and network partitions: the original requirements were nine-nines availability (99.9999999% uptime). Erlang processes are lightweight virtual-machine threads, not OS threads: a typical BEAM runtime runs millions of concurrent processes with per-process garbage collection and preemptive scheduling. The language is dynamically typed with a pattern-matching syntax that treats everything as immutable values.
 
 Erlang source compiles to BEAM bytecode. Unlike Python or JavaScript VMs, the BEAM VM was designed from the start for hot code reload: a running system can load a new version of a module without stopping. This property makes BEAM infrastructure attractive for high-availability network services, and it is also the mechanism that `code:load_binary/3` exploits for runtime code injection.
 
@@ -44,7 +44,7 @@ Erlang source compiles to BEAM bytecode. Unlike Python or JavaScript VMs, the BE
 
 Erlang programs are collections of **modules**. Each module is one source file (`.erl`) and compiles to one `.beam` file. Modules export explicitly named functions; unexported functions are private. The compiler generates an `ExpT` (export table) chunk listing exported `{function, arity}` pairs and an `ImpT` (import table) chunk listing external functions the module calls.
 
-The Erlang standard library is split between the base runtime (`erlang:` BIFs — built-in functions) and the `stdlib`, `kernel`, and other OTP applications. `erlang:open_port/2` and `os:cmd/1` are the primary OS execution surfaces. `erl_eval:exprs/2` evaluates an Erlang AST at runtime, equivalent to Python's `eval`. `code:load_binary/3` hot-loads a new module version from a binary blob, equivalent to `ClassLoader.defineClass` in Java.
+The Erlang standard library is split between the base runtime (`erlang:` BIFs: built-in functions) and the `stdlib`, `kernel`, and other OTP applications. `erlang:open_port/2` and `os:cmd/1` are the primary OS execution surfaces. `erl_eval:exprs/2` evaluates an Erlang AST at runtime, equivalent to Python's `eval`. `code:load_binary/3` hot-loads a new module version from a binary blob, equivalent to `ClassLoader.defineClass` in Java.
 
 Elixir, LFE (Lisp-Flavoured Erlang), Gleam, and other languages compile to BEAM bytecode. An Elixir Mix release produces `.beam` files with module names prefixed by `Elixir.` (e.g. `Elixir.MyApp.Worker`). `BeamContext` handles both Erlang and Elixir BEAM files transparently; atom decoding and chunk parsing are identical.
 
@@ -56,7 +56,7 @@ Elixir, LFE (Lisp-Flavoured Erlang), Gleam, and other languages compile to BEAM 
 
 ### The BEAM VM and .beam files <sup>[↑](#beamcontext)</sup>
 
-**BEAM** stands for Bogdan/Björn's Erlang Abstract Machine (named after early implementers). A `.beam` file is an IFF (Interchange File Format) container — the same format created by Electronic Arts and Commodore for the Amiga in 1985. The IFF `FORM` marker is renamed `FOR1` in BEAM files; the form type is `BEAM`. IFF containers carry named chunks with four-byte ASCII tags and 32-bit big-endian length fields.
+**BEAM** stands for Bogdan/Björn's Erlang Abstract Machine (named after early implementers). A `.beam` file is an IFF (Interchange File Format) container: the same format created by Electronic Arts and Commodore for the Amiga in 1985. The IFF `FORM` marker is renamed `FOR1` in BEAM files; the form type is `BEAM`. IFF containers carry named chunks with four-byte ASCII tags and 32-bit big-endian length fields.
 
 The relevant chunks:
 
@@ -74,7 +74,7 @@ All function names, module names, and attribute values are atoms. All atoms in a
 
 ### ETF: External Term Format <sup>[↑](#beamcontext)</sup>
 
-**ETF** (External Term Format) is Erlang's binary serialization format — the format used by `term_to_binary/1` and `binary_to_term/1`. The BEAM format uses ETF extensively: the `Dbgi` chunk stores the module AST as an ETF term, the `LitT` chunk stores compile-time constants as ETF terms, and the `Abst` chunk (now superseded by `Dbgi`) stored abstract code as ETF.
+**ETF** (External Term Format) is Erlang's binary serialization format: the format used by `term_to_binary/1` and `binary_to_term/1`. The BEAM format uses ETF extensively: the `Dbgi` chunk stores the module AST as an ETF term, the `LitT` chunk stores compile-time constants as ETF terms, and the `Abst` chunk (now superseded by `Dbgi`) stored abstract code as ETF.
 
 ETF is not self-describing in a human-readable way; reading it requires decoding type tags (integers, tuples, lists, atoms, binaries). `BeamContext` includes a full ETF decoder (`_etf_to_python`, `_decode_etf`) to parse `Dbgi` into function name/arity/line records and `LitT` into string representations of compile-time constants.
 
@@ -112,7 +112,7 @@ Two things blocked BEAM security analysis before this module:
 - Version diff analysis: `sweep_beam_diff()` to identify newly introduced dangerous imports across releases
 
 **Related modules:**
-- [BinaryContext](binary-context.md): for native `.so` NIFs (Native Implemented Functions) loaded via `erlang:load_nif/2` — the BEAM module uses `load_nif` to load C code; the `.so` is the actual execution surface
+- [BinaryContext](binary-context.md): for native `.so` NIFs (Native Implemented Functions) loaded via `erlang:load_nif/2`: the BEAM module uses `load_nif` to load C code; the `.so` is the actual execution surface
 - [FindingRegistry](registry.md): record confirmed dangerous import findings
 - [TaintTracker](taint-tracker-alpha.md): when `os:cmd` or `erlang:open_port` is confirmed, trace the argument source through calling functions
 
@@ -425,7 +425,7 @@ Dangerous imports:
 
 ## Limitations <sup>[↑](#beamcontext)</sup>
 
-1. BEAM bytecode is not disassembled. `BeamContext` reads the `Code` chunk header but does not decode individual BEAM opcodes. Taint analysis across the bytecode — tracing `os:cmd` argument sources — is not available from this module alone. Use the AST from `Dbgi` for source-level analysis when debug info is present.
+1. BEAM bytecode is not disassembled. `BeamContext` reads the `Code` chunk header but does not decode individual BEAM opcodes. Taint analysis across the bytecode: tracing `os:cmd` argument sources: is not available from this module alone. Use the AST from `Dbgi` for source-level analysis when debug info is present.
 
 2. ETF decoding is best-effort. `_etf_to_python` decodes standard ETF term types (integers, floats, atoms, tuples, lists, strings, binaries). Non-standard or nested term types fall back to a hex repr. Dbgi chunks with complex nested ASTs may produce partially decoded `ast_functions` lists.
 
@@ -445,7 +445,7 @@ After this module: for `CODE_EXEC` findings (`os:cmd`, `erlang:open_port`), exam
 
 ## Reading output <sup>[↑](#beamcontext)</sup>
 
-`BeamContext.from_path(path)` returns a `BeamContext` object — the parsed module surface, not a list of findings. Call `ctx.dangerous_imports(min_severity=...)` to get findings.
+`BeamContext.from_path(path)` returns a `BeamContext` object: the parsed module surface, not a list of findings. Call `ctx.dangerous_imports(min_severity=...)` to get findings.
 
 | Attribute | Content |
 |:---|:---|
@@ -514,7 +514,7 @@ Elixir compiles to standard BEAM `.beam` files. Elixir-compiled modules are dist
 - `System.shell/2` → `os:cmd/1` with explicit shell invocation
 - `Port.open/2` → `erlang:open_port/2`
 - `:binary.to_term/1` → `erlang:binary_to_term/1` (unsafe form)
-- `Kernel.apply/2` → `erlang:apply/2` — dynamic function dispatch
+- `Kernel.apply/2` → `erlang:apply/2`: dynamic function dispatch
 
 The `BEAMContext.dangerous_imports` list includes Elixir module-function pairs as well as the underlying Erlang BIFs they call.
 
@@ -527,9 +527,9 @@ The `BEAMContext.dangerous_imports` list includes Elixir module-function pairs a
 - [FindingRegistry](registry.md): record confirmed findings from BEAM analysis
 - [Python .pyc](python-pyc-scanning.md): analogous bytecode scanning approach for Python management planes
 - [Java .class and JAR Analysis](java-class-jar-parsing.md): analogous constant pool approach for JVM bytecode
-- [HarmonyOS ABC Decompiler](harmonyos.md): ArkTS bytecode — another managed language bytecode format encountered in firmware
+- [HarmonyOS ABC Decompiler](harmonyos.md): ArkTS bytecode: another managed language bytecode format encountered in firmware
 - [Semantic Code Search](semantic-code-search.md): semantic embedding for BEAM function names when `BEAMContext.functions` identifies candidate function names before taint analysis
-- [Pre-Auth Route Auditor](preauth-exposure.md): for Erlang Cowboy or Phoenix web applications — determine which HTTP routes are accessible without authentication
+- [Pre-Auth Route Auditor](preauth-exposure.md): for Erlang Cowboy or Phoenix web applications: determine which HTTP routes are accessible without authentication
 - [SQL Injection Scanner](sql-injection-scanner.md): Erlang applications using `mysql_otp` or `epgsql` may construct SQL strings with user input; `BEAMContext.strings` surfaces string templates used in SQL construction
 
 ---

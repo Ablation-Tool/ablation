@@ -28,7 +28,7 @@ Scan Android APK packages for hardcoded secrets, dangerous API invocations, cryp
 
 **Dalvik** is the virtual machine that ran Android applications from Android 1.0 through Android 4.4 (KitKat). It is a register-based VM (unlike the JVM's stack machine) and executes `.dex` bytecode directly, using a just-in-time (JIT) compiler to translate hot paths to native code at runtime. The register-based design was chosen to reduce the instruction count and improve execution density on the constrained hardware of the time.
 
-**ART** (Android Runtime) replaced Dalvik starting with Android 5.0 (Lollipop). ART introduced ahead-of-time (AOT) compilation: when an APK is installed, `dex2oat` compiles the `.dex` bytecode to native code stored in `.oat` / `.vdex` files. From Android 7.0 onward, ART uses a hybrid model — baseline JIT for first runs with background AOT promotion for frequently executed code. ART still uses `.dex` bytecode as its input format; the `.oat` file embeds the original DEX data alongside the compiled native code.
+**ART** (Android Runtime) replaced Dalvik starting with Android 5.0 (Lollipop). ART introduced ahead-of-time (AOT) compilation: when an APK is installed, `dex2oat` compiles the `.dex` bytecode to native code stored in `.oat` / `.vdex` files. From Android 7.0 onward, ART uses a hybrid model: baseline JIT for first runs with background AOT promotion for frequently executed code. ART still uses `.dex` bytecode as its input format; the `.oat` file embeds the original DEX data alongside the compiled native code.
 
 **Why this matters for RE:** The `.dex` format retains full string tables, class descriptors, method signatures, and field references in plaintext, even after ProGuard/R8 obfuscation. Native `.so` libraries inside the APK lose function names when stripped, but the Java/Kotlin layer in DEX remains readable. This makes DEX the primary target for static analysis of Android malware, IoT device management apps, and network appliance firmware that targets Android.
 
@@ -174,7 +174,7 @@ DexAnalyzer
               └── DEXFile.iter_native_methods() → Iterator[NativeMethod]
 ```
 
-`DexAnalyzer` depends on `ablation.core.apk_parser` and has no other ablation dependencies. It does not use `BinaryContext`, `TaintTracker`, or `SemanticSearcher` — it operates at the DEX string-table and method-reference level, not at the instruction level.
+`DexAnalyzer` depends on `ablation.core.apk_parser` and has no other ablation dependencies. It does not use `BinaryContext`, `TaintTracker`, or `SemanticSearcher`: it operates at the DEX string-table and method-reference level, not at the instruction level.
 
 **Used by:**
 - [Android](android.md) RE pipeline: `DexAnalyzer` is the first pass before JNI native library analysis
@@ -508,8 +508,8 @@ DEX format versions have evolved with Android API levels:
 - [DEX Disassembly and Lifting](dex-disassembly-and-lifting.md): bytecode-level DEX instruction disassembly and lifting to IR
 - [Android](android.md): full Android RE pipeline: APK, native library (JNI), Binder surface
 - [Android Binder Surface](android-binder-surface.md): Binder IPC attack surface analysis
-- [Java .class and JAR Analysis](java-class-jar-parsing.md): JVM bytecode — the platform DEX was adapted from; compare string_ids scanning to constant pool scanning
-- [HarmonyOS ABC Decompiler](harmonyos.md): HarmonyOS ArkTS bytecode — Huawei's Dalvik-influenced but distinct format
+- [Java .class and JAR Analysis](java-class-jar-parsing.md): JVM bytecode: the platform DEX was adapted from; compare string_ids scanning to constant pool scanning
+- [HarmonyOS ABC Decompiler](harmonyos.md): HarmonyOS ArkTS bytecode: Huawei's Dalvik-influenced but distinct format
 - [Python .pyc](python-pyc-scanning.md): analogous bytecode scanning for Python management planes
 - [Taint Analysis](taint-analysis.md): for confirming that DEX-identified `Runtime.exec` call sites receive attacker-controlled arguments
 - [Length Underflow Scanner](length-underflow.md): for JNI native libraries called from Android DEX code that process network packet lengths

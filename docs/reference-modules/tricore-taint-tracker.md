@@ -317,7 +317,7 @@ TriCore-based ECU firmware has been the subject of significant automotive securi
 
 ## TriCore endianness and addressing model <sup>[↑](#tricoretainttracker)</sup>
 
-TriCore uses **little-endian** byte ordering — opposite to many other automotive MCUs (PPC476, C167, 88k which are big-endian). This means:
+TriCore uses **little-endian** byte ordering: opposite to many other automotive MCUs (PPC476, C167, 88k which are big-endian). This means:
 - 32-bit word `0x12345678` is stored as bytes: `78 56 34 12`
 - The ELF header `e_ident[EI_DATA]` = `0x01` (ELFDATA2LSB) for TriCore ELFs
 
@@ -345,21 +345,21 @@ The TriCore has a unified 32-bit virtual address space divided into segments wit
 TriCore ECU firmware typically runs the AUTOSAR Operating System (OS) specification, which defines a static real-time task scheduling model. For RE, understanding the AUTOSAR task model matters because:
 
 **Task entry points as taint sources:** AUTOSAR tasks are functions declared with the `TASK()` macro. The OS calls these tasks on periodic schedule or on event. Network-adjacent tasks include:
-- `TASK(ComTask)` — runs the AUTOSAR COM stack, receives CAN/LIN/FlexRay PDUs
-- `TASK(DiagTask)` — runs the UDS diagnostic stack, handles Security Access
-- `TASK(NmTask)` — network management, handles CAN NM messages
+- `TASK(ComTask)`: runs the AUTOSAR COM stack, receives CAN/LIN/FlexRay PDUs
+- `TASK(DiagTask)`: runs the UDS diagnostic stack, handles Security Access
+- `TASK(NmTask)`: network management, handles CAN NM messages
 
 `SemanticSearcher.query('AUTOSAR TASK ComTask diagnostic service handler')` identifies these entry points. The taint source for each task is the AUTOSAR COM API call that receives data: `Com_ReceiveSignal()`, `PduR_CanIfRxIndication()`, or the lower-level `CanIf_RxIndication()` callback.
 
 **AUTOSAR COM signal layout:** CAN frames are broken down into signals by the AUTOSAR COM layer. Each signal has a known offset and bit width within a PDU (Protocol Data Unit). The mapping from PDU bytes to signals is defined at compile time in the AUTOSAR configuration. If the AUTOSAR configuration is available (as an ARXML file from the vehicle manufacturer), it can be used to understand which signal values arrive in which diagnostic service handler arguments.
 
-**AUTOSAR stack heap:** TriCore AUTOSAR implementations allocate separate stacks for each OS task and ISR. The stack sizes are configured in the AUTOSAR OS configuration. If an overflow occurs in a task's stack, it corrupts the next task's stack in memory (if stack overflow protection is not enabled). Stack overflow protection (via the TriCore CSA — Context Save Area — hardware mechanism) is optional in AUTOSAR configuration.
+**AUTOSAR stack heap:** TriCore AUTOSAR implementations allocate separate stacks for each OS task and ISR. The stack sizes are configured in the AUTOSAR OS configuration. If an overflow occurs in a task's stack, it corrupts the next task's stack in memory (if stack overflow protection is not enabled). Stack overflow protection (via the TriCore CSA: Context Save Area: hardware mechanism) is optional in AUTOSAR configuration.
 
 ---
 
 ## What is TriCore? History and automotive deployment <sup>[↑](#tricoretainttracker)</sup>
 
-TriCore (AUDO/AURIX) is a 32-bit RISC processor architecture developed by Infineon Technologies, introduced in 1999 as a unified architecture for automotive embedded control. The name "TriCore" reflects its three-architecture design: a RISC scalar processing unit, a real-time signal processing unit (DSP), and a microcontroller unit — all sharing a single unified address space and instruction set.
+TriCore (AUDO/AURIX) is a 32-bit RISC processor architecture developed by Infineon Technologies, introduced in 1999 as a unified architecture for automotive embedded control. The name "TriCore" reflects its three-architecture design: a RISC scalar processing unit, a real-time signal processing unit (DSP), and a microcontroller unit: all sharing a single unified address space and instruction set.
 
 TriCore replaced the C167 as Infineon's primary automotive ECU architecture starting around 2005–2008. The second-generation AURIX TC2xx (2012) and TC3xx (2018) families are now the dominant ECU processor family in European automotive ECUs, used extensively by Bosch, Continental, Delphi, and Denso in systems across BMW, Mercedes-Benz, Volkswagen Group, Audi, Porsche, Toyota, and Hyundai/Kia vehicles.
 
@@ -385,8 +385,8 @@ TriCore replaced the C167 as Infineon's primary automotive ECU architecture star
 
 TriCore uses a Harvard architecture with separate instruction and data address spaces, but unified 32-bit physical addressing. The ISA uses 32 general-purpose registers organized in two banks:
 
-**Data registers (D-registers):** D0–D15 — hold integer values (32-bit)
-**Address registers (A-registers):** A0–A15 — hold pointers and addresses (32-bit)
+**Data registers (D-registers):** D0–D15: hold integer values (32-bit)
+**Address registers (A-registers):** A0–A15: hold pointers and addresses (32-bit)
 
 This separation is unusual: you cannot use a data register as a pointer without moving it to an address register first (`mov.a An, Dm`), and vice versa. For taint tracking, this matters: a user-controlled string length (a data value in Dm) must be moved to an address register before it can be used in a memory access. `TriCoreTaintTracker` tracks both D and A register taint and propagates across `mov.a` / `mov.aa` / `mov.d` cross-register moves.
 
@@ -443,12 +443,12 @@ TriCore uses fixed 16-bit (short) and 32-bit (normal) instruction formats. The e
 ```
 
 **Security-relevant TriCore instructions:**
-- `CALL disp24` — function call, saves A11 (RA). Identifies call sites.
-- `CALLI A_n` — indirect call via address register. CTR-equivalent; `An` trace source = function pointer hijack candidate.
-- `LD.W D_d, [A_b]` — load 32-bit word from address. Source of memory reads.
-- `LD.B D_d, [A_b+r]` — load byte (bounds check gap → out-of-bounds read)
-- `ST.W [A_b], D_a` — store 32-bit word. Destination of writes.
-- `SYSCALL #N` — TriCore system call (not a standard POSIX syscall; used for privileged operations and HSM access in TC3xx)
+- `CALL disp24`: function call, saves A11 (RA). Identifies call sites.
+- `CALLI A_n`: indirect call via address register. CTR-equivalent; `An` trace source = function pointer hijack candidate.
+- `LD.W D_d, [A_b]`: load 32-bit word from address. Source of memory reads.
+- `LD.B D_d, [A_b+r]`: load byte (bounds check gap → out-of-bounds read)
+- `ST.W [A_b], D_a`: store 32-bit word. Destination of writes.
+- `SYSCALL #N`: TriCore system call (not a standard POSIX syscall; used for privileged operations and HSM access in TC3xx)
 
 ---
 
@@ -456,7 +456,7 @@ TriCore uses fixed 16-bit (short) and 32-bit (normal) instruction formats. The e
 
 For efficient taint tracking, `TriCoreTaintTracker` identifies several instruction patterns at candidate call sites:
 
-**`CALL addr18`:** Direct function call. The 18-bit signed displacement is sign-extended and added to PC. Identifies the callee at static analysis time — `TriCoreTaintTracker` resolves the callee via `ctx.imports` or `ctx.functions`.
+**`CALL addr18`:** Direct function call. The 18-bit signed displacement is sign-extended and added to PC. Identifies the callee at static analysis time: `TriCoreTaintTracker` resolves the callee via `ctx.imports` or `ctx.functions`.
 ```
 TriCore CALL encoding (32-bit):
 31          28 27              8 7     0
@@ -466,7 +466,7 @@ TriCore CALL encoding (32-bit):
 ```
 `opcode[7:0] = 0x6D`, bits [27:8] = signed 18-bit displacement (in 2-byte halfwords).
 
-**`CALLI A_n`:** Indirect call. The target address is in address register `A_n`. Identifies function pointer calls — a finding class when `A_n` source is user-controlled.
+**`CALLI A_n`:** Indirect call. The target address is in address register `A_n`. Identifies function pointer calls: a finding class when `A_n` source is user-controlled.
 ```
 CALLI encoding (16-bit):
 15        8 7    4 3   0
@@ -478,11 +478,11 @@ CALLI encoding (16-bit):
 **`LD.W D_d, [A_b] off10`:** Load 32-bit word. The 10-bit signed offset allows ±512 bytes from the base register. Used for struct field access and array element loads.
 
 **Security-critical taint patterns in TriCore:**
-1. `LD.W D4, [A4] 4` at a UDS handler entry — loading the service subfunction byte. If D4 is then used as an array index without bounds check: `ADDIH.A A_ptr, #table_base ; ADDSC.A A_ptr, A_ptr, D4, 2 ; LD.W D_result, [A_ptr]` — this is an out-of-bounds table read (CWE-125) when D4 is attacker-controlled.
+1. `LD.W D4, [A4] 4` at a UDS handler entry: loading the service subfunction byte. If D4 is then used as an array index without bounds check: `ADDIH.A A_ptr, #table_base ; ADDSC.A A_ptr, A_ptr, D4, 2 ; LD.W D_result, [A_ptr]`: this is an out-of-bounds table read (CWE-125) when D4 is attacker-controlled.
 
-2. `ST.W [A_buf], D_data ; ADD.A A_buf, #4 ; LOOP D_count, label` — a copy loop without count bounds check is a classic buffer overflow pattern. `TriCoreTaintTracker` detects the LOOP instruction pattern and flags when `D_count` (the loop counter) is taint-propagated from a network source.
+2. `ST.W [A_buf], D_data ; ADD.A A_buf, #4 ; LOOP D_count, label`: a copy loop without count bounds check is a classic buffer overflow pattern. `TriCoreTaintTracker` detects the LOOP instruction pattern and flags when `D_count` (the loop counter) is taint-propagated from a network source.
 
-3. `SYSCALL #N` — TriCore HSM syscall interface. On TC3xx, SYSCALL triggers the hardware security module. If D4 (the syscall argument) is user-controlled, this is an HSM interface confusion attack. Flag these for manual review.
+3. `SYSCALL #N`: TriCore HSM syscall interface. On TC3xx, SYSCALL triggers the hardware security module. If D4 (the syscall argument) is user-controlled, this is an HSM interface confusion attack. Flag these for manual review.
 
 ---
 
@@ -492,7 +492,7 @@ TriCore uses an unusual hardware mechanism for function call context saving: the
 
 This has several RE implications:
 
-**Return address is in the CSA, not the stack:** A buffer overflow in a local variable array (on the software stack, addressed by A10) does NOT overwrite the saved return address (which is in the CSA chain, a different memory region). This makes TriCore stack buffer overflows harder to exploit for return-address-overwrite than on MIPS, ARM, or x86 — but heap overflows or CSA corruption can still achieve code execution.
+**Return address is in the CSA, not the stack:** A buffer overflow in a local variable array (on the software stack, addressed by A10) does NOT overwrite the saved return address (which is in the CSA chain, a different memory region). This makes TriCore stack buffer overflows harder to exploit for return-address-overwrite than on MIPS, ARM, or x86: but heap overflows or CSA corruption can still achieve code execution.
 
 **CSA overflow:** If more than the configured number of nested calls occurs (CSA free list exhausts), TriCore triggers a hardware trap. Forcing this in a diagnostic handler (by causing deep recursive calls via carefully crafted diagnostic requests) creates a denial-of-service.
 
@@ -507,7 +507,7 @@ This has several RE implications:
 | UDS Security Access bypass | CWE-287 | Seed generator uses static values (fixed timestamp, ECU serial) without randomness |
 | CAN ISO-TP length field overflow | CWE-120 | `PCI[11:0]` = total PDU length → `memcpy(reassembly_buf, data, pci_len)` without bounds check on `pci_len` |
 | Array index from diagnostic data | CWE-125 | `D4 = service_subfunc; ADDSC.A A_ptr, A_table, D4, 2; LD.W` without `D4 < table_size` check |
-| Stack buffer overflow (local array) | CWE-121 | Loop writing to `[A10+offset]` with `D_count` from network — does NOT overwrite RA due to CSA model |
+| Stack buffer overflow (local array) | CWE-121 | Loop writing to `[A10+offset]` with `D_count` from network: does NOT overwrite RA due to CSA model |
 | HSM interface confusion | CWE-346 | `SYSCALL #N` with D4 from CAN without authentication check |
 
 **FindingRegistry for TriCore:**
@@ -536,7 +536,7 @@ registry.register(
 The Bosch EDC17 diesel engine management system is the most common TriCore RE target. EDC17 uses TriCore TC1736 or TC1767 hardware and implements:
 
 - UDS Security Access (0x27): proprietary seed-key algorithm for programming authorization
-- Calibration data: fuel injection timing maps, boost pressure limits, exhaust gas recirculation maps — all stored as data structures in flash
+- Calibration data: fuel injection timing maps, boost pressure limits, exhaust gas recirculation maps: all stored as data structures in flash
 - Anti-tampering: some EDC17 variants check the calibration checksum against a stored reference and log mismatches to the DTC (Diagnostic Trouble Code) memory
 
 For `TriCoreTaintTracker`, the analysis entry point is the UDS request handler. UDS packets arrive via the CAN bus (Controller Area Network); the firmware's CAN interrupt service routine places received frames in a ring buffer; the diagnostic service dispatcher reads from that buffer and calls the service handler. The taint source is the ring buffer read; the sink is either the Security Access handler (for algorithm RE) or the calibration write handler (for calibration injection research).
@@ -568,7 +568,7 @@ findings = tracker.run_interprocedural()
 - [PathSolver](path-solver.md): confirm path feasibility after a taint hit
 - [SinkPropagator](sink-propagator.md): extend sink coverage across wrappers
 - [C166/C167 Decoder](c166-c167-decoding.md): predecessor architecture for 1997–2008 ECUs
-- [ECU VLE Decoder](ecu-vle-decoder.md): NXP MPC5500 automotive PPC — another current-generation ECU competitor to TriCore
+- [ECU VLE Decoder](ecu-vle-decoder.md): NXP MPC5500 automotive PPC: another current-generation ECU competitor to TriCore
 - [ECU M68K Decoder](ecu-m68k-decoder.md): older M68K-based ECUs (1990s–2000s)
 - [FindingRegistry](registry.md): record confirmed TriCore findings; `cwe='CWE-287'` for Security Access bypass, `cwe='CWE-121'` for stack overflow
 - [Length Underflow Scanner](length-underflow.md): for TriCore CAN/ISO-TP length field processing that precedes buffer copy operations

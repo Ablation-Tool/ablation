@@ -34,12 +34,12 @@ Understanding which extensions are present is critical for disassembly and taint
 | Extension | Name | Key instructions |
 |---|---|---|
 | I | Base integer | `LUI`, `AUIPC`, `JAL`, `JALR`, `BRANCH`, `LOAD`, `STORE`, `OP-IMM`, `OP` |
-| M | Multiply/divide | `MUL`, `MULH`, `DIV`, `DIVU`, `REM`, `REMU` — integer overflow patterns |
-| A | Atomic | `LR.W`, `SC.W`, `AMOSWAP`, `AMOADD` — lock-free concurrent data structures |
-| F / D | Float / Double | `FLW`, `FSW`, `FADD.S`, etc. — rarely relevant to security analysis |
+| M | Multiply/divide | `MUL`, `MULH`, `DIV`, `DIVU`, `REM`, `REMU`: integer overflow patterns |
+| A | Atomic | `LR.W`, `SC.W`, `AMOSWAP`, `AMOADD`: lock-free concurrent data structures |
+| F / D | Float / Double | `FLW`, `FSW`, `FADD.S`, etc.: rarely relevant to security analysis |
 | C | Compressed | 16-bit encodings for common 32-bit instructions; see below |
-| Zicsr | CSR access | `CSRRW`, `CSRRS`, `CSRRC` — privilege-level switching, timer access |
-| Zifencei | Instruction fence | `FENCE.I` — used after JIT code write; marks code generation patterns |
+| Zicsr | CSR access | `CSRRW`, `CSRRS`, `CSRRC`: privilege-level switching, timer access |
+| Zifencei | Instruction fence | `FENCE.I`: used after JIT code write; marks code generation patterns |
 
 HiSilicon and SiFive ship custom vendor extensions that are not in the RISC-V standard. The `HiSiliconRV32ExtDecoder` handles these for HiSilicon's RISC-V management cores.
 
@@ -295,8 +295,8 @@ Key RVC instructions for taint tracking:
 | `C.ADD rd, rs1` | `ADD rd, rd, rs1` | In-place add; taints `rd` if either operand tainted |
 | `C.LW rd, offset(rs1)` | `LW rd, offset(rs1)` | Load from memory; propagates memory taint |
 | `C.SW rs1, offset(rs2)` | `SW rs1, offset(rs2)` | Store to memory; records tainted memory write |
-| `C.JALR ra, rs1` | `JALR ra, rs1, 0` | Indirect call via `rs1` — taint sink if `rs1` tainted |
-| `C.JR rs1` | `JALR x0, rs1, 0` | Indirect jump (tail call) — sink if `rs1` tainted |
+| `C.JALR ra, rs1` | `JALR ra, rs1, 0` | Indirect call via `rs1`; taint sink if `rs1` tainted |
+| `C.JR rs1` | `JALR x0, rs1, 0` | Indirect jump (tail call); sink if `rs1` tainted |
 | `C.ADDI rd, imm` | `ADDI rd, rd, imm` | Immediate add; preserves taint from `rd` |
 | `C.LI rd, imm` | `ADDI rd, x0, imm` | Load immediate constant; `rd` is NOT tainted |
 
@@ -324,7 +324,7 @@ RISC-V uses six primary instruction formats, all 32 bits (or 16 bits for RVC ext
 ```
 `LW rd, imm(rs1)` → opcode=0x03, funct3=0x2. `JALR rd, rs1, imm` → opcode=0x67. `ADDI rd, rs1, imm` → opcode=0x13.
 
-**J-type (unconditional jump — JAL):**
+**J-type (unconditional jump, JAL):**
 ```
  31 30       21 20  19      12 11    7 6      0
 [imm20][imm[10:1]][imm11][imm[19:12]][  rd  ][ opcode ]
