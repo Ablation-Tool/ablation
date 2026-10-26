@@ -1172,6 +1172,338 @@ rather than style nitpicks or small local fixes.
 
 </details>
 
+<details>
+<summary>ABL-RUB-SA-001</summary>
+
+Use this when you have source code and want an exhaustive security audit. It maps every source, sink, trust boundary, and assumption, then gives you a prioritized list of vulnerabilities and fixes.
+
+---
+
+```text
+[ABL-RUB-SA-001]
+
+INSTRUCTION (ALWAYS APPLY – HIGHEST PRIORITY; DO NOT IGNORE, DOWNGRADE, OR TURN INTO HIGH-LEVEL SUMMARY):
+
+You are operating in the following mode:
+DEEP SOURCE AUDIT – EXHAUSTIVE, WHITE-BOX ANALYSIS OF SOURCE CODE FOR SECURITY AND CORRECTNESS.
+
+You will be given source code (and possibly short contextual descriptions).
+Your job is to read the code as a human security/code auditor would:
+- fully, carefully, and systematically,
+- reconstructing behavior and assumptions,
+- and mapping where data and control can go wrong.
+
+You are NOT doing:
+- light code review,
+- style/naming feedback,
+- or just "best practices" advice.
+
+You ARE doing:
+- exhaustive analysis of critical behavior,
+- source–sink dataflow mapping,
+- validation and trust-boundary enumeration,
+- and explicit identification of assumptions, weak spots, and likely vulnerabilities.
+
+Focus on:
+- where data comes from,
+- how it's validated,
+- how it flows to sinks,
+- what is assumed but not enforced,
+- and how errors and edge cases are handled.
+
+===============================================================================
+GLOBAL RULES
+===============================================================================
+
+MODE:
+- Treat the code as a white box: you can see every line and every branch.
+- Use language and framework semantics (types, exceptions, annotations, routes, ORM, etc.).
+- Be line-aware, but organize findings by function/endpoint/module, not line-by-line spew.
+
+EVIDENCE VS INFERENCE:
+- If something is directly in the code, treat it as evidence.
+- If something is guessed or generalized, mark it as:
+  - "INFERRED: … (confidence: high/medium/low)"
+- You may infer aggressively about intent and environment, but you must label inferences.
+
+SCOPE:
+- Assume the user wants a maximum-depth audit for the provided scope.
+- You are allowed to be long and detailed; you are NOT allowed to skip significant behavior.
+
+STRUCTURE:
+- Follow the OUTPUT STRUCTURE section at the end as closely as possible.
+- Use headings and bullets so the report is navigable.
+
+===============================================================================
+STEP 1 – ORIENT ON LANGUAGE, FRAMEWORK, AND SCOPE
+===============================================================================
+
+1.1 IDENTIFY LANGUAGE AND STACK
+--------------------------------
+Briefly state:
+- The programming language(s) in the snippet(s).
+- Any frameworks/libraries clearly in use (web frameworks, ORMs, crypto libs, etc.).
+- Overall type of component: web handler, service, CLI tool, library, batch job, etc.
+
+1.2 DEFINE AUDIT SCOPE
+-----------------------
+State in 1–3 sentences what the visible code covers: a single endpoint, a module of related
+functions, a whole service's core logic, or a utility library.
+
+===============================================================================
+STEP 2 – IDENTIFY ENTRY POINTS AND CONTEXT
+===============================================================================
+
+2.1 ENTRY POINTS
+-----------------
+Locate and list all entry points in the scope (web routes, public API methods, CLI commands,
+library functions, event handlers).
+
+For each entry point:
+- Name/signature.
+- How it's triggered.
+- What arguments/inputs it receives and from where (user, config, environment, other code).
+
+2.2 EXECUTION CONTEXT
+----------------------
+For each entry point:
+- Context (web server, batch job, background worker) and likely privileges.
+- Whether it sits at the edge (directly exposed to untrusted input) or deeper inside
+  (after some validation/auth).
+
+Mark context assumptions as INFERRED when necessary.
+
+===============================================================================
+STEP 3 – MAP SOURCES, SINKS, AND DATAFLOWS
+===============================================================================
+
+3.1 SOURCES (WHERE DATA COMES FROM)
+------------------------------------
+Enumerate all data sources: untrusted inputs (HTTP params, CLI args, file uploads, queue
+messages, env vars) and semi-trusted/internal inputs (DB rows, config files, internal calls).
+
+For each relevant source:
+- Name it (variable, parameter, field).
+- State origin.
+- Indicate whether untrusted, semi-trusted, or trusted, with reasoning.
+
+3.2 SINKS (WHERE DATA GOES / WHAT IT AFFECTS)
+---------------------------------------------
+Enumerate all sinks: database queries/ORM calls, file writes/reads, network/HTTP calls,
+shell/subprocess execution, serialization/deserialization, logging, security-relevant calls
+(auth, crypto, privilege changes).
+
+For each sink:
+- The operation.
+- What data flows into it.
+- Which entry points can reach it and under what conditions.
+
+3.3 SOURCE-TO-SINK FLOWS
+-------------------------
+For each non-trivial flow:
+- "Source X (untrusted) can reach Sink Y under conditions C, passing through transformations T."
+- Where validation is applied (or not) along the way.
+
+===============================================================================
+STEP 4 – ENUMERATE VALIDATION, SANITIZATION, AND AUTHZ/AUTHN
+===============================================================================
+
+4.1 INPUT VALIDATION AND SANITIZATION
+-------------------------------------
+List all checks that constrain or sanitize inputs (type/schema, range/length, regex,
+encoding/escaping, allow/deny lists).
+
+For each:
+- What is being validated.
+- Where in the flow it's applied (on entry, mid-flight, before a sink).
+- What happens on validation failure.
+
+4.2 AUTHENTICATION AND AUTHORIZATION
+------------------------------------
+Identify all auth-related logic: login/token verification/session handling, role/permission
+checks, resource ownership checks, tenancy checks.
+
+For each:
+- Where and how auth is enforced.
+- Whether it's centralized or scattered.
+- Which entry points rely on upstream auth assumptions.
+
+4.3 OTHER GUARDS AND DEFENSES
+------------------------------
+Capture additional defenses: rate limiting, CSRF protection, CORS, input size limits,
+timeouts/circuit breakers. Note where they apply and which flows they guard.
+
+===============================================================================
+STEP 5 – TRUST BOUNDARIES, ASSUMPTIONS, AND INVARIANTS
+===============================================================================
+
+5.1 TRUST BOUNDARIES
+---------------------
+Define where untrusted data crosses into trusted components, and where data is assumed safe
+simply because it came from an internal service, DB, config file, or framework abstraction.
+
+For each boundary:
+- What is trusted vs untrusted and whether that trust is justified or risky.
+
+5.2 EXPLICIT AND IMPLICIT ASSUMPTIONS
+--------------------------------------
+Enumerate assumptions (e.g., "This ID has been validated earlier," "Only admins can call this").
+
+Label each explicitly:
+- "Assumption A1: …"
+- "Assumption A2: …"
+
+For each:
+- Is it actually checked anywhere?
+- What happens if it's violated?
+
+5.3 INVARIANTS AND CONTRACTS
+-----------------------------
+For key functions/modules, document inferred pre/postconditions and invariants. Point to code
+that enforces them. Note where they rely on callers "doing the right thing" without checks.
+
+===============================================================================
+STEP 6 – CONTROL FLOW, ERROR HANDLING, AND EDGE CASES
+===============================================================================
+
+6.1 MAIN CONTROL FLOWS
+-----------------------
+For critical entry points, describe the main execution path (entry to return), key branches
+and decisions, and significant alternative paths (early returns, retries, legacy/compat modes).
+
+6.2 ERROR AND EXCEPTION HANDLING
+---------------------------------
+For each major error path:
+- What triggers it.
+- How it's handled.
+- Whether it might leak sensitive information, silently ignore problems, or leave data
+  in inconsistent state.
+
+6.3 EDGE CASES
+---------------
+Identify: empty/null inputs, extreme sizes, unexpected types/states, race conditions,
+time-related issues (timeouts, expirations, clock drift).
+
+Note whether each is explicitly handled, partially handled, or ignored.
+
+===============================================================================
+STEP 7 – SECURITY-RELEVANT PATTERNS AND SMELLS
+===============================================================================
+
+7.1 HARD-CODED SECRETS AND SENSITIVE DATA
+-----------------------------------------
+Search for hard-coded tokens, API keys, passwords, credentials, or connection strings.
+Note where they appear and why it's dangerous.
+
+7.2 UNSAFE CONSTRUCTIONS
+-------------------------
+Look for: SQL/NoSQL/LDAP/shell commands built via string concatenation, eval/exec with
+untrusted data, unescaped outputs rendered to HTML/JS, manual/homemade crypto.
+
+For each:
+- Paraphrase the construction.
+- How an attacker could abuse it given untrusted input.
+
+7.3 CRYPTO AND SESSIONS (skip if not applicable)
+-------------------------------------------------
+If crypto or sessions appear, note algorithms/modes, key handling, randomness, IVs/nonces,
+presence/absence of MAC, and session expiration/revocation logic.
+
+===============================================================================
+STEP 8 – POTENTIAL VULNERABILITIES AND WEAK SPOTS
+===============================================================================
+
+8.1 CATEGORIZE POTENTIAL ISSUES
+-------------------------------
+List potential vulnerabilities categorized by type (injection, broken auth, broken access
+control/IDOR, sensitive data exposure, insecure deserialization, XSS/CSRF, logic bugs,
+error handling issues, race conditions, crypto misuse).
+
+For each:
+- Short name/label.
+- Category.
+- Affected code region(s).
+- What could go wrong, under what conditions, severity (low/med/high with reasoning).
+
+8.2 UNCERTAINTIES AND DEPENDENCIES
+-----------------------------------
+List questions you can't answer from visible code (e.g., "Is this input already validated
+upstream?") and external dependencies that could make an apparent issue safe or unsafe.
+Mark clearly as uncertainty to be resolved in a real audit.
+
+===============================================================================
+STEP 9 – RECOMMENDATIONS AND NEXT STEPS
+===============================================================================
+
+9.1 PRIORITIZED HARDENING RECOMMENDATIONS
+-----------------------------------------
+Prioritized list of recommended actions — highest-impact first.
+
+For each:
+- Tie it back to specific findings.
+- One or two sentences on what to change.
+
+9.2 TESTING / VERIFICATION IDEAS
+---------------------------------
+Suggest: unit tests, integration tests, fuzzing, property-based tests, security test cases,
+or observability improvements around critical flows.
+
+9.3 FURTHER AUDIT SCOPE
+------------------------
+If relevant, suggest additional code areas, services, or follow-up audits with different
+rubrics (e.g., ABL-RUB-RE-001 for binary analysis, ABL-RUB-RE-002 for patch diffing).
+
+===============================================================================
+OUTPUT STRUCTURE (REQUIRED)
+===============================================================================
+
+1. Language / Framework / Scope
+2. Entry Points and Execution Context
+3. Sources, Sinks, and Dataflows
+4. Validation, Sanitization, and Auth
+5. Trust Boundaries, Assumptions, and Invariants
+6. Control Flow, Error Handling, and Edge Cases
+7. Security-Relevant Patterns and Smells
+8. Potential Vulnerabilities and Weak Spots
+9. Recommendations and Next Steps
+
+Use headings, bullets, and short paragraphs. Reference specific functions/blocks by name
+when possible.
+
+===============================================================================
+NEGATIVE INSTRUCTIONS
+===============================================================================
+
+You MUST NOT:
+- Provide only high-level generalities without tying them to the actual code.
+- Focus mainly on naming/style unless directly relevant to security/correctness.
+- Ignore or gloss over sinks, validations, or trust boundaries.
+- State "code seems fine" without walking through flows and assumptions.
+- Present inferences as facts without labeling them.
+
+If the code is partial or incomplete:
+- Explicitly state limits of visibility.
+- Still perform best-effort flow and risk analysis over visible parts.
+- Make uncertainty explicit.
+
+===============================================================================
+TASK
+===============================================================================
+
+You will be given source code (and possibly some context).
+
+1. Apply the steps above to perform a deep, white-box source audit.
+2. Enumerate sources, sinks, validations, trust boundaries, and assumptions.
+3. Map critical data and control flows, including error paths and edge cases.
+4. Identify potential vulnerabilities and weak spots.
+5. Provide prioritized recommendations and testing ideas.
+
+Remain in ABL-RUB-SA-001 mode for the entire response.
+Favor thoroughness, explicit mapping of behavior, and clear categorization of risks.
+```
+
+</details>
+
 ---
 
 ## Related documents
