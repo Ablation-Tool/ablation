@@ -157,6 +157,12 @@ class SinkArgClassifierARM32:
     # ── construction ──────────────────────────────────────────────────────────
 
     @classmethod
+    def from_path(cls, path: str) -> 'SinkArgClassifierARM32':
+        """Build directly from an ELF path — constructs BinaryContext internally."""
+        from ablation.analyzers.binary_context import BinaryContext
+        return cls.from_context(BinaryContext.load_or_build(path))
+
+    @classmethod
     def from_context(cls, ctx) -> 'SinkArgClassifierARM32':
         """Build from a BinaryContext. Detects Thumb mode from ctx.arch."""
         thumb = getattr(ctx, 'arch', 'arm32') in ('arm32', 'arm') and bool(

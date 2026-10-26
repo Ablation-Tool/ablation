@@ -1342,7 +1342,9 @@ def sac_for_path(path: str):
       SinkArgClassifierPPC64ELFv1     — ppc64 BE ELFv1 (closes LOADL-GAP-002)
       SinkArgClassifierPPC64ELFv2     — ppc64 LE ELFv2 (RHEL/RHCOS ppc64le; closes HMC-MGMT gap)
       SinkArgClassifierS390X          — s390/s390x (closes zLinux-XLC SAC=0 gap)
-      SinkArgClassifier               — arm32/aarch64 and everything else
+      SinkArgClassifierARM64          — aarch64 (closes ARM64-SAC-GAP-001)
+      SinkArgClassifierARM32          — arm32 / Thumb (closes ARM-SNMP-GAP-001)
+      SinkArgClassifier               — everything else (x86_64)
 
     All returned objects expose the same public API:
       .classify_all()  → List[SinkClassification]
@@ -1383,6 +1385,12 @@ def sac_for_path(path: str):
     elif machine == _ELF_MACHINE_S390:
         from ablation.analyzers.sink_arg_classifier_s390 import SinkArgClassifierS390X
         return SinkArgClassifierS390X.from_path(path)
+    elif machine == _ELF_MACHINE_AARCH64:
+        from ablation.analyzers.sink_arg_classifier_arm64 import SinkArgClassifierARM64
+        return SinkArgClassifierARM64.from_path(path)
+    elif machine == _ELF_MACHINE_ARM:
+        from ablation.analyzers.sink_arg_classifier_arm32 import SinkArgClassifierARM32
+        return SinkArgClassifierARM32.from_path(path)
     else:
         return SinkArgClassifier.from_path(path)
 
@@ -1402,7 +1410,9 @@ def sac_for_context(ctx):
       SinkArgClassifierPPC64ELFv1   — ppc64 BE (ELFv1; detected via EI_DATA=2 in ELF header)
       SinkArgClassifierPPC64ELFv2   — ppc64 LE (ELFv2; RHEL/RHCOS ppc64le; EI_DATA=1)
       SinkArgClassifierS390X        — s390 / s390x
-      SinkArgClassifier             — everything else (x86_64, aarch64, …)
+      SinkArgClassifierARM64        — arm64 / aarch64 (closes ARM64-SAC-GAP-001)
+      SinkArgClassifierARM32        — arm32 / Thumb (closes ARM-SNMP-GAP-001)
+      SinkArgClassifier             — everything else (x86_64)
     """
     arch = getattr(ctx, 'arch', 'x86_64')
     if arch == 'x86_32':
@@ -1430,6 +1440,12 @@ def sac_for_context(ctx):
     if arch in ('loongarch64', 'la64', 'loongarch'):
         from ablation.analyzers.sink_arg_classifier_loongarch64 import SinkArgClassifierLA64
         return SinkArgClassifierLA64.from_context(ctx)
+    if arch in ('arm64', 'aarch64'):
+        from ablation.analyzers.sink_arg_classifier_arm64 import SinkArgClassifierARM64
+        return SinkArgClassifierARM64.from_context(ctx)
+    if arch in ('arm32', 'arm'):
+        from ablation.analyzers.sink_arg_classifier_arm32 import SinkArgClassifierARM32
+        return SinkArgClassifierARM32.from_context(ctx)
     return SinkArgClassifier.from_context(ctx)
 
 
