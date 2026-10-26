@@ -312,6 +312,9 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Get final register values written during FPGA configuration" | `XilinxFrameDecoder.from_bitfile(bf).config_registers()` |
 | "Compare frame data between two FPGA firmware versions (word-level diff)" | `dec_a.frame_diff(dec_b)` |
 | "Extract raw frame bytes for version comparison (Spartan-6 / Spartan-3AN)" | `XilinxFrameDecoder.from_bitfile(bf).heuristic_frame_bytes()` |
+| "Extract VHDL/Verilog source from HDL Designer HTML exports (*.htm ContentFrame files)" | `HdlHtmlExtractor.from_directory(htm_dir).to_semantic()` |
+| "Get clean source text from an HDL Designer HTML export file" | `HdlHtmlExtractor.from_directory(htm_dir).text('module.vhd')` |
+| "Write clean .vhd/.v files from HDL Designer HTML export (for HDLVersionDiff input)" | `HdlHtmlExtractor.from_directory(htm_dir).write_vhd(output_dir)` |
 | "Extract constants from Verilog/VHDL source (parameters, defines, VHDL constants)" | `VerilogSemantic.from_directory(src_dir).constants()` |
 | "Extract FSM state encodings from Verilog/VHDL" | `VerilogSemantic.from_directory(src_dir).state_encodings()` |
 | "Search Verilog/VHDL source for a protocol pattern" | `VerilogSemantic.from_directory(src_dir).query('opcode broadcast reset')` |
