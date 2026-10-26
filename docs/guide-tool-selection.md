@@ -66,6 +66,9 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "LoongArch64: find GCC 12.3.1.7 max-not-min bug in ELF" | `LA64MaxNotMinScanner.from_path(elf).scan()` |
 | "LoongArch64: find GCC 12.3.1.7 max-not-min bug in UEFI PE32+" | `LA64MaxNotMinScanner.from_pe32plus(data).scan()` |
 | "LoongArch64: find integer overflow before malloc" | `LA64HeapVulnScanner.from_path(elf).scan()` |
+| "Alpha AXP ECOFF: scan exec-class (system/popen/execve) call sites" | `AlphaEcoffScanner(binary).scan()` → `List[AlphaExecFinding]`; byte-verified BSR targets; call `trace_arg(f.caller_va)` on each finding to classify the argument |
+| "Alpha AXP: build per-function CFG from raw ECOFF binary" | `AlphaCFGBuilder(data, sections, gp_value).build(func_va)` → `Dict[va, BasicBlock]`; BFS from entry; handles BR/Bcc/RET/JMP/BSR |
+| "Alpha AXP: trace return value of a function (for BSR_RETVAL from trace_arg)" | `AlphaCFGBuilder(data, sections, gp_value).trace_return_value(cfg, ret_reg=0)` → `List[ReturnTrace]`; one result per RET block; closes BSR_RETVAL from trace_arg |
 
 ---
 
