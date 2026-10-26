@@ -1,30 +1,30 @@
 """
-iot_firmware_unpacker.py — generic IoT firmware detection and extraction pipeline.
+iot_firmware_unpacker.py: generic IoT firmware detection and extraction pipeline.
 
 Why this exists:
 1. Every IoT vendor wraps their rootfs in a vendor-specific container before the
-   standard layers (uImage, squashfs, cramfs, ext2). Identifying and stripping the
-   outer wrapper was done manually for each target (VIVOTEK 49-byte pkg header,
-   Fortinet XOR-encrypted NAND image, Dahua .bin containers, etc.). This module
+   standard layers: uImage, squashfs, cramfs, ext2. Identifying and stripping the
+   outer wrapper was done manually for each target: VIVOTEK 49-byte pkg header,
+   Fortinet XOR-encrypted NAND image, Dahua .bin containers. This module
    automates format detection and extraction to a working rootfs directory.
 
 2. Encrypted firmware hit us immediately on the ND9541 NVR (.img with Salted__ magic).
    Early detection saves a full download + 4 extraction attempts.
 
 3. The goal is one call that returns a structured rootfs inventory ready for
-   BinaryContext and ShellSinkClassifier — replacing the manual dd/zcat/tar/mount chain.
+   BinaryContext and ShellSinkClassifier. It replaces the manual dd/zcat/tar/mount chain.
 
 Supported formats (outer wrappers):
   VIVOTEK .flash.pkg   49-byte vendor header + gzip tar
   uImage               64-byte U-Boot header (magic 0x27051956)
-  SquashFS             v3/v4 (little-endian: 'sqsh', big-endian: 'hsqs')
+  SquashFS             v3/v4. Little-endian magic: 'sqsh'. Big-endian magic: 'hsqs'.
   CramFS               little-endian: 0x28CD3D45, big-endian: 0x453DCD28
   JFFS2                LE/BE inode/dirent magic pairs
   ext2/3/4             0xEF53 superblock at +1080
   gzip                 1F 8B 08
   XZ                   FD 37 7A 58 5A 00
   GNU tar              'ustar' at offset 257
-  OpenSSL encrypted    'Salted__' (AES CBC PBKDF, passphrase needed)
+  OpenSSL encrypted    'Salted__'. AES CBC PBKDF. Passphrase required.
   ZIP                  PK 03 04
 
 Usage::
@@ -39,7 +39,7 @@ Usage::
         outdir='/tmp/vivotek_unpack/',
     )
     print(result.rootfs_path)    # /tmp/vivotek_unpack/rootfs/
-    print(result.inventory)      # [FirmwareFile(path, size, magic), ...]
+    print(result.inventory)      # list of FirmwareFile objects with path, size, magic
 
     # Encrypted image:
     info = IoTFirmwareUnpacker.probe('/path/to/ND9541.img')
@@ -116,7 +116,7 @@ class FirmwareInfo:
     notes: str = ''
 
     def __str__(self) -> str:
-        enc = " [ENCRYPTED — passphrase required]" if self.encrypted else ""
+        enc = " [ENCRYPTED: passphrase required]" if self.encrypted else ""
         return (
             f"FirmwareInfo: {Path(self.path).name}\n"
             f"  format      : {self.format}{enc}\n"
@@ -456,7 +456,7 @@ def _main() -> None:
         return
 
     if info.encrypted:
-        print("[BLOCKED] Encrypted image — provide passphrase / decryption key to proceed.")
+        print("[BLOCKED] Encrypted image. Provide passphrase or decryption key to proceed.")
         sys.exit(1)
 
     result = IoTFirmwareUnpacker.unpack(args.firmware, outdir=args.outdir)

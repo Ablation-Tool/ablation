@@ -10,7 +10,7 @@ Walk CGI directories in a firmware rootfs, classify every handler as shell or EL
 
 2. **ShellSinkClassifier needed a caller that scopes it to the right files.** Running ShellSinkClassifier across `/usr/bin` on a full rootfs would include every shell utility, not just CGI handlers. This module narrows the input to known CGI directory paths, then batches all shell scripts into a single ShellSinkClassifier call.
 
-3. **ELF handlers need queueing for binary RE.** CGI handlers that are ELF binaries (e.g., `camctrl.cgi`) are not analyzable by ShellSinkClassifier. This module surfaces them separately so the caller can immediately run `BinaryContext.load_or_build()` + `SinkArgClassifier` on them.
+3. **ELF handlers need queueing for binary RE.** CGI handlers that are ELF binaries such as `camctrl.cgi` are not analyzable by ShellSinkClassifier. This module surfaces them separately so the caller can immediately run `BinaryContext.load_or_build()` + `SinkArgClassifier` on them.
 
 ---
 
@@ -81,10 +81,10 @@ elf_paths = [h.abs_path for h in surface.elf_handlers]
 | Verdict | Priority | Meaning |
 |:---|:---|:---|
 | `ARG_PROPAGATED` | 0 | Attacker-controlled value in command position |
-| `EVAL_SINK` | 1 | eval with any argument — always manual review |
-| `UNKNOWN` | 2 | Unresolved provenance — conservative, treat as risky |
+| `EVAL_SINK` | 1 | eval with any argument. Always requires manual review. |
+| `UNKNOWN` | 2 | Unresolved provenance. Conservative. Treat as risky. |
 | `RODATA_CONST` | 3 | Only internal literal values reach the sink |
-| `[elf]` | 4 | ELF handler — needs BinaryContext + SinkArgClassifier |
+| `[elf]` | 4 | ELF handler. Needs BinaryContext + SinkArgClassifier. |
 | `RODATA_CONST` (no sinks) | 3 | No exec sinks found |
 
 ---
@@ -144,7 +144,7 @@ RODATA_CONST       unknown      211B  usr/share/www/cgi-bin/identify.cgi
 
 **`auth_hint='admin'` on non-auth paths:** The auth inference checks whether any directory component matches `{'admin', 'auth', 'secure', 'protected', 'private'}`. A path like `/usr/admin_tools/handler.sh` would match `admin` even if it isn't an auth-protected CGI handler. Treat `auth_hint` as a hint, not a guarantee.
 
-**Shell handlers with UNKNOWN verdict:** These are handlers where a variable in command position has no assignment anywhere in the script (set by an external caller or config). UNKNOWN is conservative — most are RODATA_CONST in practice. Read the script to confirm.
+**Shell handlers with UNKNOWN verdict:** These are handlers where a variable in command position has no assignment anywhere in the script. The variable was set by an external caller or config. UNKNOWN is conservative. Most are RODATA_CONST in practice. Read the script to confirm.
 
 ---
 

@@ -8,17 +8,17 @@ Why this exists:
    reading every line manually (2+ hours for a 2500-line handler like upload_vadp).
 
 2. SinkArgClassifier classifies exec sinks in ELF binaries. There was no equivalent
-   for shell scripts — a direct gap when the attack surface is shell.
+   for shell scripts. This was a direct gap when the attack surface is shell.
 
 3. Existing source_taint_tracker.py targets Python source. PerlTaintScanner targets
    Perl. Neither handles POSIX sh/bash syntax.
 
 Verdict classes (aligned with SinkArgClassifier):
-  RODATA_CONST      — all command tokens are literal strings; no injection possible
-  ARG_PROPAGATED    — command contains a variable with confirmed external provenance
-                      (positional params, CGI env, XML/config tool output, stdin)
-  UNKNOWN           — command contains a variable whose origin is not visible in-file
-  EVAL_SINK         — eval with any provenance; always requires manual review
+  RODATA_CONST      all command tokens are literal strings; no injection possible
+  ARG_PROPAGATED    command contains a variable with confirmed external provenance:
+                    positional params, CGI env, XML/config tool output, or stdin
+  UNKNOWN           command contains a variable whose origin is not visible in-file
+  EVAL_SINK         eval with any provenance; always requires manual review
 
 Exec-class sinks detected:
   1. Variable in command position: ``${VAR}/script`` or ``$VAR args``
@@ -67,7 +67,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 
 # ---------------------------------------------------------------------------
-# External input sources — command substitutions that return attacker data
+# External input sources: command substitutions that return attacker data
 # ---------------------------------------------------------------------------
 
 # Tool names whose output is treated as external/attacker-influenced input
@@ -343,7 +343,7 @@ class ShellSinkClassifier:
             if _RE_BLANK_OR_COMMENT.match(stripped):
                 continue
 
-            # read VAR — stdin input
+            # read VAR: stdin input
             m = re.match(r'^\s*read\s+(-[a-zA-Z]+\s+)*([A-Za-z_][A-Za-z0-9_]*)', stripped)
             if m:
                 varname = m.group(2)

@@ -76,7 +76,7 @@ else:
 |:---|:---|
 | `path` | Source file path |
 | `size` | File size in bytes |
-| `format` | Detected format string (e.g. `vivotek_pkg`, `openssl_aes`) |
+| `format` | Detected format string: `vivotek_pkg`, `openssl_aes`, `squashfs_le`, etc. |
 | `encrypted` | True if OpenSSL AES or other encryption detected |
 | `inner_offset` | Byte offset where the real payload starts |
 | `notes` | Human-readable notes (e.g. suggested decryption step) |
@@ -139,7 +139,7 @@ if result.rootfs_path:
 
 ## False positives
 
-**Partial gzip inside uImage misidentified as plain gzip:** If the uImage wraps a gzip-compressed squashfs, `probe()` sees the uImage magic at offset 0 and returns `uimage`, not `gzip`. This is correct — `unpack()` will strip the 64-byte header and then process the gzip payload.
+**Partial gzip inside uImage misidentified as plain gzip:** If the uImage wraps a gzip-compressed squashfs, `probe()` sees the uImage magic at offset 0 and returns `uimage`, not `gzip`. This is correct. `unpack()` will strip the 64-byte header and then process the gzip payload.
 
 **VIVOTEK header heuristic on other 49-byte-padded containers:** The VIVOTEK detection checks only that offset 49 has gzip magic. A non-VIVOTEK container that happens to have `\x1f\x8b` at byte 49 will be misclassified. If extraction fails, re-probe at different offsets manually.
 
@@ -157,7 +157,7 @@ if result.rootfs_path:
 
 | ID | Severity | Finding |
 |:---|:---|:---|
-| IFU-F1 | MEDIUM | `gzip.decompress()` is unbounded — decompression bomb risk on crafted firmware |
+| IFU-F1 | MEDIUM | `gzip.decompress()` is unbounded. A crafted firmware zip bomb can exhaust memory. |
 | IFU-F2 | LOW | `tarfile.extractall(filter='data')` path traversal guard requires Python 3.12+ |
 | IFU-F3 | LOW | Hardcoded 120s `unsquashfs` timeout; large images may exceed this |
 

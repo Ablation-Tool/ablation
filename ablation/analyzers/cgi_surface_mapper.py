@@ -1,10 +1,9 @@
 """
-cgi_surface_mapper.py — map and triage the HTTP CGI attack surface of an embedded Linux firmware rootfs.
+cgi_surface_mapper.py: map and triage the HTTP CGI attack surface of an embedded Linux firmware rootfs.
 
 Why this exists:
 1. IoT firmware ships 50-200 CGI handlers as the entire web attack surface. Manually
-   enumerating and classifying each handler (shell vs. ELF, authed vs. unauthed,
-   exec sinks present) takes hours. This module does it in one call.
+   enumerating and classifying each handler takes hours. This module does it in one call.
 
 2. Shell CGI handlers are the highest-value targets (VIVOTEK had 60+ shell CGIs;
    upload_vadp alone had VIVOTEK-001 CONFIRMED HIGH). ShellSinkClassifier can sweep
@@ -28,7 +27,7 @@ Usage::
     print(mapper.report(surface))
 
     # Get only handlers with confirmed injection risk:
-    risky = [h for h in surface if h.max_verdict in ('ARG_PROPAGATED', 'EVAL_SINK')]
+    risky = [h for h in surface.risky if h.max_verdict != 'UNKNOWN']
 
     # Get ELF CGI paths for binary RE:
     elf_targets = [h.abs_path for h in surface if h.handler_type == 'elf']
@@ -72,7 +71,7 @@ class CGIHandler:
     abs_path: str
     handler_type: str      # "shell" | "elf" | "symlink" | "unknown"
     size: int
-    auth_hint: str         # "admin" | "user" | "unknown" — based on directory name
+    auth_hint: str         # "admin" | "user" | "unknown": inferred from directory name
     max_verdict: str       # worst-case verdict from ShellSinkClassifier (shell only)
     sink_count: int = 0    # number of flagged sinks
     sinks: List[ShellSinkResult] = field(default_factory=list)
