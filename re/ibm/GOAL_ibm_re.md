@@ -115,9 +115,10 @@ BoMC IMM2 sessions 1–9:
 `firmware-7043-240/DOR97069.img`, `firmware-7248-43p/beta112.img`,
 `firmware-7020-40p/P12H0456.IMG`
 `re/ibm/pseries_fw_re.py`
-- binwalk sweep each for embedded ELFs, FFS volumes, compressed regions.
-  If ELF found: BinaryContext + exec-class sweep.
-  Otherwise: string scan for hardcoded credentials, URLs, debug ports.
+- [x] COMPLETE (session 14, 2026-10-25). FORGE PASS. PSERIES-FW-001 SAFE.
+- Format: IBM/Apple PPS Microcode flat binary (Open Firmware / CHRP, 1994-1996).
+- No ELFs, no successfully decompressed compressed payload, no network boot strings.
+- No credentials, IPs, or debug ports. TR97069+DOR97069 share level 12H0656.
 
 **11. collections/firmware/system-firmware/01VL930_139_040.img** (308MB POWER7)
 `re/ibm/power7_fw_re.py`
