@@ -142,15 +142,20 @@ BoMC IMM2 sessions 1–9:
 **13. dcconnect hardware 7526** (3 × 128KB, arch TBD)
 `7526b323.bin`, `7526b325.bin`, `7526b331.bin`
 `re/ibm/dcconnect_7526_re.py`
-- Arch detect: try 8051 (0x02 = LJMP), 68000 (0x4E71 = NOP),
-  x86 real-mode (0xFA = CLI). Once arch confirmed: basic exec sweep.
+- [x] COMPLETE (session 14, 2026-10-25). FORGE PASS. DCCONNECT-7526-001 SAFE.
+- Actually 4 BIN files (B3.23, B3.25, B3.31, B3.41); arch = x86 real-mode (FA=CLI at 0x32).
+- 50-byte ASCII version header + machine code. No hardcoded passwords or IPs.
+- "PASSWORD:" is config menu label; value in NVRAM, not binary.
 
 **14. dcconnect hardware 7527** (4 × 128KB, likely x86 real-mode)
 `7527v122.bin`, `pft0120d.bin`, `pft0121.bin`, `pft0121m.bin`
 `re/ibm/dcconnect_7527_re.py`
-- FA 06 50 B8 pattern at offset 0 = x86 CLI + prefix. Disassemble
-  as 16-bit x86. Compare variants with DTWMatcher. Sweep for
-  hardcoded credentials, network config.
+- [x] COMPLETE (session 14, 2026-10-25). FORGE PASS. DCCONNECT-7527-001 SAFE.
+- x86 real-mode (FA 06 50 = CLI PUSH ES PUSH AX at offset 0, no header).
+- IBM + PAR Microsystems joint product (POS/retail, V01.20d to V01.22, 1987-1996).
+- Password dialog strings ("Enter your current password:") are UI labels; values in NVRAM.
+- DTWMatcher not applied (no 16-bit x86 function start scanner in ablation).
+- 525 strings each; no hardcoded IPs; no security regression across versions.
 
 ---
 
