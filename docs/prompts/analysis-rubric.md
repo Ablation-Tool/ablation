@@ -4,6 +4,22 @@ Optional and experimental. May change or be removed.
 
 A collection of reusable, system-level instruction blocks ("rubrics") designed to control how an LLM thinks and works on a task.
 
+| Designation | Domain |
+|---|---|
+| ABL-RUB-RE-001 | Deep RE |
+| ABL-RUB-RE-002 | Patch diffing |
+| ABL-RUB-TR-001 | Multi-target triage |
+| ABL-RUB-RF-001 | Refactor planning |
+| ABL-RUB-SA-001 | Source audit |
+| ABL-RUB-PR-001 | Protocol reconstruction |
+| ABL-RUB-OB-001 | Obfuscation/packer analysis |
+| ABL-RUB-RG-001 | RAG system dissection |
+| ABL-RUB-BS-001 | Behavioral spec synthesis |
+| ABL-RUB-EC-001 | Edge case analysis |
+| ABL-RUB-LT-001 | Logging/telemetry design |
+| ABL-RUB-BR-001 | Blast radius analysis |
+| ABL-RUB-DC-001 | Data contract drift |
+| ABL-RUB-SC-001 | Supply-chain defense |
 
 ---
 
