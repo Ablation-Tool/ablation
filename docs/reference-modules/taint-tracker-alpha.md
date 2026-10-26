@@ -1,12 +1,12 @@
 # AlphaTaintTracker
 
 - [What is Alpha AXP?](#what-alpha-axp-is)
-  - [21064 — EV4 (1992)](#alpha-21064--ev4-1992)
-  - [21164 — EV5 / EV56 (1994–96)](#alpha-21164--ev5-1995-and-ev56-1996)
-  - [21264 — EV6 / EV67 / EV68 (1998–2001)](#alpha-21264--ev6-1998-ev67-1999-ev68-2001)
+  - [21064, EV4 (1992)](#alpha-21064-ev4-1992)
+  - [21164, EV5 / EV56 (1994–96)](#alpha-21164-ev5-1995-and-ev56-1996)
+  - [21264, EV6 / EV67 / EV68 (1998–2001)](#alpha-21264-ev6-1998-ev67-1999-ev68-2001)
   - [Disassembly quick-reference by generation](#summary-what-each-generation-means-when-you-see-a-binary)
   - [Binary formats: ECOFF vs ELF](#binary-formats-ecoff-vs-elf)
-- [Taint tracking vs. decompilation](#taint-tracking-vs-decompilation--what-each-one-does)
+- [Taint tracking vs. decompilation](#taint-tracking-vs-decompilation-what-each-one-does)
 - [Why this exists (gaps in the linear scanner)](#why-alphatainttracker-exists-gaps-in-the-linear-scanner)
 - [Module relationships](#module-relationships)
 - [ISA reference](#alpha-axp-architecture-background)
@@ -42,7 +42,7 @@ DEC was acquired by Compaq in 1998. Compaq was acquired by HP in 2002. HP EOL'd 
 
 ### Chip generations <sup>[↑](#alphatainttracker)</sup>
 
-#### Alpha 21064 — EV4 (1992) <sup>[↑](#alphatainttracker)</sup>
+#### Alpha 21064, EV4 (1992) <sup>[↑](#alphatainttracker)</sup>
 
 The first Alpha chip. DEC shipped it at 150–200 MHz in the DEC 3000 workstation and DEC 4000/7000/10000 server lines. Systems running it shipped with **OSF/1 1.x–3.x** (later renamed Tru64) and **OpenVMS 6.x**.
 
@@ -65,7 +65,7 @@ When you see ZAPNOT (zero bytes not) patterns interleaved with loads and stores,
 
 ---
 
-#### Alpha 21164 — EV5 (1995) and EV56 (1996) <sup>[↑](#alphatainttracker)</sup>
+#### Alpha 21164, EV5 (1995) and EV56 (1996) <sup>[↑](#alphatainttracker)</sup>
 
 DEC's second-generation Alpha. Shipped in the DEC AlphaServer 2000, 4000, and 8000 lines at 266–500 MHz. The primary platform for **Tru64 UNIX 4.x–5.x** and **OpenVMS 7.x**.
 
@@ -90,7 +90,7 @@ Code that runs on both 21064 and 21164+ checks `AMASK` at startup and branches t
 
 ---
 
-#### Alpha 21264 — EV6 (1998), EV67 (1999), EV68 (2001) <sup>[↑](#alphatainttracker)</sup>
+#### Alpha 21264, EV6 (1998), EV67 (1999), EV68 (2001) <sup>[↑](#alphatainttracker)</sup>
 
 Compaq's (ex-DEC) third-generation Alpha. Shipped in the AlphaServer ES40, DS20, and GS-series at 466–1000 MHz. The primary platform for **Tru64 UNIX 5.1** and **OpenVMS 7.3**. Also used in the Nintendo GameBoy Advance predecessor project (cancelled) and Cray supercomputer nodes.
 
@@ -138,7 +138,7 @@ Alpha binaries come in two formats:
 
 ---
 
-## Taint tracking vs. decompilation — what each one does <sup>[↑](#alphatainttracker)</sup>
+## Taint tracking vs. decompilation: what each one does <sup>[↑](#alphatainttracker)</sup>
 
 Ablation has two separate pipelines for Alpha AXP. They answer different questions.
 
@@ -362,7 +362,7 @@ class AlphaTaintFinding:
     func_name:    str                    # symbol name or 'sub_<va>'
     sink_va:      int                    # VA of the BSR instruction calling the sink
     sink_name:    str                    # 'system', 'execv', 'popen', etc.
-    tainted_args: List[str]              # e.g. ['r16', 'r17'] — the tainted argument regs
+    tainted_args: List[str]              # e.g. ['r16', 'r17'] - the tainted argument regs
     labels:       FrozenSet[TaintLabel]  # union of all taint labels on tainted_args
     severity:     str = 'HIGH'
 ```
@@ -401,7 +401,7 @@ state.set('r16', frozenset([TaintLabel('argv')]))
 state.taint('r16', TaintLabel('argv'))  # adds a label, preserving existing ones
 state.join(other)             # returns new merged state (union of labels per reg)
 state.equals(other)           # True if identical taint maps
-state.tainted_arg_regs()      # ['r16', 'r17', ...] — subset of r16–r21 that are tainted
+state.tainted_arg_regs()      # ['r16', 'r17', ...] - subset of r16-r21 that are tainted
 state.copy()                  # deep copy
 ```
 
