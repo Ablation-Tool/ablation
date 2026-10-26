@@ -1,40 +1,32 @@
 # AlphaTaintTracker
 
----
-
-**Alpha AXP chip variants**
-· [21064 — EV4 (1992)](#alpha-21064--ev4-1992)
-· [21164 — EV5 / EV56 (1994–96)](#alpha-21164--ev5-1995-and-ev56-1996)
-· [21264 — EV6 / EV67 / EV68 (1998–2001)](#alpha-21264--ev6-1998-ev67-1999-ev68-2001)
-· [Quick-read disassembly table](#summary-what-each-generation-means-when-you-see-a-binary)
-· [ECOFF vs ELF](#binary-formats-ecoff-vs-elf)
-
-**Tracker design**
-· [Taint tracking vs. decompilation](#taint-tracking-vs-decompilation--what-each-one-does)
-· [Why this exists (3 gaps in linear scan)](#why-alphatainttracker-exists-gaps-in-the-linear-scanner)
-· [Module relationships](#module-relationships)
-
-**ISA reference**
-· [Register file](#integer-register-file)
-· [Instruction encoding & opcodes](#instruction-encoding)
-· [BSR target encoding](#bsr-target-encoding)
-· [GP register (ECOFF / ELF)](#ecoff--elf-and-the-gp-register)
-
-**API**
-· [Constructor / `from_path()`](#constructor)
-· [`scan_function()`](#scan_functionfunc_va-init_taintnone-callee_resultsnone-max_insns4096)
-· [`run_interprocedural()`](#run_interprocedualdepth3-max_insns4096)
-· [`AlphaTaintFinding`](#alphataintfinding)
-· [`AlphaTaintState`](#alphataintstate)
-· [`TaintLabel`](#taintlabel)
-· [Transfer function table](#transfer-function)
-· [`AlphaCFGBuilder`](#alphacfgbuilder)
-· [`AlphaEcoffScanner`](#alphaecoffscanner)
-
-**Reference**
-· [Worked example](#worked-example)
-· [Limitations](#limitations)
-· [Comparison with linear-scan trackers](#comparison-with-existing-trackers)
+- [What is Alpha AXP?](#what-alpha-axp-is)
+  - [21064 — EV4 (1992)](#alpha-21064--ev4-1992)
+  - [21164 — EV5 / EV56 (1994–96)](#alpha-21164--ev5-1995-and-ev56-1996)
+  - [21264 — EV6 / EV67 / EV68 (1998–2001)](#alpha-21264--ev6-1998-ev67-1999-ev68-2001)
+  - [Disassembly quick-reference by generation](#summary-what-each-generation-means-when-you-see-a-binary)
+  - [Binary formats: ECOFF vs ELF](#binary-formats-ecoff-vs-elf)
+- [Taint tracking vs. decompilation](#taint-tracking-vs-decompilation--what-each-one-does)
+- [Why this exists (gaps in the linear scanner)](#why-alphatainttracker-exists-gaps-in-the-linear-scanner)
+- [Module relationships](#module-relationships)
+- [ISA reference](#alpha-axp-architecture-background)
+  - [Register file](#integer-register-file)
+  - [Instruction encoding & opcodes](#instruction-encoding)
+  - [BSR target encoding](#bsr-target-encoding)
+  - [GP register (ECOFF / ELF)](#ecoff--elf-and-the-gp-register)
+- [API reference](#constructor)
+  - [Constructor / `from_path()`](#constructor)
+  - [`scan_function()`](#scan_functionfunc_va-init_taintnone-callee_resultsnone-max_insns4096)
+  - [`run_interprocedural()`](#run_interprocedualdepth3-max_insns4096)
+  - [`AlphaTaintFinding`](#alphataintfinding)
+  - [`AlphaTaintState`](#alphataintstate)
+  - [`TaintLabel`](#taintlabel)
+  - [Transfer function table](#transfer-function)
+  - [`AlphaCFGBuilder`](#alphacfgbuilder)
+  - [`AlphaEcoffScanner`](#alphaecoffscanner)
+- [Worked example](#worked-example)
+- [Limitations](#limitations)
+- [Comparison with existing trackers](#comparison-with-existing-trackers)
 
 ---
 
