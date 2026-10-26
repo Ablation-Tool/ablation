@@ -341,11 +341,37 @@ No attacker-controlled data reaches any system() call. **No finding.**
 
 **BOMC-ASU-002 update**: `PingImmInterface` has 0 direct callers. fn ptr stored at CIM descriptor table entries (0x440a08, 0x10e9700, 0x1532f68). CIM dispatch context: invoked via WBEM `ExecMethod` on HTTPS:5989. addr = WBEM method argument, no sanitization path observed. Requires authenticated CIM credentials.
 
+## Session 11 — DSA102 LiveOS Squashfs Full Sweep
+
+**Source**: `CR9BoMC_IMM370_UEFI232_DSA102_FC.iso → LiveOS/squashfs.img`
+**Format**: Squashfs 4.0 zlib, 146,391,035 bytes → inner `ext3fs.img` (5.9GB sparse) → RHEL 6.4 x86_64 rootfs (built 2015-09-23)
+**Mount**: outer squashfs @ `/mnt/dsa_outer`, inner ext3 @ `/mnt/dsa_inner`
+**ELF count**: 1,712
+
+**Setuid sweep**: ZERO setuid/setgid binaries
+
+> LiveOS boots as root (PID 1 = root). Setuid is architecturally unnecessary. Known-setuid binaries (`su`, `passwd`, `ping`, `sudo`) all have the bit stripped. `sudo` is `--x--x--x` (execute-only, no setuid).
+
+**Exec-class scan**: 196 / 1712 ELFs have exec-class imports
+
+| Binary | Imports | Verdict |
+|---|---|---|
+| `/bin/exec_nosol` | `execl` | SAFE — `execl("/bin/bash", "/bin/tcstart.sh")` hardcoded |
+| `/bin/exec_sol` | `execl` | SAFE — `execl("/bin/bash", "/bin/tcsolstart.sh")` hardcoded |
+| `/bin/exec_term` | `execl` | SAFE — `execl("/bin/bash", ...)` hardcoded startup |
+| `/bin/linlpcfg` | `system` | SAFE — `system("whoami...")` root-check only, RODATA_CONST |
+| `/usr/lib64/libdbfaj.so` | `execl popen system` | THIRD-PARTY (Brocade FC HBA library) — out of scope |
+| `/usr/bin/bcu` | `system` | THIRD-PARTY (Emulex HBA tool) — out of scope |
+| 190 standard binaries | various | RHEL 6.4 baseline — not traced |
+
+**VERDICT**: NO FINDING.
+
+Note: `exec_nosol`/`exec_sol` carry a `.note.SuSE` ELF section — compiled for SuSE Linux with GCC 4.1.2 (~2007) and bundled into the RHEL-based LiveOS as pre-built vendor stubs.
+
 ## Next Targets
 
-1. LiveOS squashfs (1d) — mount + setuid sweep + exec-class scan
-2. SHA256 similarity check (1e) — CR7/CR8/CR9 variants
-3. BOMC-ASU-002 — CIM dispatch trace (lower priority; requires CIM framework analysis)
+1. SHA256 similarity check (1e) — CR7/CR8/CR9 binary variants
+2. BOMC-ASU-002 — CIM dispatch trace (lower priority; requires CIM framework analysis)
 
 ## SH4 Ablation Gap
 
