@@ -211,9 +211,9 @@ class SinkArgClassifierARM64:
 
     def _read_va(self, va: int, size: int) -> bytes:
         off = self._va_to_file_offset(va)
-        if off < 0 or off + size > len(self._data):
+        if off < 0 or off >= len(self._data):
             return b''
-        return self._data[off:off + size]
+        return self._data[off:off + size]  # Python slice clamps to buffer end
 
     def _read_u64_le(self, va: int) -> Optional[int]:
         raw = self._read_va(va, 8)
