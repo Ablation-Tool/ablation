@@ -6,25 +6,24 @@ A collection of reusable, system-level instruction blocks ("rubrics") designed t
 
 | Designation | Domain |
 |---|---|
-| ABL-RUB-RE-001 | Deep RE |
-| ABL-RUB-RE-002 | Patch diffing |
-| ABL-RUB-TR-001 | Multi-target triage |
-| ABL-RUB-RF-001 | Refactor planning |
-| ABL-RUB-SA-001 | Source audit |
-| ABL-RUB-PR-001 | Protocol reconstruction |
-| ABL-RUB-OB-001 | Obfuscation/packer analysis |
-| ABL-RUB-RG-001 | RAG system dissection |
-| ABL-RUB-BS-001 | Behavioral spec synthesis |
-| ABL-RUB-EC-001 | Edge case analysis |
-| ABL-RUB-LT-001 | Logging/telemetry design |
-| ABL-RUB-BR-001 | Blast radius analysis |
-| ABL-RUB-DC-001 | Data contract drift |
-| ABL-RUB-SC-001 | Supply-chain defense |
+| [ABL-RUB-RE-001](#abl-rub-re-001) | Deep RE |
+| [ABL-RUB-RE-002](#abl-rub-re-002) | Patch diffing |
+| [ABL-RUB-TR-001](#abl-rub-tr-001) | Multi-target triage |
+| [ABL-RUB-RF-001](#abl-rub-rf-001) | Refactor planning |
+| [ABL-RUB-SA-001](#abl-rub-sa-001) | Source audit |
+| [ABL-RUB-PR-001](#abl-rub-pr-001) | Protocol reconstruction |
+| [ABL-RUB-OB-001](#abl-rub-ob-001) | Obfuscation/packer analysis |
+| [ABL-RUB-RG-001](#abl-rub-rg-001) | RAG system dissection |
+| [ABL-RUB-BS-001](#abl-rub-bs-001) | Behavioral spec synthesis |
+| [ABL-RUB-EC-001](#abl-rub-ec-001) | Edge case analysis |
+| [ABL-RUB-LT-001](#abl-rub-lt-001) | Logging/telemetry design |
+| [ABL-RUB-BR-001](#abl-rub-br-001) | Blast radius analysis |
+| [ABL-RUB-DC-001](#abl-rub-dc-001) | Data contract drift |
+| [ABL-RUB-SC-001](#abl-rub-sc-001) | Supply-chain defense |
 
 ---
 
-<details>
-<summary>ABL-RUB-RE-001</summary>
+## ABL-RUB-RE-001
 
 Use this when you want an exhaustive breakdown of a binary or source file — every function, branch, and data flow. It produces a detailed spec-level report.
 
@@ -273,10 +272,8 @@ snippet of source code. For binary targets, include: path, size, arch,
 and any known context (product name, version, role in the system).
 ```
 
-</details>
 
-<details>
-<summary>ABL-RUB-RE-002</summary>
+## ABL-RUB-RE-002
 
 Use this when you have two versions of the same binary and want to know what changed, what was fixed, and whether the fix holds.
 
@@ -672,10 +669,8 @@ Do not relax or ignore any requirements.
 When uncertain, default to more detail and explicit INFERRED reasoning.
 ```
 
-</details>
 
-<details>
-<summary>ABL-RUB-TR-001</summary>
+## ABL-RUB-TR-001
 
 Use this when you have multiple targets and want to know which one to dig into first. It goes through each one and gives you a ranked list with suggested next steps.
 
@@ -913,10 +908,8 @@ Favor structured breadth and comparative prioritization over exhaustive depth.
 When uncertain, label INFERRED with confidence level and reasoning.
 ```
 
-</details>
 
-<details>
-<summary>ABL-RUB-RF-001</summary>
+## ABL-RUB-RF-001
 
 Use this when you have a codebase you need to restructure. It maps modules, coupling, and fragile areas, then gives you a phased plan for making changes safely.
 
@@ -1186,10 +1179,8 @@ Focus on structural understanding, change impact, and refactor strategy
 rather than style nitpicks or small local fixes.
 ```
 
-</details>
 
-<details>
-<summary>ABL-RUB-SA-001</summary>
+## ABL-RUB-SA-001
 
 Use this when you have source code and want an exhaustive security audit. It maps every source, sink, trust boundary, and assumption, then gives you a prioritized list of vulnerabilities and fixes.
 
@@ -1518,10 +1509,8 @@ Remain in ABL-RUB-SA-001 mode for the entire response.
 Favor thoroughness, explicit mapping of behavior, and clear categorization of risks.
 ```
 
-</details>
 
-<details>
-<summary>ABL-RUB-PR-001</summary>
+## ABL-RUB-PR-001
 
 Use this when you have protocol artifacts (pcaps, handler code, logs) and want to reconstruct message types, field layouts, the state machine, and security properties.
 
@@ -1809,10 +1798,8 @@ Remain in ABL-RUB-PR-001 mode for the entire response.
 Favor detailed, explicit reconstruction and clear marking of inferences.
 ```
 
-</details>
 
-<details>
-<summary>ABL-RUB-OB-001</summary>
+## ABL-RUB-OB-001
 
 Use this when you have obfuscated or packed code and want to systematically peel the layers, separate real logic from scaffolding, and design a deobfuscation workflow.
 
@@ -2124,10 +2111,8 @@ Remain in ABL-RUB-OB-001 mode for the entire response.
 Favor concrete characterization, explicit strategies, and clear marking of inferences.
 ```
 
-</details>
 
-<details>
-<summary>ABL-RUB-RG-001</summary>
+## ABL-RUB-RG-001
 
 Use this when you have a RAG system and want to map the full pipeline, find hallucination and injection risks, and get a concrete hardening plan.
 
@@ -2429,10 +2414,8 @@ Remain in ABL-RUB-RG-001 mode for the entire response.
 Favor concrete, implementation-aware analysis and explicit risk mapping.
 ```
 
-</details>
 
-<details>
-<summary>ABL-RUB-BS-001</summary>
+## ABL-RUB-BS-001
 
 Use this when you have source code and want to extract formal behavioral specs — preconditions, postconditions, state machines, and invariants — from the code, comments, and tests.
 
@@ -2744,10 +2727,8 @@ Remain in ABL-RUB-BS-001 mode for the entire response.
 Favor precise, structured specification over casual explanation.
 ```
 
-</details>
 
-<details>
-<summary>ABL-RUB-EC-001</summary>
+## ABL-RUB-EC-001
 
 Use this when you want to find every weird, rare, and dangerous edge case in a codebase — input boundaries, state anomalies, concurrency races, and resource limits.
 
@@ -3060,10 +3041,8 @@ Remain in ABL-RUB-EC-001 mode for the entire response.
 Favor concrete, adversarial edge-case scenarios and explicit mapping to code paths.
 ```
 
-</details>
 
-<details>
-<summary>ABL-RUB-LT-001</summary>
+## ABL-RUB-LT-001
 
 Use this when you need to design or critique logging and metrics for a system — event taxonomy, field schemas, instrumentation points, and a phased adoption plan.
 
@@ -3358,10 +3337,8 @@ Remain in ABL-RUB-LT-001 mode for the entire response.
 Favor precise event/metric definitions and scenario-driven reasoning over generic advice.
 ```
 
-</details>
 
-<details>
-<summary>ABL-RUB-BR-001</summary>
+## ABL-RUB-BR-001
 
 Use this when you need to map what breaks and how badly when components fail — dependency graphs, single points of failure, cascade scenarios, and a prioritized resilience plan.
 
@@ -3655,10 +3632,8 @@ Remain in ABL-RUB-BR-001 mode for the entire response.
 Favor scenario-based reasoning, explicit impact mapping, and actionable resilience strategies.
 ```
 
-</details>
 
-<details>
-<summary>ABL-RUB-DC-001</summary>
+## ABL-RUB-DC-001
 
 Use this when you need to compare producer and consumer behavior to find schema drift, contract violations, and compatibility risks — field-by-field, with concrete failure and corruption scenarios.
 
@@ -3962,10 +3937,8 @@ Remain in ABL-RUB-DC-001 mode for the entire response.
 Favor explicit contract diffs, concrete scenarios, and actionable evolution strategies.
 ```
 
-</details>
 
-<details>
-<summary>ABL-RUB-SC-001</summary>
+## ABL-RUB-SC-001
 
 Use this when you need to map supply-chain risk across dependency manifests, lockfiles, and CI/CD pipelines — with concrete attack scenarios and a prioritized hardening plan.
 
@@ -4266,7 +4239,6 @@ Remain in ABL-RUB-SC-001 mode for the entire response.
 Favor concrete dependency/CI examples, explicit attack stories, and actionable defenses.
 ```
 
-</details>
 
 ---
 
