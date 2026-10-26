@@ -312,6 +312,9 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Get final register values written during FPGA configuration" | `XilinxFrameDecoder.from_bitfile(bf).config_registers()` |
 | "Compare frame data between two FPGA firmware versions (word-level diff)" | `dec_a.frame_diff(dec_b)` |
 | "Extract raw frame bytes for version comparison (Spartan-6 / Spartan-3AN)" | `XilinxFrameDecoder.from_bitfile(bf).heuristic_frame_bytes()` |
+| "Extract text, register tables, and constants from a .docx ASIC specification" | `DocxReExtractor.from_path(path).register_tables()` |
+| "Get all tables from a .docx spec as structured row/cell data" | `DocxReExtractor.from_path(path).tables()` |
+| "Get full plain text from a .docx ASIC spec" | `DocxReExtractor.from_path(path).text()` |
 | "Extract VHDL/Verilog source from HDL Designer HTML exports (*.htm ContentFrame files)" | `HdlHtmlExtractor.from_directory(htm_dir).to_semantic()` |
 | "Get clean source text from an HDL Designer HTML export file" | `HdlHtmlExtractor.from_directory(htm_dir).text('module.vhd')` |
 | "Write clean .vhd/.v files from HDL Designer HTML export (for HDLVersionDiff input)" | `HdlHtmlExtractor.from_directory(htm_dir).write_vhd(output_dir)` |
