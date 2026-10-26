@@ -1,20 +1,34 @@
-# Binary Lifter
+# BinaryLifter
+
+- [Why this exists](#why-this-exists)
+- [How it works](#how-it-works)
+  - [Architecture support](#architecture-support)
+- [Usage](#usage)
+  - [With a BinaryContext](#with-a-binarycontext-recommended-avoids-re-parsing)
+  - [With taint annotations](#with-taint-annotations-from-arm64tainttracker)
+  - [Convenience one-liner](#convenience-one-liner)
+- [Example output](#example-output)
+- [False positives](#false-positives)
+- [Pipeline position](#pipeline-position)
+- [Reading findings](#reading-findings)
+- [See also](#see-also)
+- [Ppc476Lifter](#ppc476lifter-specialized-ibm-ppc476-be-lifter)
 
 Lift native binary functions to annotated C pseudocode across 18 ISA variants, from full typed register-tracking IR on ARM64/x86-64 to structural pseudocode on all other ablation-native decoders.
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#binarylifter)</sup>
 
-1. **Before BinaryLifter there was no single entry point that produced readable pseudocode for all 18 ISA variants in Ablation: each new engagement required hand-crafted Capstone loops and ad-hoc register tracking for MIPS, PPC, RISC-V, LoongArch64, ARC, V850, nanoMIPS, and SH-2A.** `BinaryLifter.from_pathbinary, arch='ppc32'.lift_function(va)` produces a structural skeleton for any of the 18 supported ISAs in a single call. The per-ISA state machines `_ARM64State`, `_MIPSState`, `_PPCState`, `_RISCVState`, etc. each seed register slots from their ABI calling convention so that argument and return registers have named `arg0`/`arg1` expressions without manual setup.
+1. No single entry point produced readable pseudocode for all 18 ISA variants. Each engagement required hand-crafted Capstone loops and ad-hoc register tracking for MIPS, PPC, RISC-V, LoongArch64, ARC, V850, nanoMIPS, and SH-2A. `BinaryLifter.from_path(binary, arch='ppc32').lift_function(va)` produces a structural skeleton for any supported ISA in a single call. Per-ISA state machines (`_ARM64State`, `_MIPSState`, `_PPCState`, `_RISCVState`, etc.) seed register slots from their ABI so argument and return registers have named `arg0`/`arg1` expressions without manual setup.
 
-2. **The CFG walk infrastructure was identical across ISAs: block-level BFS over `cfg_*.blocks`, but had never been connected to a shared IR emitter, forcing copy-paste per ISA.** `_walk_ablation_cfg` closes that gap: one BFS walker, per-ISA `_make_*_emit` closures, no duplication. Calls are emitted with resolved PLT symbol names, returns use the ABI return register, and branches emit `if /* cond */ goto label;`. Arithmetic instructions that are not yet modeled emit as `// mnemonic ops` rather than silently dropping information.
+2. The CFG walk infrastructure was identical across ISAs (block-level BFS over `cfg_*.blocks`) but had never been connected to a shared IR emitter, so each ISA had its own copy. `_walk_ablation_cfg` closes that gap: one BFS walker with per-ISA `_make_*_emit` closures. Calls emit with resolved PLT symbol names, returns use the ABI return register, and branches emit `if /* cond */ goto label;`. Unmodeled arithmetic emits as `// mnemonic ops` rather than silently dropping information.
 
-3. **`BeamContext` existed for Erlang/Elixir BEAM module analysis but required a separate invocation outside any consistent RE interface.** `BinaryLifter.from_pathbeam_file, arch='beam'.lift_function(0)` returns a module-level summary exports, dangerous imports, atom inventory through the same `lift_function` interface as native ISA lifting, allowing BEAM modules to appear in the same pipeline position as any other binary target.
+3. `BeamContext` existed for Erlang/Elixir BEAM module analysis but required a separate invocation outside any consistent RE interface. `BinaryLifter.from_path(beam_file, arch='beam').lift_function(0)` returns a module-level summary (exports, dangerous imports, atom inventory) through the same `lift_function` interface as any native ISA target.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#binarylifter)</sup>
 
 ```mermaid
 flowchart TD
@@ -88,7 +102,7 @@ flowchart TD
     linkStyle 29 stroke:#2e7d32,stroke-width:3px
 ```
 
-### Architecture support
+### Architecture support <sup>[↑](#binarylifter)</sup>
 
 | ISA | `arch=` strings | Completeness |
 |:---|:---|:---|
@@ -114,7 +128,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#binarylifter)</sup>
 
 ```python
 from ablation.analyzers.binary_lifter import BinaryLifter
@@ -123,7 +137,7 @@ from ablation.analyzers.binary_lifter import BinaryLifter
 lifter = BinaryLifter.from_path('/path/to/arm64.elf')
 print(lifter.lift_function(0x12340))
 
-# Structural backend — PPC32
+# Structural backend - PPC32
 lifter = BinaryLifter.from_path('/path/to/ppc32.elf', arch='ppc32')
 print(lifter.lift_function(0x10430))
 
@@ -140,7 +154,7 @@ lifter = BinaryLifter.from_path('/path/to/arc.elf', arch='arc')
 print(lifter.lift_function(0x1000))
 ```
 
-### With a BinaryContext recommended: avoids re-parsing
+### With a BinaryContext recommended: avoids re-parsing <sup>[↑](#binarylifter)</sup>
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
@@ -151,7 +165,7 @@ lifter = BinaryLifter.from_context(ctx)
 print(lifter.lift_function(0x12340))
 ```
 
-### With taint annotations from ARM64TaintTracker
+### With taint annotations from ARM64TaintTracker <sup>[↑](#binarylifter)</sup>
 
 ```python
 from ablation.analyzers.taint_tracker_arm64 import ARM64TaintTracker
@@ -163,7 +177,7 @@ print(lifter.lift_function(0x12340))
 # Tainted registers appear as /* TAINTED */ in output
 ```
 
-### Convenience one-liner
+### Convenience one-liner <sup>[↑](#binarylifter)</sup>
 
 ```python
 BinaryLifter.report('/path/to/binary', 0x12340, arch='mips32')
@@ -171,7 +185,7 @@ BinaryLifter.report('/path/to/binary', 0x12340, arch='mips32')
 
 ---
 
-## Example output
+## Example output <sup>[↑](#binarylifter)</sup>
 
 The following illustrates the output format for the three completeness tiers. Actual function names, virtual addresses, and IR expressions will reflect the specific binary.
 
@@ -220,7 +234,7 @@ The following illustrates the output format for the three completeness tiers. Ac
 
 ---
 
-## False positives
+## False positives <sup>[↑](#binarylifter)</sup>
 
 **Compiler-synthesized stubs appear as functions in some loaders.** PLT entries and thunks are short sequences that `BinaryContext` filters using known stub patterns, but custom thunks built from non-standard sequences may pass the filter. Validate any candidate VA against `ctx.func_starts` before investing in full lift output: a thunk will show only 1-3 instructions with a single tail-call.
 
@@ -230,7 +244,7 @@ The following illustrates the output format for the three completeness tiers. Ac
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#binarylifter)</sup>
 
 **Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution, PLT index, and confirmed function names via `ctx.set_name()`. For stripped binaries, run `SemanticSearcher.query()` first to identify candidate function VAs: lifting unrelated functions at arbitrary addresses wastes time on prologue/epilogue sequences.
 
@@ -238,7 +252,7 @@ The following illustrates the output format for the three completeness tiers. Ac
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#binarylifter)</sup>
 
 | Field | Content |
 |:---|:---|
@@ -251,7 +265,7 @@ The following illustrates the output format for the three completeness tiers. Ac
 
 ---
 
-## See also
+## See also <sup>[↑](#binarylifter)</sup>
 
 - [BinaryContext](binary-context.md): session state, function/import index, confirmed name overlay
 - [TaintAnalysis](taint-analysis.md): dataflow tracking; feed `findings` into `.with_taint()` for annotation
@@ -260,7 +274,7 @@ The following illustrates the output format for the three completeness tiers. Ac
 
 ---
 
-## Ppc476Lifter: specialized IBM PPC476 BE lifter
+## Ppc476Lifter: specialized IBM PPC476 BE lifter <sup>[↑](#binarylifter)</sup>
 
 **File:** `ablation/analyzers/ppc476_lifter.py`
 
