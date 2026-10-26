@@ -43,7 +43,7 @@ if ctx.names_count():
 
 See `docs/guide-tool-selection.md` for the full task→tool lookup table.
 
-**Ordering:** BinaryContext → SemanticSearcher (new binary/vuln class) → FuncProfiler (candidate) → **SinkArgClassifier** (eliminate RODATA_CONST first) → TaintTracker (ARG_PROPAGATED/UNKNOWN sinks only) → PathSolver (confirm feasibility). Manual capstone only when TaintTracker has no configured sink.
+**Ordering:** BinaryContext → SemanticSearcher (new binary/vuln class) → FuncProfiler (candidate) → **SinkArgClassifier** (eliminate RODATA_CONST first) → **NetworkSinkFinder** (networked binaries: filter SAC results to network-reachable sinks only; skip for local-only binaries) → TaintTracker (ARG_PROPAGATED/UNKNOWN sinks only) → PathSolver (confirm feasibility). Manual capstone only when TaintTracker has no configured sink.
 
 ---
 
@@ -64,7 +64,8 @@ See `docs/reference-modules/` for per-module constructor patterns and key method
 5. `PatternLibrary.sweep()`: replay confirmed patterns from prior engagements
 6. `FuncProfiler.profile()` on top candidates
 6.5. `SinkArgClassifier.from_context(ctx).classify_all()`: classify ALL shell sink call sites as RODATA_CONST / SNPRINTF_RODATA / ARG_PROPAGATED / UNKNOWN. Eliminate RODATA_CONST and parameterless SNPRINTF_RODATA before TaintTracker runs. Use `from_context(ctx)`, not `from_path()`: `from_path()` returns ~22 func_starts on stripped binaries.
-7. `TaintTracker` on ARG_PROPAGATED / UNKNOWN sinks only (not RODATA_CONST)
+6.6. `NetworkSinkFinder.from_context(ctx).find(depth=3)`: for any binary with network PLT imports, filter SAC results to network-reachable sinks only. Skip for local-only binaries (no recv/accept/read in PLT). Returns {} immediately if no network sources found.
+7. `TaintTracker` on ARG_PROPAGATED / UNKNOWN sinks from NetworkSinkFinder results only (not the full SAC set)
 8. `IPRegAnnotator` for cross-library call chains
 9. `WindowAnalyzer.dump_text()` for manual disasm only when automated tools don't have the sink
 
