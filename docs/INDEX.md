@@ -78,6 +78,7 @@ Analyze hardware description language source files: extract constants, compare v
 | [HdlHtmlExtractor](reference-modules/hdl-html-extractor.md) | Extract VHDL/Verilog from HDL Designer HTML exports (ContentFrame0.htm files) and feed into VerilogSemantic |
 | [LatexReExtractor](reference-modules/latex-re-extractor.md) | Extract sections, \\newcommand constants, tabular tables, inline numeric parameters, and labeled items from LaTeX ASIC/firmware specs |
 | [LpgbtDecoder](reference-modules/lpgbt-decoder.md) | Decode lpGBT e-link serial protocols: LCB 6B/8B downlink (L0A/BCR/CMD frames), STAR FLINK 4-bit uplink, HCC 8B/10B uplink |
+| [VersalPdi](reference-modules/versal-pdi.md) | Parse Xilinx Versal PDI firmware images: MetaHeader, IHT, image/partition headers, CDO section scanner, CDO command parser; pld and boot sub-formats; git hash extraction |
 | [VerilogSemantic](reference-modules/verilog-semantic.md) | Extract constants, signal widths, FSM states from a single Verilog/VHDL source tree |
 | [HDLVersionDiff](reference-modules/hdl-version-diff.md) | Compare two HDL source versions: added/removed/changed constants, signals, ports, FSM states |
 | [OneHotFSMExtractor](reference-modules/one-hot-fsm-extractor.md) | Extract state transition tables from one-hot `assign d_next[N] = ...` Verilog FSMs |

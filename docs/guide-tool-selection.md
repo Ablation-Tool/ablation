@@ -320,6 +320,14 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Extract tabular register-map tables from a LaTeX spec" | `LatexReExtractor.from_path(tex).tables()` |
 | "Navigate section hierarchy of a LaTeX spec" | `LatexReExtractor.from_path(tex).sections()` |
 | "Extract \\textbf{label}: description pairs from LaTeX itemize lists" | `LatexReExtractor.from_path(tex).labeled_items()` |
+| "Parse a Xilinx Versal PDI firmware image (pld or boot type)" | `VersalPdi.from_path(path).report()` |
+| "Determine PDI type (pld/boot) and extract sync word count" | `vp.result.pdi_type`, `vp.result.sync_word_count` |
+| "Extract git commit hash from a Versal PDI (works for both pld and boot)" | `VersalPdi.from_path(path).git_hash()` — recovers from image header OR XILPDI CDO command |
+| "List all CDO sections in a PDI and their command counts" | `VersalPdi.from_path(path).cdo_sections()` — each `CdoSection` has `.offset`, `.length_words`, `.commands` |
+| "Extract all NPI register writes from a PDI's CDO sections" | iterate `cdo.commands` filtering `cmd.npi_addr is not None` |
+| "Find all CFICDR/PL partitions (bitstream) in a PDI" | `[ph for ph in vp.partitions() if ph.is_pl]` |
+| "Batch-parse all .pdi files in a directory for build provenance" | `VersalPdi.scan_directory(dir, '*.pdi')` — each result has `.git_hash()` |
+| "Scan an arbitrary CDO blob for CDO sections (no MetaHeader)" | `VersalPdi.from_bytes(data).cdo_sections()` — scanner works even when pdi_type = 'unknown' |
 | "Decode LCB downlink byte buffer (L0A triggers, BCR, CMD frames)" | `LcbDecoder.decode_stream(data)` — returns `List[LcbFrame]` with frame_type, l0a_map, bcr, tag |
 | "Decode STAR FLINK 4-bit nibble uplink (PR/LP events with L0ID)" | `StarFlinkDecoder.decode_stream(nibbles)` — returns `List[StarFlinkEvent]` with l0id |
 | "Decode HCC 8B/10B uplink bit stream" | `decode_8b10b_stream(bits)` — returns `[(offset, byte, is_k)]` per codeword |
