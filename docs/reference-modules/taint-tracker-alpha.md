@@ -32,11 +32,11 @@
 
 ## What Alpha AXP is <sup>[↑](#alphatainttracker)</sup>
 
-**Alpha AXP** (also written Alpha or DEC Alpha) is a 64-bit RISC processor architecture designed by Digital Equipment Corporation (DEC) and released in 1992. It was DEC's attempt to replace their aging 32-bit VAX line with something fast enough to last twenty years. The architecture was pure 64-bit from day one — no 32-bit compatibility mode, no segmentation, no x87 float stack. Every instruction is 32 bits wide, every register is 64 bits wide, and the load/store model is strict (no memory-to-memory operations).
+**Alpha AXP** (also written Alpha or DEC Alpha) is a 64-bit RISC processor architecture designed by Digital Equipment Corporation (DEC) and released in 1992. It was DEC's attempt to replace their aging 32-bit VAX line with something fast enough to last twenty years. The architecture was pure 64-bit from day one: no 32-bit compatibility mode, no segmentation, no x87 float stack. Every instruction is 32 bits wide, every register is 64 bits wide, and the load/store model is strict (no memory-to-memory operations).
 
 Alpha was used in DEC workstations and servers running **Tru64 UNIX** (originally called OSF/1) and **OpenVMS**. IBM AIX and several other commercial UNIX systems ran on Alpha hardware. Later, Linux was ported to Alpha and saw production use into the 2000s.
 
-DEC was acquired by Compaq in 1998. Compaq was acquired by HP in 2002. HP EOL'd Alpha in 2007. The result is a large installed base of Alpha firmware, server software, and embedded code that is still running today — on real hardware in some cases, and far more commonly in emulated environments used to host legacy applications.
+DEC was acquired by Compaq in 1998. Compaq was acquired by HP in 2002. HP EOL'd Alpha in 2007. The result is a large installed base of Alpha firmware, server software, and embedded code still running today: sometimes on real hardware, more commonly in emulated environments hosting legacy applications.
 
 **Why Alpha binaries show up in RE work:** industrial control systems, telecoms infrastructure, financial backend systems, and military/government installations ran Tru64 or OpenVMS for decades and many never migrated off. When you're doing RE on legacy infrastructure or doing firmware analysis on hardware that predates ARM-everywhere, you encounter Alpha. It is also common in IBM research/academic code distributions and in archived OS source trees.
 
@@ -46,7 +46,7 @@ DEC was acquired by Compaq in 1998. Compaq was acquired by HP in 2002. HP EOL'd 
 
 The first Alpha chip. DEC shipped it at 150–200 MHz in the DEC 3000 workstation and DEC 4000/7000/10000 server lines. Systems running it shipped with **OSF/1 1.x–3.x** (later renamed Tru64) and **OpenVMS 6.x**.
 
-**Microarchitecture:** 2-issue in-order superscalar with two parallel pipelines — one integer/branch, one FP. No out-of-order execution, no speculative loads. 8 KB direct-mapped I-cache and 8 KB direct-mapped D-cache on-die. External Bcache (L2) ranged from 512 KB to 16 MB depending on the system board. The 21064A (EV45) variant bumped clocks to 275–300 MHz and doubled the on-chip caches.
+**Microarchitecture:** 2-issue in-order superscalar with two parallel pipelines: one integer/branch, one FP. No out-of-order execution, no speculative loads. 8 KB direct-mapped I-cache and 8 KB direct-mapped D-cache on-die. External Bcache (L2) ranged from 512 KB to 16 MB depending on the system board. The 21064A (EV45) variant bumped clocks to 275–300 MHz and doubled the on-chip caches.
 
 **No byte or word memory operations.** This is the most important RE detail for 21064. The architecture defined only 32-bit (`LDL`/`STL`) and 64-bit (`LDQ`/`STQ`) memory operations. There is no `LDBU` (load byte unsigned), no `LDWU` (load word unsigned), no `STB`, no `STW`. This was a deliberate simplification that DEC later had to reverse.
 
@@ -59,7 +59,7 @@ STQ  r1, 0(r17)       ; store 8 bytes at once
 ADDQ r16, 8, r16      ; advance source pointer
 ```
 
-When you see ZAPNOT (zero bytes not) patterns interleaved with loads and stores, you're looking at byte-level operations emulated on a 21064 binary. The taint tracker treats ZAPNOT as an integer op (opcode 0x12), so taint propagates through it correctly — but it means the disassembly is more verbose than equivalent code on later chips.
+When you see ZAPNOT (zero bytes not) patterns interleaved with loads and stores, you're looking at byte-level operations emulated on a 21064 binary. The taint tracker treats ZAPNOT as an integer op (opcode 0x12), so taint propagates through it correctly. The disassembly is more verbose than equivalent code on later chips.
 
 **No ISA extension detection.** The `AMASK` and `IMPLVER` instructions added in 21164 don't exist on 21064. Binaries compiled strictly for 21064 never check for extensions at runtime.
 
@@ -69,24 +69,24 @@ When you see ZAPNOT (zero bytes not) patterns interleaved with loads and stores,
 
 DEC's second-generation Alpha. Shipped in the DEC AlphaServer 2000, 4000, and 8000 lines at 266–500 MHz. The primary platform for **Tru64 UNIX 4.x–5.x** and **OpenVMS 7.x**.
 
-**Microarchitecture:** 4-issue in-order superscalar with four parallel execution pipelines (2 integer, 1 FP, 1 load/store). Still in-order, so instruction scheduling by the compiler matters enormously. Added **96 KB of on-chip L2 cache** (the "Bcache"), which made a large real-world performance difference — the 21064 depended heavily on external SRAM L2, which had far higher latency. The 21164 also introduced a dedicated third cache level: an optional external L3 that could be up to 64 MB.
+**Microarchitecture:** 4-issue in-order superscalar with four parallel execution pipelines (2 integer, 1 FP, 1 load/store). Still in-order, so instruction scheduling by the compiler matters enormously. Added **96 KB of on-chip L2 cache** (the "Bcache"), which made a large real-world performance difference. The 21064 depended on external SRAM L2 at far higher latency. The 21164 also introduced a dedicated third cache level: an optional external L3 that could be up to 64 MB.
 
 **The AMASK / IMPLVER extension model.** DEC added runtime ISA extension detection to the architecture starting with 21164. Two new instructions:
 
-- `IMPLVER` — writes the implementation version into a register. Returns 1 for 21164, 2 for 21264.
-- `AMASK mask, result` — clears bits in `mask` that correspond to **supported** extensions. If a bit is cleared in the result, that extension is present. A bit left set means absent.
+- `IMPLVER`: writes the implementation version into a register. Returns 1 for 21164, 2 for 21264.
+- `AMASK mask, result`: clears bits in `mask` that correspond to **supported** extensions. If a bit is cleared in the result, that extension is present. A bit left set means absent.
 
 The extension bits are:
-- Bit 0: **BWX** — byte and word memory extensions
-- Bit 1: **FIX** — square root and FP convert instructions
-- Bit 2: **CIX** — count extension (leading zeros, popcount)
-- Bit 8: **MVI** — motion video instructions (multimedia SIMD)
+- Bit 0: **BWX**: byte and word memory extensions
+- Bit 1: **FIX**: square root and FP convert instructions
+- Bit 2: **CIX**: count extension (leading zeros, popcount)
+- Bit 8: **MVI**: motion video instructions (multimedia SIMD)
 
 Code that runs on both 21064 and 21164+ checks `AMASK` at startup and branches to a byte-loop fallback vs. a BWX fast path. When you see `AMASK` / `BEQ` / `IMPLVER` in a binary, you're looking at a multi-path implementation with a chip detection branch.
 
 **The EV56 sub-variant** (1996) is the binary-analysis-critical one. EV56 is a die shrink of EV5 that adds **BWX** as a standard feature. The `LDBU`/`LDWU`/`STB`/`STW` opcodes work correctly on EV56 but trap (illegal instruction fault) on plain EV5. Tru64 5.x shipped binaries in two forms: "generic" (21164 baseline, avoids BWX) and "tuned" (EV56+, uses BWX freely). When you're analysing a Tru64 binary and see LDBU/STB without a preceding AMASK guard, you're on an EV56-targeted binary.
 
-**RE implication:** EV56 binaries doing string operations look like normal modern code. EV5 (non-EV56) binaries look like 21064 binaries — mask/shift sequences everywhere for byte ops.
+**RE implication:** EV56 binaries doing string operations look like normal modern code. EV5 (non-EV56) binaries look like 21064 binaries: mask/shift sequences everywhere for byte ops.
 
 ---
 
@@ -96,7 +96,7 @@ Compaq's (ex-DEC) third-generation Alpha. Shipped in the AlphaServer ES40, DS20,
 
 **Microarchitecture:** The first Alpha with **out-of-order execution**. 4-issue OoO with a 20-entry integer and 15-entry FP reorder buffer. Two integer clusters, each capable of two operations per cycle. Register renaming with 41 physical integer registers (31 architectural + 10 rename). 64 KB I-cache and 64 KB D-cache on-chip (up from 21164's 8+8 KB). External L2 of 2–16 MB.
 
-From a static analysis perspective, out-of-order execution is invisible — the compiler still emits sequential instructions and the hardware reorders them transparently. The disassembly looks the same as EV5. What changed is that the compiler could now issue more aggressive instruction sequences without worrying about pipeline interlocks (the hardware resolves them).
+From a static analysis perspective, out-of-order execution is invisible: the compiler still emits sequential instructions and the hardware reorders them transparently. The disassembly looks the same as EV5. What changed is that the compiler could now issue more aggressive instruction sequences without worrying about pipeline interlocks (the hardware resolves them).
 
 **BWX is baseline on EV6.** Unlike EV56 where BWX was an extension, EV6 made it mandatory. All EV6+ binaries use byte/word memory operations freely. You will not see ZAPNOT/mask sequences for byte operations in EV6-targeted binaries.
 
@@ -104,10 +104,10 @@ From a static analysis perspective, out-of-order execution is invisible — the 
 
 *EV6 (21264 base):* Adds BWX as mandatory, MVI (motion video) as optional.
 
-*EV67 (21264A, 1999):* Adds **CIX** — the count extension. Three new instructions:
-- `CTLZ` — count leading zeros
-- `CTTZ` — count trailing zeros  
-- `CTPOP` — population count (number of set bits)
+*EV67 (21264A, 1999):* Adds **CIX**, the count extension. Three new instructions:
+- `CTLZ`: count leading zeros
+- `CTTZ`: count trailing zeros
+- `CTPOP`: population count (number of set bits)
 
 When you see `CTPOP` or `CTLZ` in a binary, you have an EV67+ target. These appear in cryptographic code (popcount for Hamming weight), network packet classifiers, and anywhere that bitfield operations would otherwise need a loop.
 
@@ -121,18 +121,18 @@ When you see `CTPOP` or `CTLZ` in a binary, you have an EV67+ target. These appe
 
 | You see this in the disassembly | What it tells you |
 |:--|:--|
-| ZAPNOT / SRL / SLL / BIS patterns around LDQ/STQ | Byte-level operations on a 21064 target — no BWX |
-| LDBU / LDWU / STB / STW without preceding AMASK | EV56 or EV6+ target — BWX always present |
+| ZAPNOT / SRL / SLL / BIS patterns around LDQ/STQ | Byte-level operations on a 21064 target (no BWX) |
+| LDBU / LDWU / STB / STW without preceding AMASK | EV56 or EV6+ target (BWX always present) |
 | AMASK → BEQ dispatch before string code | Multi-path binary: 21164 generic target with runtime BWX check |
-| IMPLVER result used in conditional branch | Runtime chip detection — binary runs on multiple Alpha generations |
+| IMPLVER result used in conditional branch | Runtime chip detection: binary runs on multiple Alpha generations |
 | CTPOP / CTLZ / CTTZ | EV67+ target (21264A or later) |
-| None of the above, strict LDQ/STQ only | 21064 strict target — oldest and most restrictive |
+| None of the above, strict LDQ/STQ only | 21064 strict target, oldest and most restrictive |
 
 ### Binary formats: ECOFF vs ELF <sup>[↑](#alphatainttracker)</sup>
 
 Alpha binaries come in two formats:
 
-**ECOFF** (Extended COFF) is the native Tru64/OSF/1 format. It stores the **GP (global pointer) value** in the optional header — a literal integer that tells the dynamic linker what value to load into r29 before calling any function. Every `LDQ Ra, disp(gp)` instruction is a GOT dereference: `Ra ← *GOT[gp + disp]`. Without the correct GP value you cannot resolve what string a `system()` argument points to. `AlphaEcoffScanner._load()` reads GP from the ECOFF header automatically.
+**ECOFF** (Extended COFF) is the native Tru64/OSF/1 format. It stores the **GP (global pointer) value** in the optional header: a literal integer that tells the dynamic linker what value to load into r29 before calling any function. Every `LDQ Ra, disp(gp)` instruction is a GOT dereference: `Ra ← *GOT[gp + disp]`. Without the correct GP value you cannot resolve what string a `system()` argument points to. `AlphaEcoffScanner._load()` reads GP from the ECOFF header automatically.
 
 **ELF** is used for Linux Alpha and cross-compiled targets. GP is not stored in the header; it must be recovered from the `.got` section or from `_gp` symbol. The tracker falls back to heuristic GP recovery for ELF (see Limitations).
 
@@ -144,7 +144,7 @@ Ablation has two separate pipelines for Alpha AXP. They answer different questio
 
 **The decompiler pipeline** (`AlphaIRLifter` → `SSABuilder` → `PseudoCEmitter`) answers: *what does this function compute?* It lifts raw Alpha instructions to an architecture-neutral IR, builds SSA form, recovers struct field access patterns, and emits pseudo-C. Use it when you need to understand a function's logic.
 
-**The taint tracker** (`AlphaTaintTracker`) answers: *does attacker-controlled data reach a dangerous function call?* It does not try to understand what the code computes — it only asks whether a register holding user-controlled data is passed as the first argument to `system()`, `execv()`, `popen()`, or similar exec-class sinks. This is the vulnerability scanner path.
+**The taint tracker** (`AlphaTaintTracker`) answers: *does attacker-controlled data reach a dangerous function call?* It does not try to understand what the code computes. It only asks whether a register holding user-controlled data is passed as the first argument to `system()`, `execv()`, `popen()`, or similar exec-class sinks. This is the vulnerability scanner path.
 
 The two pipelines are independent but complementary. A typical workflow:
 
@@ -158,13 +158,13 @@ The two pipelines are independent but complementary. A typical workflow:
 
 Steps 1–2 classify the easy cases (hardcoded strings, GP-relative constants). Steps 3–4 handle the hard cases (values assembled across multiple basic blocks or passed through wrappers). Step 5 is confirmation and write-up.
 
-**Taint** means: this register may contain a value that an attacker can influence. The tracker seeds entry registers as tainted (all of r16–r21 = the six argument registers) and forwards that label through the function. If a tainted register is passed to `system()`, that is a finding. The label doesn't say what the attacker can do — only that the data came from an attacker-influenced source. Whether it's actually exploitable requires the manual step (step 5).
+**Taint** means: this register may contain a value that an attacker can influence. The tracker seeds entry registers as tainted (all of r16–r21 = the six argument registers) and forwards that label through the function. If a tainted register is passed to `system()`, that is a finding. The label does not say what the attacker can do. It only identifies the data source as attacker-influenced. Whether it is exploitable requires the manual step (step 5).
 
 ---
 
 ## Why AlphaTaintTracker exists (gaps in the linear scanner) <sup>[↑](#alphatainttracker)</sup>
 
-The existing `taint_tracker_*.py` family — and `AlphaEcoffScanner.trace_arg()` — does **linear backward scans within a single basic-block window**. That is fast and sufficient for the common case (a string constant loaded two instructions before the call). Three concrete gaps motivated a CFG-aware replacement:
+The existing `taint_tracker_*.py` family and `AlphaEcoffScanner.trace_arg()` both do **linear backward scans within a single basic-block window**. That is fast and sufficient for the common case (a string constant loaded two instructions before the call). Three concrete gaps motivated a CFG-aware replacement:
 
 1. **No cross-block propagation.** Taint does not follow edges across basic block boundaries. A value set in block A that flows to block B via a conditional branch is invisible to block B's analysis.
 
@@ -175,7 +175,7 @@ The existing `taint_tracker_*.py` family — and `AlphaEcoffScanner.trace_arg()`
 `AlphaTaintTracker` fixes all three by using **forward CFG-fixpoint propagation** built on `AlphaCFGBuilder`:
 
 - `AlphaTaintState` is threaded forward along CFG edges via a worklist algorithm.
-- At merge points (join nodes), incoming states from all predecessors are **unioned** — any predecessor that taints a register taints the merged result (conservative/sound).
+- At merge points (join nodes), incoming states from all predecessors are **unioned**: any predecessor that taints a register taints the merged result (conservative/sound).
 - BSR results are modelled: if a callee itself reaches a sink with tainted args, its return value (r0) is conservatively tainted in subsequent scans.
 
 ---
@@ -195,9 +195,9 @@ Understanding the tracker requires knowing the Alpha register file and calling c
 | r16–r21 | a0–a5 | Function arguments (caller-save) |
 | r22–r25 | t8–t11 | More caller-save temporaries |
 | r26 | ra | Return address (written by BSR) |
-| r27 | pv / t12 | Procedure value — used for position-independent code; clobbered by calls |
+| r27 | pv / t12 | Procedure value: used for position-independent code; clobbered by calls |
 | r28 | at | Assembler temporary (caller-save) |
-| r29 | gp | Global pointer — base for all GP-relative loads (GOT accesses) |
+| r29 | gp | Global pointer: base for all GP-relative loads (GOT accesses) |
 | r30 | sp | Stack pointer |
 | r31 | zero | Hardwired zero |
 
@@ -230,7 +230,7 @@ Key opcodes for taint analysis:
 | 0x2C | STL | Store 32-bit longword. No register is written. |
 | 0x2D | STQ | Store 64-bit quadword. No register is written. |
 | 0x10–0x17 | INTA/INTL/INTS/INTM | Integer arithmetic (ADD, SUB, MUL, logical, shift). rc = f(ra, rb_or_lit). |
-| 0x11, fn=0x20 | BIS | Bitwise OR — the `MOV Ra, Rb` pseudo-op is `BIS Ra, $31, Rc`. |
+| 0x11, fn=0x20 | BIS | Bitwise OR. The `MOV Ra, Rb` pseudo-op is `BIS Ra, $31, Rc`. |
 | 0x30 | BR | Unconditional branch. Ra (usually r31) written with next-PC for computed gotos. |
 | 0x34 | BSR | Branch and store return: Ra ← PC+4; branches to disp21 target. The **call** instruction. |
 | 0x1A, hint=0 | JMP | Indirect jump. |
@@ -255,7 +255,7 @@ Tru64 / OSF/1 binaries are **ECOFF** (alpha-specific). ELF binaries exist for Li
 - **ECOFF**: GP value is stored in the ECOFF optional header (`aouthdr.gp_value`). `AlphaEcoffScanner._load()` extracts it from the header and passes it to the tracker. All `LDQ Ra, disp(gp)` instructions are GOT-relative accesses: `*GOT[gp + disp]`.
 - **ELF**: GP points to the `.got` section base. Parser falls back to heuristic if no `.got` is found.
 
-Without a correct GP value, `LDA/LDAH/LDQ` address resolution fails silently — strings appear as raw VAs rather than resolved values.
+Without a correct GP value, `LDA/LDAH/LDQ` address resolution fails silently: strings appear as raw VAs rather than resolved values.
 
 ---
 
@@ -295,7 +295,7 @@ AlphaTaintTracker(
 tracker = AlphaTaintTracker.from_path('/path/to/binary')
 ```
 
-`from_path()` calls `AlphaEcoffScanner._load()` to get `(data, gp_value, sections)` and `_sym_table()` for symbol names. If the file is not valid ECOFF/ELF, it falls back to raw bytes with `base=0` and an empty symbol table — sink detection by name will not work in that mode.
+`from_path()` calls `AlphaEcoffScanner._load()` to get `(data, gp_value, sections)` and `_sym_table()` for symbol names. If the file is not valid ECOFF/ELF, it falls back to raw bytes with `base=0` and an empty symbol table. Sink detection by name will not work in that mode.
 
 ---
 
@@ -306,7 +306,7 @@ Scans a single function for exec-class sink calls with tainted arguments.
 **Algorithm:**
 
 1. Calls `AlphaCFGBuilder.build(func_va, max_insns)` to recover the function's basic-block CFG.
-2. Seeds the entry block's state with `init_taint`. Default: r16–r21 all tainted with `TaintLabel('arg_N')` — conservative for library functions where all arguments are suspect.
+2. Seeds the entry block's state with `init_taint`. Default: r16–r21 all tainted with `TaintLabel('arg_N')`, conservative for library functions where all arguments are suspect.
 3. Runs **worklist fixpoint**:
    - Dequeues a block VA; copies its entry state.
    - Runs `_transfer(va, insn, state, callee_results)` over every instruction in the block.
@@ -318,7 +318,7 @@ Scans a single function for exec-class sink calls with tainted arguments.
 
 | Parameter | Default | Meaning |
 |:--|:--|:--|
-| `init_taint` | r16–r21 each tainted with `arg_N` | Entry register state. Override when you know which args are clean. |
+| `init_taint` | r16–r21 each tainted with `arg_N` | Entry register state. Conservative for library functions where all arguments are suspect. Override when you know which args are clean. |
 | `callee_results` | `{}` | Map from callee VA → taint labels for its return value (r0). Built by `run_interprocedural()`. |
 | `max_insns` | 4096 | Instruction limit passed to `AlphaCFGBuilder.build()`. Prevents infinite loops on pathological functions. |
 
@@ -433,12 +433,12 @@ findings = tracker.scan_function(func_va, init_taint=init)
 
 ## Transfer function <sup>[↑](#alphatainttracker)</sup>
 
-`_transfer(insn_va, word, state, callee_results)` updates `state` in-place for one instruction. The table covers every Alpha opcode the tracker handles explicitly; all others default to **CLEAN write to Ra** (conservative — treats the result as untainted).
+`_transfer(insn_va, word, state, callee_results)` updates `state` in-place for one instruction. The table covers every Alpha opcode the tracker handles explicitly; all others default to **CLEAN write to Ra** (conservative: treats the result as untainted).
 
 | Opcode | Instruction | Taint effect |
 |:--|:--|:--|
-| 0x08 | `LDA Ra, d(Rb)` | Ra ← **CLEAN** — constant or address arithmetic. If you need to track the resulting address itself, taint at the load that dereferences it. |
-| 0x09 | `LDAH Ra, d(Rb)` | Ra ← **CLEAN** — same rationale. |
+| 0x08 | `LDA Ra, d(Rb)` | Ra ← **CLEAN**: constant or address arithmetic. If you need to track the resulting address itself, taint at the load that dereferences it. |
+| 0x09 | `LDAH Ra, d(Rb)` | Ra ← **CLEAN**: same rationale. |
 | 0x28 | `LDL Ra, d(Rb)` | Ra ← **labels(Rb)**. Memory is not modelled; taint propagates from the address register. |
 | 0x29 | `LDQ Ra, d(Rb)` | Ra ← **labels(Rb)**. Same. |
 | 0x2C | `STL Ra, d(Rb)` | **No register written.** Store is a side effect; taint is not propagated to a memory model. |
@@ -454,7 +454,7 @@ findings = tracker.scan_function(func_va, init_taint=init)
 **What memory taint means here:** The tracker does not maintain a per-address memory map. When a load (`LDQ Ra, d(Rb)`) fires, the taint on `Ra` comes from `Rb` (the *address register*), not from whatever value was stored at that address. This means:
 
 - A pointer to tainted data: `LDQ Ra, 0(Rb)` where Rb is tainted → Ra is tainted. ✓
-- A clean pointer into a tainted buffer: `LDQ Ra, 0(Rb)` where Rb is clean → Ra is clean, even if the buffer contains user-controlled data. This is a **known limitation** — see below.
+- A clean pointer into a tainted buffer: `LDQ Ra, 0(Rb)` where Rb is clean → Ra is clean, even if the buffer contains user-controlled data. This is a **known limitation**; see Limitations.
 
 ---
 
@@ -466,10 +466,10 @@ findings = tracker.scan_function(func_va, init_taint=init)
 
 Builds the CFG via a recursive-descent worklist starting at `func_va`. Each time it encounters a branch:
 
-- **Conditional branch (BEQ/BNE/etc.)**: two successors — fall-through and taken target.
-- **BR**: one successor — the branch target. Ra is marked CLEAN.
+- **Conditional branch (BEQ/BNE/etc.)**: two successors: fall-through and taken target.
+- **BR**: one successor: the branch target. Ra is marked CLEAN.
 - **BSR**: does **not** create a CFG edge; treated as a sequential instruction (call-and-continue). The callee is NOT inlined.
-- **JMP/JSR** (hint 0/1): indirect — block exits with `is_jmp=True`, no successors recorded.
+- **JMP/JSR** (hint 0/1): indirect; block exits with `is_jmp=True`, no successors recorded.
 - **RET** (hint 2): block exits with `is_ret=True`, no successors.
 
 Returns a `CFG` with `blocks: Dict[int, BasicBlock]` and `entry: int`.
@@ -497,7 +497,7 @@ For each `is_ret` block in `cfg`, scans backward through the block's last `windo
 | insn_type | Meaning |
 |:--|:--|
 | `LDA_CONST` | r0 is a small integer constant (e.g. error code). |
-| `LDA_GP` | r0 is an address computed as `gp + disp` — usually a `.rodata` string pointer. `.interp` field contains the resolved string. |
+| `LDA_GP` | r0 is an address computed as `gp + disp`: usually a `.rodata` string pointer. `.interp` field contains the resolved string. |
 | `LDAH_GP` | Same but using `LDAH` (16-bit shifted displacement). |
 | `LDQ_GP` | r0 is loaded from GOT: `*GOT[gp + disp]`. `.value` is the GOT-slot value at load time. |
 | `BIS_MOV` | r0 ← another register (MOV pseudo-op). One level of register aliasing is resolved. |
@@ -567,7 +567,7 @@ print(f'{len(all_findings)} findings across binary')
 
 4. **No floating-point registers.** Alpha has a separate FP register file (f0–f31). Exec-class sinks use integer registers only, so this is rarely a gap in practice.
 
-5. **Stripped binaries fall back to heuristic function discovery.** `_heuristic_func_list()` only finds BSR targets, not all functions — prologue patterns are not used. Some functions will be missed.
+5. **Stripped binaries fall back to heuristic function discovery.** `_heuristic_func_list()` only finds BSR targets, not all functions; prologue patterns are not used. Some functions will be missed.
 
 6. **ECOFF only for `from_path()`.** The ELF fallback in `from_path()` does not attempt to resolve GP from `.dynamic` or `.got`. GP will be `None`, making all GP-relative address resolutions fail.
 
@@ -577,13 +577,13 @@ print(f'{len(all_findings)} findings across binary')
 
 | Property | `trace_arg()` (linear backward) | `AlphaTaintTracker` (CFG fixpoint) |
 |:--|:--|:--|
-| Crosses basic block boundaries | No — single-block window | Yes — worklist over entire CFG |
-| Join at merge points | No — no phi merging | Yes — state union at each join node |
+| Crosses basic block boundaries | No (single-block window) | Yes (worklist over entire CFG) |
+| Join at merge points | No (no phi merging) | Yes (state union at each join node) |
 | Callee return-value taint | Stops at `BSR_RETVAL` | Modelled via `callee_results` dict |
 | Interprocedural depth | 0 (no cross-function) | Up to `depth` (default 3) iterations |
 | Memory taint | No | No |
 | Speed | ~1 ms per call site | 5–50 ms per function |
 | False negatives | Higher (misses cross-block paths) | Lower (conservative union at joins) |
-| False positives | Lower (narrower scope) | Higher (conservative — any tainted predecessor taints join) |
+| False positives | Lower (narrower scope) | Higher: any tainted predecessor taints the join |
 
 **Workflow:** use `AlphaEcoffScanner.scan()` + `trace_arg()` for initial call-site discovery and quick RODATA_CONST classification. Escalate to `AlphaTaintTracker.scan_function()` only for findings where `trace_arg()` returns `BSR_RETVAL` or `UNKNOWN` and the function is non-trivial (multiple blocks).
