@@ -101,6 +101,9 @@ _VH_ENUM_RE = re.compile(
     re.MULTILINE | re.IGNORECASE
 )
 
+# std_logic (single-bit) — bare type with no width spec
+_VH_STD_LOGIC_RE = re.compile(r'\bstd_logic\s*$', re.IGNORECASE)
+
 # std_logic_vector width: bit_vector(N downto 0) or std_logic_vector(N downto 0)
 _VH_WIDTH_RE = re.compile(
     r'(?:std_logic_vector|bit_vector|unsigned|signed)\s*\(\s*(\d+)\s+downto\s+\d+\s*\)',
@@ -386,13 +389,16 @@ def _extract_vhdl(text: str, fname: str, entries: List[_SourceEntry]) -> None:
         val = m.group(2).strip().rstrip(";")
         entries.append(_SourceEntry("constant", m.group(1), val, fname, _lineno_for_pos(m.start())))
 
-    # Signals with width
+    # Signals with width (multi-bit) or single-bit std_logic
     for m in _VH_SIGNAL_RE.finditer(text):
         type_str = m.group(2).strip()
         wm = _VH_WIDTH_RE.search(type_str)
         if wm:
             width = int(wm.group(1)) + 1
             entries.append(_SourceEntry("port", m.group(1), str(width), fname, _lineno_for_pos(m.start())))
+        elif _VH_STD_LOGIC_RE.search(type_str):
+            # Single-bit std_logic signal — previously invisible to HDLVersionDiff
+            entries.append(_SourceEntry("port", m.group(1), "1", fname, _lineno_for_pos(m.start())))
 
     # Enumerated type (FSM states)
     for m in _VH_ENUM_RE.finditer(text):
