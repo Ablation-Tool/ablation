@@ -143,6 +143,94 @@ LoongArch PLT stubs are 4 instructions × 4 bytes = 16 bytes same width as AArch
 
 ---
 
+## Structured operand API
+
+`LoongArchOpType` and `LoongArchOperand` were added in session 15.
+Before them, every tool that needed to inspect instruction operands had to parse `frame.op_str` — splitting on commas, stripping whitespace, checking whether a token begins with `$`.
+That approach was fragile and duplicated per-mnemonic knowledge across multiple modules.
+
+### Why this exists
+
+1. `SinkArgClassifierLA64._trace_arg()` needed to check whether the destination register of an `or` instruction matched a target register index, whether a `pcaddi` immediate pointed into `.rodata`, and whether an `ld.d` loaded from a callee-saved base. Every one of those checks parsed `op_str` differently from the others. A structured layer removes all of them.
+
+2. `TaintTracker` on LA64 cannot propagate taint without knowing which registers an instruction reads and writes. The op_str representation has no field for "this instruction writes operand 0 and reads operands 1 and 2" — that distinction requires per-mnemonic parsing or a typed operand list.
+
+3. New scanners added during RE (CFG builders, data-flow wallets) should not need to learn the op_str grammar. `frame.operands[n].reg` or `frame.operands[n].imm` gives them the value directly.
+
+### Types
+
+```python
+class LoongArchOpType(IntEnum):
+    INVALID = 0
+    REG     = 1   # integer register  $r0-$r31
+    IMM     = 2   # immediate (signed)
+    MEM     = 3   # memory operand (reserved; not yet emitted)
+    FREG    = 4   # FP register $f0-$f31
+    VREG    = 5   # LSX 128-bit $vr0-$vr31
+    XREG    = 6   # LASX 256-bit $xr0-$xr31
+    CFR     = 7   # condition flag $fcc0-$fcc7
+    FCSR    = 8   # FP control/status $fcsr0-$fcsr3
+    SCR     = 9   # scratch control $scr0-$scr3
+
+@dataclass
+class LoongArchOperand:
+    type: LoongArchOpType
+    reg:  int = 0   # register index (for REG/FREG/VREG/XREG/CFR/FCSR/SCR)
+    imm:  int = 0   # signed immediate (for IMM)
+
+    @property
+    def reg_name(self) -> str: ...  # returns ABI name e.g. "$a0", "$sp"
+```
+
+`LoongArchOpType` numbering matches Capstone's `CS_OP_*` constants.
+When the project contributes the decoder to Capstone, consumer code that checks `op.type == REG` will not need updating.
+
+### Access patterns
+
+```python
+from ablation.analyzers.loongarch_decoder import LoongArchDecoder, LoongArchOpType
+
+dec = LoongArchDecoder()
+frame = dec.decode_one(insn_bytes, va)
+
+# Check destination register
+if frame.operands and frame.operands[0].type == LoongArchOpType.REG:
+    dest_idx  = frame.operands[0].reg       # integer index 0-31
+    dest_name = frame.operands[0].reg_name  # e.g. "$a0"
+
+# Check immediate
+if len(frame.operands) >= 2 and frame.operands[1].type == LoongArchOpType.IMM:
+    offset = frame.operands[1].imm   # signed integer
+
+# Check whether dest is an argument register ($a0-$a7 = indices 4-11)
+_ARG_IDX = frozenset(range(4, 12))
+if frame.operands[0].reg in _ARG_IDX:
+    ...
+
+# op_str is still populated for backward compat and human-readable display
+print(frame)   # 0x00001000  001500a4  or           $a0, $a1, $zero
+```
+
+### Register index reference
+
+| Index | ABI name | Role |
+|---|---|---|
+| 0 | `$zero` | Hardwired zero |
+| 1 | `$ra` | Return address |
+| 3 | `$sp` | Stack pointer |
+| 4–11 | `$a0`–`$a7` | Arguments / return values |
+| 12–20 | `$t0`–`$t8` | Caller-saved temporaries |
+| 22 | `$fp` | Frame pointer (callee-saved) |
+| 23–31 | `$s0`–`$s8` | Callee-saved |
+
+### MEM operands
+
+MEM operands are reserved and not yet emitted.
+Load and store instructions produce separate REG (base) and IMM (displacement) operands.
+A future pass can fuse adjacent REG+IMM pairs into a MEM operand when a full memory-access model is needed.
+
+---
+
 ## Taint propagation rules
 
 | Instruction class | Propagation |
@@ -319,3 +407,4 @@ for f in findings:
 - [BinaryContext](binary-context.md): session state and function/import index
 - [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
 - [SemanticSearch](semantic-search.md): behavioral candidate search on the binary
+- [SinkArgClassifierLA64](sink-arg-classifier-la64.md): exec-sink argument provenance for LA64
