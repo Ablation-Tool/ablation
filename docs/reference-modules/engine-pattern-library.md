@@ -271,20 +271,14 @@ behavior is identical.
 
 ---
 
-## Why this exists
-
-Prior to this module, enginepatternlibrary required manual work outside the Ablation pipeline. This module integrates the capability directly so findings feed the shared `PatternLibrary` and `FindingRegistry` without a separate toolchain.
-
----
-
 ## How it works
 
 `EnginePatternLibrary.label_binary(ctx, xg)` runs three passes against `ctx.func_starts`:
 1. **String-marker pass:** finds string constants unique to each engine such as `"UE4"` and `"idTech"` in the binary and labels functions that reference them.
-2. **Semantic pass:** queries `SemanticSearcher` with engine-specific natural-language descriptions and labels high-confidence hits.
-3. **SAX structural pass:** encodes each function's opcode sequence as SAX symbols and finds approximate nearest neighbors in the engine corpus.
+2. **String pattern pass:** runs regex patterns against all string xrefs of each function and labels matches.
+3. **Semantic pass:** queries `SemanticSearcher` with engine-specific natural-language descriptions and labels high-confidence hits.
 
-Each labeled function gets an `EngineLabel` with the engine name and confidence score. `strip_reportlabels, total_funcs` summarizes coverage.
+Each labeled function gets an `EngineLabel` with the engine name and confidence score. `strip_report(labels, total_funcs)` summarizes coverage.
 
 ---
 
@@ -294,7 +288,7 @@ Each labeled function gets an `EngineLabel` with the engine name and confidence 
 from ablation.analyzers.engine_pattern_library import EnginePatternLibrary
 
 lib = EnginePatternLibrary.default()
-labels = lib.label_binary(ctx)   # Dict[int, EngineLabel]
+labels = lib.label_binary(ctx, xg)   # Dict[int, EngineLabel]
 for va, label in sorted(labels.items()):
     print(f"  {va:#x}  {label.engine:20s}  conf={label.confidence:.2f}")
 ```
@@ -331,7 +325,7 @@ Game code that happens to reference engine string constants such as a debug log 
 
 ## Reading output
 
-`PatternLibrary.match(ctx)` returns `List[EngineLabel]`: one per confirmed function match:
+`lib.label_binary(ctx, xg)` returns `Dict[int, EngineLabel]`: one entry per labeled function, keyed by VA:
 
 | Attribute | Content |
 |:---|:---|
@@ -349,8 +343,8 @@ Use `label.strip()` to test if the match is high-confidence enough to exclude fr
 
 ## See also
 
-- [BinaryContext](binary-context.md): function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md): record confirmed findings
+- [BinaryContext](binary-context.md): load and build the function corpus before labeling
+- [SAX Approximate Indexing](sax-approximate-indexing.md): the SAX structural matcher that produces `match_kind='sax'` labels
+- [Semantic Search](semantic-search.md): `SemanticSearcher` used in the semantic pass
+- [Finding Registry](finding-registry.md): source of confirmed findings for `ingest_from_findings()` flywheel
+- [Hypothesis Engine](hypothesis-engine.md): downstream engine for analyzing the unlabeled residual
