@@ -320,6 +320,11 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Extract tabular register-map tables from a LaTeX spec" | `LatexReExtractor.from_path(tex).tables()` |
 | "Navigate section hierarchy of a LaTeX spec" | `LatexReExtractor.from_path(tex).sections()` |
 | "Extract \\textbf{label}: description pairs from LaTeX itemize lists" | `LatexReExtractor.from_path(tex).labeled_items()` |
+| "Decode LCB downlink byte buffer (L0A triggers, BCR, CMD frames)" | `LcbDecoder.decode_stream(data)` — returns `List[LcbFrame]` with frame_type, l0a_map, bcr, tag |
+| "Decode STAR FLINK 4-bit nibble uplink (PR/LP events with L0ID)" | `StarFlinkDecoder.decode_stream(nibbles)` — returns `List[StarFlinkEvent]` with l0id |
+| "Decode HCC 8B/10B uplink bit stream" | `decode_8b10b_stream(bits)` — returns `[(offset, byte, is_k)]` per codeword |
+| "Decode single LCB 6B/8B codeword byte" | `decode_6b8b(byte)` → `(6bit_value, is_k)` or `None` if invalid |
+| "Decode single 10-bit 8B/10B word (HCC uplink)" | `decode_8b10b(word10)` → `(byte, is_k)` or `None` if invalid |
 | "Extract VHDL/Verilog source from HDL Designer HTML exports (*.htm ContentFrame files)" | `HdlHtmlExtractor.from_directory(htm_dir).to_semantic()` |
 | "Get clean source text from an HDL Designer HTML export file" | `HdlHtmlExtractor.from_directory(htm_dir).text('module.vhd')` |
 | "Write clean .vhd/.v files from HDL Designer HTML export (for HDLVersionDiff input)" | `HdlHtmlExtractor.from_directory(htm_dir).write_vhd(output_dir)` |
