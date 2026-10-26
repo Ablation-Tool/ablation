@@ -91,10 +91,11 @@ BoMC IMM2 sessions 1–9:
 
 **8. NC-AS400/qzrdu0mm.sav** (OS/400 SAVLIB, 182KB)
 `re/ibm/as400_re.py`
-- savf2zip if available, else hex-parse SAVLIB header (QSYS format:
-  magic 0x00 + 32-byte obj name EBCDIC). Identify object types
-  (*PGM, *SRVPGM, *MODULE). Log format only; no TIMI disasm attempted
-  without a V3R1 system.
+- [x] COMPLETE (session 14, 2026-10-25). FORGE PASS. AS400-001 SAFE.
+- savf2zip not installed; hex-parsed SAVLIB EBCDIC records.
+- 9 objects (PACKDEV library): QZRDPACK, QZRDPDSP/CL, QZRDPEXT/CL, DSPPCKF, EXTPCKF,
+  QDZRDPDSP, QHZRDCMD1 — pack file display/extract utilities. V3R1 ILE C + CLP.
+- Three versions (1997 × 2, 1998): same 9 objects. No network/auth code.
 
 **9. MQSeries-RarePlatforms/cpqnsk51/IC44753** (NonStop PAK, 13.2MB, MIPS)
 `re/ibm/nonstop_re.py`
