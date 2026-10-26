@@ -1,10 +1,29 @@
-# Semantic Code Search
+# SemanticSearcher
 
-Find functions in a stripped binary using natural language: a BERT-based embedding search that matches behavioral descriptions like "HTTP request parser" or "AES key schedule" to the binary's disassembled functions, without symbol names or source code.
+  - [What is semantic code search?](#what-is-semantic-code-search)
+  - [Why this exists](#why-this-exists)
+  - [How it works](#how-it-works)
+  - [SemanticSearcher](#semanticsearcher-1)
+  - [Usage](#usage)
+  - [Example output](#example-output)
+  - [False positives](#false-positives)
+  - [Pipeline position](#pipeline-position)
+  - [Reading results](#reading-results)
+  - [See also](#see-also)
+
+**File:** `ablation/analyzers/semantic_search.py`
 
 ---
 
-## Why this exists <sup>[↑](#semantic-code-search)</sup>
+## What is semantic code search? <sup>[↑](#semanticsearcher)</sup>
+
+Semantic code search finds functions in a stripped binary by matching a natural-language description of behavior to function embeddings computed from disassembly. Instead of searching by symbol name (unavailable in stripped binaries) or by byte patterns (only matches known functions), it searches by meaning: "HTTP request parser," "AES key schedule," or "command injection sink that calls system()."
+
+The approach uses dense vector embeddings trained on pairs of (natural-language description, disassembled code). A query like "allocates memory proportional to a user-supplied length" is encoded by the same embedding model as the binary's disassembled functions, and cosine similarity ranks candidates. Functions semantically similar to the description score high regardless of whether the compiler renamed, inlined, or recompiled them.
+
+`SemanticSearcher` uses BAAI/bge-small-en-v1.5 at 384 dimensions via `fastembed`. The model was chosen for its balance between accuracy and speed: it scores an 885-function binary in approximately 35 seconds on CPU without GPU acceleration. The corpus is built once by `CorpusBuilder` and cached; subsequent queries against the same binary complete in milliseconds. The CLAUDE.md workflow directive is explicit: run `SemanticSearcher.query()` across all vulnerability classes before touching any disassembly.
+
+## Why this exists <sup>[↑](#semanticsearcher)</sup>
 
 1. **Stripped firmware has no symbol names.** The first step in any firmware RE engagement is identifying what functions exist and what they do. Without symbols, the only practical options are recognizing known patterns pattern matching or semantic similarity to function descriptions. When a pattern library has no coverage: a new target, a modified function, a custom cipher: the analyst needs a way to search by what the function *does* rather than what it is called. Semantic Code Search provides that capability.
 
@@ -14,7 +33,7 @@ Find functions in a stripped binary using natural language: a BERT-based embeddi
 
 ---
 
-## How it works <sup>[↑](#semantic-code-search)</sup>
+## How it works <sup>[↑](#semanticsearcher)</sup>
 
 The searcher operates in three stages: **assembly normalization**, **embedding**, and **whitened cosine retrieval**.
 
@@ -56,7 +75,7 @@ flowchart TD
     linkStyle 13 stroke:#2e7d32,stroke-width:3px
 ```
 
-### Assembly normalization <sup>[↑](#semantic-code-search)</sup>
+### Assembly normalization <sup>[↑](#semanticsearcher)</sup>
 
 Raw disassembly contains build-specific tokens addresses, register names, large immediates that differ between compiler versions and must be stripped before encoding. After stripping, each opcode is mapped to one of 11 BinFuse semantic categories:
 
@@ -80,7 +99,7 @@ Cross-architecture invariance: `mov rax, rbx` (x86-64), `ldr x0, [x1]` (AArch64)
 
 **Operand type patterns** from BinDeep Tian et al., 2020: keeping `MEM[REG+IMM]` patterns alongside opcode categories adds approximately 1.2% F1 over opcode-only encoding.
 
-### Embedding and whitening <sup>[↑](#semantic-code-search)</sup>
+### Embedding and whitening <sup>[↑](#semanticsearcher)</sup>
 
 The normalized description text is encoded with `BAAI/bge-small-en-v1.5` via `fastembed`. The resulting 384-dimensional embeddings are post-processed with PCA whitening Su et al., 2021:
 
@@ -91,7 +110,7 @@ The normalized description text is encoded with `BAAI/bge-small-en-v1.5` via `fa
 
 Without whitening, cosine similarity between unrelated BERT embeddings scores 0.6–0.9 unusably high. After whitening, unrelated pairs drop to 0.4–0.6 and true matches stay above 0.8, making the similarity score actionable.
 
-### Caching <sup>[↑](#semantic-code-search)</sup>
+### Caching <sup>[↑](#semanticsearcher)</sup>
 
 The corpus is expensive to build ~549 seconds for 11,000 functions on CPU, ~4 hours for the full 296k function corpus. The searcher caches the whitened embedding matrix as a `.pkl` file at `~/.ablation/func_semantic_cache_BAAI_bge_small_en_v1_5_<live_hash>.pkl`. Cache validity is keyed on `sha256func_id.db`: any new function insertion invalidates the cache. A `live_addrs` hash is included so caches for different binaries do not collide.
 
@@ -99,7 +118,7 @@ Scoping the corpus to a single binary (via `from_context()`) encodes approximate
 
 ---
 
-## SemanticSearcher <sup>[↑](#semantic-code-search)</sup>
+## SemanticSearcher <sup>[↑](#semanticsearcher)</sup>
 
 ```python
 from ablation.analyzers.semantic_search import SemanticSearcher
@@ -115,7 +134,7 @@ for r in results:
     print(f"  0x{r.va:x}  {r.name}  ({r.confidence})  score={r.score:.3f}")
 ```
 
-### `query()` return type <sup>[↑](#semantic-code-search)</sup>
+### `query()` return type <sup>[↑](#semanticsearcher)</sup>
 
 ```python
 @dataclass
@@ -129,7 +148,7 @@ class SimilarFunction:
 
 ---
 
-## Usage <sup>[↑](#semantic-code-search)</sup>
+## Usage <sup>[↑](#semanticsearcher)</sup>
 
 ```python
 from ablation.analyzers.semantic_search import SemanticSearcher
@@ -166,7 +185,7 @@ searcher.invalidate_cache()
 
 ---
 
-## Example output <sup>[↑](#semantic-code-search)</sup>
+## Example output <sup>[↑](#semanticsearcher)</sup>
 
 ```
 [semantic_search] query="AES key schedule" top_k=5
@@ -186,7 +205,7 @@ searcher.invalidate_cache()
 
 ---
 
-## False positives <sup>[↑](#semantic-code-search)</sup>
+## False positives <sup>[↑](#semanticsearcher)</sup>
 
 **Protobuf and template stubs with zero callers.** Generated serialization stubs are structurally repetitive (many `DATA_TRANSFER_OP` + `COMPARISON_OP` sequences) and embed well on queries for data handling functions. The `live_addrs` filter in `from_context()` excludes functions not confirmed in this binary's analysis, eliminating most template stubs that were registered from other binaries. If false positives persist, tighten the score threshold from 0.78 to 0.85.
 
@@ -198,7 +217,7 @@ searcher.invalidate_cache()
 
 ---
 
-## Pipeline position <sup>[↑](#semantic-code-search)</sup>
+## Pipeline position <sup>[↑](#semanticsearcher)</sup>
 
 **Before this module:** `BinaryContext.load_or_build()` to populate the names registry. The more named functions in the registry, the higher the quality of the corpus. `CorpusBuilder.build()` is typically run first to populate the registry from export tables, debug symbols, and cross-reference analysis.
 
@@ -206,7 +225,7 @@ searcher.invalidate_cache()
 
 ---
 
-## Reading results <sup>[↑](#semantic-code-search)</sup>
+## Reading results <sup>[↑](#semanticsearcher)</sup>
 
 | Field | Content |
 |:---|:---|
@@ -218,7 +237,7 @@ searcher.invalidate_cache()
 
 ---
 
-## See also <sup>[↑](#semantic-code-search)</sup>
+## See also <sup>[↑](#semanticsearcher)</sup>
 
 - [Binary Context](binary-context.md): corpus ingest source; run `from_context()` first
 - [Function Profiler](function-profiler.md): deep behavioral analysis for candidates found by semantic search

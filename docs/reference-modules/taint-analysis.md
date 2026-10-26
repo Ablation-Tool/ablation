@@ -1,10 +1,29 @@
-# Taint Analysis
+# TaintTracker
 
-Forward-propagate attacker-controlled data through a function's instruction stream and report every instruction where tainted values reach security-sensitive sinks: allocation size arguments, copy length operands, memory write destinations, call arguments, and branch conditions.
+  - [What is taint analysis?](#what-is-taint-analysis)
+  - [Why this exists](#why-this-exists)
+  - [How it works](#how-it-works)
+  - [TaintTracker](#tainttracker-1)
+  - [Usage](#usage)
+  - [Example output](#example-output)
+  - [False positives](#false-positives)
+  - [Pipeline position](#pipeline-position)
+  - [Reading findings](#reading-findings)
+  - [See also](#see-also)
+
+**File:** `ablation/analyzers/taint_tracker.py` · `ablation/analyzers/taint_tracker_arm64.py`
 
 ---
 
-## Why this exists <sup>[↑](#taint-analysis)</sup>
+## What is taint analysis? <sup>[↑](#tainttracker)</sup>
+
+Taint analysis is a form of information flow tracking that marks data as "tainted" when it originates from an untrusted source (network input, user-supplied arguments, file reads) and propagates that mark forward through every computation that depends on that data. When tainted data reaches a security-sensitive operation (a size argument to `malloc`, a length to `memcpy`, a command string to `system`), a finding is reported.
+
+The key insight is that taint analysis answers a different question than static pattern matching. A scanner that flags every call to `system()` produces false positives for calls with hardcoded strings. A scanner that flags every `memcpy` with a length argument produces false positives when the length comes from a compile-time constant. Taint analysis narrows the question: does attacker-supplied data actually flow to this argument? Only findings where the data flow is confirmed get reported.
+
+Ablation implements two taint tracker variants. `TaintTracker` in `taint_tracker.py` handles x86-64 intraprocedural and interprocedural flows: it traces within a function and follows `CALL` targets to trace across function boundaries. `ARM64TaintTracker` in `taint_tracker_arm64.py` applies the same logic to AArch64 binaries. Both use `TaintState.join()` at merge points in the CFG to model paths through conditional branches conservatively.
+
+## Why this exists <sup>[↑](#tainttracker)</sup>
 
 1. **A finding from a scanner is a hypothesis: taint analysis converts it to a verdict.** When the `HeapVulnScanner` reports an integer overflow before `malloc`, or the `FormatStringScanner` reports that a format register originates from a function argument, neither tool has answered the critical question: does that value come from attacker-controlled network input? `TaintTracker` takes those findings as starting points and traces the data forward through the function body, answering precisely which instruction paths are reachable from tainted data.
 
@@ -14,7 +33,7 @@ Forward-propagate attacker-controlled data through a function's instruction stre
 
 ---
 
-## How it works <sup>[↑](#taint-analysis)</sup>
+## How it works <sup>[↑](#tainttracker)</sup>
 
 The tracker executes a single forward pass through the disassembled function body, maintaining a live taint set of canonical register names and named stack slots.
 
@@ -94,7 +113,7 @@ flowchart TD
     linkStyle 32 stroke:#2e7d32,stroke-width:3px
 ```
 
-### Register canonicalization <sup>[↑](#taint-analysis)</sup>
+### Register canonicalization <sup>[↑](#tainttracker)</sup>
 
 Every register reference in the instruction stream is normalized to its 64-bit canonical form before any taint operation:
 
@@ -110,7 +129,7 @@ Every register reference in the instruction stream is normalized to its 64-bit c
 
 This means `movzx eax, byte [rsp+8]; test rax, rax` is correctly handled: the `movzx` write to `eax` is tracked on `rax`, and the subsequent `test rax, rax` sees the correct taint state.
 
-### Sink detection <sup>[↑](#taint-analysis)</sup>
+### Sink detection <sup>[↑](#tainttracker)</sup>
 
 The five sink types and their detection conditions:
 
@@ -122,7 +141,7 @@ The five sink types and their detection conditions:
 | `branch_cond` | Tainted operand in a `CMP` or `TEST` instruction controls a conditional branch |
 | `call_arg` | Any tainted argument register at any `CALL` not already classified as alloc/copy |
 
-### Conservative propagation semantics <sup>[↑](#taint-analysis)</sup>
+### Conservative propagation semantics <sup>[↑](#tainttracker)</sup>
 
 The tracker is **path-insensitive**: it does not branch-fork the taint state at conditional jumps. Instead, it assumes all code paths execute the union of all paths. This means:
 
@@ -134,7 +153,7 @@ The tracker is **path-insensitive**: it does not branch-fork the taint state at 
 
 ---
 
-## TaintTracker <sup>[↑](#taint-analysis)</sup>
+## TaintTracker <sup>[↑](#tainttracker)</sup>
 
 ```python
 from ablation.analyzers.taint_tracker import TaintTracker
@@ -152,7 +171,7 @@ for sink in sinks:
     print(sink)
 ```
 
-### Integration with BinaryContext <sup>[↑](#taint-analysis)</sup>
+### Integration with BinaryContext <sup>[↑](#tainttracker)</sup>
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
@@ -178,7 +197,7 @@ for f in [x for x in heap_findings if x.severity == 'HIGH']:
             print(f"  {s}")
 ```
 
-### Extending allocator and copy function sets <sup>[↑](#taint-analysis)</sup>
+### Extending allocator and copy function sets <sup>[↑](#tainttracker)</sup>
 
 ```python
 from ablation.analyzers.taint_tracker import TaintTracker
@@ -195,7 +214,7 @@ for va, name in ctx.plt.items():
 
 ---
 
-## Usage <sup>[↑](#taint-analysis)</sup>
+## Usage <sup>[↑](#tainttracker)</sup>
 
 ```python
 from ablation.analyzers.taint_tracker import TaintTracker
@@ -216,7 +235,7 @@ for sink in sinks:
 
 ---
 
-## Example output <sup>[↑](#taint-analysis)</sup>
+## Example output <sup>[↑](#tainttracker)</sup>
 
 ```
 0x40a214  [call_arg]  call 0x401050  (tainted: rdi): arg1 at call
@@ -228,7 +247,7 @@ for sink in sinks:
 
 ---
 
-## False positives <sup>[↑](#taint-analysis)</sup>
+## False positives <sup>[↑](#tainttracker)</sup>
 
 **Path-insensitive analysis on guarded code.** A function that validates user input at the top and returns early on invalid input will still show taint reaching sinks on the guarded fast path: the tracker does not model the fact that the early return prevents the tainted value from ever reaching the allocation on the valid-input path. Manually verify that the branch at the `branch_cond` sink does not guard the `alloc_size` sink.
 
@@ -240,7 +259,7 @@ for sink in sinks:
 
 ---
 
-## Pipeline position <sup>[↑](#taint-analysis)</sup>
+## Pipeline position <sup>[↑](#tainttracker)</sup>
 
 **Before this module:** `HeapVulnScanner`, `FormatStringScanner`, or any other scanner that identifies candidate functions and initial tainted registers. `BinaryContext` supplies the PLT for allocator and copy function resolution.
 
@@ -248,7 +267,7 @@ for sink in sinks:
 
 ---
 
-## Reading findings <sup>[↑](#taint-analysis)</sup>
+## Reading findings <sup>[↑](#tainttracker)</sup>
 
 | Field | Content |
 |:---|:---|
@@ -260,7 +279,7 @@ for sink in sinks:
 
 ---
 
-## See also <sup>[↑](#taint-analysis)</sup>
+## See also <sup>[↑](#tainttracker)</sup>
 
 - [Heap Vulnerability Scanner](heap-vulnerability-scanner.md): generates the function candidates that `TaintTracker` confirms
 - [Format String Scanner](format-string-scanner.md): produces `arg_passthrough` candidates for taint confirmation

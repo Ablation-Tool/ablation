@@ -1,10 +1,28 @@
-# Control-Flow Graph Construction
+# CFGBuilder
 
-Per-function control-flow graph construction for x86-64 ELF binaries using iterative recursive disassembly: producing `BasicBlock` and `CFG` structures with dominator trees, reaching definitions, and successor edges for use by flow-sensitive taint analysis and structural analysis tools.
+  - [What is a control-flow graph?](#what-is-a-control-flow-graph)
+  - [Why this exists](#why-this-exists)
+  - [How it works](#how-it-works)
+  - [Usage](#usage)
+  - [Example output](#example-output)
+  - [False positives](#false-positives)
+  - [Pipeline position](#pipeline-position)
+  - [Reading output](#reading-output)
+  - [See also](#see-also)
+
+**File:** `ablation/analyzers/cfg_builder.py`
 
 ---
 
-## Why this exists <sup>[↑](#control-flow-graph-construction)</sup>
+## What is a control-flow graph? <sup>[↑](#cfgbuilder)</sup>
+
+A control-flow graph (CFG) is a directed graph in which each node represents a basic block: a maximal sequence of instructions with no branches into the middle and no branches out except at the last instruction. Edges represent possible transfers of control: a conditional branch produces two outgoing edges (taken and not-taken), an unconditional branch produces one, and a function return typically has no outgoing edges within the function (modeled as a sink node). The CFG is the foundational data structure for nearly all flow-sensitive program analysis: reaching-definitions, dominance trees, loop detection, taint propagation, and structural code recovery all build on it.
+
+The algorithm for constructing a CFG from a stripped binary is iterative recursive disassembly. Starting from a known function entry point, the disassembler decodes instructions sequentially. When it reaches a branch instruction, it adds the branch target(s) to a worklist and marks the current block as ending there. It then processes each worklist entry, decoding forward until hitting another branch or a return. This process continues until the worklist is empty. The key challenge for stripped binaries is disambiguating code from data: a byte sequence like `0xEB 0x00` could be a short jump over padding or part of an immediate operand, and misidentifying it causes the CFG to diverge from the runtime graph.
+
+`CFGBuilder` uses Capstone x86-64 for instruction decoding and resolves indirect jumps through import table (`jmp [rip+N]` PLT stubs) and switch table patterns (array of addresses indexed by a register). The resulting `CFG` object exposes `BasicBlock` nodes with predecessor/successor edge lists, and supports computing the dominator tree (`DomTree`) and loop structure (`LoopInfo`) used by `SSABuilder`, `TaintTracker`, and `PathSolver`. For non-x86 architectures, per-arch `*CFGBuilder` subclasses in `arm_cfg.py`, `arm64_cfg.py`, `mips_cfg.py`, and so on follow the same interface.
+
+## Why this exists <sup>[↑](#cfgbuilder)</sup>
 
 1. **Flow-sensitive taint analysis (`analyze_function_flow_sensitive()`) and dominator-based loop detection both require a correctly built CFG: without it, all analysis treats a function's instructions as a flat sequence, missing the semantics of conditional branches and loop back-edges.** `CFGBuilder.build_function()` constructs the CFG using iterative recursive disassembly Andriesse, "Practical Binary Analysis" §8.2.4: follow direct branches from each basic block, stop at `ret`/`jmp`/`hlt`, push both sides of a conditional branch. The result is a `CFG` with correct successor edges across all paths.
 
@@ -14,7 +32,7 @@ Per-function control-flow graph construction for x86-64 ELF binaries using itera
 
 ---
 
-## How it works <sup>[↑](#control-flow-graph-construction)</sup>
+## How it works <sup>[↑](#cfgbuilder)</sup>
 
 ```mermaid
 flowchart TD
@@ -39,7 +57,7 @@ flowchart TD
     linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
-### ISA-specific CFG builders <sup>[↑](#control-flow-graph-construction)</sup>
+### ISA-specific CFG builders <sup>[↑](#cfgbuilder)</sup>
 
 | Module | ISA | Special handling |
 |:---|:---|:---|
@@ -57,7 +75,7 @@ flowchart TD
 
 ---
 
-## Usage <sup>[↑](#control-flow-graph-construction)</sup>
+## Usage <sup>[↑](#cfgbuilder)</sup>
 
 ```python
 from ablation.analyzers.cfg_builder import CFGBuilder
@@ -92,7 +110,7 @@ print(f"Total CFGs built: {len(all_cfgs)}")
 
 ---
 
-## Example output <sup>[↑](#control-flow-graph-construction)</sup>
+## Example output <sup>[↑](#cfgbuilder)</sup>
 
 The following illustrates the CFG stats and block structure format. Actual values are function-specific.
 
@@ -108,7 +126,7 @@ CFG for <func-va>:
 
 ---
 
-## False positives <sup>[↑](#control-flow-graph-construction)</sup>
+## False positives <sup>[↑](#cfgbuilder)</sup>
 
 **`build_function()` stops at `jmp` unconditional jump without following jump-table targets.** Functions with switch statements that use a `jmp [rax*8+table]` pattern will have their jump-table cases appear as unreachable blocks in the CFG. The `stats()` field `has_indirect_branch: True` flags this. Flow-sensitive analysis on such functions may miss paths through switch cases.
 
@@ -116,13 +134,13 @@ CFG for <func-va>:
 
 ---
 
-## Pipeline position <sup>[↑](#control-flow-graph-construction)</sup>
+## Pipeline position <sup>[↑](#cfgbuilder)</sup>
 
 Build CFGs after `XRefGraph` provides function boundaries and PLT mapping. `CFGBuilder` is a prerequisite for `analyze_function_flow_sensitive()`, `SubsequenceSearcher` which uses op-category sequences derived from CFG blocks, and `StructureRecovery` which reads dominator trees. Build once per session and cache: `BinaryContext.load_or_build()` handles this automatically.
 
 ---
 
-## Reading output <sup>[↑](#control-flow-graph-construction)</sup>
+## Reading output <sup>[↑](#cfgbuilder)</sup>
 
 `CFGBuilder.build(va)` returns a `CFG` object:
 
@@ -146,7 +164,7 @@ Build CFGs after `XRefGraph` provides function boundaries and PLT mapping. `CFGB
 
 ---
 
-## See also <sup>[↑](#control-flow-graph-construction)</sup>
+## See also <sup>[↑](#cfgbuilder)</sup>
 
 - [XRefGraph](xref-graph.md): provides function starts and PLT map; required for `CFGBuilder`
 - [Taint Analysis](taint-analysis.md): `analyze_function_flow_sensitive()` uses CFG basic blocks

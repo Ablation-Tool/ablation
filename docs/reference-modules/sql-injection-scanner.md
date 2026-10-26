@@ -1,10 +1,10 @@
-# SQL Injection Scanner
+# SqlSinkScanner
 
 Detect raw SQL injection in x86-64 ELF binaries that call the MySQL C API `mysql_query`, `mysql_real_query` or SQLite3 `sqlite3_exec`, `sqlite3_prepare_v2`, `sqlite3_prepare` directly: tracing the SQL string argument backward from each call site to classify its provenance as `INJECTABLE`, `INJECTABLE_LITERAL`, `RODATA_CONST`, `SAFE_NUMERIC`, `ARG_PROPAGATED`, or `UNKNOWN`.
 
 ---
 
-## Why this exists <sup>[↑](#sql-injection-scanner)</sup>
+## Why this exists <sup>[↑](#sqlsinkscanner)</sup>
 
 1. **`FormatStringScanner` misses the SQL injection pattern because `snprintf` is safe in isolation: the danger is `snprintfbuf, sizeof(buf, "WHERE login='%s'", username); mysql_queryconn, buf`.** `FormatStringScanner` reports a finding when a format string contains `%s` and the buffer is passed to a dangerous output function. It does not model the SQL API call chain: `snprintf` writes to a local buffer; `mysql_query` receives that buffer as its SQL argument. Detecting this requires chaining: find SQL sink → trace SQL arg register RSI, arg1 backward → find the `snprintf` call that populated the buffer → inspect the format string.
 
@@ -14,7 +14,7 @@ Detect raw SQL injection in x86-64 ELF binaries that call the MySQL C API `mysql
 
 ---
 
-## How it works <sup>[↑](#sql-injection-scanner)</sup>
+## How it works <sup>[↑](#sqlsinkscanner)</sup>
 
 ```mermaid
 flowchart TD
@@ -36,7 +36,7 @@ flowchart TD
     linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
-### Verdict definitions <sup>[↑](#sql-injection-scanner)</sup>
+### Verdict definitions <sup>[↑](#sqlsinkscanner)</sup>
 
 | Verdict | Severity | Meaning |
 |---|---|---|
@@ -47,7 +47,7 @@ flowchart TD
 | `SAFE_NUMERIC` | LOW | Format string uses only `%d`/`%u`/`%x`: no string interpolation |
 | `RODATA_CONST` | LOW | SQL string is a fixed RODATA literal with no format specifiers |
 
-### SQL sinks covered <sup>[↑](#sql-injection-scanner)</sup>
+### SQL sinks covered <sup>[↑](#sqlsinkscanner)</sup>
 
 | Symbol | SQL arg position | Notes |
 |---|---|---|
@@ -59,7 +59,7 @@ flowchart TD
 
 ---
 
-## Usage <sup>[↑](#sql-injection-scanner)</sup>
+## Usage <sup>[↑](#sqlsinkscanner)</sup>
 
 ```python
 from ablation.analyzers.sql_sink_scanner import SqlSinkScanner, INJECTABLE, ARG_PROPAGATED
@@ -92,7 +92,7 @@ findings2 = scanner2.scan()
 
 ---
 
-## Example output <sup>[↑](#sql-injection-scanner)</sup>
+## Example output <sup>[↑](#sqlsinkscanner)</sup>
 
 ```
 SqlSinkScanner: /path/webapp_binary
@@ -115,7 +115,7 @@ SqlSinkScanner: /path/webapp_binary
 
 ---
 
-## False positives <sup>[↑](#sql-injection-scanner)</sup>
+## False positives <sup>[↑](#sqlsinkscanner)</sup>
 
 **`INJECTABLE` verdict on format strings where the `%s` argument is a hardcoded RODATA value.** The scanner checks whether the format string has `%s`, it does not verify whether the string argument passed to `%s` is user-controlled or a fixed constant. A call like `snprintf(buf, N, "WHERE type='%s'", "admin"); mysql_queryconn, buf` is `INJECTABLE` because the format string has `%s`, but the argument `"admin"` is fixed. After identifying an `INJECTABLE` finding, verify with `TaintTracker` that the `%s` argument register at the `snprintf` call is user-influenced.
 
@@ -125,7 +125,7 @@ SqlSinkScanner: /path/webapp_binary
 
 ---
 
-## Pipeline position <sup>[↑](#sql-injection-scanner)</sup>
+## Pipeline position <sup>[↑](#sqlsinkscanner)</sup>
 
 **Before this module:** Run `SinkArgClassifier.from_path(elf).classify_all()` to identify which call sites are `RODATA_CONST` vs `ARG_PROPAGATED` across all sinks. This establishes the baseline before focusing on SQL-specific chaining. `SqlSinkScanner` provides the SQL-chain-specific analysis that `SinkArgClassifier` does not cover.
 
@@ -133,7 +133,7 @@ SqlSinkScanner: /path/webapp_binary
 
 ---
 
-## Reading findings <sup>[↑](#sql-injection-scanner)</sup>
+## Reading findings <sup>[↑](#sqlsinkscanner)</sup>
 
 | Field | Content |
 |:---|:---|
@@ -147,7 +147,7 @@ SqlSinkScanner: /path/webapp_binary
 
 ---
 
-## See also <sup>[↑](#sql-injection-scanner)</sup>
+## See also <sup>[↑](#sqlsinkscanner)</sup>
 
 - [Sink Arg Classifier](sink-arg-classifier.md): classify all call sites not just SQL as RODATA_CONST/ARG_PROPAGATED/UNKNOWN before running this scanner
 - [Taint Analysis](taint-analysis.md): trace ARG_PROPAGATED findings from user input to the SQL sink

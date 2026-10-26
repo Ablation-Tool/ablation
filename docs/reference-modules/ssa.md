@@ -1,5 +1,26 @@
 # SSABuilder
 
+  - [What is Static Single Assignment form?](#what-is-static-single-assignment-form)
+  - [Why this exists](#why-this-exists)
+  - [Constructor](#constructor)
+  - [build() → SSAForm](#build--ssaform)
+  - [SSAForm methods](#ssaform-methods)
+  - [SSAName](#ssaname)
+  - [Typical usage for DX-001 class findings](#typical-usage-for-dx-001-class-findings)
+  - [Known limitations](#known-limitations)
+
+**File:** `ablation/analyzers/ssa.py`
+
+---
+
+## What is Static Single Assignment form? <sup>[↑](#ssabuilder)</sup>
+
+Static Single Assignment (SSA) form is a property of an intermediate representation in which every variable is defined exactly once. When a source-level variable is assigned in two branches of an `if` statement, SSA creates two distinct versions of that variable (for example `r0_1` on the true branch and `r0_2` on the false branch) and inserts a "phi function" at the merge point that selects between them based on which branch was taken. The phi function carries no runtime cost: it is a representation artifact that makes the control-flow-sensitive reaching definition explicit.
+
+The algorithm for computing SSA was published by Cytron et al. in 1991 ("Efficiently computing static single assignment form and the control dependence graph"). It works in two passes over the control flow graph. The first pass places phi functions at "dominance frontier" join points: the set of blocks where a definition on one path meets an alternative definition on another path, specifically the minimal set that makes every use dominated by exactly one definition. The second pass renames all uses and definitions to add version numbers using a depth-first traversal of the dominator tree.
+
+Ablation uses `SSABuilder` because linear-scan taint trackers (the `TaintTracker` family) cannot follow a register value across basic-block boundaries. When `rax` holds a tainted length in block A, flows through a conditional branch, and reaches a `malloc` call in block C, a linear scan of block C alone does not see the taint origin. SSA's reaching-definition query resolves this: `SSAForm.reaching_def('rax', malloc_va)` returns the single SSA name that reaches the malloc call site, and `SSAForm.defs_of(name)` returns the instruction that defined it. This closes the "DX-001 class" gap where taint across basic blocks required manual trace.
+
 ## Why this exists <sup>[↑](#ssabuilder)</sup>
 
 1. `trace_arg()` stops with `BSR_RETVAL` when the target register was set by a

@@ -1,10 +1,29 @@
-# Length Underflow Scanner
+# LengthUnderflowScanner
 
-Detect protocol parser integer underflow in x86-64 firmware: the C12-class pattern where a fixed header size is subtracted from a user-supplied length field, the result is truncated to uint16 or uint8, and the wrapped value is passed to a callee without a prior bounds check.
+  - [What is header-subtraction integer underflow?](#what-is-header-subtraction-integer-underflow)
+  - [Why this exists](#why-this-exists)
+  - [How it works](#how-it-works)
+  - [LengthUnderflowScanner](#lengthunderflowscanner-1)
+  - [Usage](#usage)
+  - [Example output](#example-output)
+  - [False positives](#false-positives)
+  - [Pipeline position](#pipeline-position)
+  - [Reading findings](#reading-findings)
+  - [See also](#see-also)
+
+**File:** `ablation/analyzers/length_underflow.py`
 
 ---
 
-## Why this exists <sup>[↑](#length-underflow-scanner)</sup>
+## What is header-subtraction integer underflow? <sup>[↑](#lengthunderflowscanner)</sup>
+
+Protocol parsers compute the payload length by subtracting a fixed header size from a total length field received from the network: `payload_len = total_len - sizeof(header)`. When `total_len` is user-controlled and smaller than `sizeof(header)`, the subtraction produces a large positive number after unsigned integer truncation. For example, `(uint16_t)(5 - 20)` produces `0xFFF1` (65521), not a negative value. If that wrapped length is then passed to `malloc`, the allocator returns a 65 KB buffer instead of the intended small one; if it is passed to `memcpy` as a count, the copy reads 65 KB from a network buffer into a small stack or heap allocation.
+
+This class of vulnerability (CWE-191: Integer Underflow, CWE-131: Incorrect Calculation of Buffer Size) is endemic in network protocol parsers written in C. The pattern appears in TLV (Type-Length-Value) parsers, fixed-header binary protocols, and any code path that receives a framed message and must extract the payload after stripping the header. The C standard defines unsigned subtraction as wrapping modulo 2^N, so the resulting value is always a valid (but unexpected) large positive integer from the runtime's perspective, meaning no fault is raised and the large allocation or copy proceeds silently.
+
+`LengthUnderflowScanner` looks for exactly this pattern statically: a `SUB` instruction or equivalent that has one operand from an immediate (the header size constant) and one from a register loaded from network input, followed by a truncating `MOVZX` to a 16-bit or 8-bit destination, followed by a `CALL` to an allocation or copy function. The scanner uses backward dataflow to trace where the `SUB` result goes; it applies a "bounds-check filter" that suppresses findings where a `CMP` or `TEST` on the result precedes the allocation or copy call, since an adequate bounds check prevents the underflow from reaching the sink.
+
+## Why this exists <sup>[↑](#lengthunderflowscanner)</sup>
 
 1. **Integer underflow in protocol parsers is a systematic vulnerability class across firmware.** The pattern is not specific to one protocol or one vendor: DNS, GRE, PPTP, SCTP, Diameter, and many proprietary protocols all parse variable-length fields by subtracting a fixed header size from a user-supplied total length to compute the payload size. When the user supplies a length smaller than the header size, the subtraction underflows, and the resulting negative value wraps to a large positive integer when truncated to uint16 or uint8. A scanner that looks for this pattern across an entire binary body identifies every instance systematically.
 
@@ -14,7 +33,7 @@ Detect protocol parser integer underflow in x86-64 firmware: the C12-class patte
 
 ---
 
-## How it works <sup>[↑](#length-underflow-scanner)</sup>
+## How it works <sup>[↑](#lengthunderflowscanner)</sup>
 
 The scanner operates in three phases per function: **subtraction detection**, **guard lookback**, and **truncation + call lookahead**.
 
@@ -64,7 +83,7 @@ flowchart TD
     linkStyle 17 stroke:#00695c,stroke-width:2px
 ```
 
-### Subtraction detection <sup>[↑](#length-underflow-scanner)</sup>
+### Subtraction detection <sup>[↑](#lengthunderflowscanner)</sup>
 
 Accepts two instruction forms:
 - `LEA dest, [base - N]` where `N` is in `[4, 256]` and `base` is not `rbp`/`rsp` excluding stack frame accesses
@@ -72,17 +91,17 @@ Accepts two instruction forms:
 
 The constant range `[4, 256]` covers typical protocol header sizes: IPv4 (20), TCP (20), UDP (8), GRE (4), SCTP (12), PPTP (8), and custom protocol headers up to 256 bytes.
 
-### Guard lookback <sup>[↑](#length-underflow-scanner)</sup>
+### Guard lookback <sup>[↑](#lengthunderflowscanner)</sup>
 
 Scans the 25 instructions preceding the subtraction for any `CMP` or `TEST` instruction that uses the same register family as the subtraction destination. Register aliases are canonicalized for example `edx` and `rdx` are the same family, so a `CMP r9d, 0x10` is recognized as a guard for a `LEA edx, [r9 - 0x10]`.
 
-### Truncation detection <sup>[↑](#length-underflow-scanner)</sup>
+### Truncation detection <sup>[↑](#lengthunderflowscanner)</sup>
 
 Looks for register-to-register `MOVZX`/`MOVZWL`/`MOVZBL` within 10 instructions after the subtraction, where the source register is in the same family as the subtraction destination. Memory-to-register `MOVZX` forms for example `movzx edx, byte ptr [rdx+6]` are excluded: those load a new value from memory, not the arithmetic result.
 
 ---
 
-## LengthUnderflowScanner <sup>[↑](#length-underflow-scanner)</sup>
+## LengthUnderflowScanner <sup>[↑](#lengthunderflowscanner)</sup>
 
 ```python
 from ablation.analyzers.length_underflow import LengthUnderflowScanner
@@ -103,7 +122,7 @@ print(f"Total: {len(findings)}  Unguarded: {sum(1 for f in findings if not f.gua
 
 ---
 
-## Usage <sup>[↑](#length-underflow-scanner)</sup>
+## Usage <sup>[↑](#lengthunderflowscanner)</sup>
 
 ```python
 from ablation.analyzers.length_underflow import LengthUnderflowScanner
@@ -134,7 +153,7 @@ for f in unguarded:
 
 ---
 
-## Example output <sup>[↑](#length-underflow-scanner)</sup>
+## Example output <sup>[↑](#lengthunderflowscanner)</sup>
 
 ```
 UnderflowFinding [UNGUARDED]
@@ -154,7 +173,7 @@ UnderflowFinding [UNGUARDED]
 
 ---
 
-## False positives <sup>[↑](#length-underflow-scanner)</sup>
+## False positives <sup>[↑](#lengthunderflowscanner)</sup>
 
 **Fixed-size structure offset arithmetic.** Code that computes an index into a fixed-size struct member for example `lea rdi, [rbx - 8]` to access a struct field 8 bytes before a pointer will match the subtraction check. The register destination then passed through a `MOVZX` for a different purpose could complete the pattern spuriously. Verify by examining the context: does the subtracted register actually hold a user-supplied length field?
 
@@ -164,7 +183,7 @@ UnderflowFinding [UNGUARDED]
 
 ---
 
-## Pipeline position <sup>[↑](#length-underflow-scanner)</sup>
+## Pipeline position <sup>[↑](#lengthunderflowscanner)</sup>
 
 **Before this module:** `BinaryContext.load_or_build()` to supply the PLT symbol map for call-target resolution.
 
@@ -172,7 +191,7 @@ UnderflowFinding [UNGUARDED]
 
 ---
 
-## Reading findings <sup>[↑](#length-underflow-scanner)</sup>
+## Reading findings <sup>[↑](#lengthunderflowscanner)</sup>
 
 | Field | Content |
 |:---|:---|
@@ -188,7 +207,7 @@ UnderflowFinding [UNGUARDED]
 
 ---
 
-## See also <sup>[↑](#length-underflow-scanner)</sup>
+## See also <sup>[↑](#lengthunderflowscanner)</sup>
 
 - [Taint Analysis](taint-analysis.md): confirm that the length field originates from user-controlled input
 - [Heap Vulnerability Scanner](heap-vulnerability-scanner.md): detects integer overflows before allocation multiplicative overflow class

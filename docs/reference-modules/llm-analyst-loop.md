@@ -1,10 +1,28 @@
-# LLM Analyst Loop
+# AgentLoop
 
-ReAct Reason + Act agent loop that drives Claude through a tool-calling conversation to analyze a stripped binary function: recovering function names, roles, confidence scores, and vulnerability hypotheses without symbols or source code.
+  - [What is the ReAct pattern?](#what-is-the-react-pattern)
+  - [Why this exists](#why-this-exists)
+  - [How it works](#how-it-works)
+  - [Usage](#usage)
+  - [Example output](#example-output)
+  - [False positives](#false-positives)
+  - [Pipeline position](#pipeline-position)
+  - [Reading output](#reading-output)
+  - [See also](#see-also)
+
+**Files:** `ablation/analyzers/llm_analyst/agent_loop.py` · `ablation/analyzers/llm_analyst/tool_registry.py`
 
 ---
 
-## Why this exists <sup>[↑](#llm-analyst-loop)</sup>
+## What is the ReAct pattern? <sup>[↑](#agentloop)</sup>
+
+ReAct (Reason + Act, Yao et al. 2022) is an agent architecture in which a language model interleaves reasoning traces and tool calls in a single conversation loop. At each step the model produces either a Thought (free-text reasoning about what it has observed so far and what to do next) or a tool invocation (a structured call to an external analysis function). The tool's output is fed back into the conversation as an Observation, and the model continues until it has enough information to produce a final Answer. The loop terminates when the model emits a stop signal or reaches a maximum step count.
+
+The key advantage of ReAct over single-shot prompting for binary analysis is that the model can adaptively select which analysis tools to run based on what it learns at each step. A one-shot prompt cannot adjust its query after seeing that a function calls `malloc` and `memcpy`; the ReAct agent can follow up immediately by running `FuncProfiler` on the exact function identified in the previous step, then `TaintTracker` on the allocation candidate found by `FuncProfiler`. The tool calls are not scripted in advance: the model navigates the analysis space guided by what each tool returns.
+
+`AgentLoop` implements the ReAct loop against the Anthropic Claude API. The `ToolRegistry` wraps Ablation analysis tools (semantic search, profiling, taint tracking, disassembly windowing) in the JSON schema format required by Claude's tool-use API. `ContextBuilder` assembles the initial system prompt from the `BinaryContext` summary, known function names, and the analysis objective. `AgentLoop.run()` sends the prompt, handles tool calls in a loop, and returns an `AnalysisResult` with the recovered function name, role, confidence score, and any vulnerability hypotheses the model reported.
+
+## Why this exists <sup>[↑](#agentloop)</sup>
 
 1. **Semantic search identifies function candidates by embedding similarity, but for functions whose role cannot be inferred from adjacent strings or callees alone, reasoning over the actual disassembly is required.** `AgentLoop.run()` gives Claude a set of RE tools: disassembly, CFG, cross-references, string lookup, import lookup, and function DB query; and a task ("name this function" or "find vulnerabilities") and lets it reason through the analysis in a bounded multi-turn loop. The result is a structured `AnalysisResult` with a proposed name, role, and confidence score.
 
@@ -14,7 +32,7 @@ ReAct Reason + Act agent loop that drives Claude through a tool-calling conversa
 
 ---
 
-## How it works <sup>[↑](#llm-analyst-loop)</sup>
+## How it works <sup>[↑](#agentloop)</sup>
 
 ```mermaid
 flowchart TD
@@ -72,7 +90,7 @@ flowchart TD
     linkStyle 22 stroke:#6a1b9a,stroke-width:2px
 ```
 
-### AnalysisResult fields <sup>[↑](#llm-analyst-loop)</sup>
+### AnalysisResult fields <sup>[↑](#agentloop)</sup>
 
 | Field | Type | Description |
 |:---|:---|:---|
@@ -84,7 +102,7 @@ flowchart TD
 
 ---
 
-## Usage <sup>[↑](#llm-analyst-loop)</sup>
+## Usage <sup>[↑](#agentloop)</sup>
 
 ```python
 from ablation.analyzers.llm_analyst.agent_loop import AgentLoop
@@ -130,7 +148,7 @@ loop.persist_result(result, binary_sha256='<sha256>')
 
 ---
 
-## Example output <sup>[↑](#llm-analyst-loop)</sup>
+## Example output <sup>[↑](#agentloop)</sup>
 
 The following illustrates the `AnalysisResult` output format. Actual names and addresses are binary-specific.
 
@@ -147,7 +165,7 @@ run_patch() cve_hypothesis:
 
 ---
 
-## False positives <sup>[↑](#llm-analyst-loop)</sup>
+## False positives <sup>[↑](#agentloop)</sup>
 
 **`max_tool_calls=10` is a hard budget: functions that require more tool calls to analyze will have lower-confidence results.** Increase `max_tool_calls` for complex functions large CFGs, indirect dispatch, heavily-inlined code at the cost of more API tokens per function. The default of 10 is appropriate for 90% of handler-class functions.
 
@@ -155,13 +173,13 @@ run_patch() cve_hypothesis:
 
 ---
 
-## Pipeline position <sup>[↑](#llm-analyst-loop)</sup>
+## Pipeline position <sup>[↑](#agentloop)</sup>
 
 Run `AgentLoop` as a targeted tool on `SemanticSearcher` top candidates that need human-quality naming and role analysis, not as a bulk pass over all functions token cost is per-function. Use `run()` for naming and `run_patch()` for diff-based vulnerability hypothesis generation after `VersionTracker.find_homolog()` identifies a changed function.
 
 ---
 
-## Reading output <sup>[↑](#llm-analyst-loop)</sup>
+## Reading output <sup>[↑](#agentloop)</sup>
 
 `AgentLoopctx, task.runfunc_addr` returns an `AnalysisResult`:
 
@@ -182,7 +200,7 @@ Run `AgentLoop` as a targeted tool on `SemanticSearcher` top candidates that nee
 
 ---
 
-## See also <sup>[↑](#llm-analyst-loop)</sup>
+## See also <sup>[↑](#agentloop)</sup>
 
 - [Assisted Function Naming](assisted-function-naming.md): higher-level interface wrapping `AgentLoop` for batch function naming
 - [Assisted Vulnerability Hypotheses](assisted-vulnerability-hypotheses.md): `run_patch()` usage for patch-based CVE hypothesis

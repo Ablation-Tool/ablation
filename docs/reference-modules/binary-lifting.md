@@ -1,10 +1,28 @@
-# Binary Lifting
+# BinaryLifter
 
-Lift native binary instructions from 18 ISA variants: ARM64, x86-64, x86-32, ARM32/Thumb, MIPS-32/64, nanoMIPS, PPC-32/64, RISC-V 32/64, LoongArch64, SH-2A, ARC EM/HS, V850/RH850, BEAM: to annotated C pseudocode with resolved calls, typed register state, and optional taint annotations, via `ablation/analyzers/binary_lifter.py` `BinaryLifter`.
+  - [What is binary lifting?](#what-is-binary-lifting)
+  - [Why this exists](#why-this-exists)
+  - [How it works](#how-it-works)
+  - [Usage](#usage)
+  - [Example output](#example-output)
+  - [False positives](#false-positives)
+  - [Pipeline position](#pipeline-position)
+  - [Reading output](#reading-output)
+  - [See also](#see-also)
+
+**File:** `ablation/analyzers/binary_lifter.py`
 
 ---
 
-## Why this exists <sup>[↑](#binary-lifting)</sup>
+## What is binary lifting? <sup>[↑](#binarylifter)</sup>
+
+Binary lifting translates raw machine instructions from a native ISA into a higher-level intermediate representation (IR) that captures the program's semantics without the encoding details specific to each architecture. The output looks like annotated C pseudocode: function calls resolved to symbol names, typed register states, memory accesses expressed as pointer dereferences, and control flow as structured `if`/`while` blocks. An analyst reading the lifted output can reason about what a function does without knowing whether the original was ARM64 or MIPS.
+
+The fundamental challenge in binary lifting is that native instructions are highly heterogeneous. ARM64 uses 32-bit fixed-width encodings with SIMD registers and status flags; MIPS uses delay slots and branch-likely instructions that have no C equivalent; BEAM is a bytecode VM for Erlang processes with message-passing and process scheduling built into the instruction set. A single lifter that handles all 18 ISAs in Ablation's target list must abstract over these differences while preserving the semantics that taint analysis and vulnerability detection depend on.
+
+`BinaryLifter` dispatches to per-arch state machines (`_ARM64State`, `_X86_64State`, etc.) that each implement the ISA-specific decoding, then normalizes the output into a common `NativeVal`-based pseudocode format. The lifting output integrates directly with `BinaryContext` function boundaries and the taint annotation pipeline, so a lifted function can be taint-analyzed immediately after lifting without a separate import step.
+
+## Why this exists <sup>[↑](#binarylifter)</sup>
 
 1. Firmware targets span dozens of ISA variants that commercial tools support poorly: nanoMIPS (MediaTek), BEAM Erlang/OTP embedded nodes, SH-2A Renesas automotive, ARC EM/HS (DesignWare embedded), and V850/RH850 automotive ECUs are second-tier targets in commercial disassemblers. `BinaryLifter` provides a single dispatch interface across all 18 ISAs so that ablation analysis scripts do not branch on architecture.
 
@@ -14,7 +32,7 @@ Lift native binary instructions from 18 ISA variants: ARM64, x86-64, x86-32, ARM
 
 ---
 
-## How it works <sup>[↑](#binary-lifting)</sup>
+## How it works <sup>[↑](#binarylifter)</sup>
 
 ```mermaid
 flowchart TD
@@ -36,7 +54,7 @@ flowchart TD
 
 ---
 
-## Usage <sup>[↑](#binary-lifting)</sup>
+## Usage <sup>[↑](#binarylifter)</sup>
 
 ```python
 from ablation.analyzers.binary_lifter import BinaryLifter
@@ -86,7 +104,7 @@ BinaryLifter.report('/path/to/binary', 0x12340, arch='ppc32')
 
 ---
 
-## Example output <sup>[↑](#binary-lifting)</sup>
+## Example output <sup>[↑](#binarylifter)</sup>
 
 The following is a schematic example showing output structure. Values are illustrative.
 
@@ -118,7 +136,7 @@ lift_function(0x10430)   [arch=mips32, structural backend]
 
 ---
 
-## False positives <sup>[↑](#binary-lifting)</sup>
+## False positives <sup>[↑](#binarylifter)</sup>
 
 **Structural backend pseudocode has no register provenance**: on non-ARM64/x86-64 ISAs, `BinaryLifter` does not maintain a typed register state machine. A call to `system(a0)` in MIPS structural pseudocode confirms `a0` is the first argument, but the lifter does not trace where `a0` was last written. Combine structural output with `SinkArgClassifier` and the relevant `TaintTracker` for ISAs that have one.
 
@@ -128,19 +146,19 @@ lift_function(0x10430)   [arch=mips32, structural backend]
 
 ---
 
-## Pipeline position <sup>[↑](#binary-lifting)</sup>
+## Pipeline position <sup>[↑](#binarylifter)</sup>
 
 Use `BinaryLifter.lift_function(va)` after `FuncProfiler` identifies a candidate function and `SinkArgClassifier` classifies the sink as `ARG_PROPAGATED` or `UNKNOWN`. The pseudocode output serves as human-readable confirmation of the taint path before writing the finding to `re/<vendor>/<target>_re.py`. For ARM64 and x86-64 targets, chain `.with_taintfindings` from a prior `TaintTracker` run to annotate taint flow directly in the pseudocode.
 
 ---
 
-## Reading output <sup>[↑](#binary-lifting)</sup>
+## Reading output <sup>[↑](#binarylifter)</sup>
 
 `BinaryLifter.lift_function(va)` returns a pseudocode string: multi-line annotated C-like IR with taint labels inline. The return type is `str`; no structured IR object is exposed.
 
 ---
 
-## See also <sup>[↑](#binary-lifting)</sup>
+## See also <sup>[↑](#binarylifter)</sup>
 
 - [Binary Lifter](binary-lifter.md): complete `BinaryLifter` API, `NativeVal` dataclass, `_X86_64State` detail
 - [BinaryContext](binary-context.md): session state container; use `from_context()` to inherit PLT and name overlay
