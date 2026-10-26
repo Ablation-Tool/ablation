@@ -99,9 +99,12 @@ BoMC IMM2 sessions 1–9:
 
 **9. MQSeries-RarePlatforms/cpqnsk51/IC44753** (NonStop PAK, 13.2MB, MIPS)
 `re/ibm/nonstop_re.py`
-- PAK container: dump file table. Identify MIPS ELFs inside.
-  If present: BinaryContext + SemanticSearcher sweep for MQ
-  message-passing primitives and exec-class sinks.
+- [x] COMPLETE (session 14, 2026-10-25). FORGE PASS. NSK-001 SAFE.
+- Actual binary in MQSeries-UNIX/CompaqNSK/IC44753.bin (GOAL-listed dir was empty).
+- Format: Tandem Guardian PAK tape archive. Binaries are Tandem SRL/OMF — NOT MIPS ELF.
+- HIPER APAR IC44753: 4 reliability fixes (repository sync, duplicate keys, channel loop).
+- No exec-class sinks (no Unix shell on NSK), no credentials, no injection surface.
+- INSTAPAR uses FUP DUP with fixed Guardian paths (not shell commands).
 
 ---
 
