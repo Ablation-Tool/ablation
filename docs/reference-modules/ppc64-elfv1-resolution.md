@@ -18,11 +18,22 @@ Resolve PPC64 big-endian ELFv1 OPD Official Procedure Descriptor entries and pat
 
 ```mermaid
 flowchart TD
-    A["Ppc64ElfV1Resolver.resolve(elf_path) → Ppc64ElfV1Info"] --> B["Parse ELF:\n  Is this ELFv1? e_machine=PPC64 AND .opd section present\n  .opd: 24-byte entries, each: [code_va, toc_va, env_va]"]
-    B --> C["For each .opd entry:\n  Read code_va from offset 0\n  Read toc_va from offset 8\n  Build: opd_va → code_va mapping"]
-    C --> D["Resolve .plt entries:\n  Each .plt entry (glink stub) jmps to .opd VA\n  Trace: plt_va → glink → opd_va → code_va\n  Build: plt_va → symbol_name from .dynsym/.rela.plt"]
-    D --> E["Ppc64ElfV1Info:\n  opd_map: Dict[opd_va, code_va]\n  plt: Dict[plt_va, symbol_name]"]
-    E --> F["patch_context(ctx: BinaryContext) → None\n  ctx.plt.update(stub_map)\n  ctx.func_starts updated with code VAs\n  After patch: ctx.plt_name(stub_va) returns symbol"]
+    A(["Ppc64ElfV1Resolver.resolve(elf_path) → Ppc64ElfV1Info"]):::input --> B["Parse ELF:\n  Is this ELFv1? e_machine=PPC64 AND .opd section present\n  .opd: 24-byte entries, each: [code_va, toc_va, env_va]"]:::primary
+    B:::primary --> C["For each .opd entry:\n  Read code_va from offset 0\n  Read toc_va from offset 8\n  Build: opd_va → code_va mapping"]:::secondary
+    C:::secondary --> D["Resolve .plt entries:\n  Each .plt entry (glink stub) jmps to .opd VA\n  Trace: plt_va → glink → opd_va → code_va\n  Build: plt_va → symbol_name from .dynsym/.rela.plt"]:::tertiary
+    D:::tertiary --> E["Ppc64ElfV1Info:\n  opd_map: Dict[opd_va, code_va]\n  plt: Dict[plt_va, symbol_name]"]:::tertiary
+    E:::tertiary --> F(["patch_context(ctx: BinaryContext) → None\n  ctx.plt.update(stub_map)\n  ctx.func_starts updated with code VAs\n  After patch: ctx.plt_name(stub_va) returns symbol"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

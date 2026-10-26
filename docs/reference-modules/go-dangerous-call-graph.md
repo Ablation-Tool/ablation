@@ -18,30 +18,60 @@ Map every `os/exec` call site in a stripped Go binary: resolving the static comm
 
 ```mermaid
 flowchart TD
-    A["scan_binary(binary_path)"] --> B["Load ELF bytes\n_parse_elf_segments → PT_LOAD [{p_vaddr, p_offset, p_filesz}]"]
-    B --> C["GoFuncTable.from_binary(data) → {VA: name} from .gopclntab"]
-    C --> D["GoSubprocessScanner(data, segments, func_table)"]
-    D --> E["GoStringResolver(data, segments) — resolves .rodata strings from LEA/MOV"]
-    D --> F["Build _va_to_name, _name_to_va maps\nBuild _sorted_vas for size estimation"]
-    E & F --> G["scan(): iterate _sorted_vas"]
-    G --> H{_is_stdlib(name)?}
-    H -->|yes| I[Skip: runtime. reflect. sync. syscall. etc.]
-    H -->|no| J["_func_size(va): gap to next pclntab entry, capped at max_func_size=0x4000"]
-    J --> K["_disasm_func(va, size): Capstone x86-64 or ARM64"]
-    K --> L{iterate instructions}
-    L --> M{"_extract_call_target(insn): CALL imm / BL imm?"}
-    M -->|no| L
-    M -->|"yes, VA in EXEC_TARGETS?"| N["Exec target found: os/exec.Command / CommandContext / Start / Run / Output / CombinedOutput"]
-    N --> O{arch == arm64?}
-    O -->|yes| P["resolved = None (ARM64 ADRP+ADD not implemented)\ncmd_type = dynamic, severity = MEDIUM"]
-    O -->|no x86-64| Q["GoStringResolver.resolve_call_site(instrs, idx, lookback=12)\nLEA rax,[rip+X] + MOV rbx,N window\nResolve VA to .rodata content"]
-    Q --> R{resolved?}
-    R -->|yes| S["cmd_string = content\n_classify_cmd → (relative/path/absolute/dynamic, severity)"]
-    R -->|no| T["cmd_type=dynamic, severity=MEDIUM"]
-    S & T --> U["SubprocessSite(scanner_func, call_va, exec_target, cmd_string, cmd_type, severity)"]
-    U --> L
-    L --> V["Sort: HIGH → MEDIUM → INFO → alphabetical"]
-    V --> W["List[SubprocessSite]"]
+    A(["scan_binary(binary_path)"]):::input --> B["Load ELF bytes\n_parse_elf_segments → PT_LOAD [{p_vaddr, p_offset, p_filesz}]"]:::primary
+    B:::primary --> C["GoFuncTable.from_binary(data) → {VA: name} from .gopclntab"]:::secondary
+    C:::secondary --> D["GoSubprocessScanner(data, segments, func_table)"]:::tertiary
+    D:::tertiary --> E["GoStringResolver(data, segments) · resolves .rodata strings from LEA/MOV"]:::tertiary
+    D:::tertiary --> F(["Build _va_to_name, _name_to_va maps\nBuild _sorted_vas for size estimation"]):::output
+    E:::tertiary --> G["scan(): iterate _sorted_vas"]:::tertiary
+    G:::tertiary --> H{"_is_stdlib(name)?"}:::neutral
+    H:::neutral -->|yes| I(["Skip: runtime. reflect. sync. syscall. etc."]):::output
+    H:::neutral -->|no| J["_func_size(va): gap to next pclntab entry, capped at max_func_size=0x4000"]:::tertiary
+    J:::tertiary --> K["_disasm_func(va, size): Capstone x86-64 or ARM64"]:::tertiary
+    K:::tertiary --> L{"iterate instructions"}:::neutral
+    L:::neutral --> M{"_extract_call_target(insn): CALL imm / BL imm?"}:::neutral
+    M:::neutral -->|no| L:::neutral
+    M:::neutral -->|"yes, VA in EXEC_TARGETS?"| N["Exec target found: os/exec.Command / CommandContext / Start / Run / Output / CombinedOutput"]:::tertiary
+    N:::tertiary --> O{"arch == arm64?"}:::neutral
+    O:::neutral -->|yes| P(["resolved = None (ARM64 ADRP+ADD not implemented)\ncmd_type = dynamic, severity = MEDIUM"]):::output
+    O:::neutral -->|no x86-64| Q["GoStringResolver.resolve_call_site(instrs, idx, lookback=12)\nLEA rax,[rip+X] + MOV rbx,N window\nResolve VA to .rodata content"]:::tertiary
+    Q:::tertiary --> R{"resolved?"}:::neutral
+    R:::neutral -->|yes| S["cmd_string = content\n_classify_cmd → (relative/path/absolute/dynamic, severity)"]:::tertiary
+    R:::neutral -->|no| T(["cmd_type=dynamic, severity=MEDIUM"]):::output
+    S:::tertiary --> U["SubprocessSite(scanner_func, call_va, exec_target, cmd_string, cmd_type, severity)"]:::tertiary
+    U:::tertiary --> L:::neutral
+    L:::neutral --> V["Sort: HIGH → MEDIUM → INFO → alphabetical"]:::tertiary
+    V:::tertiary --> W(["List[SubprocessSite]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#546e7a,stroke-width:2px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#546e7a,stroke-width:2px
+    linkStyle 11 stroke:#546e7a,stroke-width:2px
+    linkStyle 12 stroke:#546e7a,stroke-width:2px
+    linkStyle 13 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 14 stroke:#546e7a,stroke-width:2px
+    linkStyle 15 stroke:#2e7d32,stroke-width:3px
+    linkStyle 16 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 17 stroke:#546e7a,stroke-width:2px
+    linkStyle 18 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 19 stroke:#2e7d32,stroke-width:3px
+    linkStyle 20 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 21 stroke:#546e7a,stroke-width:2px
+    linkStyle 22 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 23 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Command path classification

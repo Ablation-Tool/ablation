@@ -18,15 +18,29 @@ Extend interprocedural taint tracking across shared library boundaries: followin
 
 ```mermaid
 flowchart TD
-    A["CrossBinaryTaintTracker(entry_binary, lib_graph, max_hops=6)"] --> B["TaintTracker.run_interprocedural() on entry_binary\n  Stop at PLT entries → TaintHop: symbol, arg_indices"]
-    B --> C["For each PLT-stopped hop:\n  LibGraph.resolve(symbol) → exporting_binary\n  Start new TaintTracker on exporting_binary\n  Seed with tainted args at function entry"]
-    C --> D{"Reached a sink\nor max_hops?"}
-    D -->|Sink reached| E["TaintChain: List[TaintHop]\n  depth: int\n  sink_binary_name()\n  fmt() → full trace string"]
-    D -->|Not reached| F["Continue BFS to next library hop"]
-    D -->|max_hops| G["Chain truncated at max_hops\nReport as partial chain"]
-    E --> H["run() → List[TaintChain]\nreport(chains) → str"]
+    A(["CrossBinaryTaintTracker(entry_binary, lib_graph, max_hops=6)"]):::input --> B["TaintTracker.run_interprocedural() on entry_binary\n  Stop at PLT entries → TaintHop: symbol, arg_indices"]:::primary
+    B:::primary --> C["For each PLT-stopped hop:\n  LibGraph.resolve(symbol) → exporting_binary\n  Start new TaintTracker on exporting_binary\n  Seed with tainted args at function entry"]:::secondary
+    C:::secondary --> D{"Reached a sink\nor max_hops?"}:::neutral
+    D:::neutral -->|Sink reached| E["TaintChain: List[TaintHop]\n  depth: int\n  sink_binary_name()\n  fmt() → full trace string"]:::tertiary
+    D:::neutral -->|Not reached| F(["Continue BFS to next library hop"]):::output
+    D:::neutral -->|max_hops| G(["Chain truncated at max_hops\nReport as partial chain"]):::output
+    E:::tertiary --> H(["run() → List[TaintChain]\nreport(chains) → str"]):::output
 
-    I["LibGraph.from_dir(firmware_lib_dir)"] --> J["Parse all ELF .so in directory:\n  Build import_map: symbol → binary\n  Build export_map: binary → exported symbols\n  Build dep_graph: binary → dependencies"]
+    I(["LibGraph.from_dir(firmware_lib_dir)"]):::input --> J(["Parse all ELF .so in directory:\n  Build import_map: symbol → binary\n  Build export_map: binary → exported symbols\n  Build dep_graph: binary → dependencies"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#546e7a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

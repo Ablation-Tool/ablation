@@ -18,10 +18,20 @@ Detect TVM-generated `tvmgen_*` inference symbols in TI MCU firmware compiled by
 
 ```mermaid
 flowchart TD
-    A["TiNNCScanner.from_path(path)"] --> B["Detect format:\n  ELF → lief symbol table\n  COFF2/AR → TiCoffLoader symbol table\n  → NormSymbol list"]
-    B --> C["scan() → TiNNCScanResult\n  Filter symbols matching tvmgen_* pattern\n  For each match:\n    Parse operator name from tvmgen_default_fused_*\n    Extract operator type: nn_conv2d / nn_dense / etc.\n    Parse tensor dimensions from symbol name suffixes\n    → TiNNCModule(symbol, operator, dims)"]
-    C --> D["TiNNCScanResult:\n  modules: List[TiNNCModule]\n  findings: List[TiNNCScanFinding]"]
-    D --> E["TiNNCModule:\n  symbol: NormSymbol\n  operator: str\n  dims: List[int]\n\nTiNNCScanFinding:\n  finding_class: str  (LARGE_TENSOR | EXTERN_DATA | PATTERN_MISMATCH)\n  detail: str\n  severity: str"]
+    A(["TiNNCScanner.from_path(path)"]):::input --> B["Detect format:\n  ELF → lief symbol table\n  COFF2/AR → TiCoffLoader symbol table\n  → NormSymbol list"]:::primary
+    B:::primary --> C["scan() → TiNNCScanResult\n  Filter symbols matching tvmgen_* pattern\n  For each match:\n    Parse operator name from tvmgen_default_fused_*\n    Extract operator type: nn_conv2d / nn_dense / etc.\n    Parse tensor dimensions from symbol name suffixes\n    → TiNNCModule(symbol, operator, dims)"]:::secondary
+    C:::secondary --> D["TiNNCScanResult:\n  modules: List[TiNNCModule]\n  findings: List[TiNNCScanFinding]"]:::tertiary
+    D:::tertiary --> E(["TiNNCModule:\n  symbol: NormSymbol\n  operator: str\n  dims: List[int]\n\nTiNNCScanFinding:\n  finding_class: str  (LARGE_TENSOR | EXTERN_DATA | PATTERN_MISMATCH)\n  detail: str\n  severity: str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,9 +18,18 @@ Probe DNS nameservers for AXFR/IXFR zone transfer acceptance, UDP ANY amplificat
 
 ```mermaid
 flowchart TD
-    A["probe_dns_zone_transfer(host, port=53) → list\n  _dns_extract_zone(host) → zone name\n  AXFR (type=252) over TCP/53:\n    _dns_query_msg(0xA001, 0x0000, zone, 252)\n    _dns_tcp(host, port, msg) → response\n    ancount > 0 → DNS_AXFR_ALLOWED (CRITICAL)\n  IXFR (type=251) with SOA serial=0:\n    ancount > 0 → DNS_IXFR_ALLOWED (HIGH)\n  UDP ANY (QTYPE=255) for google.com:\n    response > 512 bytes → DNS_ANY_AMPLIFICATION (HIGH)\n  → [{severity, title, detail, host, port}]"] --> B["probe_dns_recursion(host, port=53) → list\n  A query for google.com with RD=1:\n    RA bit + rcode=0 + ancount > 0 → DNS_OPEN_RESOLVER (HIGH)\n    EDNS0 OPT record in response → EDNS0 supported\n    COOKIE absent → DNS_NO_EDNS_COOKIE (MEDIUM)\n  version.bind CHAOS TXT query:\n    non-empty answer → DNS_VERSION_DISCLOSURE (LOW)\n    version string exposed\n  → [{severity, title, detail, host, port}]"]
-    B --> C["probe_dns_dot_doh(host, port=853) → list\n  DoT: TCP/853 TLS handshake\n    TLS connect success → DNS_OVER_TLS_PORT_OPEN (HIGH)\n    A query over DoT → ancount > 0\n      → DNS_OVER_TLS_OPEN_RESOLVER (CRITICAL)\n  DoH: HTTPS GET /dns-query?dns=<b64url-encoded-wire-query>\n    Accept: application/dns-message\n    HTTP 200 with dns content-type\n      → DNS_OVER_HTTPS_ENDPOINT (HIGH)\n  → [{severity, title, detail, host, port}]"]
-    C --> D["PCAPAnalyzer.extract_dns() → list\n  From captured PCAP (offline analysis):\n  Scan UDP port 53 packets in PCAP file\n  Parse DNS header: txid, flags, qdcount\n  Decode QNAME label encoding\n  Return queries + NXDOMAIN responses\n  → [{query: str, type: str, src: str, rcode: int, qr: str}]"]
+    A(["probe_dns_zone_transfer(host, port=53) → list\n  _dns_extract_zone(host) → zone name\n  AXFR (type=252) over TCP/53:\n    _dns_query_msg(0xA001, 0x0000, zone, 252)\n    _dns_tcp(host, port, msg) → response\n    ancount > 0 → DNS_AXFR_ALLOWED (CRITICAL)\n  IXFR (type=251) with SOA serial=0:\n    ancount > 0 → DNS_IXFR_ALLOWED (HIGH)\n  UDP ANY (QTYPE=255) for google.com:\n    response > 512 bytes → DNS_ANY_AMPLIFICATION (HIGH)\n  → [{severity, title, detail, host, port}]"]):::input --> B["probe_dns_recursion(host, port=53) → list\n  A query for google.com with RD=1:\n    RA bit + rcode=0 + ancount > 0 → DNS_OPEN_RESOLVER (HIGH)\n    EDNS0 OPT record in response → EDNS0 supported\n    COOKIE absent → DNS_NO_EDNS_COOKIE (MEDIUM)\n  version.bind CHAOS TXT query:\n    non-empty answer → DNS_VERSION_DISCLOSURE (LOW)\n    version string exposed\n  → [{severity, title, detail, host, port}]"]:::primary
+    B:::primary --> C["probe_dns_dot_doh(host, port=853) → list\n  DoT: TCP/853 TLS handshake\n    TLS connect success → DNS_OVER_TLS_PORT_OPEN (HIGH)\n    A query over DoT → ancount > 0\n      → DNS_OVER_TLS_OPEN_RESOLVER (CRITICAL)\n  DoH: HTTPS GET /dns-query?dns=<b64url-encoded-wire-query>\n    Accept: application/dns-message\n    HTTP 200 with dns content-type\n      → DNS_OVER_HTTPS_ENDPOINT (HIGH)\n  → [{severity, title, detail, host, port}]"]:::secondary
+    C:::secondary --> D(["PCAPAnalyzer.extract_dns() → list\n  From captured PCAP (offline analysis):\n  Scan UDP port 53 packets in PCAP file\n  Parse DNS header: txid, flags, qdcount\n  Decode QNAME label encoding\n  Return queries + NXDOMAIN responses\n  → [{query: str, type: str, src: str, rcode: int, qr: str}]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

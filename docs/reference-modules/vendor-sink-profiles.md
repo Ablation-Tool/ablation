@@ -18,12 +18,23 @@ Load vendor-specific sink registrations and known-safe exec patterns from YAML p
 
 ```mermaid
 flowchart TD
-    A["ablation/profiles/<vendor>.yaml\n  vendor: fortinet\n  sinks:\n    - name: fadcsystem\n      arg_pos: 0\n      note: FortiOS exec wrapper\n    - name: wm_popen\n      arg_pos: 0\n      note: FortiMail popen wrapper\n  known_safe_exec_patterns:\n    - pattern: '^/usr/bin/logger'\n      note: syslog-only exec, no injection risk"] --> B["VendorProfile.from_vendor('fortinet') → VendorProfile\n  Reads ablation/profiles/fortinet.yaml\n  Validates YAML schema\n  Caches parsed profile"]
-    B --> C["apply_to(classifier: SinkArgClassifier):\n  For each sink in profile.sinks:\n    classifier.add_sink(name, arg_pos)\n  Register safe patterns in classifier"]
-    B --> D["sink_note(name) → str\n  Returns the 'note' field for a registered sink\n  Used in report output for human context"]
-    B --> E["safe_pattern_for_exec(unsetenv_strings) → Optional[dict]\n  Check if the exec site matches a known-safe pattern\n  Returns pattern dict if matched, None if not"]
-    B --> F["summary() → str\n  List registered sinks and safe patterns"]
-    G["VendorProfile.available_vendors() → List[str]\n  Lists all .yaml files in ablation/profiles/\n  Returns vendor names without extension"]
+    A(["ablation/profiles/<vendor>.yaml\n  vendor: fortinet\n  sinks:\n    - name: fadcsystem\n      arg_pos: 0\n      note: FortiOS exec wrapper\n    - name: wm_popen\n      arg_pos: 0\n      note: FortiMail popen wrapper\n  known_safe_exec_patterns:\n    - pattern: '^/usr/bin/logger'\n      note: syslog-only exec, no injection risk"]):::input --> B["VendorProfile.from_vendor('fortinet') → VendorProfile\n  Reads ablation/profiles/fortinet.yaml\n  Validates YAML schema\n  Caches parsed profile"]:::primary
+    B:::primary --> C(["apply_to(classifier: SinkArgClassifier):\n  For each sink in profile.sinks:\n    classifier.add_sink(name, arg_pos)\n  Register safe patterns in classifier"]):::output
+    B:::primary --> D(["sink_note(name) → str\n  Returns the 'note' field for a registered sink\n  Used in report output for human context"]):::output
+    B:::primary --> E(["safe_pattern_for_exec(unsetenv_strings) → Optional[dict]\n  Check if the exec site matches a known-safe pattern\n  Returns pattern dict if matched, None if not"]):::output
+    B:::primary --> F(["summary() → str\n  List registered sinks and safe patterns"]):::output
+    G(["VendorProfile.available_vendors() → List[str]\n  Lists all .yaml files in ablation/profiles/\n  Returns vendor names without extension"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

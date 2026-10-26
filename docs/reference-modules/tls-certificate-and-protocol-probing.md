@@ -18,9 +18,18 @@ Inspect TLS certificate chains, key strength, legacy protocol version support TL
 
 ```mermaid
 flowchart TD
-    A["TLSAnalyzer() — no constructor args\n  analyzer.analyze(host, port=443) → result dict"] --> B["connect() → cert_chain, cipher_suite\n  _ssl_ctx_no_verify(): do not validate chain (get all certs)\n  ssl.SSLSocket.getpeercert(binary_form=True)\n  Extract: leaf + intermediates + root\n  _extract_cert_key_info(cert) per certificate:\n    key_type, key_size, sig_alg, not_after"]
-    B --> C["CipherSuiteProber(host, port):\n  probe_legacy_versions()\n    SSLv3, TLSv1.0 (0x0301), TLSv1.1 (0x0302)\n    _send_raw_clienthello(payload) → ServerHello or Alert\n  probe_weak_ciphers()\n    RC4: 0x0005, 0x000A, 0x0013, 0x0014\n    3DES: 0x000A  |  NULL: 0x002C  |  EXPORT: 0x0006\n    Anon DH: 0x001A, 0x0018\n  probe_dh_params()\n    DH key exchange: extract p, g, server_key_share\n    Check: p < 2048 bits (weak DH)"]
-    C --> D["tls_enum.py:\n  check_certificate_transparency(host, port)\n  check_tls_inspection(host, port) → proxy detection\n  check_pin_mismatch(host, port)\n  → TLSFinding(severity, title, detail, host, port)"]
+    A(["TLSAnalyzer() · no constructor args\n  analyzer.analyze(host, port=443) → result dict"]):::input --> B["connect() → cert_chain, cipher_suite\n  _ssl_ctx_no_verify(): do not validate chain (get all certs)\n  ssl.SSLSocket.getpeercert(binary_form=True)\n  Extract: leaf + intermediates + root\n  _extract_cert_key_info(cert) per certificate:\n    key_type, key_size, sig_alg, not_after"]:::primary
+    B:::primary --> C["CipherSuiteProber(host, port):\n  probe_legacy_versions()\n    SSLv3, TLSv1.0 (0x0301), TLSv1.1 (0x0302)\n    _send_raw_clienthello(payload) → ServerHello or Alert\n  probe_weak_ciphers()\n    RC4: 0x0005, 0x000A, 0x0013, 0x0014\n    3DES: 0x000A  |  NULL: 0x002C  |  EXPORT: 0x0006\n    Anon DH: 0x001A, 0x0018\n  probe_dh_params()\n    DH key exchange: extract p, g, server_key_share\n    Check: p < 2048 bits (weak DH)"]:::secondary
+    C:::secondary --> D(["tls_enum.py:\n  check_certificate_transparency(host, port)\n  check_tls_inspection(host, port) → proxy detection\n  check_pin_mismatch(host, port)\n  → TLSFinding(severity, title, detail, host, port)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

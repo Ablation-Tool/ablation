@@ -18,12 +18,24 @@ Detect PPC32 PEF ABI register clobber bugs in classic Mac OS / OpenTransport bin
 
 ```mermaid
 flowchart TD
-    A["PEFABIClobberScanner.from_bytes(code, base_va)"] --> B["For each instruction in linear scan:\n  Identify sink calls (bl to known exec-class symbols)\n  Record sink VA + argument registers needed (r3, r4, ...)"]
-    B --> C["For each sink call site:\n  Backward walk from sink VA:\n    Track last-write register for each argument reg\n    Stop at: ret/rfi (RETURN), b/ba (UNCOND), function boundary\n    Stop at: bl (CALL) — any intermediate bl clobbers r3-r13"]
-    C --> D{"Backward walk result?"}
-    D -->|"call_clobber: bl found\nbetween last-write and sink"| E["ABIClobberFinding:\n  site_va: int  (sink BL VA)\n  check_reg: int  (e.g. 4 for r4)\n  verdict: 'PLAUSIBLE' or 'SAFE'\n  stop_va: int  (where walk stopped)\n  stop_reason: 'reg_written' | 'call_clobber' | \n    'uncond_branch' | 'return' | 'window_exhausted'"]
-    D -->|"reg_written before any bl"| F["verdict='SAFE' — no finding"]
-    E --> G["scan(sink_vas, check_regs=[4], window=32) → List[ABIClobberFinding]\nreport(findings) → str"]
+    A(["PEFABIClobberScanner.from_bytes(code, base_va)"]):::input --> B["For each instruction in linear scan:\n  Identify sink calls (bl to known exec-class symbols)\n  Record sink VA + argument registers needed (r3, r4, ...)"]:::primary
+    B:::primary --> C["For each sink call site:\n  Backward walk from sink VA:\n    Track last-write register for each argument reg\n    Stop at: ret/rfi (RETURN), b/ba (UNCOND), function boundary\n    Stop at: bl (CALL) · any intermediate bl clobbers r3-r13"]:::secondary
+    C:::secondary --> D{"Backward walk result?"}:::neutral
+    D:::neutral -->|"call_clobber: bl found\nbetween last-write and sink"| E["ABIClobberFinding:\n  site_va: int  (sink BL VA)\n  check_reg: int  (e.g. 4 for r4)\n  verdict: 'PLAUSIBLE' or 'SAFE'\n  stop_va: int  (where walk stopped)\n  stop_reason: 'reg_written' | 'call_clobber' | \n    'uncond_branch' | 'return' | 'window_exhausted'"]:::tertiary
+    D:::neutral -->|"reg_written before any bl"| F(["verdict='SAFE' · no finding"]):::output
+    E:::tertiary --> G(["scan(sink_vas, check_regs=[4], window=32) → List[ABIClobberFinding]\nreport(findings) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#546e7a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

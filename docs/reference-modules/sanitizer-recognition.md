@@ -18,12 +18,24 @@ Detect allowlist-style byte-validator functions in x86-64 ELF binaries without s
 
 ```mermaid
 flowchart TD
-    A["SanitizerDetector.from_path(path) or\nSanitizerDetector.from_context(ctx)"] --> B["For each function ≤ 128 instructions:\n  Score against detection signature:\n  1. Byte-load loop (movzx + backward-edge branch)\n  2. Range comparisons (cmp + ja/jb with immediate)\n  3. Equality checks (cmp + je/jne with immediate)\n  4. Dual return paths (one path: xor eax,eax; other: mov eax,1)\n  5. No malloc/printf/IO calls (pure char-classification)"]
-    B --> C["Score ≥ _MIN_SCORE → SanitizerProfile:\n  func_va: int\n  score: int\n  accepted_bytes: Set[int] (bytes that return 1)\n  coverage_report: SanitizerCoverageReport"]
-    C --> D["SanitizerCoverageReport:\n  shell_safe() → bool\n  (checks |;&$()\\<>\\n\\t all rejected)\n  metachar_coverage: dict\n  fmt() → human-readable coverage table"]
-    A --> E["detect(min_score=_MIN_SCORE) → List[SanitizerProfile]\n  All detected sanitizer functions"]
-    A --> F["lookup(func_va) → Optional[SanitizerProfile]\n  Check whether a specific VA is a sanitizer"]
-    A --> G["analyze_function(func_va) → Optional[SanitizerProfile]\n  Score a single function (for targeted analysis)"]
+    A(["SanitizerDetector.from_path(path) or\nSanitizerDetector.from_context(ctx)"]):::input --> B["For each function ≤ 128 instructions:\n  Score against detection signature:\n  1. Byte-load loop (movzx + backward-edge branch)\n  2. Range comparisons (cmp + ja/jb with immediate)\n  3. Equality checks (cmp + je/jne with immediate)\n  4. Dual return paths (one path: xor eax,eax; other: mov eax,1)\n  5. No malloc/printf/IO calls (pure char-classification)"]:::primary
+    B:::primary --> C["Score ≥ _MIN_SCORE → SanitizerProfile:\n  func_va: int\n  score: int\n  accepted_bytes: Set[int] (bytes that return 1)\n  coverage_report: SanitizerCoverageReport"]:::secondary
+    C:::secondary --> D(["SanitizerCoverageReport:\n  shell_safe() → bool\n  (checks |;&$()\\<>\\n\\t all rejected)\n  metachar_coverage: dict\n  fmt() → human-readable coverage table"]):::output
+    A:::input --> E(["detect(min_score=_MIN_SCORE) → List[SanitizerProfile]\n  All detected sanitizer functions"]):::output
+    A:::input --> F(["lookup(func_va) → Optional[SanitizerProfile]\n  Check whether a specific VA is a sanitizer"]):::output
+    A:::input --> G(["analyze_function(func_va) → Optional[SanitizerProfile]\n  Score a single function (for targeted analysis)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

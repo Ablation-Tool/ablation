@@ -18,11 +18,22 @@ Parse PowerPC PEF Preferred Executable Format binaries used by Mac Classic CFM C
 
 ```mermaid
 flowchart TD
-    A["PEFBinaryAnalyzer.from_path(path)"] --> B["Parse PEF container header:\n  containerID: 'Joy!' magic + 'pef'\n  architecture: ppc | 68k\n  sectionCount: N sections\n  → List[PEFSection]"]
-    B --> C["sections() / code_sections() / data_sections()\n  PEFSection: name, kind, baseAddress, totalSize, read_from()"]
-    B --> D["imported_libs() → List[PEFImportedLib]\n  Name, symbol count from loader section"]
-    D --> E["imported_symbols() → List[PEFImport]\n  Symbol name, class (function / data)\n  RTOC index → stub VA mapping"]
-    E --> F["stub_table() → Dict[str, int]\n  symbol_name → code_VA for all function stubs\n  dangerous_imports() → List[str]\n  all_imports() → List[str]"]
+    A(["PEFBinaryAnalyzer.from_path(path)"]):::input --> B["Parse PEF container header:\n  containerID: 'Joy!' magic + 'pef'\n  architecture: ppc | 68k\n  sectionCount: N sections\n  → List[PEFSection]"]:::primary
+    B:::primary --> C(["sections() / code_sections() / data_sections()\n  PEFSection: name, kind, baseAddress, totalSize, read_from()"]):::output
+    B:::primary --> D["imported_libs() → List[PEFImportedLib]\n  Name, symbol count from loader section"]:::secondary
+    D:::secondary --> E["imported_symbols() → List[PEFImport]\n  Symbol name, class (function / data)\n  RTOC index → stub VA mapping"]:::tertiary
+    E:::tertiary --> F(["stub_table() → Dict[str, int]\n  symbol_name → code_VA for all function stubs\n  dangerous_imports() → List[str]\n  all_imports() → List[str]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

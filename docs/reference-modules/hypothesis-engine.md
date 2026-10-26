@@ -23,25 +23,39 @@ A taint tracker returns a list of findings. A semantic searcher returns ranked V
 
 ```mermaid
 flowchart TD
-    A["Seed: N competing claims for the same subject\nsubject = {call_site_va: '0x401920'}\nclaim A = {target_va: '0x4026c0'}  prior=0.5\nclaim B = {target_va: '0x403110'}  prior=0.5\n\nHypothesisRecord: uuid · kind · subject · claim\nstatus · prior · confidence\nsupport_score · contradiction_score · evidence_ids[]"] --> B["add_evidence() from any analyzer"]
+    A(["Seed: N competing claims for the same subject\nsubject = {call_site_va: '0x401920'}\nclaim A = {target_va: '0x4026c0'}  prior=0.5\nclaim B = {target_va: '0x403110'}  prior=0.5\n\nHypothesisRecord: uuid · kind · subject · claim\nstatus · prior · confidence\nsupport_score · contradiction_score · evidence_ids[]"]):::input --> B["add_evidence() from any analyzer"]:::primary
 
-    B --> C["EvidenceScorer: deterministic scoring per family\nRaw strength: provided by caller (0.5 – 1.0)\n\nFamily weights:\n  behavioral  1.00  runtime traces, emulator output\n  data_flow   0.90  taint paths, use-def chains\n  structure   0.75  CFG, instruction boundaries\n  cross_ref   0.65  strings, PLT, callers/callees\n  version     0.60  DTW, Jaccard, structural homologs\n  manual      0.50  analyst observation with provenance\n  semantic    0.25  embeddings, function similarity\n\nDiminishing returns (same family):\n  weight × 1/(1+ln(count))\n  count=1 → 1.00×  count=2 → 0.59×  count=5 → 0.38×\n\ncontribution = strength × reliability × independence"]
+    B:::primary --> C["EvidenceScorer: deterministic scoring per family\nRaw strength: provided by caller (0.5 · 1.0)\n\nFamily weights:\n  behavioral  1.00  runtime traces, emulator output\n  data_flow   0.90  taint paths, use-def chains\n  structure   0.75  CFG, instruction boundaries\n  cross_ref   0.65  strings, PLT, callers/callees\n  version     0.60  DTW, Jaccard, structural homologs\n  manual      0.50  analyst observation with provenance\n  semantic    0.25  embeddings, function similarity\n\nDiminishing returns (same family):\n  weight × 1/(1+ln(count))\n  count=1 → 1.00×  count=2 → 0.59×  count=5 → 0.38×\n\ncontribution = strength × reliability × independence"]:::secondary
 
-    C --> D["score() → confidence, status"]
+    C:::secondary --> D["score() → confidence, status"]:::tertiary
 
-    D --> E{"State transition\n(deterministic, not a threshold)"}
+    D:::tertiary --> E{"State transition\n(deterministic, not a threshold)"}:::neutral
 
-    E -->|"No meaningful evidence"| F["UNTESTED"]
-    E -->|"Weak or single-family support"| G["PLAUSIBLE"]
-    E -->|"Multiple independent families agree"| H["SUPPORTED"]
-    E -->|"confidence ≥ 0.75 AND\n≥1 structural/data_flow/behavioral\nAND ≥2 independent families\nAND zero hard contradictions"| I[/"CONFIRMED"/]
-    E -->|"Hard contradiction\nstrength ≥ 0.80\nimmediately overrides all scoring"| J[/"REJECTED"/]
-    E -->|"Two or more hypotheses\nobservationally equivalent"| K["UNRESOLVED"]
+    E:::neutral -->|"No meaningful evidence"| F(["UNTESTED"]):::output
+    E:::neutral -->|"Weak or single-family support"| G(["PLAUSIBLE"]):::output
+    E:::neutral -->|"Multiple independent families agree"| H["SUPPORTED"]:::tertiary
+    E:::neutral -->|"confidence ≥ 0.75 AND\n≥1 structural/data_flow/behavioral\nAND ≥2 independent families\nAND zero hard contradictions"| I(["CONFIRMED"]):::output
+    E:::neutral -->|"Hard contradiction\nstrength ≥ 0.80\nimmediately overrides all scoring"| J(["REJECTED"]):::output
+    E:::neutral -->|"Two or more hypotheses\nobservationally equivalent"| K(["UNRESOLVED"]):::output
 
-    H --> L["plan() → ProbeRanker selects next probe\n\nEIG = disagreement × observability / cost\n\ndisagreement: fraction of hypotheses the probe splits\n  (≈0 if affects all equally, ≈1 if splits them)\nobservability: fraction of target the analyzer observes\n  (disassembly=0.95, taint=0.80)\ncost: analyst time + compute\n  (manual=10, disasm=0.5)\n\nExecuted probes excluded from future rankings"]
-
-    style I fill:#14532d,stroke:#166534,color:#dcfce7
-    style J fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    H:::tertiary --> L(["plan() → ProbeRanker selects next probe\n\nEIG = disagreement × observability / cost\n\ndisagreement: fraction of hypotheses the probe splits\n  (≈0 if affects all equally, ≈1 if splits them)\nobservability: fraction of target the analyzer observes\n  (disassembly=0.95, taint=0.80)\ncost: analyst time + compute\n  (manual=10, disasm=0.5)\n\nExecuted probes excluded from future rankings"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#546e7a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,10 +18,20 @@ Detect Bring Your Own Vulnerable Driver (BYOVD) capabilities in Windows kernel d
 
 ```mermaid
 flowchart TD
-    A["ByovdDetector(driver_path)"] --> B["Stage 1: Import signature\n  Scan PE import table for:\n  PHYS_MEM_RW: MmMapIoSpace, HalTranslateBusAddress\n  PROC_TOKEN: ZwOpenProcess, PsLookupProcessByProcessId\n  DIRECT_KERNEL: MmGetSystemRoutineAddress, IoCreateDevice\n  MSR_ACCESS: __rdmsr / __wrmsr patterns\n  Each match → ByovdCapability(class, import_name, va)"]
-    B --> C["Stage 2: IOCTL surface scan\n  Find IoCreateDevice + IRP_MJ_DEVICE_CONTROL dispatch\n  Trace IOCTL dispatch table → handler VAs\n  For each handler: does it call a Stage 1 capability?\n  Result: capability reachable from IOCTL surface?"]
-    C --> D["Stage 3: String evidence\n  Scan string table for:\n  \\Device\\PhysicalMemory\n  Known vulnerable driver device path patterns\n  Direct object manager path strings"]
-    D --> E["ByovdReport:\n  capabilities: List[ByovdCapability]\n  msr_accesses: List[ByovdMsrAccess]\n  byovd_strings: List[str]\n  is_byovd_capable (property) → bool\n  risk_level (property) → str\n  fmt() → str"]
+    A(["ByovdDetector(driver_path)"]):::input --> B["Stage 1: Import signature\n  Scan PE import table for:\n  PHYS_MEM_RW: MmMapIoSpace, HalTranslateBusAddress\n  PROC_TOKEN: ZwOpenProcess, PsLookupProcessByProcessId\n  DIRECT_KERNEL: MmGetSystemRoutineAddress, IoCreateDevice\n  MSR_ACCESS: __rdmsr / __wrmsr patterns\n  Each match → ByovdCapability(class, import_name, va)"]:::primary
+    B:::primary --> C["Stage 2: IOCTL surface scan\n  Find IoCreateDevice + IRP_MJ_DEVICE_CONTROL dispatch\n  Trace IOCTL dispatch table → handler VAs\n  For each handler: does it call a Stage 1 capability?\n  Result: capability reachable from IOCTL surface?"]:::secondary
+    C:::secondary --> D["Stage 3: String evidence\n  Scan string table for:\n  \\Device\\PhysicalMemory\n  Known vulnerable driver device path patterns\n  Direct object manager path strings"]:::tertiary
+    D:::tertiary --> E(["ByovdReport:\n  capabilities: List[ByovdCapability]\n  msr_accesses: List[ByovdMsrAccess]\n  byovd_strings: List[str]\n  is_byovd_capable (property) → bool\n  risk_level (property) → str\n  fmt() → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

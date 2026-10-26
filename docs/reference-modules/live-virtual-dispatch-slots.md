@@ -18,10 +18,20 @@ Enumerate exported Binder service interfaces from Android APK DEX class definiti
 
 ```mermaid
 flowchart TD
-    A["BinderScanner.from_path(apk_path)"] --> B["Parse AndroidManifest.xml:\n  Extract <service> elements:\n    name, exported, permission\n  → Dict[class_name, manifest_entry]"]
-    B --> C["Parse DEX classes.dex:\n  For each ClassDef where superclass in\n    {Service, IntentService, ...}:\n    Resolve onBind() return type\n    If returns IBinder → Binder server candidate\n    Resolve onTransact() transaction codes\n    → BinderFinding"]
-    C --> D["BinderFinding:\n  class_name: str\n  exported: bool\n  permission: Optional[str]\n  transaction_codes: List[int]\n  severity: CRITICAL (exported, no permission)\n            HIGH (exported, weak permission)\n            MEDIUM (not exported)\n  fmt() → str"]
-    D --> E["report(findings) → str"]
+    A(["BinderScanner.from_path(apk_path)"]):::input --> B["Parse AndroidManifest.xml:\n  Extract <service> elements:\n    name, exported, permission\n  → Dict[class_name, manifest_entry]"]:::primary
+    B:::primary --> C["Parse DEX classes.dex:\n  For each ClassDef where superclass in\n    {Service, IntentService, ...}:\n    Resolve onBind() return type\n    If returns IBinder → Binder server candidate\n    Resolve onTransact() transaction codes\n    → BinderFinding"]:::secondary
+    C:::secondary --> D["BinderFinding:\n  class_name: str\n  exported: bool\n  permission: Optional[str]\n  transaction_codes: List[int]\n  severity: CRITICAL (exported, no permission)\n            HIGH (exported, weak permission)\n            MEDIUM (not exported)\n  fmt() → str"]:::tertiary
+    D:::tertiary --> E(["report(findings) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

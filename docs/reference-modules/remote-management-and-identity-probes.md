@@ -18,9 +18,18 @@ Probe SMB for null sessions and NTLM challenge-response exposure, test WinRM aut
 
 ```mermaid
 flowchart TD
-    A["probe_smb_null_session(host) → dict\n  TCP connect → 445\n  _build_smb_negotiate() → send\n  _build_smb_session_setup_null(uid=0) → send\n  Parse NT_STATUS 0x00 → null session ok\n  → {vulnerable: bool, dialect: str, os_version: str}"] --> B["probe_smb_ntlm(host, port=445) → dict\n  TCP + SMB Negotiate + NTLMSSP_NEGOTIATE\n  Parse Type 2 (NTLM Challenge) response\n    target_name, challenge_bytes[8]\n    flags: NTLMSSP_NEGOTIATE_EXTENDED_SESSION_SECURITY\n  → {ntlm_challenge: bytes, target_name, flags}"]
-    B --> C["probe_winrm(host) → dict\n  HTTP OPTIONS http://host:5985/wsman\n  Check: WWW-Authenticate header\n    Kerberos → Kerberos auth available\n    NTLM → pass-the-hash viable\n  Check: Content-Type: application/soap+xml\n  → {winrm_enabled: bool, auth_methods: List[str]}"]
-    C --> D["probe_wmi_unauth(host) → dict\n  enumerate_rpc_endpoints() → DCOM/RPC surface\n    TCP 135 endpoint mapper query\n    Look for: IWbemServices UUID\n  probe_rdp(host) → dict\n    TCP connect 3389 + RDP TPKT header\n    Parse CredSSP / NLA negotiation response\n    → {rdp_enabled, nla_required: bool}"]
+    A(["probe_smb_null_session(host) → dict\n  TCP connect → 445\n  _build_smb_negotiate() → send\n  _build_smb_session_setup_null(uid=0) → send\n  Parse NT_STATUS 0x00 → null session ok\n  → {vulnerable: bool, dialect: str, os_version: str}"]):::input --> B["probe_smb_ntlm(host, port=445) → dict\n  TCP + SMB Negotiate + NTLMSSP_NEGOTIATE\n  Parse Type 2 (NTLM Challenge) response\n    target_name, challenge_bytes[8]\n    flags: NTLMSSP_NEGOTIATE_EXTENDED_SESSION_SECURITY\n  → {ntlm_challenge: bytes, target_name, flags}"]:::primary
+    B:::primary --> C["probe_winrm(host) → dict\n  HTTP OPTIONS http://host:5985/wsman\n  Check: WWW-Authenticate header\n    Kerberos → Kerberos auth available\n    NTLM → pass-the-hash viable\n  Check: Content-Type: application/soap+xml\n  → {winrm_enabled: bool, auth_methods: List[str]}"]:::secondary
+    C:::secondary --> D(["probe_wmi_unauth(host) → dict\n  enumerate_rpc_endpoints() → DCOM/RPC surface\n    TCP 135 endpoint mapper query\n    Look for: IWbemServices UUID\n  probe_rdp(host) → dict\n    TCP connect 3389 + RDP TPKT header\n    Parse CredSSP / NLA negotiation response\n    → {rdp_enabled, nla_required: bool}"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

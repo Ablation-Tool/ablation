@@ -18,9 +18,18 @@ Decode Motorola 88000 (M88K) binaries: identifying `RISC.88000` architecture COF
 
 ```mermaid
 flowchart TD
-    A["coff_m88k_parser.parse(path) → M88kCoffBinary\n  Parse COFF header:\n    machine = RISC.88000\n  Extract sections (.text, .data)\n  entry, text_start, data_start from optional header"] --> B["M88kDecoder(binary)\n  binary.text → Section with .data and .base_va"]
-    B --> C["M88kDecoder.decode_word(word, va) → M88kInsn\n  Decode 32-bit big-endian instruction:\n    6-bit opcode field → mnemonic\n    Register fields: D, S1, S2\n    Immediate: 16-bit for loads/stores/branches\n  Security-relevant subset:\n    ld/st (loads/stores)\n    jsr/jsr.n (subroutine call)\n    jmp/jmp.n (indirect branch)\n    br/br.n (direct branch)\n    addu/subu/mulu (arithmetic)"]
-    C --> D["M88kDecoder.function_starts() → Set[int]\n  Scan for M88K function prologue:\n    subu r31, r31, N  (frame allocation)\n    st r1, r31, N     (LR save)\n  Return set of start VAs"]
+    A(["coff_m88k_parser.parse(path) → M88kCoffBinary\n  Parse COFF header:\n    machine = RISC.88000\n  Extract sections (.text, .data)\n  entry, text_start, data_start from optional header"]):::input --> B["M88kDecoder(binary)\n  binary.text → Section with .data and .base_va"]:::primary
+    B:::primary --> C["M88kDecoder.decode_word(word, va) → M88kInsn\n  Decode 32-bit big-endian instruction:\n    6-bit opcode field → mnemonic\n    Register fields: D, S1, S2\n    Immediate: 16-bit for loads/stores/branches\n  Security-relevant subset:\n    ld/st (loads/stores)\n    jsr/jsr.n (subroutine call)\n    jmp/jmp.n (indirect branch)\n    br/br.n (direct branch)\n    addu/subu/mulu (arithmetic)"]:::secondary
+    C:::secondary --> D(["M88kDecoder.function_starts() → Set[int]\n  Scan for M88K function prologue:\n    subu r31, r31, N  (frame allocation)\n    st r1, r31, N     (LR save)\n  Return set of start VAs"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

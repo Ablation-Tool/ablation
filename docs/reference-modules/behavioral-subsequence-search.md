@@ -18,20 +18,34 @@ Find all functions in a binary that contain a specified behavioral operation-cat
 
 ```mermaid
 flowchart TD
-    A["SubsequenceSearcher.from_path(binary_path, ctx=ctx)"] --> B["For each function in binary:\n  capstone disassemble\n  Convert to operation-category sequence\n  (int codes: COMPARISON_OP, CONDITIONAL_OP,\n   DATA_TRANSFER_OP, UNCONDITIONAL_OP, CALL, etc.)"]
-    B --> C["precompute(max_funcs=20000)\n  Build full sequence map in memory\n  (one-time cost, reused across all searches)"]
+    A(["SubsequenceSearcher.from_path(binary_path, ctx=ctx)"]):::input --> B["For each function in binary:\n  capstone disassemble\n  Convert to operation-category sequence\n  (int codes: COMPARISON_OP, CONDITIONAL_OP,\n   DATA_TRANSFER_OP, UNCONDITIONAL_OP, CALL, etc.)"]:::primary
+    B:::primary --> C["precompute(max_funcs=20000)\n  Build full sequence map in memory\n  (one-time cost, reused across all searches)"]:::secondary
 
-    C --> D["search(pattern, min_func_len=4)\n  For each function:\n    _find_pattern_occurrences(seq, pattern)\n    None in pattern = wildcard (any opcat)\n  Returns List[PatternMatch] sorted by occurrence count"]
+    C:::secondary --> D["search(pattern, min_func_len=4)\n  For each function:\n    _find_pattern_occurrences(seq, pattern)\n    None in pattern = wildcard (any opcat)\n  Returns List[PatternMatch] sorted by occurrence count"]:::tertiary
 
-    C --> E["search_dtw(ref_seq, threshold=0.6)\n  DTW sliding window over each function's sequence\n  Warp-distance < threshold → match\n  Returns List[PatternMatch] sorted by score"]
+    C:::secondary --> E(["search_dtw(ref_seq, threshold=0.6)\n  DTW sliding window over each function's sequence\n  Warp-distance < threshold → match\n  Returns List[PatternMatch] sorted by score"]):::output
 
-    C --> F["search_like(func_va, threshold=0.6)\n  Use func_va's own sequence as ref_seq\n  Feed into search_dtw()\n  Finds all structurally similar functions"]
+    C:::secondary --> F(["search_like(func_va, threshold=0.6)\n  Use func_va's own sequence as ref_seq\n  Feed into search_dtw()\n  Finds all structurally similar functions"]):::output
 
-    C --> G["pattern_frequency()\n  Compute most common N-gram patterns\n  across all functions\n  Useful for identifying library idioms to exclude"]
+    C:::secondary --> G(["pattern_frequency()\n  Compute most common N-gram patterns\n  across all functions\n  Useful for identifying library idioms to exclude"]):::output
 
-    C --> H["common_patterns(min_count=5)\n  Return patterns that appear in ≥ min_count functions\n  Identifies structural hot-spots in the binary"]
+    C:::secondary --> H(["common_patterns(min_count=5)\n  Return patterns that appear in ≥ min_count functions\n  Identifies structural hot-spots in the binary"]):::output
 
-    D --> I["PatternMatch: func_va, binary,\n  match_offsets: List[int],\n  seq_len: int, score: float"]
+    D:::tertiary --> I(["PatternMatch: func_va, binary,\n  match_offsets: List[int],\n  seq_len: int, score: float"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

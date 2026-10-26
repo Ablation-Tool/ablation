@@ -18,9 +18,18 @@ Detect inherently unsafe deprecated functions: `gets()`, `mktemp()`, `tmpnam()`,
 
 ```mermaid
 flowchart TD
-    A["DeprecatedFuncScanner.from_context(ctx)\n  or .from_path(path)"] --> B["scan() → List[DeprecatedHit]\n  Walk PLT: find gets/mktemp/tmpnam/getwd entries\n  For each PLT entry found:\n    Find all BL/CALL sites to this PLT entry\n    For gets() call sites:\n      Search preceding instructions for LEA rdi,[rbp-N]\n      Extract N → overflow_offset = N + 8 (saved ret addr)\n    → DeprecatedHit"]
-    B --> C["DeprecatedHit:\n  func_name: str   (gets/mktemp/tmpnam/getwd)\n  call_va: int\n  overflow_offset: Optional[int]  (gets only, if LEA found)\n  severity: CRITICAL (gets with offset) | HIGH (others)\n  cwe: str  (CWE-242 / CWE-377)\n  fmt() → str"]
-    C --> D["report(hits) → str"]
+    A(["DeprecatedFuncScanner.from_context(ctx)\n  or .from_path(path)"]):::input --> B["scan() → List[DeprecatedHit]\n  Walk PLT: find gets/mktemp/tmpnam/getwd entries\n  For each PLT entry found:\n    Find all BL/CALL sites to this PLT entry\n    For gets() call sites:\n      Search preceding instructions for LEA rdi,[rbp-N]\n      Extract N → overflow_offset = N + 8 (saved ret addr)\n    → DeprecatedHit"]:::primary
+    B:::primary --> C["DeprecatedHit:\n  func_name: str   (gets/mktemp/tmpnam/getwd)\n  call_va: int\n  overflow_offset: Optional[int]  (gets only, if LEA found)\n  severity: CRITICAL (gets with offset) | HIGH (others)\n  cwe: str  (CWE-242 / CWE-377)\n  fmt() → str"]:::secondary
+    C:::secondary --> D(["report(hits) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

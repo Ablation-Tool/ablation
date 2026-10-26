@@ -27,18 +27,30 @@ Standard Capstone decodes PowerPC Book E but not VLE. Pointing Capstone at a VLE
 
 ```mermaid
 flowchart TD
-    A["Raw ECU ROM (.bin)"] --> B["EcuROMLayoutAnalyzer\nidentifies CODE regions"]
-    B --> C{"VLE probe\n(byte0 & 0x90) == 0x10\non first 64 instructions"}
-    C -->|"SE count > 33%\nof probe = VLE"| D["EcuVLEDecoder\n16-bit SE + 32-bit VLE"]
-    C -->|"No SE instructions\n= Book E"| E["Capstone PPC32\nBook E decoder"]
-    D --> F["function_starts()\ne_stwu r1, -N(r1) prologue scan\nse_mflr r0 leaf scan"]
-    E --> G["function_starts()\nstwu r1, -N(r1) prologue scan"]
-    F --> H["PPC32TaintTracker\n(seeded with VLE function starts)"]
-    G --> H
-    H --> I[/"TaintFinding\nsink · source · chain"/]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style I fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    A(["Raw ECU ROM (.bin)"]):::input --> B["EcuROMLayoutAnalyzer\nidentifies CODE regions"]:::primary
+    B:::primary --> C{"VLE probe\n(byte0 & 0x90) == 0x10\non first 64 instructions"}:::neutral
+    C:::neutral -->|"SE count > 33%\nof probe = VLE"| D["EcuVLEDecoder\n16-bit SE + 32-bit VLE"]:::secondary
+    C:::neutral -->|"No SE instructions\n= Book E"| E["Capstone PPC32\nBook E decoder"]:::tertiary
+    D:::secondary --> F["function_starts()\ne_stwu r1, -N(r1) prologue scan\nse_mflr r0 leaf scan"]:::tertiary
+    E:::tertiary --> G["function_starts()\nstwu r1, -N(r1) prologue scan"]:::tertiary
+    F:::tertiary --> H["PPC32TaintTracker\n(seeded with VLE function starts)"]:::tertiary
+    G:::tertiary --> H:::tertiary
+    H:::tertiary --> I(["TaintFinding\nsink · source · chain"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
 ```
 
 Without `EcuVLEDecoder`, the function-start scan on a VLE binary returns empty because Capstone produces garbage. An empty function-start list means the taint tracker runs zero interprocedural passes and produces zero findings, with no indication why.

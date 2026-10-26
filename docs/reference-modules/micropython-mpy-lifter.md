@@ -18,12 +18,22 @@ Parse MicroPython `.mpy` v6 compiled modules: decoding the global qstr table, co
 
 ```mermaid
 flowchart TD
-    A["MpyLifter.from_path(path)\nor .from_bytes(data)"] --> B["_parse(data):\nbyte 0: MPY_MAGIC = ord('M') = 0x4D\nbyte 1: version = 6\nbyte 2: feature_flags\nbyte 3: small_int_bits\nMpyHeader(version_major, feature_flags, small_int_bits)"]
-    B --> C["vuint() n_qstr → [qstr_entry() × n_qstr]\nqstr_entry: raw=vuint(); raw&1 → interned ref; else read raw>>1 bytes → UTF-8 string\nvuint() n_obj → [obj_entry() × n_obj]\nobj_entry: type_char = chr(byte):\n  N=None, T=True, F=False, i=int, f=float, c=complex\n  S/s=str, B/b=bytes, (=tuple"]
-    C --> D["raw_code(qstrs, objs) → MpyCodeObj:\nkind_len=vuint(): kind=bits[1:0], has_children=bit[2], data_len=bits[31:3]\ndata=read(data_len)\nif has_children: n=vuint() → [raw_code() × n] → children\nMpyCodeObj(kind, data, children)\nRecurse until no more children"]
-    D --> E["_decode_bytecode(co) → Iterator[MpyInsn]:\n_skip_prelude(): _decode_prelude_sig() + _decode_prelude_size() → insn_start\nPer opcode byte:\n0x70-0x9F: LOAD_CONST_SMALL_INT_MULTI, operand=op-0x70-16\n0xB0-0xBF: LOAD_FAST_MULTI, operand=op-0xB0\n0xC0-0xCF: STORE_FAST_MULTI, operand=op-0xC0\n0xD0-0xD6: UNARY_OP; 0xD7-0xFF: BINARY_OP\n0x10-0x1C: FMT_QSTR → vuint qstr index → qstr_val from co._qstrs\n0x20-0x37: FMT_VINT → vuint operand\n0x40-0x4B: FMT_JUMP → signed LE uint16 relative offset\n0x50-0x69: FMT_BYTE (no operand)"]
-    F["lift_module() → str:\nStack-machine simulation over _decode_bytecode()\nLOAD_* → push string expression\nSTORE_* → pop + emit 'name = expr'\nCALL_FUNCTION/METHOD → pop args + func → push 'func(args)'\nIMPORT_NAME → emit 'import qstr'\nMAKE_FUNCTION → recurse _lift_code(child, lines, depth+1)\nBRANCH/JUMP → emit 'if'/'for'/'try' headers (no merge; linear output)"]
-    G["dangerous_calls() → list[dict]:\nWalk _walk() (DFS over code-object tree)\nIMPORT_NAME qstr in _DANGEROUS_IMPORTS → DANGEROUS_IMPORT HIGH/MEDIUM\nLOAD_NAME/LOAD_GLOBAL qstr in _DANGEROUS_NAMES → DANGEROUS_CALL HIGH\nLOAD_ATTR qstr in _DANGEROUS_ATTRS → DANGEROUS_ATTR HIGH"]
+    A(["MpyLifter.from_path(path)\nor .from_bytes(data)"]):::input --> B["_parse(data):\nbyte 0: MPY_MAGIC = ord('M') = 0x4D\nbyte 1: version = 6\nbyte 2: feature_flags\nbyte 3: small_int_bits\nMpyHeader(version_major, feature_flags, small_int_bits)"]:::primary
+    B:::primary --> C["vuint() n_qstr → [qstr_entry() × n_qstr]\nqstr_entry: raw=vuint(); raw&1 → interned ref; else read raw>>1 bytes → UTF-8 string\nvuint() n_obj → [obj_entry() × n_obj]\nobj_entry: type_char = chr(byte):\n  N=None, T=True, F=False, i=int, f=float, c=complex\n  S/s=str, B/b=bytes, (=tuple"]:::secondary
+    C:::secondary --> D["raw_code(qstrs, objs) → MpyCodeObj:\nkind_len=vuint(): kind=bits[1:0], has_children=bit[2], data_len=bits[31:3]\ndata=read(data_len)\nif has_children: n=vuint() → [raw_code() × n] → children\nMpyCodeObj(kind, data, children)\nRecurse until no more children"]:::tertiary
+    D:::tertiary --> E(["_decode_bytecode(co) → Iterator[MpyInsn]:\n_skip_prelude(): _decode_prelude_sig() + _decode_prelude_size() → insn_start\nPer opcode byte:\n0x70-0x9F: LOAD_CONST_SMALL_INT_MULTI, operand=op-0x70-16\n0xB0-0xBF: LOAD_FAST_MULTI, operand=op-0xB0\n0xC0-0xCF: STORE_FAST_MULTI, operand=op-0xC0\n0xD0-0xD6: UNARY_OP; 0xD7-0xFF: BINARY_OP\n0x10-0x1C: FMT_QSTR → vuint qstr index → qstr_val from co._qstrs\n0x20-0x37: FMT_VINT → vuint operand\n0x40-0x4B: FMT_JUMP → signed LE uint16 relative offset\n0x50-0x69: FMT_BYTE (no operand)"]):::output
+    F(["lift_module() → str:\nStack-machine simulation over _decode_bytecode()\nLOAD_* → push string expression\nSTORE_* → pop + emit 'name = expr'\nCALL_FUNCTION/METHOD → pop args + func → push 'func(args)'\nIMPORT_NAME → emit 'import qstr'\nMAKE_FUNCTION → recurse _lift_code(child, lines, depth+1)\nBRANCH/JUMP → emit 'if'/'for'/'try' headers (no merge; linear output)"]):::input
+    G(["dangerous_calls() → list[dict]:\nWalk _walk() (DFS over code-object tree)\nIMPORT_NAME qstr in _DANGEROUS_IMPORTS → DANGEROUS_IMPORT HIGH/MEDIUM\nLOAD_NAME/LOAD_GLOBAL qstr in _DANGEROUS_NAMES → DANGEROUS_CALL HIGH\nLOAD_ATTR qstr in _DANGEROUS_ATTRS → DANGEROUS_ATTR HIGH"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Security flag sets

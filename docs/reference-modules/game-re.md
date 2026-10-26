@@ -22,22 +22,33 @@ PS3 game binaries split logic between the main PPU core and up to six SPU coproc
 
 ```mermaid
 flowchart TD
-    A[/"Stripped game binary (ELF or PE, 50k-200k functions)"/] --> B["Pass 1 · String-marker sweep (fastest)\nGame engines embed unique string constants.\n'UE4 LogCore Fatal:' → Unreal Engine 4\n'Com_Error' → id Tech engine\n'IVEngineServer' → Source 2\n\nFor each engine's string_markers:\n  Find all VAs of that string in .rodata\n  Find all functions that xref it\n  Label: engine='UE4', category='crash'"]
+    A(["Stripped game binary (ELF or PE, 50k-200k functions)"]):::input --> B["Pass 1 · String-marker sweep (fastest)\nGame engines embed unique string constants.\n'UE4 LogCore Fatal:' → Unreal Engine 4\n'Com_Error' → id Tech engine\n'IVEngineServer' → Source 2\n\nFor each engine's string_markers:\n  Find all VAs of that string in .rodata\n  Find all functions that xref it\n  Label: engine='UE4', category='crash'"]:::primary
 
-    B --> C{"Labeled\nall functions?"}
-    C -->|Unlabeled remain| D["Pass 2 · Semantic sweep (medium speed)\nFor each UNLABELED function:\n  Build behavioral description:\n    callee names + string refs + asm category sequence\n  Encode → BERT vector (768 dims)\n  Cosine similarity vs engine signature vectors\n  Threshold: 0.45 (higher than 0.30 vuln hunting\n  because engine false positives cost analyst time)"]
+    B:::primary --> C{"Labeled\nall functions?"}:::neutral
+    C:::neutral -->|Unlabeled remain| D["Pass 2 · Semantic sweep (medium speed)\nFor each UNLABELED function:\n  Build behavioral description:\n    callee names + string refs + asm category sequence\n  Encode → BERT vector (768 dims)\n  Cosine similarity vs engine signature vectors\n  Threshold: 0.45 (higher than 0.30 vuln hunting\n  because engine false positives cost analyst time)"]:::secondary
 
-    C -->|All labeled| G
+    C:::neutral -->|All labeled| G(["G"]):::output
 
-    D --> E{"Unlabeled\nremain?"}
-    E -->|Unlabeled remain| F["Pass 3 · SAX structural sweep (slowest, run last)\nFor each STILL UNLABELED function:\n  Encode opcode sequence as SAX string\n  (Symbolic Aggregate approXimation,\n  BinFuse 11-category encoding)\n  Approximate nearest-neighbor search\n  vs pre-computed SAX strings of engine functions\n\nCatches pure algorithmic code:\n  sort · hash · memory layout routines"]
+    D:::secondary --> E{"Unlabeled\nremain?"}:::neutral
+    E:::neutral -->|Unlabeled remain| F["Pass 3 · SAX structural sweep (slowest, run last)\nFor each STILL UNLABELED function:\n  Encode opcode sequence as SAX string\n  (Symbolic Aggregate approXimation,\n  BinFuse 11-category encoding)\n  Approximate nearest-neighbor search\n  vs pre-computed SAX strings of engine functions\n\nCatches pure algorithmic code:\n  sort · hash · memory layout routines"]:::tertiary
 
-    E -->|All labeled| G
+    E:::neutral -->|All labeled| G:::output
 
-    F --> G[/"Coverage report\nN% engine-labeled → skip in manual RE\n(100-N)% unlabeled → analyst targets"/]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style G fill:#14532d,stroke:#166534,color:#dcfce7
+    F:::tertiary --> G:::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#546e7a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Why three passes instead of one
@@ -101,9 +112,17 @@ The PS3 Cell Broadband Engine has two distinct processor types on one die. Secur
 
 ```mermaid
 flowchart LR
-    A["PS3 Cell BE"] --> B["PPU\nPower Processing Unit\nPPC64 + VMX/AltiVec SIMD\nDirect main memory access\nRuns OS and main game loop"]
+    A(["PS3 Cell BE"]):::input --> B(["PPU\nPower Processing Unit\nPPC64 + VMX/AltiVec SIMD\nDirect main memory access\nRuns OS and main game loop"]):::output
 
-    A --> C["SPU × 6\nSynergistic Processing Unit\n128 × 128-bit registers (all SIMD)\n256 KB local store only: no cache, no TLB\nNo memory load instructions\nData arrives via DMA from main memory\n11 instruction formats, 4-byte big-endian\nAll ops treat registers as SIMD vectors"]
+    A:::input --> C(["SPU × 6\nSynergistic Processing Unit\n128 × 128-bit registers (all SIMD)\n256 KB local store only: no cache, no TLB\nNo memory load instructions\nData arrives via DMA from main memory\n11 instruction formats, 4-byte big-endian\nAll ops treat registers as SIMD vectors"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#2e7d32,stroke-width:3px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
 ```
 
 Every SPU instruction treats its register as a vector of four 32-bit integers, two 64-bit integers, or sixteen 8-bit integers depending on the instruction. There is no scalar 32-bit mode. A 32-bit add (`a` instruction) adds four pairs of 32-bit integers simultaneously. Data must be pre-staged in local store via DMA channels before any computation can begin.

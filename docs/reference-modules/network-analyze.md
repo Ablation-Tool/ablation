@@ -28,9 +28,18 @@ Network traffic analysis and active enumeration: PCAP parsing for credential ext
 
 ```mermaid
 flowchart TD
-    A["NetworkAnalyzer()"] --> B["enumerate_all() → dict\n  {interfaces, connections, listening, firewall}\n  get_connections() reads /proc/net/tcp, tcp6\n    → [{protocol, local_ip, local_port, remote_ip, remote_port, state, uid}]\n  LISTEN state → appended to 'listening' list\n  get_firewall_rules() → iptables -L -n / pfctl -sr"]
-    A --> C["run_network_analysis(target: str) → dict\n  ICMPScanner.scan(subnet)\n  WebDirBrute(url).scan()\n  → {target, icmp, web, findings}"]
-    A --> D["PCAPAnalyzer(path).parse() then extract_credentials() → dict\n  os.path.getsize() guard → f.read(_MAX_PCAP_BYTES)\n  Parse Ethernet/IP/TCP records\n  Extract HTTP auth, FTP creds, DNS queries\n  → {packets_parsed, credentials, dns_queries, protocols}"]
+    A(["NetworkAnalyzer()"]):::input --> B(["enumerate_all() → dict\n  {interfaces, connections, listening, firewall}\n  get_connections() reads /proc/net/tcp, tcp6\n    → [{protocol, local_ip, local_port, remote_ip, remote_port, state, uid}]\n  LISTEN state → appended to 'listening' list\n  get_firewall_rules() → iptables -L -n / pfctl -sr"]):::output
+    A:::input --> C(["run_network_analysis(target: str) → dict\n  ICMPScanner.scan(subnet)\n  WebDirBrute(url).scan()\n  → {target, icmp, web, findings}"]):::output
+    A:::input --> D(["PCAPAnalyzer(path).parse() then extract_credentials() → dict\n  os.path.getsize() guard → f.read(_MAX_PCAP_BYTES)\n  Parse Ethernet/IP/TCP records\n  Extract HTTP auth, FTP creds, DNS queries\n  → {packets_parsed, credentials, dns_queries, protocols}"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#2e7d32,stroke-width:3px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

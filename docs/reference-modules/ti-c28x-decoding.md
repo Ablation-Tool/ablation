@@ -18,10 +18,20 @@ Decode Texas Instruments TMS320C28x firmware: implementing the 16-bit word-addre
 
 ```mermaid
 flowchart TD
-    A["EcuC28xDecoder.from_path(path, base_va=0)\n  or .from_bytes(data, base_va=0)"] --> B["insn_length(byte_off) → int\n  Read first 16-bit word (LE) at byte_off\n  Decode opcode field (bits[15:8] or bits[15:10])\n  1-word instruction → return 2 (bytes)\n  2-word instruction → return 4 (bytes)"]
-    B --> C["decode_one(byte_off) → Optional[C28xInsn]\n  Decode 1 or 2-word instruction\n  Security-relevant subset:\n    LCR/LRETR: subroutine calls and returns\n    MOVL/MOVB: 32-bit/8-bit moves (data transfer)\n    ADDB/SUBBL: arithmetic with immediate\n    B/BF: branch instructions\n  C28xInsn: address, mnemonic, op_str, size, words"]
-    C --> D["disassemble(start_va, end_va) → Iterator[C28xInsn]"]
-    C --> E["function_starts() → List[int]\n  Scan for C28x function prologue:\n    PUSH RB (push return block) + PUSH AR1H:AR0H\n  Return sorted start addresses"]
+    A(["EcuC28xDecoder.from_path(path, base_va=0)\n  or .from_bytes(data, base_va=0)"]):::input --> B["insn_length(byte_off) → int\n  Read first 16-bit word (LE) at byte_off\n  Decode opcode field (bits[15:8] or bits[15:10])\n  1-word instruction → return 2 (bytes)\n  2-word instruction → return 4 (bytes)"]:::primary
+    B:::primary --> C["decode_one(byte_off) → Optional[C28xInsn]\n  Decode 1 or 2-word instruction\n  Security-relevant subset:\n    LCR/LRETR: subroutine calls and returns\n    MOVL/MOVB: 32-bit/8-bit moves (data transfer)\n    ADDB/SUBBL: arithmetic with immediate\n    B/BF: branch instructions\n  C28xInsn: address, mnemonic, op_str, size, words"]:::secondary
+    C:::secondary --> D(["disassemble(start_va, end_va) → Iterator[C28xInsn]"]):::output
+    C:::secondary --> E(["function_starts() → List[int]\n  Scan for C28x function prologue:\n    PUSH RB (push return block) + PUSH AR1H:AR0H\n  Return sorted start addresses"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

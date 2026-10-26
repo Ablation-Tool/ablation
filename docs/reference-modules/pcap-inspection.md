@@ -18,9 +18,18 @@ Extract DNS queries with NXDOMAIN/domain-flux detection, cleartext credentials F
 
 ```mermaid
 flowchart TD
-    A["PCAPAnalyzer(filepath: str)\n  .parse() → bool\n    Read libpcap global header (24 bytes):\n      magic: 0xA1B2C3D4 (BE) or 0xD4C3B2A1 (LE)\n      version_major, version_minor\n      snaplen, linktype\n    Read per-packet records into self.packets list\n  .run_all() → dict"] --> B["extract_credentials() → list\n  Scan TCP payloads per stream:\n    FTP (port 21): USER + PASS sequence → 'user:pass'\n    Telnet (port 23): login: / Password: prompts\n    HTTP Basic (port 80/8080): Authorization: Basic <b64>\n      base64.b64decode → cleartext\n  → [{proto, src, dst, cred}]"]
-    B --> C["extract_dns() → list\n  UDP port 53 packets:\n    DNS header: txid, flags, qdcount\n    Decode QNAME label encoding\n    qr_bit=0 → query; rcode=3 → NXDOMAIN response\n  → [{query: str, type: str, src: str, rcode: int, qr: str}]"]
-    C --> D["extract_http() → list\n  TCP port 80/8080/8000/443 payloads:\n    Match GET/POST/PUT/DELETE request lines\n    Extract Host: header\n  → [{method, path, host, src}]\n\nrun_all() → dict:\n  {filepath, packet_count, credentials, dns_queries, http_requests}"]
+    A(["PCAPAnalyzer(filepath: str)\n  .parse() → bool\n    Read libpcap global header (24 bytes):\n      magic: 0xA1B2C3D4 (BE) or 0xD4C3B2A1 (LE)\n      version_major, version_minor\n      snaplen, linktype\n    Read per-packet records into self.packets list\n  .run_all() → dict"]):::input --> B["extract_credentials() → list\n  Scan TCP payloads per stream:\n    FTP (port 21): USER + PASS sequence → 'user:pass'\n    Telnet (port 23): login: / Password: prompts\n    HTTP Basic (port 80/8080): Authorization: Basic <b64>\n      base64.b64decode → cleartext\n  → [{proto, src, dst, cred}]"]:::primary
+    B:::primary --> C["extract_dns() → list\n  UDP port 53 packets:\n    DNS header: txid, flags, qdcount\n    Decode QNAME label encoding\n    qr_bit=0 → query; rcode=3 → NXDOMAIN response\n  → [{query: str, type: str, src: str, rcode: int, qr: str}]"]:::secondary
+    C:::secondary --> D(["extract_http() → list\n  TCP port 80/8080/8000/443 payloads:\n    Match GET/POST/PUT/DELETE request lines\n    Extract Host: header\n  → [{method, path, host, src}]\n\nrun_all() → dict:\n  {filepath, packet_count, credentials, dns_queries, http_requests}"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

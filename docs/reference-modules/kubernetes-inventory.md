@@ -18,10 +18,20 @@ Enumerate Kubernetes pods, services, secrets, RBAC bindings, service accounts, a
 
 ```mermaid
 flowchart TD
-    A["K8sEnumerator(host, token, ca_cert)"] --> B["RBAC SelfSubjectAccessReview:\n  POST /apis/authorization.k8s.io/v1/selfsubjectaccessreviews\n  → effective permissions for this SA"]
-    B --> C["Resource enumeration (per permission):\n  pods: GET /api/v1/namespaces/{ns}/pods\n  services: GET /api/v1/namespaces/{ns}/services\n  secrets: GET /api/v1/namespaces/{ns}/secrets\n    base64-decode values, flag _looks_like_cred(key)\n  configmaps: GET /api/v1/namespaces/{ns}/configmaps\n    _looks_like_cred(key) on all ConfigMap keys\n  serviceaccounts: GET /api/v1/namespaces/{ns}/serviceaccounts"]
-    C --> D["Standalone checks:\n  check_k8s_configmap_exposure(host, port, timeout)\n    Enumerate default namespace ConfigMaps (no-auth)\n  check_k8s_resource_limits(host, port, timeout)\n    Check pods without resource limits (lateral movement risk)\n  check_kubelet_api_exposure(host, timeout)\n    Probe port 10255 (read-only) and port 10250 (exec-enabled)"]
-    D --> E["Returns: dict with pods, services, secrets,\n  configmap_creds, rbac_permissions, kubelet_exposure"]
+    A(["K8sEnumerator(host, token, ca_cert)"]):::input --> B["RBAC SelfSubjectAccessReview:\n  POST /apis/authorization.k8s.io/v1/selfsubjectaccessreviews\n  → effective permissions for this SA"]:::primary
+    B:::primary --> C["Resource enumeration (per permission):\n  pods: GET /api/v1/namespaces/{ns}/pods\n  services: GET /api/v1/namespaces/{ns}/services\n  secrets: GET /api/v1/namespaces/{ns}/secrets\n    base64-decode values, flag _looks_like_cred(key)\n  configmaps: GET /api/v1/namespaces/{ns}/configmaps\n    _looks_like_cred(key) on all ConfigMap keys\n  serviceaccounts: GET /api/v1/namespaces/{ns}/serviceaccounts"]:::secondary
+    C:::secondary --> D["Standalone checks:\n  check_k8s_configmap_exposure(host, port, timeout)\n    Enumerate default namespace ConfigMaps (no-auth)\n  check_k8s_resource_limits(host, port, timeout)\n    Check pods without resource limits (lateral movement risk)\n  check_kubelet_api_exposure(host, timeout)\n    Probe port 10255 (read-only) and port 10250 (exec-enabled)"]:::tertiary
+    D:::tertiary --> E(["Returns: dict with pods, services, secrets,\n  configmap_creds, rbac_permissions, kubelet_exposure"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

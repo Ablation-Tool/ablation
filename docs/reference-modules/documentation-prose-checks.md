@@ -18,11 +18,22 @@ Provide schema-validated stage output and deterministic routing for the Ablation
 
 ```mermaid
 flowchart TD
-    A["WorkflowDocument(target_binary, target_vendor)"] --> B["current() → Stage\n  Returns: current stage in pipeline\n  Stages: triage → sweep → profile → taint\n    → confirmation → registration"]
-    B --> C["validate(stage_name, instance: dict) → List[str]\n  Check instance against stage JSON schema\n  finding_confirmation requires: byte_proof, va, cve_class\n  taint_result requires: source_va, sink_va, verdict\n  Returns: list of schema violation messages (empty = valid)"]
-    C --> D["advance(to_stage: str, evidence: dict) → WorkflowDocument\n  Validate transition: current → to_stage in StageTransition graph\n  Validate evidence against to_stage schema\n  Append stage to history\n  Return updated document"]
-    D --> E["dirty_since_commit() → bool\n  Compare document hash vs last git commit\n  True if advanced but not committed"]
-    D --> F["to_json() / from_json() → str\n  Serialization for SESSION.md embedding"]
+    A(["WorkflowDocument(target_binary, target_vendor)"]):::input --> B["current() → Stage\n  Returns: current stage in pipeline\n  Stages: triage → sweep → profile → taint\n    → confirmation → registration"]:::primary
+    B:::primary --> C["validate(stage_name, instance: dict) → List[str]\n  Check instance against stage JSON schema\n  finding_confirmation requires: byte_proof, va, cve_class\n  taint_result requires: source_va, sink_va, verdict\n  Returns: list of schema violation messages (empty = valid)"]:::secondary
+    C:::secondary --> D["advance(to_stage: str, evidence: dict) → WorkflowDocument\n  Validate transition: current → to_stage in StageTransition graph\n  Validate evidence against to_stage schema\n  Append stage to history\n  Return updated document"]:::tertiary
+    D:::tertiary --> E(["dirty_since_commit() → bool\n  Compare document hash vs last git commit\n  True if advanced but not committed"]):::output
+    D:::tertiary --> F(["to_json() / from_json() → str\n  Serialization for SESSION.md embedding"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

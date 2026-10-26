@@ -18,10 +18,20 @@ Capture live network traffic with a raw socket (`AF_PACKET` / `AF_INET` + `SOCK_
 
 ```mermaid
 flowchart TD
-    A["sniff_network(duration=10.0, interface=None) → dict\n  or RawSniffer(interface, promiscuous=True)"] --> B["RawSniffer:\n  socket.AF_PACKET + SOCK_RAW (Linux)\n  socket.AF_INET + SOCK_RAW (macOS)\n  promiscuous mode: SIOCGIFFLAGS/SIOCSIFFLAGS\n  recv(65535) → raw Ethernet frame\n  IPHeader.from_bytes(frame[14:]) → src/dst/proto\n  TCPHeader or UDPHeader from payload"]
-    B --> C["Per packet:\n  TCP: track (src_ip, src_port, dst_ip, dst_port) → stream\n    CredentialExtractor.extract(tcp_payload) → creds\n  UDP port 5353: MDNSDiscovery.parse_response()\n  UDP port 1900: SSDPDiscovery.parse_response()"]
-    C --> D["detect_arp_spoofing(interface) → List[dict]\n  Read ARP table: _arp_read() → [(ip, mac)]\n  Send ARP probe, compare responses\n  Duplicate MAC for different IPs → spoofing detected\n\nicmp_host_discovery(target_cidr) → List[str]\n  ICMP echo request to each host in /CIDR\n  → live host IP list"]
-    D --> E["sniff_network() returns:\n  packets: int\n  credentials: List[dict]\n  mdns_services: List[dict]\n  ssdp_devices: List[dict]\n  arp_findings: List[dict]"]
+    A(["sniff_network(duration=10.0, interface=None) → dict\n  or RawSniffer(interface, promiscuous=True)"]):::input --> B["RawSniffer:\n  socket.AF_PACKET + SOCK_RAW (Linux)\n  socket.AF_INET + SOCK_RAW (macOS)\n  promiscuous mode: SIOCGIFFLAGS/SIOCSIFFLAGS\n  recv(65535) → raw Ethernet frame\n  IPHeader.from_bytes(frame[14:]) → src/dst/proto\n  TCPHeader or UDPHeader from payload"]:::primary
+    B:::primary --> C["Per packet:\n  TCP: track (src_ip, src_port, dst_ip, dst_port) → stream\n    CredentialExtractor.extract(tcp_payload) → creds\n  UDP port 5353: MDNSDiscovery.parse_response()\n  UDP port 1900: SSDPDiscovery.parse_response()"]:::secondary
+    C:::secondary --> D["detect_arp_spoofing(interface) → List[dict]\n  Read ARP table: _arp_read() → [(ip, mac)]\n  Send ARP probe, compare responses\n  Duplicate MAC for different IPs → spoofing detected\n\nicmp_host_discovery(target_cidr) → List[str]\n  ICMP echo request to each host in /CIDR\n  → live host IP list"]:::tertiary
+    D:::tertiary --> E(["sniff_network() returns:\n  packets: int\n  credentials: List[dict]\n  mdns_services: List[dict]\n  ssdp_devices: List[dict]\n  arp_findings: List[dict]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

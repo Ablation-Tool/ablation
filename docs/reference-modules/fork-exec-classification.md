@@ -18,12 +18,24 @@ Classify `fork()` callers in x86-64 ELF binaries as `WORKER`, `EXEC_AFTER_FORK`,
 
 ```mermaid
 flowchart TD
-    A["ForkExecClassifier.from_path(elf_path)\n  or .from_context(ctx)"] --> B["classify() → List[ForkCallerResult]\n  Find: all call fork() sites in binary\n  For each call site:\n    Identify child branch (eax == 0 path after fork return)\n    BFS from child_entry_va over CFG blocks"]
-    B --> C{"Child branch analysis"}
-    C -->|"exec*() found in child path"| D["EXEC_AFTER_FORK\n  exec_target: str\n  exec_call_va: int\n  — investigate for command injection"]
-    C -->|"exit() / _exit() before exec"| E["EXIT_IN_CHILD\n  — daemonization pattern\n  ELIMINATED as injection vector"]
-    C -->|"No exec, enters event loop"| F["WORKER\n  — child handles connection\n  ELIMINATED as injection vector"]
-    C -->|"BFS budget exhausted"| G["UNKNOWN\n  — trace child to exhaustion\n  Do not override to ELIMINATED"]
+    A(["ForkExecClassifier.from_path(elf_path)\n  or .from_context(ctx)"]):::input --> B["classify() → List[ForkCallerResult]\n  Find: all call fork() sites in binary\n  For each call site:\n    Identify child branch (eax == 0 path after fork return)\n    BFS from child_entry_va over CFG blocks"]:::primary
+    B:::primary --> C{"Child branch analysis"}:::neutral
+    C:::neutral -->|"exec*() found in child path"| D(["EXEC_AFTER_FORK\n  exec_target: str\n  exec_call_va: int\n  · investigate for command injection"]):::output
+    C:::neutral -->|"exit() / _exit() before exec"| E(["EXIT_IN_CHILD\n  · daemonization pattern\n  ELIMINATED as injection vector"]):::output
+    C:::neutral -->|"No exec, enters event loop"| F(["WORKER\n  · child handles connection\n  ELIMINATED as injection vector"]):::output
+    C:::neutral -->|"BFS budget exhausted"| G(["UNKNOWN\n  · trace child to exhaustion\n  Do not override to ELIMINATED"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

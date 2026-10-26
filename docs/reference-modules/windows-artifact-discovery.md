@@ -18,9 +18,18 @@ Scan the Windows filesystem for $MFT timeline anomalies, LNK file targets recent
 
 ```mermaid
 flowchart TD
-    A["detect_windows_forensic_artifacts(scan_path='/') → List[dict]\n  $MFT: parse record timestamps\n    Created/Modified/Accessed/Changed\n    Flag: Modified < Created (timestamp manipulation)\n  LNK: scan %APPDATA%/Recent/*.lnk\n    Parse shell link header: target path, volume, machine ID\n    → [{lnk_path, target, accessed_time}]"] --> B["Prefetch: C:\\Windows\\Prefetch\\*.pf\n  Parse MAM/MAM compressed header\n  Extract: executable name, run count, last run time\n  → [{executable, run_count, last_run}]\n\nEVTX: C:\\Windows\\System32\\winevt\\Logs\\*.evtx\n  Parse binary EVTX record format\n  Flag: EventID 1102/104 (log clear)\n  Flag: > 2h gap without shutdown event\n  → [{log, event_id, timestamp, anomaly}]"]
-    B --> C["detect_mutex_artifacts(binary_data) → list\n  Scan for string matches against\n    known malware mutex name list\n    (ransomware, banking trojans, APT loaders)\n  → [{mutex_name, malware_family, confidence}]"]
-    C --> D["detect_clipboard_monitor(binary_data) → list\n  Scan for: SetClipboardViewer / AddClipboardFormatListener\n  OpenClipboard + GetClipboardData sequence\n  → [{va, api_seq, description}]"]
+    A(["detect_windows_forensic_artifacts(scan_path='/') → List[dict]\n  $MFT: parse record timestamps\n    Created/Modified/Accessed/Changed\n    Flag: Modified < Created (timestamp manipulation)\n  LNK: scan %APPDATA%/Recent/*.lnk\n    Parse shell link header: target path, volume, machine ID\n    → [{lnk_path, target, accessed_time}]"]):::input --> B["Prefetch: C:\\Windows\\Prefetch\\*.pf\n  Parse MAM/MAM compressed header\n  Extract: executable name, run count, last run time\n  → [{executable, run_count, last_run}]\n\nEVTX: C:\\Windows\\System32\\winevt\\Logs\\*.evtx\n  Parse binary EVTX record format\n  Flag: EventID 1102/104 (log clear)\n  Flag: > 2h gap without shutdown event\n  → [{log, event_id, timestamp, anomaly}]"]:::primary
+    B:::primary --> C["detect_mutex_artifacts(binary_data) → list\n  Scan for string matches against\n    known malware mutex name list\n    (ransomware, banking trojans, APT loaders)\n  → [{mutex_name, malware_family, confidence}]"]:::secondary
+    C:::secondary --> D(["detect_clipboard_monitor(binary_data) → list\n  Scan for: SetClipboardViewer / AddClipboardFormatListener\n  OpenClipboard + GetClipboardData sequence\n  → [{va, api_seq, description}]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

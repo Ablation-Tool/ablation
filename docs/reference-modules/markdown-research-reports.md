@@ -18,11 +18,22 @@ Render sweep results as a structured markdown research report: ranked candidates
 
 ```mermaid
 flowchart TD
-    A["generate_report(\n  results=sweep_results,\n  binary_path, vendor, product, version,\n  registry_hits=None,\n  xref=None,\n  top_k=5,\n  min_score=0.75\n) → str (markdown)"] --> B["Header section:\n  # Sweep Report: <product> <version>\n  Binary: <path>  |  Generated: <datetime>"]
-    B --> C["Per-tag sections (sorted by severity):\n  ## <TAG> — <count> candidates\n  | VA | Score | Name |\n  | top_k rows by score |"]
-    C --> D["If registry_hits:\n  ## Registry Correlations\n  Prior confirmed findings with embedding\n  similarity ≥ threshold, per candidate VA"]
-    D --> E["If xref:\n  Per candidate: callers / callees inline\n  from XRefGraph"]
-    E --> F["## Verification Checklist\n  [ ] Byte-verify each candidate VA\n  [ ] Run PathSolver on ARG_PROPAGATED sinks\n  [ ] Record results in FindingRegistry"]
+    A(["generate_report(\n  results=sweep_results,\n  binary_path, vendor, product, version,\n  registry_hits=None,\n  xref=None,\n  top_k=5,\n  min_score=0.75\n) → str (markdown)"]):::input --> B["Header section:\n  # Sweep Report: <product> <version>\n  Binary: <path>  |  Generated: <datetime>"]:::primary
+    B:::primary --> C["Per-tag sections (sorted by severity):\n  ## <TAG> · <count> candidates\n  | VA | Score | Name |\n  | top_k rows by score |"]:::secondary
+    C:::secondary --> D["If registry_hits:\n  ## Registry Correlations\n  Prior confirmed findings with embedding\n  similarity ≥ threshold, per candidate VA"]:::tertiary
+    D:::tertiary --> E["If xref:\n  Per candidate: callers / callees inline\n  from XRefGraph"]:::tertiary
+    E:::tertiary --> F(["## Verification Checklist\n  [ ] Byte-verify each candidate VA\n  [ ] Run PathSolver on ARG_PROPAGATED sinks\n  [ ] Record results in FindingRegistry"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

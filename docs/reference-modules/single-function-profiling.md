@@ -18,13 +18,23 @@ Produce a complete analysis report for one function in a single call: combining 
 
 ```mermaid
 flowchart TD
-    A["FuncProfiler.from_path(path, custom_sinks)\n  or .from_context(ctx, custom_sinks)"] --> B["profile(va, end_va) → FuncProfile\n  BinaryContext: string xrefs in [va..end_va]\n  RegAnnotator.annotate_calls(va, end_va)\n  Sink detection: callee in sink_catalog?"]
-    B --> C["FuncProfile:\n  va, end_va, byte_count\n  strings: List[Tuple[va, str]]\n  calls: List[ProfiledCall]\n  sink_calls() → calls where is_sink == True"]
-    C --> D["ProfiledCall:\n  site_va, target_name, is_sink, args: Dict[reg, RegVal]\n  fmt(arg_regs) → formatted call line\n  is_sink: target in sink_catalog OR custom_sinks"]
-    D --> E["FuncProfile.fmt(show_unknown_only_if_sink) → str\n  Header: [FUNC va..end_va] Nbytes Ncalls Nstrings NSINKS\n  STRINGS: VA + content\n  CALLS: VA, target, [SINK] marker, arg register values"]
+    A(["FuncProfiler.from_path(path, custom_sinks)\n  or .from_context(ctx, custom_sinks)"]):::input --> B["profile(va, end_va) → FuncProfile\n  BinaryContext: string xrefs in [va..end_va]\n  RegAnnotator.annotate_calls(va, end_va)\n  Sink detection: callee in sink_catalog?"]:::primary
+    B:::primary --> C["FuncProfile:\n  va, end_va, byte_count\n  strings: List[Tuple[va, str]]\n  calls: List[ProfiledCall]\n  sink_calls() → calls where is_sink == True"]:::secondary
+    C:::secondary --> D["ProfiledCall:\n  site_va, target_name, is_sink, args: Dict[reg, RegVal]\n  fmt(arg_regs) → formatted call line\n  is_sink: target in sink_catalog OR custom_sinks"]:::tertiary
+    D:::tertiary --> E(["FuncProfile.fmt(show_unknown_only_if_sink) → str\n  Header: [FUNC va..end_va] Nbytes Ncalls Nstrings NSINKS\n  STRINGS: VA + content\n  CALLS: VA, target, [SINK] marker, arg register values"]):::output
 
-    F["profile_many(va_list) → List[FuncProfile]\n  Batch profile over a list of function VAs\n  Uses shared ctx (no re-parse per function)"]
-    G["sinks_in_region(va, end_va, window) → List[ProfiledCall]\n  Find all sink calls within a window\n  without full function disassembly"]
+    F(["profile_many(va_list) → List[FuncProfile]\n  Batch profile over a list of function VAs\n  Uses shared ctx (no re-parse per function)"]):::input
+    G(["sinks_in_region(va, end_va, window) → List[ProfiledCall]\n  Find all sink calls within a window\n  without full function disassembly"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

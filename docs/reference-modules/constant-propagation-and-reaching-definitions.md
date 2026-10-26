@@ -18,12 +18,24 @@ Track which instruction definitions reach each program point, and propagate cons
 
 ```mermaid
 flowchart TD
-    A["CFG (from CFGBuilder.build_function(va))"] --> B["ReachingDefsAnalysis(cfg):\n  Lattice: Set of (block_id, reg) definition pairs\n  Transfer: RDA[block] = gen(block) ∪ (in - kill(block))\n  gen: all defs in block\n  kill: all prior defs of same register\n  Worklist: standard iterative fixpoint"]
-    A --> C["ConstPropAnalysis(cfg, domtree):\n  Lattice: ⊤ (unknown) / Const(v) / ⊥ (overdefined)\n  Transfer: MOV/LEA/ADD with Const inputs → Const output\n  JOIN: ⊤ ∩ Const = Const; Const ∩ Const = Const if same v, else ⊥\n  Worklist: priority-ordered by reverse postorder"]
-    A --> D["SCCPAnalysis(cfg, domtree) — Wegman-Zadeck:\n  Same constant lattice as ConstPropAnalysis\n  Additionally tracks edge executability:\n    Initial: only entry block's edges are executable\n    Conditional branch with Const condition → one edge executable\n    → eliminates unreachable CFG paths\n  Output: per-block Const values + executable edge set"]
-    B --> E["rda.run() → Dict[block_id, ReachingDefsState]"]
-    C --> F["cp.run() → Dict[block_id, ConstPropState]\n  state[block][reg] → Const(v) | TOP | BOTTOM"]
-    D --> G["sccp.run() → SCCPResult\n  sccp_result.const_at(va, reg) → Optional[int]\n  sccp_result.is_executable(src_block, dst_block) → bool"]
+    A(["CFG (from CFGBuilder.build_function(va))"]):::input --> B["ReachingDefsAnalysis(cfg):\n  Lattice: Set of (block_id, reg) definition pairs\n  Transfer: RDA[block] = gen(block) ∪ (in - kill(block))\n  gen: all defs in block\n  kill: all prior defs of same register\n  Worklist: standard iterative fixpoint"]:::primary
+    A:::input --> C["ConstPropAnalysis(cfg, domtree):\n  Lattice: ⊤ (unknown) / Const(v) / ⊥ (overdefined)\n  Transfer: MOV/LEA/ADD with Const inputs → Const output\n  JOIN: ⊤ ∩ Const = Const; Const ∩ Const = Const if same v, else ⊥\n  Worklist: priority-ordered by reverse postorder"]:::secondary
+    A:::input --> D["SCCPAnalysis(cfg, domtree) · Wegman-Zadeck:\n  Same constant lattice as ConstPropAnalysis\n  Additionally tracks edge executability:\n    Initial: only entry block's edges are executable\n    Conditional branch with Const condition → one edge executable\n    → eliminates unreachable CFG paths\n  Output: per-block Const values + executable edge set"]:::tertiary
+    B:::primary --> E(["rda.run() → Dict[block_id, ReachingDefsState]"]):::output
+    C:::secondary --> F(["cp.run() → Dict[block_id, ConstPropState]\n  state[block][reg] → Const(v) | TOP | BOTTOM"]):::output
+    D:::tertiary --> G(["sccp.run() → SCCPResult\n  sccp_result.const_at(va, reg) → Optional[int]\n  sccp_result.is_executable(src_block, dst_block) → bool"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

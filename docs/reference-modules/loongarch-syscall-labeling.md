@@ -64,9 +64,18 @@ For kernel module analysis, the module defines separate source and sink sets tha
 
 ```mermaid
 flowchart TD
-    A["syscall_loongarch64.SYSCALL_TABLE: Dict[int, str]\n  Derived from linux/include/uapi/asm-generic/unistd.h (6.6 kernel)\n  Key: syscall number  Value: syscall name\n  Example: 221 → 'execve', 64 → 'write', 222 → 'execveat'"] --> B["syscall_name(nr: int) → str\n  Returns syscall name or 'syscall_<nr>' if unknown"]
-    B --> C["TaintTracker (LoongArch64) uses SYSCALL_TABLE:\n  At syscall instruction:\n    Resolve $a7 via ConstPropAnalysis → nr\n    Label sink as SYSCALL_TABLE[nr]\n    Classify $a0–$a5 argument taints"]
-    C --> D["analyze_cfg() from analysis_loongarch64.py:\n  ABI: $a0=$a7 seeding for taint\n  Finding: sink=syscall_name if $a0–$a5 tainted"]
+    A(["syscall_loongarch64.SYSCALL_TABLE: Dict[int, str]\n  Derived from linux/include/uapi/asm-generic/unistd.h (6.6 kernel)\n  Key: syscall number  Value: syscall name\n  Example: 221 → 'execve', 64 → 'write', 222 → 'execveat'"]):::input --> B["syscall_name(nr: int) → str\n  Returns syscall name or 'syscall_<nr>' if unknown"]:::primary
+    B:::primary --> C["TaintTracker (LoongArch64) uses SYSCALL_TABLE:\n  At syscall instruction:\n    Resolve $a7 via ConstPropAnalysis → nr\n    Label sink as SYSCALL_TABLE[nr]\n    Classify $a0·$a5 argument taints"]:::secondary
+    C:::secondary --> D(["analyze_cfg() from analysis_loongarch64.py:\n  ABI: $a0=$a7 seeding for taint\n  Finding: sink=syscall_name if $a0·$a5 tainted"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

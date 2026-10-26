@@ -18,11 +18,22 @@ Extract FortiOS hardware firmware images using a two-stage pipeline: outer 64-by
 
 ```mermaid
 flowchart TD
-    A["FortiOSHardwareExtractor.from_path(fw_path)"] --> B["ZIP unwrap (v8.0.0+)\n  or bare gzip (v6.x/v7.x)"]
-    B --> C["recover_xor_key(data)\n  XorSolver: IC + byte-frequency analysis\n  NAND 0xFF assumption → 64-byte repeating key\n  Returns: (key: bytes, confidence: float)"]
-    C --> D["scan_partitions(decrypted)\n  Detect partition boundaries by magic\n  → List[PartitionHit(name, offset, magic)]"]
-    D --> E["extract_to(output_dir)\n  Write each partition as <name>.bin/.gz/etc.\n  Returns: ExtractionResult(key, partitions, confidence)"]
-    E --> F["FirmwareContainerKeyExtractor.from_path(fw_path)\n  Calls FortiOSHardwareExtractor for outer decryption\n  _scan_pkcs1_blocks(): scan for PKCS#1 0x00 02 ... 00 key blocks\n  _attempt_inner_decryption():\n    For each candidate key: RC4-decrypt partition header\n    gzip magic match (1f 8b) → accept key\n  Returns: ExtractionResult(outer_key, inner_keys, partitions)"]
+    A(["FortiOSHardwareExtractor.from_path(fw_path)"]):::input --> B["ZIP unwrap (v8.0.0+)\n  or bare gzip (v6.x/v7.x)"]:::primary
+    B:::primary --> C["recover_xor_key(data)\n  XorSolver: IC + byte-frequency analysis\n  NAND 0xFF assumption → 64-byte repeating key\n  Returns: (key: bytes, confidence: float)"]:::secondary
+    C:::secondary --> D["scan_partitions(decrypted)\n  Detect partition boundaries by magic\n  → List[PartitionHit(name, offset, magic)]"]:::tertiary
+    D:::tertiary --> E["extract_to(output_dir)\n  Write each partition as <name>.bin/.gz/etc.\n  Returns: ExtractionResult(key, partitions, confidence)"]:::tertiary
+    E:::tertiary --> F(["FirmwareContainerKeyExtractor.from_path(fw_path)\n  Calls FortiOSHardwareExtractor for outer decryption\n  _scan_pkcs1_blocks(): scan for PKCS#1 0x00 02 ... 00 key blocks\n  _attempt_inner_decryption():\n    For each candidate key: RC4-decrypt partition header\n    gzip magic match (1f 8b) → accept key\n  Returns: ExtractionResult(outer_key, inner_keys, partitions)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

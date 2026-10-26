@@ -18,14 +18,26 @@ Parse AppleDouble container files produced by `unar` and Stuffit Expander on Lin
 
 ```mermaid
 flowchart TD
-    A["AppleDoubleExtractor.from_path(path)\nor .from_bytes(data)"] --> B["_parse():\nVerify len(data) >= 26 (_HDR_SIZE)\nstruct.unpack_from('>IHH16sH', data, 0):\n  magic(4) + ver_hi(2) + ver_lo(2) + home_fs(16) + entry_count(2)\nmagic == 0x00051600 → AppleSingle: raise ValueError\nmagic != 0x00051607 → raise ValueError\nversion = (ver_hi << 16) | ver_lo"]
-    B --> C["Entry table parse:\nFor i in range(entry_count):\n  struct.unpack_from('>III', data, 26 + i*12):\n    entry_id(4) + offset(4) + length(4)\n  Append AppleDoubleEntry(entry_id, offset, length)\nTotal header: 26 + entry_count × 12 bytes"]
-    C --> D["AppleDoubleResult(version, home_fs, entries, _data)"]
-    D --> E["resource_fork() → bytes:\nresource_fork_entry() → entry_id=2\nentry.read_from(_data): data[offset : offset+length]"]
-    D --> F["finder_info() → Optional[bytes]:\nentry_id=8 → data[offset : offset+length]\n(bytes 0-3: file type, bytes 4-7: creator code)"]
-    D --> G["real_name() → Optional[str]:\nentry_id=3 → raw bytes\n.decode('mac_roman', errors='replace').rstrip(b'\\x00')"]
-    H["batch_extract_resource_forks(paths):\nFor each path: from_path() → resource_fork_entry() → read_from()\nException → None\nReturns {path_str: bytes | None}"]
-    I["is_appledouble(data): struct.unpack('>I',data[:4])[0] == 0x00051607"]
+    A(["AppleDoubleExtractor.from_path(path)\nor .from_bytes(data)"]):::input --> B["_parse():\nVerify len(data) >= 26 (_HDR_SIZE)\nstruct.unpack_from('>IHH16sH', data, 0):\n  magic(4) + ver_hi(2) + ver_lo(2) + home_fs(16) + entry_count(2)\nmagic == 0x00051600 → AppleSingle: raise ValueError\nmagic != 0x00051607 → raise ValueError\nversion = (ver_hi << 16) | ver_lo"]:::primary
+    B:::primary --> C["Entry table parse:\nFor i in range(entry_count):\n  struct.unpack_from('>III', data, 26 + i*12):\n    entry_id(4) + offset(4) + length(4)\n  Append AppleDoubleEntry(entry_id, offset, length)\nTotal header: 26 + entry_count × 12 bytes"]:::secondary
+    C:::secondary --> D["AppleDoubleResult(version, home_fs, entries, _data)"]:::tertiary
+    D:::tertiary --> E(["resource_fork() → bytes:\nresource_fork_entry() → entry_id=2\nentry.read_from(_data): data[offset : offset+length]"]):::output
+    D:::tertiary --> F(["finder_info() → Optional[bytes]:\nentry_id=8 → data[offset : offset+length]\n(bytes 0-3: file type, bytes 4-7: creator code)"]):::output
+    D:::tertiary --> G(["real_name() → Optional[str]:\nentry_id=3 → raw bytes\n.decode('mac_roman', errors='replace').rstrip(b'\\x00')"]):::output
+    H(["batch_extract_resource_forks(paths):\nFor each path: from_path() → resource_fork_entry() → read_from()\nException → None\nReturns {path_str: bytes | None}"]):::input
+    I(["is_appledouble(data): struct.unpack('>I',data[:4])[0] == 0x00051607"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Entry ID reference

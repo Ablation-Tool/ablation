@@ -18,10 +18,20 @@ Reconstruct C++ vtables in PS3 Cell PPU (PPC64) binaries: finding all virtual di
 
 ```mermaid
 flowchart TD
-    A["PS3OPDVtableScanner.from_path(elf_path, toc)\n  or .from_context(ctx, toc)"] --> B["scan(min_slots=3) → List[OPDVtable]\n  Phase 1: Build OPD map\n    Read .opd section: {opd_va: (code_va, toc_va)}\n  Phase 2: Scan data segment for sequences of\n    4-byte LE pointers into .opd VA range\n    Minimum min_slots consecutive OPD pointers\n    → OPDVtable(base_va, slots=[code_va,...])"]
-    B --> C["OPDVtable:\n  base_va: int  (data address of vtable)\n  slots: List[int]  (code VAs of methods)\n  target_at(slot_idx) → int  (code VA for slot k)"]
-    C --> D["inject_into_context(vtables, ctx) → int\n  ctx.set_name(vtable.base_va, 'vtable_<base_va>', source='opd_vtable')\n  For each slot k:\n    ctx.set_name(slots[k], 'vtable_<base_va>_slot_<k>', source='opd_vtable')\n  Returns: count of names set"]
-    D --> E["find_by_method_name(vtables, ctx, pattern) → List[(OPDVtable, slot_idx)]\n  For each vtable slot (code VA):\n    Check string xrefs in that function for pattern\n  Returns: vtables where a slot function references the pattern"]
+    A(["PS3OPDVtableScanner.from_path(elf_path, toc)\n  or .from_context(ctx, toc)"]):::input --> B["scan(min_slots=3) → List[OPDVtable]\n  Phase 1: Build OPD map\n    Read .opd section: {opd_va: (code_va, toc_va)}\n  Phase 2: Scan data segment for sequences of\n    4-byte LE pointers into .opd VA range\n    Minimum min_slots consecutive OPD pointers\n    → OPDVtable(base_va, slots=[code_va,...])"]:::primary
+    B:::primary --> C["OPDVtable:\n  base_va: int  (data address of vtable)\n  slots: List[int]  (code VAs of methods)\n  target_at(slot_idx) → int  (code VA for slot k)"]:::secondary
+    C:::secondary --> D["inject_into_context(vtables, ctx) → int\n  ctx.set_name(vtable.base_va, 'vtable_<base_va>', source='opd_vtable')\n  For each slot k:\n    ctx.set_name(slots[k], 'vtable_<base_va>_slot_<k>', source='opd_vtable')\n  Returns: count of names set"]:::tertiary
+    D:::tertiary --> E(["find_by_method_name(vtables, ctx, pattern) → List[(OPDVtable, slot_idx)]\n  For each vtable slot (code VA):\n    Check string xrefs in that function for pattern\n  Returns: vtables where a slot function references the pattern"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

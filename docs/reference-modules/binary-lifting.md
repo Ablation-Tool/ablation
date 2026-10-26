@@ -18,10 +18,20 @@ Lift native binary instructions from 18 ISA variants: ARM64, x86-64, x86-32, ARM
 
 ```mermaid
 flowchart TD
-    A["BinaryLifter.from_path(path, arch='arm64')\n  or .from_context(ctx, arch='arm64')"] --> B["ISA dispatch in lift_function(va):\n  'arm64' → _lift_arm64 (full: typed NativeVal state machine)\n  'x86_64'/'amd64' → _lift_x86_64 (full: typed x86_64 state)\n  all others → structural backend\n  Returns multi-line pseudo-C IR string"]
-    B --> C["ARM64 / x86-64 full backends:\n  Typed register assignments (NativeVal)\n  Resolved call names via ctx._names + _plt\n  Taint annotations if .with_taint() called\n  Branch target labels (loc_<va>)"]
-    C --> D["Structural backends (16 ISAs):\n  Capstone disassembly → C-style expression rendering\n  Call sites resolved to function names\n  Branch targets labeled (loc_<va>)\n  Arithmetic as C operators"]
-    D --> E["report(path, va, arch='arm64') → None\n  Convenience: constructs lifter, calls lift_function(va),\n  prints to stdout. Does not return a value."]
+    A(["BinaryLifter.from_path(path, arch='arm64')\n  or .from_context(ctx, arch='arm64')"]):::input --> B["ISA dispatch in lift_function(va):\n  'arm64' → _lift_arm64 (full: typed NativeVal state machine)\n  'x86_64'/'amd64' → _lift_x86_64 (full: typed x86_64 state)\n  all others → structural backend\n  Returns multi-line pseudo-C IR string"]:::primary
+    B:::primary --> C["ARM64 / x86-64 full backends:\n  Typed register assignments (NativeVal)\n  Resolved call names via ctx._names + _plt\n  Taint annotations if .with_taint() called\n  Branch target labels (loc_<va>)"]:::secondary
+    C:::secondary --> D["Structural backends (16 ISAs):\n  Capstone disassembly → C-style expression rendering\n  Call sites resolved to function names\n  Branch targets labeled (loc_<va>)\n  Arithmetic as C operators"]:::tertiary
+    D:::tertiary --> E(["report(path, va, arch='arm64') → None\n  Convenience: constructs lifter, calls lift_function(va),\n  prints to stdout. Does not return a value."]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

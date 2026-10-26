@@ -18,11 +18,22 @@ Parse Java `.class` files and JAR archives, scan the JVM constant pool for secur
 
 ```mermaid
 flowchart TD
-    A["parse_class_file(data) or analyze_jar(jar_path)"] --> B["ConstantPool.parse()\n  Read cp_count entries\n  UTF8 strings, class refs, method refs\n  Long/Double consume 2 slots"]
-    B --> C["scan_constant_pool_strings(data)\n  Linear scan for tag=1 UTF8 entries\n  No bytecode decode needed\n  Finds: exec, ClassLoader, ObjectInputStream\n  JNDI, XXE, SSRF, hardcoded literals"]
-    C --> D["detect_java_deserialization_exploitation()\n  InvokerTransformer / ChainedTransformer\n  Commons Collections gadget chain\n  SerializedLambda (Java 8+ gadget)\n  0xACED0005 magic in pool"]
-    D --> E["analyze_spring_application_context()\n  @RequestMapping without @PreAuthorize\n  Spring Actuator endpoint exposure\n  @Value with hardcoded literal"]
-    E --> F["synthesize_findings(all_results) → List[dict]\n  severity: CRITICAL / HIGH / MEDIUM\n  exploit: reproduction path\n  detail: constant pool evidence"]
+    A(["parse_class_file(data) or analyze_jar(jar_path)"]):::input --> B["ConstantPool.parse()\n  Read cp_count entries\n  UTF8 strings, class refs, method refs\n  Long/Double consume 2 slots"]:::primary
+    B:::primary --> C["scan_constant_pool_strings(data)\n  Linear scan for tag=1 UTF8 entries\n  No bytecode decode needed\n  Finds: exec, ClassLoader, ObjectInputStream\n  JNDI, XXE, SSRF, hardcoded literals"]:::secondary
+    C:::secondary --> D["detect_java_deserialization_exploitation()\n  InvokerTransformer / ChainedTransformer\n  Commons Collections gadget chain\n  SerializedLambda (Java 8+ gadget)\n  0xACED0005 magic in pool"]:::tertiary
+    D:::tertiary --> E["analyze_spring_application_context()\n  @RequestMapping without @PreAuthorize\n  Spring Actuator endpoint exposure\n  @Value with hardcoded literal"]:::tertiary
+    E:::tertiary --> F(["synthesize_findings(all_results) → List[dict]\n  severity: CRITICAL / HIGH / MEDIUM\n  exploit: reproduction path\n  detail: constant pool evidence"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

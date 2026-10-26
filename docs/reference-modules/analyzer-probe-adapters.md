@@ -18,18 +18,36 @@ Bridge between the Hypothesis Engine's typed `ProbeRecord` requests and the conc
 
 ```mermaid
 flowchart TD
-    A["execute_probe(probe, ctx, session)"] --> B["_ADAPTER_MAP.get(probe.kind)\nOne entry per kind: disassembly→DisassemblyAdapter, cfg→CFGAdapter,\nxref→XRefAdapter, lifter→LifterAdapter, semantic→SemanticAdapter,\nversion→VersionAdapter, taint→TaintAdapter, manual→ManualAdapter\n(+DynamicProbeAdapter if Unicorn installed)"]
-    B --> C["adapter.execute(probe, ctx, session)"]
-    C --> D["_target_vas(probe, session):\nprobe.parameters['va'] or probe.parameters['vas'] (direct)\nOR session.get_hypothesis(id).subject['va'/'func_va'/'call_site_va'/'target_va']"]
-    D --> E{probe.kind}
-    E -->|disassembly| F["Capstone: arch→CS_ARCH_ARM64/X86\ncs.disasm(func_bytes, va)\nCount: insn_count, call_targets (bl/blr/call), branch_count\nEvidenceRelation.NEUTRAL strength=0.6"]
-    E -->|cfg| G["CFGBuilder.build(va)\nnum_basic_blocks, has_loop (back-edge: target < source)\nEvidenceRelation.NEUTRAL strength=0.65"]
-    E -->|xref| H["XRefGraph: callers_of(va), callees_of(va), plt_name(va)\nstring_refs: ctx.strings_in_func(va)\nEvidenceRelation.NEUTRAL strength=0.60"]
-    E -->|lifter| I["BinaryLifter.lift_function(va)\nCount: tainted_vars (/* TAINTED */), call_sites (fn_), declared_vars\nIf tainted_vars > 0: family='data_flow' strength=0.80\nElse: family='structure' strength=0.70"]
-    E -->|semantic| J["SemanticSearcher.query(hypothesis.claim.description, top_k=5)\nEvidenceRelation.NEUTRAL strength=top_hit.score × 0.25"]
-    E -->|version| K["DTWMatcher(ctx.path, probe.parameters['reference_binary'])\nscore_functions(va, va) → similarity\nstrength = min(0.80, similarity × 0.80)"]
-    E -->|taint| L["_run_taint(ctx, va, arch, params):\narm64→ARM64TaintTracker, arm32→ARM32TaintTracker\nx86_64→TaintTracker, la64→LoongArch64TaintTracker\ntracker.run_interprocedural()\nIf paths found: EvidenceRelation.SUPPORTS strength=min(0.90, 0.60+0.10×path_count)"]
-    E -->|manual| M["Return NEUTRAL EvidenceRecord strength=0.0\n'analyst must add evidence via add_evidence()'"]
+    A(["execute_probe(probe, ctx, session)"]):::input --> B["_ADAPTER_MAP.get(probe.kind)\nOne entry per kind: disassembly→DisassemblyAdapter, cfg→CFGAdapter,\nxref→XRefAdapter, lifter→LifterAdapter, semantic→SemanticAdapter,\nversion→VersionAdapter, taint→TaintAdapter, manual→ManualAdapter\n(+DynamicProbeAdapter if Unicorn installed)"]:::primary
+    B:::primary --> C["adapter.execute(probe, ctx, session)"]:::secondary
+    C:::secondary --> D["_target_vas(probe, session):\nprobe.parameters['va'] or probe.parameters['vas'] (direct)\nOR session.get_hypothesis(id).subject['va'/'func_va'/'call_site_va'/'target_va']"]:::tertiary
+    D:::tertiary --> E{"probe.kind"}:::neutral
+    E:::neutral -->|disassembly| F(["Capstone: arch→CS_ARCH_ARM64/X86\ncs.disasm(func_bytes, va)\nCount: insn_count, call_targets (bl/blr/call), branch_count\nEvidenceRelation.NEUTRAL strength=0.6"]):::output
+    E:::neutral -->|cfg| G(["CFGBuilder.build(va)\nnum_basic_blocks, has_loop (back-edge: target < source)\nEvidenceRelation.NEUTRAL strength=0.65"]):::output
+    E:::neutral -->|xref| H(["XRefGraph: callers_of(va), callees_of(va), plt_name(va)\nstring_refs: ctx.strings_in_func(va)\nEvidenceRelation.NEUTRAL strength=0.60"]):::output
+    E:::neutral -->|lifter| I(["BinaryLifter.lift_function(va)\nCount: tainted_vars (/* TAINTED */), call_sites (fn_), declared_vars\nIf tainted_vars > 0: family='data_flow' strength=0.80\nElse: family='structure' strength=0.70"]):::output
+    E:::neutral -->|semantic| J(["SemanticSearcher.query(hypothesis.claim.description, top_k=5)\nEvidenceRelation.NEUTRAL strength=top_hit.score × 0.25"]):::output
+    E:::neutral -->|version| K(["DTWMatcher(ctx.path, probe.parameters['reference_binary'])\nscore_functions(va, va) → similarity\nstrength = min(0.80, similarity × 0.80)"]):::output
+    E:::neutral -->|taint| L(["_run_taint(ctx, va, arch, params):\narm64→ARM64TaintTracker, arm32→ARM32TaintTracker\nx86_64→TaintTracker, la64→LoongArch64TaintTracker\ntracker.run_interprocedural()\nIf paths found: EvidenceRelation.SUPPORTS strength=min(0.90, 0.60+0.10×path_count)"]):::output
+    E:::neutral -->|manual| M(["Return NEUTRAL EvidenceRecord strength=0.0\n'analyst must add evidence via add_evidence()'"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#546e7a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Adapter registry

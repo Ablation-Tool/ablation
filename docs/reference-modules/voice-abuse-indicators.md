@@ -18,11 +18,22 @@ Detect telephony denial-of-service susceptibility, call eavesdropping surfaces, 
 
 ```mermaid
 flowchart TD
-    A["detect_sip_flood_surface(host, port=5060) → list\n  Rapid INVITE burst: no rate limit → SIP_NO_RATE_LIMIT (MEDIUM)\n  Malformed SIP accepted → SIP_MALFORMED_ACCEPTED (MEDIUM)\n  Oversized URI accepted → SIP_OVERSIZED_URI_ACCEPTED (MEDIUM)\n  → [{severity, title, detail, host, port}]"] --> B["detect_tdos_indicators(host, port=5060) → list\n  INVITE with spoofed PAI header → SIP_CALLER_ID_SPOOFING_POSSIBLE (HIGH)\n  Rapid OPTIONS burst → SIP_OPTIONS_RATE_UNLIMITED (MEDIUM)\n  Rapid REGISTER Expires cycling → SIP_REGISTRATION_EXHAUSTION_POSSIBLE (HIGH)\n  → [{severity, title, detail, host, port}]"]
-    B --> C["detect_sip_eavesdropping_surface(host, port=5060) → list\n  SUBSCRIBE to presence (RFC 3856) → SIP_PRESENCE_SUBSCRIPTION_UNAUTH (HIGH)\n  Unsolicited NOTIFY → SIP_NOTIFY_REFLECTS_UNSOLICITED (MEDIUM)\n  INVITE with SDP offer → SIP_SDP_CODEC_DISCLOSURE (MEDIUM)\n  → [{severity, title, detail, host, port}]"]
-    C --> D["detect_voip_eavesdrop_surface(host, port=5060) → list\n  SDP RTP/AVP offer accepted → SRTP_NOT_REQUIRED (CRITICAL)\n  RTCP port reachable → RTCP_PORT_ACCESSIBLE (MEDIUM)\n  → [{severity, title, detail, host, port}]"]
-    D --> E["probe_sip_authentication_weaknesses(host, port=5060) → list\n  401 nonce captured; re-used without nc increment\n  → SIP_NONCE_REPLAY_ACCEPTED (CRITICAL) if accepted\n  → [{severity, title, detail, host, port}]"]
-    E --> F["probe_sip_authentication_bypass(host, port=5060) → list\n  INVITE with no Authorization header → SIP_UNAUTH_INVITE (HIGH)\n  Digest with blank password → SIP_AUTH_BYPASS (CRITICAL)\n  Digest with forged response → SIP_DIGEST_BYPASS (CRITICAL)\n  → [{severity, title, detail, host, port}]"]
+    A(["detect_sip_flood_surface(host, port=5060) → list\n  Rapid INVITE burst: no rate limit → SIP_NO_RATE_LIMIT (MEDIUM)\n  Malformed SIP accepted → SIP_MALFORMED_ACCEPTED (MEDIUM)\n  Oversized URI accepted → SIP_OVERSIZED_URI_ACCEPTED (MEDIUM)\n  → [{severity, title, detail, host, port}]"]):::input --> B["detect_tdos_indicators(host, port=5060) → list\n  INVITE with spoofed PAI header → SIP_CALLER_ID_SPOOFING_POSSIBLE (HIGH)\n  Rapid OPTIONS burst → SIP_OPTIONS_RATE_UNLIMITED (MEDIUM)\n  Rapid REGISTER Expires cycling → SIP_REGISTRATION_EXHAUSTION_POSSIBLE (HIGH)\n  → [{severity, title, detail, host, port}]"]:::primary
+    B:::primary --> C["detect_sip_eavesdropping_surface(host, port=5060) → list\n  SUBSCRIBE to presence (RFC 3856) → SIP_PRESENCE_SUBSCRIPTION_UNAUTH (HIGH)\n  Unsolicited NOTIFY → SIP_NOTIFY_REFLECTS_UNSOLICITED (MEDIUM)\n  INVITE with SDP offer → SIP_SDP_CODEC_DISCLOSURE (MEDIUM)\n  → [{severity, title, detail, host, port}]"]:::secondary
+    C:::secondary --> D["detect_voip_eavesdrop_surface(host, port=5060) → list\n  SDP RTP/AVP offer accepted → SRTP_NOT_REQUIRED (CRITICAL)\n  RTCP port reachable → RTCP_PORT_ACCESSIBLE (MEDIUM)\n  → [{severity, title, detail, host, port}]"]:::tertiary
+    D:::tertiary --> E["probe_sip_authentication_weaknesses(host, port=5060) → list\n  401 nonce captured; re-used without nc increment\n  → SIP_NONCE_REPLAY_ACCEPTED (CRITICAL) if accepted\n  → [{severity, title, detail, host, port}]"]:::tertiary
+    E:::tertiary --> F(["probe_sip_authentication_bypass(host, port=5060) → list\n  INVITE with no Authorization header → SIP_UNAUTH_INVITE (HIGH)\n  Digest with blank password → SIP_AUTH_BYPASS (CRITICAL)\n  Digest with forged response → SIP_DIGEST_BYPASS (CRITICAL)\n  → [{severity, title, detail, host, port}]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

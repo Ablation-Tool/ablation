@@ -18,17 +18,34 @@ Detect and handle compressed AIX BFF archives LZW type `0x0E`, IBM Huffman type 
 
 ```mermaid
 flowchart TD
-    A["BFFDecompressor.open(path)"] --> B["os.path.getsize() guard: > 256MB → ValueError\nRead all bytes → data"]
-    B --> C["detect(data):\n_bff_type(data): data[0] in {0x09, 0x0C, 0x0E, 0x10, 0x11}\nReturns: 'plain' / 'huffman' / 'lzw' / 'gzip-variant' / 'not-bff'"]
-    C --> D{format?}
-    D -->|plain 0x09| E["iter_entries(data) → List[BffEntry]\n(delegates to bff_extractor)"]
-    D -->|lzw 0x0E| F["_try_uncompress_lzw(data):\nsubprocess.run(['uncompress','-c'], input=data, timeout=30)\nreturncode==0 and stdout → decompressed bytes\nVerify decompressed[:2] == BFF_MAGIC\niter_entries(decompressed) → List[BffEntry]"]
-    F --> G{"uncompress\nsucceeded?"}
-    G -->|no| H["BFFCompressedError:\n'LZW-compressed BFF (type 0x0E). '\n'Run: uncompress -c <file> | restore -xvqf -'"]
-    D -->|huffman 0x0C| I["_try_restore(path):\nsubprocess.run(['which','restore'])\nrestore not found → return None\nRestore found → restore -xvqf path -d tmpdir\n(returns tmpdir path as bytes marker)\nAlways raises BFFCompressedError for Huffman:"]
-    I --> J["BFFCompressedError:\n'IBM Huffman-compressed BFF (type 0x0C). '\n'Requires AIX restore(8). '\n'See XLC-GAP-014 for open-source implementation gap.'"]
-    D -->|not-bff| K["ValueError: 'not a BFF archive'"]
-    D -->|unknown| L["BFFCompressedError: 'type 0xXX is not handled'"]
+    A(["BFFDecompressor.open(path)"]):::input --> B["os.path.getsize() guard: > 256MB → ValueError\nRead all bytes → data"]:::primary
+    B:::primary --> C["detect(data):\n_bff_type(data): data[0] in {0x09, 0x0C, 0x0E, 0x10, 0x11}\nReturns: 'plain' / 'huffman' / 'lzw' / 'gzip-variant' / 'not-bff'"]:::secondary
+    C:::secondary --> D{"format?"}:::neutral
+    D:::neutral -->|plain 0x09| E(["iter_entries(data) → List[BffEntry]\n(delegates to bff_extractor)"]):::output
+    D:::neutral -->|lzw 0x0E| F["_try_uncompress_lzw(data):\nsubprocess.run(['uncompress','-c'], input=data, timeout=30)\nreturncode==0 and stdout → decompressed bytes\nVerify decompressed[:2] == BFF_MAGIC\niter_entries(decompressed) → List[BffEntry]"]:::tertiary
+    F:::tertiary --> G{"uncompress\nsucceeded?"}:::neutral
+    G:::neutral -->|no| H(["BFFCompressedError:\n'LZW-compressed BFF (type 0x0E). '\n'Run: uncompress -c <file> | restore -xvqf -'"]):::output
+    D:::neutral -->|huffman 0x0C| I["_try_restore(path):\nsubprocess.run(['which','restore'])\nrestore not found → return None\nRestore found → restore -xvqf path -d tmpdir\n(returns tmpdir path as bytes marker)\nAlways raises BFFCompressedError for Huffman:"]:::tertiary
+    I:::tertiary --> J(["BFFCompressedError:\n'IBM Huffman-compressed BFF (type 0x0C). '\n'Requires AIX restore(8). '\n'See XLC-GAP-014 for open-source implementation gap.'"]):::output
+    D:::neutral -->|not-bff| K(["ValueError: 'not a BFF archive'"]):::output
+    D:::neutral -->|unknown| L(["BFFCompressedError: 'type 0xXX is not handled'"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#546e7a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#546e7a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### BFF volume header type codes

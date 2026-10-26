@@ -18,26 +18,52 @@ Build an authentication surface map of a source code repository in under five se
 
 ```mermaid
 flowchart TD
-    A["SourceContext.from_path(repo_root)"] --> B["_walk_source_files: rglob all files\nskip: node_modules .git .next __pycache__ dist build .turbo coverage target\nkeep: .ts .tsx .js .mjs .cjs .py .rs .go .java .rb .php"]
-    B --> C["Build lang_map: {language: [Path, ...]}"]
-    C --> D["_is_route_file(path): check 8 content signals\nNext.js pages/app, Express/Fastify, Flask/FastAPI/DRF, Django CBV, Axum/Actix\nRoute files added to ctx.route_files"]
-    D --> E["_detect_package_roots: find monorepo package.json roots"]
-    E --> F[SourceContext ready]
-    F --> G["SourceEntryClassifier.from_context(ctx)"]
-    G --> H["classify() — iterates ctx.route_files"]
-    H --> I["_classify_file(path): read text → _classify_text()"]
-    I --> J["_classify_text: scan _AUTH_PATTERNS (25+)\nFirst match at highest rank wins\nOrder: ADMIN → INTERNAL → SESSION → API_KEY → NONE"]
-    J --> K{auth_level == NONE?}
-    K -->|yes| L["Follow one import level:\n_IMPORT_FROM regex finds import statements\n_resolve_import(): resolve relative or @/-aliased imports\nRe-classify imported file; upgrade if auth found"]
-    K -->|no| M
-    L --> M{AllowAny check}
-    M -->|"permission_classes=[AllowAny] found\nOR @action(permission_classes=[AllowAny]) found"| N["Downgrade SESSION → NONE"]
-    M -->|no AllowAny| O
-    N & O --> P["is_low_value: health/ready/ping/version/openapi/swagger signals"]
-    P --> Q["RouteClassification: path, rel_path, auth_level, matched_signal, is_low_value"]
-    Q --> H
-    H --> R["Sort: weakest-auth-first (NONE before API_KEY before SESSION …)"]
-    R --> S["report() → Route Auth Surface Map"]
+    A(["SourceContext.from_path(repo_root)"]):::input --> B["_walk_source_files: rglob all files\nskip: node_modules .git .next __pycache__ dist build .turbo coverage target\nkeep: .ts .tsx .js .mjs .cjs .py .rs .go .java .rb .php"]:::primary
+    B:::primary --> C["Build lang_map: {language: [Path, ...]}"]:::secondary
+    C:::secondary --> D["_is_route_file(path): check 8 content signals\nNext.js pages/app, Express/Fastify, Flask/FastAPI/DRF, Django CBV, Axum/Actix\nRoute files added to ctx.route_files"]:::tertiary
+    D:::tertiary --> E["_detect_package_roots: find monorepo package.json roots"]:::tertiary
+    E:::tertiary --> F["SourceContext ready"]:::tertiary
+    F:::tertiary --> G["SourceEntryClassifier.from_context(ctx)"]:::tertiary
+    G:::tertiary --> H["classify() · iterates ctx.route_files"]:::tertiary
+    H:::tertiary --> I["_classify_file(path): read text → _classify_text()"]:::tertiary
+    I:::tertiary --> J["_classify_text: scan _AUTH_PATTERNS (25+)\nFirst match at highest rank wins\nOrder: ADMIN → INTERNAL → SESSION → API_KEY → NONE"]:::tertiary
+    J:::tertiary --> K{"auth_level == NONE?"}:::neutral
+    K:::neutral -->|yes| L["Follow one import level:\n_IMPORT_FROM regex finds import statements\n_resolve_import(): resolve relative or @/-aliased imports\nRe-classify imported file; upgrade if auth found"]:::tertiary
+    K:::neutral -->|no| M["M"]:::tertiary
+    L:::tertiary --> M:::tertiary
+    M:::tertiary -->|"permission_classes=[AllowAny] found\nOR @action(permission_classes=[AllowAny]) found"| N["Downgrade SESSION → NONE"]:::tertiary
+    M:::tertiary -->|no AllowAny| O(["O"]):::output
+    N:::tertiary --> P["is_low_value: health/ready/ping/version/openapi/swagger signals"]:::tertiary
+    P:::tertiary --> Q["RouteClassification: path, rel_path, auth_level, matched_signal, is_low_value"]:::tertiary
+    Q:::tertiary --> H:::tertiary
+    H:::tertiary --> R["Sort: weakest-auth-first (NONE before API_KEY before SESSION …)"]:::tertiary
+    R:::tertiary --> S(["report() → Route Auth Surface Map"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#546e7a,stroke-width:2px
+    linkStyle 10 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 11 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 12 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 13 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 14 stroke:#2e7d32,stroke-width:3px
+    linkStyle 15 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 16 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 17 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 18 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 19 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Authentication levels

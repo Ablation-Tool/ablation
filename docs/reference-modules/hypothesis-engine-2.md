@@ -18,15 +18,25 @@ Coordinate the analysis session lifecycle for a single binary: accepting typed h
 
 ```mermaid
 flowchart TD
-    A["HypothesisEngine.from_binary(binary_path,\n  architecture='aarch64',\n  max_probes=50,\n  ctx=BinaryContext)"] --> B["HypothesisSession.create() → session\nHypothesisEngine(session, EvidenceScorer, ProbeRanker)"]
-    B --> C["seed(kind, subject, claims, prior=0.5)\n→ [HypothesisRecord × len(claims)]\nEach: HypothesisRecord.create(kind, subject, claim, prior)\nsession.add_hypothesis(h)\nstatus: UNTESTED; confidence: prior"]
-    C --> D["add_evidence(analyzer, family, subject, observation,\n  relation, hypothesis_ids, strength, reliability)\n→ EvidenceRecord.create(...)\nsession.add_evidence(ev)\nFor each hid in hypothesis_ids:\n  h = session.get_hypothesis(hid)\n  ev_for_h = session.evidence_for(hid)\n  scorer.update_hypothesis(h, ev_for_h)\n  → update h.confidence, h.status"]
-    D --> E["plan(top_n=5) → str:\nranker.plan_report(surviving_hypotheses,\n  executed_kinds, top_n):\n  Generate probe candidates per surviving hypothesis\n  Score by expected_information_gain\n  Return ranked table (no execution)"]
-    F["step(kind=None, approved=False, max_probes=50):\nBudget check: len(executed_probes) >= max_probes → None\nsurviving = session.surviving_hypotheses()\nranker.top_probe() or by kind\nsession.add_probe(probe)\napproved=True AND ctx attached:\n  _lazy_execute_probe(probe, ctx, session)\n  For each ev in result:\n    session.add_evidence(ev)\n    scorer.update_hypothesis(h, ev_for_h)\n  probe.mark_executed([ev.id for ev in results])\n  _executed_kinds.append(probe.kind)"]
-    G["add_hard_contradiction(\n  analyzer, family, subject, observation,\n  hypothesis_ids, explanation):\n→ add_evidence(relation=CONTRADICTS, strength=0.95, reliability=0.95)\n  notes='HARD CONTRADICTION: explanation'"]
-    H["run_until_stable(max_steps=8) → int:\nLoop: if no unresolved hypotheses → stop\nstep() → probe; if None → stop\nReturn steps taken"]
-    I["report() → str:\n'HYPOTHESIS ENGINE REPORT' header\nBy ConfidenceState: CONFIRMED/SUPPORTED/PLAUSIBLE/\n  UNRESOLVED/UNTESTED/REJECTED\nPer h: score_report(h, ev, scorer)\nHard contradictions section\nProbe history: ✓/○ kind analyzer eig status"]
-    J["save(path) / load(path):\nHypothesisSession.save() → JSON\nHypothesisSession.load() → session\nRe-create engine from saved state"]
+    A(["HypothesisEngine.from_binary(binary_path,\n  architecture='aarch64',\n  max_probes=50,\n  ctx=BinaryContext)"]):::input --> B["HypothesisSession.create() → session\nHypothesisEngine(session, EvidenceScorer, ProbeRanker)"]:::primary
+    B:::primary --> C["seed(kind, subject, claims, prior=0.5)\n→ [HypothesisRecord × len(claims)]\nEach: HypothesisRecord.create(kind, subject, claim, prior)\nsession.add_hypothesis(h)\nstatus: UNTESTED; confidence: prior"]:::secondary
+    C:::secondary --> D["add_evidence(analyzer, family, subject, observation,\n  relation, hypothesis_ids, strength, reliability)\n→ EvidenceRecord.create(...)\nsession.add_evidence(ev)\nFor each hid in hypothesis_ids:\n  h = session.get_hypothesis(hid)\n  ev_for_h = session.evidence_for(hid)\n  scorer.update_hypothesis(h, ev_for_h)\n  → update h.confidence, h.status"]:::tertiary
+    D:::tertiary --> E(["plan(top_n=5) → str:\nranker.plan_report(surviving_hypotheses,\n  executed_kinds, top_n):\n  Generate probe candidates per surviving hypothesis\n  Score by expected_information_gain\n  Return ranked table (no execution)"]):::output
+    F(["step(kind=None, approved=False, max_probes=50):\nBudget check: len(executed_probes) >= max_probes → None\nsurviving = session.surviving_hypotheses()\nranker.top_probe() or by kind\nsession.add_probe(probe)\napproved=True AND ctx attached:\n  _lazy_execute_probe(probe, ctx, session)\n  For each ev in result:\n    session.add_evidence(ev)\n    scorer.update_hypothesis(h, ev_for_h)\n  probe.mark_executed([ev.id for ev in results])\n  _executed_kinds.append(probe.kind)"]):::input
+    G(["add_hard_contradiction(\n  analyzer, family, subject, observation,\n  hypothesis_ids, explanation):\n→ add_evidence(relation=CONTRADICTS, strength=0.95, reliability=0.95)\n  notes='HARD CONTRADICTION: explanation'"]):::input
+    H(["run_until_stable(max_steps=8) → int:\nLoop: if no unresolved hypotheses → stop\nstep() → probe; if None → stop\nReturn steps taken"]):::input
+    I(["report() → str:\n'HYPOTHESIS ENGINE REPORT' header\nBy ConfidenceState: CONFIRMED/SUPPORTED/PLAUSIBLE/\n  UNRESOLVED/UNTESTED/REJECTED\nPer h: score_report(h, ev, scorer)\nHard contradictions section\nProbe history: ✓/○ kind analyzer eig status"]):::input
+    J(["save(path) / load(path):\nHypothesisSession.save() → JSON\nHypothesisSession.load() → session\nRe-create engine from saved state"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### ConfidenceState transitions

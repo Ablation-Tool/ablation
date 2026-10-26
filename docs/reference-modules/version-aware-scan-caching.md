@@ -18,12 +18,21 @@ Persist scanner results as JSON-serializable dicts with automatic invalidation w
 
 ```mermaid
 flowchart TD
-    A["ScanResultVersionCache.for_scanner(ScannerClass)\n  Reads scanner source path to compute hash\n  Cache file: ~/.ablation/cache/scan_<scanner>_<scanner_hash>.json"] --> B["get_or_scan(file_path, force=False) → List[dict]\n  Compute hash of file_path (SHA256 of first 64KB)\n  Key: (file_hash, scanner_hash)\n  Cache hit? → return cached List[dict]\n  Cache miss? → invoke scanner, store result, return result"]
-    B --> C["Scanner invocation:\n  ScannerClass.from_path(file_path)\n  scanner.scan()\n  [f.as_dict() for f in findings]\n  → List[dict] stored in cache"]
-    C --> D["save() → persist JSON cache to disk\n  Call after get_or_scan() or scan_batch()"]
+    A(["ScanResultVersionCache.for_scanner(ScannerClass)\n  Reads scanner source path to compute hash\n  Cache file: ~/.ablation/cache/scan_<scanner>_<scanner_hash>.json"]):::input --> B["get_or_scan(file_path, force=False) → List[dict]\n  Compute hash of file_path (SHA256 of first 64KB)\n  Key: (file_hash, scanner_hash)\n  Cache hit? → return cached List[dict]\n  Cache miss? → invoke scanner, store result, return result"]:::primary
+    B:::primary --> C["Scanner invocation:\n  ScannerClass.from_path(file_path)\n  scanner.scan()\n  [f.as_dict() for f in findings]\n  → List[dict] stored in cache"]:::secondary
+    C:::secondary --> D(["save() → persist JSON cache to disk\n  Call after get_or_scan() or scan_batch()"]):::output
 
-    E["scan_batch(file_paths, ...) → Dict[str, List[dict]]\n  For each path: get_or_scan(path)\n  Returns per-path findings dict\n  Auto-calls save() after all files"]
-    F["is_cached(file_path) → bool\n  cache_stats() → {'total': N, 'hits': M, 'misses': K}\n  evict(file_path) → bool  (remove from cache)"]
+    E(["scan_batch(file_paths, ...) → Dict[str, List[dict]]\n  For each path: get_or_scan(path)\n  Returns per-path findings dict\n  Auto-calls save() after all files"]):::input
+    F(["is_cached(file_path) → bool\n  cache_stats() → {'total': N, 'hits': M, 'misses': K}\n  evict(file_path) → bool  (remove from cache)"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

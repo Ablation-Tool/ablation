@@ -18,9 +18,18 @@ Parse firmware container images with a plaintext partition table, identify parti
 
 ```mermaid
 flowchart TD
-    A["FirmwareContainer.parse(data) → FirmwareContainer\n  Read magic[8]: identify container format\n  fw_version, vendor_string, product_string\n  Partition table: n × 296-byte records\n    name[32], type[4], offset[8], size[8]\n    checksum[4], compression[4]\n  _detect_payload(data, offset, size):\n    SquashFS / JFFS2 / ext2-4 / gzip / xz / ELF\n  → List[FirmwarePartition{name, type, payload_type}]"] --> B["scan_firmware_signatures(data) → list\n  Magic byte scan:\n    b'\\x27\\x05\\x19\\x56' → U-Boot image\n    b'sqsh' / b'hsqs' → SquashFS\n    b'\\x85\\x19' → JFFS2 LE / b'\\x19\\x85' BE\n    b'\\x1f\\x8b' → gzip\n  → [{signature_type, offset, description}]"]
-    B --> C["analyze_firmware_entropy(data, block_size=1024) → list\n  Shannon entropy per 1KB block:\n    < 1.0 → zero padding\n    1.0-3.0 → structured data\n    3.0-6.0 → text/code\n    6.0-7.5 → packed binary\n    > 7.5 → compressed or encrypted\n  → [{block_offset, entropy, type}]"]
-    C --> D["extract_firmware_strings(data, min_length=8) → dict\n  Printable string extraction\n  Categories:\n    credentials: user=, pass=, admin, default\n    urls: http://, https://, ftp://\n    crypto_material: BEGIN CERTIFICATE, BEGIN RSA\n    version_strings: v[0-9]+, build-[0-9]+\n    paths: /etc/, /usr/, /var/\n  → {credentials, urls, crypto_material, versions, paths}"]
+    A(["FirmwareContainer.parse(data) → FirmwareContainer\n  Read magic[8]: identify container format\n  fw_version, vendor_string, product_string\n  Partition table: n × 296-byte records\n    name[32], type[4], offset[8], size[8]\n    checksum[4], compression[4]\n  _detect_payload(data, offset, size):\n    SquashFS / JFFS2 / ext2-4 / gzip / xz / ELF\n  → List[FirmwarePartition{name, type, payload_type}]"]):::input --> B["scan_firmware_signatures(data) → list\n  Magic byte scan:\n    b'\\x27\\x05\\x19\\x56' → U-Boot image\n    b'sqsh' / b'hsqs' → SquashFS\n    b'\\x85\\x19' → JFFS2 LE / b'\\x19\\x85' BE\n    b'\\x1f\\x8b' → gzip\n  → [{signature_type, offset, description}]"]:::primary
+    B:::primary --> C["analyze_firmware_entropy(data, block_size=1024) → list\n  Shannon entropy per 1KB block:\n    < 1.0 → zero padding\n    1.0-3.0 → structured data\n    3.0-6.0 → text/code\n    6.0-7.5 → packed binary\n    > 7.5 → compressed or encrypted\n  → [{block_offset, entropy, type}]"]:::secondary
+    C:::secondary --> D(["extract_firmware_strings(data, min_length=8) → dict\n  Printable string extraction\n  Categories:\n    credentials: user=, pass=, admin, default\n    urls: http://, https://, ftp://\n    crypto_material: BEGIN CERTIFICATE, BEGIN RSA\n    version_strings: v[0-9]+, build-[0-9]+\n    paths: /etc/, /usr/, /var/\n  → {credentials, urls, crypto_material, versions, paths}"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

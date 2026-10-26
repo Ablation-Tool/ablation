@@ -18,9 +18,18 @@ Analyze Apache C module binaries (`.so` files built against APR/APRUTIL) for sec
 
 ```mermaid
 flowchart TD
-    A["ApacheModuleAnalyzer.from_path(module_path)\n  or .from_context(ctx)"] --> B["Register hook discovery:\n  Find: ap_hook_check_access / ap_hook_auth_checker call sites\n  Extract: handler VA from first argument\n  → Dict[hook_name, handler_va]"]
-    B --> C["scan() → List[ApacheFinding]\n  For each auth hook handler (FuncProfiler.profile):\n    DECLINED_EARLY: function returns -1 without credential check\n    SESSION_SKIP_FLAG: apr_table_get(r->notes, 'skip_auth') with direct return\n    BYPASS_PATH: r->request_config or r->notes flag check before auth\n  Severity: HIGH (DECLINED_EARLY) | MEDIUM (SESSION_SKIP_FLAG)"]
-    C --> D["ApacheFinding:\n  hook_name: str\n  handler_va: int\n  pattern: str  (DECLINED_EARLY | SESSION_SKIP_FLAG | BYPASS_PATH)\n  severity: str\n  fmt() → str"]
+    A(["ApacheModuleAnalyzer.from_path(module_path)\n  or .from_context(ctx)"]):::input --> B["Register hook discovery:\n  Find: ap_hook_check_access / ap_hook_auth_checker call sites\n  Extract: handler VA from first argument\n  → Dict[hook_name, handler_va]"]:::primary
+    B:::primary --> C["scan() → List[ApacheFinding]\n  For each auth hook handler (FuncProfiler.profile):\n    DECLINED_EARLY: function returns -1 without credential check\n    SESSION_SKIP_FLAG: apr_table_get(r->notes, 'skip_auth') with direct return\n    BYPASS_PATH: r->request_config or r->notes flag check before auth\n  Severity: HIGH (DECLINED_EARLY) | MEDIUM (SESSION_SKIP_FLAG)"]:::secondary
+    C:::secondary --> D(["ApacheFinding:\n  hook_name: str\n  handler_va: int\n  pattern: str  (DECLINED_EARLY | SESSION_SKIP_FLAG | BYPASS_PATH)\n  severity: str\n  fmt() → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

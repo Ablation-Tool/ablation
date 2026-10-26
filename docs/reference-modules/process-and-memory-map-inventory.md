@@ -18,10 +18,20 @@ Enumerate running processes, loaded shared libraries, executable/RWX memory regi
 
 ```mermaid
 flowchart TD
-    A["ProcessEnumerator()"] --> B["enumerate() → List[ProcessInfo]\n  Walk /proc/[0-9]*/\n  Per PID:\n    /proc/pid/cmdline → command\n    /proc/pid/status → name, pid, uid, gid, State\n    /proc/pid/maps → memory mappings\n    /proc/pid/environ → environment variables\n    /proc/pid/fd/ → open file descriptors"]
-    B --> C["ProcessInfo per process:\n  pid, cmdline, uid, gid\n  maps: List[MemoryMap]\n    MemoryMap: va_start, va_end, perms, offset, path\n    Flag RWX: perms='rwx' and path='' (anonymous RWX)\n  env: Dict[str, str]\n  open_fds: List[str]"]
-    C --> D["scan_dll_hijacking_candidates(proc_path='/proc') → list\n  For each process with SUID/root:\n    Filter maps to .so loads from writable paths\n    → [{pid, cmdline, lib_path, writable: True}]"]
-    D --> E["detect_hollow_process(pid) → dict\n  Compare /proc/pid/exe vs first executable map\n  Mismatch → process hollowing indicator\n\nenumerate_volatile_forensics(output_dir) → dict\n  Snapshot: processes, net, modules, sysrq\n  Write to output_dir/<timestamp>/"]
+    A(["ProcessEnumerator()"]):::input --> B["enumerate() → List[ProcessInfo]\n  Walk /proc/[0-9]*/\n  Per PID:\n    /proc/pid/cmdline → command\n    /proc/pid/status → name, pid, uid, gid, State\n    /proc/pid/maps → memory mappings\n    /proc/pid/environ → environment variables\n    /proc/pid/fd/ → open file descriptors"]:::primary
+    B:::primary --> C["ProcessInfo per process:\n  pid, cmdline, uid, gid\n  maps: List[MemoryMap]\n    MemoryMap: va_start, va_end, perms, offset, path\n    Flag RWX: perms='rwx' and path='' (anonymous RWX)\n  env: Dict[str, str]\n  open_fds: List[str]"]:::secondary
+    C:::secondary --> D["scan_dll_hijacking_candidates(proc_path='/proc') → list\n  For each process with SUID/root:\n    Filter maps to .so loads from writable paths\n    → [{pid, cmdline, lib_path, writable: True}]"]:::tertiary
+    D:::tertiary --> E(["detect_hollow_process(pid) → dict\n  Compare /proc/pid/exe vs first executable map\n  Mismatch → process hollowing indicator\n\nenumerate_volatile_forensics(output_dir) → dict\n  Snapshot: processes, net, modules, sysrq\n  Write to output_dir/<timestamp>/"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

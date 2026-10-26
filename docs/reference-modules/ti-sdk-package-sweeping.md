@@ -18,9 +18,18 @@ Decode TI CC254x Enhanced 8051 firmware (BLE 4.0 SoC) using the MCS-51 ISA model
 
 ```mermaid
 flowchart TD
-    A["TI SDK package or HiSilicon NearLink firmware"] --> B["isa_8051.py — TI CC254x:\n  Mcs51Decoder.decode(data, base_addr) → List[Mcs51Insn]\n  Per instruction:\n    is_call/is_jump/is_branch/is_ret\n    reads_aes_sfr()/writes_aes_sfr() → SFR 0xB1-0xB3 access\n    changes_bank() → code banking (0x8000-0xFFFF window)\n  sfr_name(addr) → human-readable SFR label"]
-    B --> C["hisi_rv32_ext.py — WS63/Hi3863:\n  HiSiliconRV32ExtDecoder.decode_one(data, offset) → HisiInsn\n  Custom opcode dispatch:\n    0x0b: ldmia/stmia (multi-register load/store)\n    0x7b: custom-3 dispatch/context (~9000 hits in WS63)\n    0x5b: muliadd\n    0x3b: beqi/bnei/bgei/blti branch-immediate\n    0x1b: addshf/orshf/andshf (shift-fused ALU)\n    0x1f: l.li 6-byte long load-immediate (CRITICAL: variable length)\n  Pass corrected frames to Capstone for standard RISC-V"]
-    C --> D["sweeps/ti_sweep.py:\n  Walk SDK package directory tree\n  Dispatch artifacts by magic/suffix to correct decoder\n  Run semantic sweep on each extracted binary\n  Report findings per artifact"]
+    A(["TI SDK package or HiSilicon NearLink firmware"]):::input --> B["isa_8051.py · TI CC254x:\n  Mcs51Decoder.decode(data, base_addr) → List[Mcs51Insn]\n  Per instruction:\n    is_call/is_jump/is_branch/is_ret\n    reads_aes_sfr()/writes_aes_sfr() → SFR 0xB1-0xB3 access\n    changes_bank() → code banking (0x8000-0xFFFF window)\n  sfr_name(addr) → human-readable SFR label"]:::primary
+    B:::primary --> C["hisi_rv32_ext.py · WS63/Hi3863:\n  HiSiliconRV32ExtDecoder.decode_one(data, offset) → HisiInsn\n  Custom opcode dispatch:\n    0x0b: ldmia/stmia (multi-register load/store)\n    0x7b: custom-3 dispatch/context (~9000 hits in WS63)\n    0x5b: muliadd\n    0x3b: beqi/bnei/bgei/blti branch-immediate\n    0x1b: addshf/orshf/andshf (shift-fused ALU)\n    0x1f: l.li 6-byte long load-immediate (CRITICAL: variable length)\n  Pass corrected frames to Capstone for standard RISC-V"]:::secondary
+    C:::secondary --> D(["sweeps/ti_sweep.py:\n  Walk SDK package directory tree\n  Dispatch artifacts by magic/suffix to correct decoder\n  Run semantic sweep on each extracted binary\n  Report findings per artifact"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

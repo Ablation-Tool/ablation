@@ -18,10 +18,20 @@ Lift compiled MicroPython `.mpy` v6 bytecode files to readable pseudo-Python sou
 
 ```mermaid
 flowchart TD
-    A["MpyLifter.from_path(path) or .from_bytes(data)"] --> B["_parse():\n  MpyHeader: magic, version=6, features, qstr_win\n  qstr table: {id → str} — all string constants\n  const object table: int, float, str, bytes literals\n  Recursive code-object tree: functions + nested lambdas"]
-    B --> C["lift_module() → str\n  Walk root code object + all children via _lift_code()\n  Per opcode: IMPORT_NAME, LOAD_GLOBAL, LOAD_ATTR resolved\n  via qstr table → pseudo-Python string (indented, readable)"]
-    C --> D["imports() → list[str]\n  Walk all code objects\n  Collect IMPORT_NAME qstr values (deduplicated, in-order)\n  → module names as found in bytecode"]
-    D --> E["dangerous_calls() → list[dict]\n  Walk all code objects\n  IMPORT_NAME + name in _DANGEROUS_IMPORTS → DANGEROUS_IMPORT\n  LOAD_NAME/LOAD_GLOBAL + name in _DANGEROUS_NAMES → DANGEROUS_CALL\n  LOAD_ATTR + attr in _DANGEROUS_ATTRS → DANGEROUS_ATTR\n  Each: {type, detail, offset, function, severity}\n  → report(findings) → str ASCII table"]
+    A(["MpyLifter.from_path(path) or .from_bytes(data)"]):::input --> B["_parse():\n  MpyHeader: magic, version=6, features, qstr_win\n  qstr table: {id → str} · all string constants\n  const object table: int, float, str, bytes literals\n  Recursive code-object tree: functions + nested lambdas"]:::primary
+    B:::primary --> C["lift_module() → str\n  Walk root code object + all children via _lift_code()\n  Per opcode: IMPORT_NAME, LOAD_GLOBAL, LOAD_ATTR resolved\n  via qstr table → pseudo-Python string (indented, readable)"]:::secondary
+    C:::secondary --> D["imports() → list[str]\n  Walk all code objects\n  Collect IMPORT_NAME qstr values (deduplicated, in-order)\n  → module names as found in bytecode"]:::tertiary
+    D:::tertiary --> E(["dangerous_calls() → list[dict]\n  Walk all code objects\n  IMPORT_NAME + name in _DANGEROUS_IMPORTS → DANGEROUS_IMPORT\n  LOAD_NAME/LOAD_GLOBAL + name in _DANGEROUS_NAMES → DANGEROUS_CALL\n  LOAD_ATTR + attr in _DANGEROUS_ATTRS → DANGEROUS_ATTR\n  Each: {type, detail, offset, function, severity}\n  → report(findings) → str ASCII table"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

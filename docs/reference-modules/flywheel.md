@@ -24,11 +24,22 @@ The flywheel has two halves: storage and replay.
 
 ```mermaid
 flowchart LR
-    A["Confirm finding\nFindingRegistry.register()"] --> B[("~/.ablation/findings.db\nSQLite · all vendors · all targets")]
-    B --> C["Next engagement\nPatternLibrary.ingest_from_registry()"]
-    C --> D["pl.sweep(searcher)\nAll confirmed patterns run\nagainst the new binary"]
-    D --> E["New confirmed finding\nFindingRegistry.register()"]
-    E --> B
+    A(["Confirm finding\nFindingRegistry.register()"]):::input --> B["~/.ablation/findings.db\nSQLite · all vendors · all targets"]:::primary
+    B:::primary --> C["Next engagement\nPatternLibrary.ingest_from_registry()"]:::secondary
+    C:::secondary --> D["pl.sweep(searcher)\nAll confirmed patterns run\nagainst the new binary"]:::tertiary
+    D:::tertiary --> E["New confirmed finding\nFindingRegistry.register()"]:::tertiary
+    E:::tertiary --> B:::primary
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#bf360c,stroke-width:2px
 ```
 
 ---

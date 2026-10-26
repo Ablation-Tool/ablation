@@ -20,22 +20,44 @@ Scan executable non-`.text` ELF sections for the two Power10 ppc64le ELFv2 PLT s
 
 ```mermaid
 flowchart TD
-    A["scan_power10_stubs(data, lief_binary, r2)"] --> B["For each ELF section"]
-    B --> C{SHF_EXECINSTR AND\nnot .text AND\nsize >= 12?}
-    C -->|no| B
-    C -->|yes| D["Scan raw bytes for MTCTR+BCTR anchor\n(7D8903A6 + 4E800420)"]
-    D --> E{anchor found?}
-    E -->|no| D
-    E -->|yes| F["Read 8 bytes before anchor"]
-    F --> G{word[-8] == 0xF8410018\nAND word[-4] & 0xFFFF0000 == 0xE9820000?}
-    G -->|yes Form A| H["D = sign_extend_16(word[-4] & 0xFFFF) & ~3\ngot_VA = r2 + D\nstub_VA = anchor_VA - 8"]
-    G -->|no| I{word[-8] & 0xFFF00000 == 0x04100000\nAND word[-4] & 0xFFFF0000 == 0xE5800000?}
-    I -->|yes Form B| J["d0_hi = (word[-8] >> 16) & 0x3\nd0_lo = word[-8] & 0xFFFF\nd1 = word[-4] & 0xFFFF\nD = sign_extend_34((d0_hi<<32)|(d0_lo<<16)|d1)\ngot_VA = anchor_VA - 8 + D\nstub_VA = anchor_VA - 8"]
-    I -->|no| D
-    H --> K["stub_to_got[stub_VA] = got_VA"]
-    J --> K
-    K --> D
-    D --> L["Return stub_to_got dict"]
+    A(["scan_power10_stubs(data, lief_binary, r2)"]):::input --> B["For each ELF section"]:::primary
+    B:::primary --> C{"SHF_EXECINSTR AND\nnot .text AND\nsize >= 12?"}:::neutral
+    C:::neutral -->|no| B:::primary
+    C:::neutral -->|yes| D["Scan raw bytes for MTCTR+BCTR anchor\n(7D8903A6 + 4E800420)"]:::secondary
+    D:::secondary --> E{"anchor found?"}:::neutral
+    E:::neutral -->|no| D:::secondary
+    E:::neutral -->|yes| F["Read 8 bytes before anchor"]:::tertiary
+    F:::tertiary --> G{"word[-8] == 0xF8410018\nAND word[-4] & 0xFFFF0000 == 0xE9820000?"}:::neutral
+    G:::neutral -->|yes Form A| H["D = sign_extend_16(word[-4] & 0xFFFF) & ~3\ngot_VA = r2 + D\nstub_VA = anchor_VA - 8"]:::tertiary
+    G:::neutral -->|no| I{"word[-8] & 0xFFF00000 == 0x04100000\nAND word[-4] & 0xFFFF0000 == 0xE5800000?"}:::neutral
+    I:::neutral -->|yes Form B| J["d0_hi = (word[-8] >> 16) & 0x3\nd0_lo = word[-8] & 0xFFFF\nd1 = word[-4] & 0xFFFF\nD = sign_extend_34((d0_hi<<32)|(d0_lo<<16)|d1)\ngot_VA = anchor_VA - 8 + D\nstub_VA = anchor_VA - 8"]:::tertiary
+    I:::neutral -->|no| D:::secondary
+    H:::tertiary --> K["stub_to_got[stub_VA] = got_VA"]:::tertiary
+    J:::tertiary --> K:::tertiary
+    K:::tertiary --> D:::secondary
+    D:::secondary --> L(["Return stub_to_got dict"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#bf360c,stroke-width:2px
+    linkStyle 3 stroke:#00695c,stroke-width:2px
+    linkStyle 4 stroke:#546e7a,stroke-width:2px
+    linkStyle 5 stroke:#00695c,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#546e7a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#546e7a,stroke-width:2px
+    linkStyle 10 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 11 stroke:#00695c,stroke-width:2px
+    linkStyle 12 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 13 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 14 stroke:#00695c,stroke-width:2px
+    linkStyle 15 stroke:#2e7d32,stroke-width:3px
 ```
 
 **Integration into ELFv2 SAC:**

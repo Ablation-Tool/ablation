@@ -18,17 +18,28 @@ Pre-computed, serialized binary context cache that captures ELF parsing results 
 
 ```mermaid
 flowchart TD
-    A["BinaryContext.load_or_build(path, force_rebuild)"] --> B{"Cache hit?\n  (~/.ablation/cache/<sha256>.pkl)"}
-    B -- Yes --> C["load_from_cache_file() → ctx\n  Deserialize in <100ms"]
-    B -- No --> D["BinaryContext.build(path):\n  ELF parsing via pyelftools:\n    plt: {va: symbol} from .plt/.plt.got\n    exports: {name: va} from .dynsym/.symtab\n    strings: {va: content} from .rodata (≥4 chars)\n    func_starts: from .eh_frame FDEs + callee augmentation\n    call_edges: [(from, to, label)] from disassembly"]
-    D --> E["XRefGraph.build():\n  Build call graph + string xref index\n  Support: x86_64, arm64, arm32/Thumb\n  build_xref_index() → number of xrefs added"]
-    E --> F["Serialize to cache\n  ~2-5s build time → <100ms reload"]
+    A(["BinaryContext.load_or_build(path, force_rebuild)"]):::input --> B{"Cache hit?\n  (~/.ablation/cache/<sha256>.pkl)"}:::neutral
+    B:::neutral --> C(["load_from_cache_file() → ctx\n  Deserialize in <100ms"]):::output
+    B:::neutral --> D["BinaryContext.build(path):\n  ELF parsing via pyelftools:\n    plt: {va: symbol} from .plt/.plt.got\n    exports: {name: va} from .dynsym/.symtab\n    strings: {va: content} from .rodata (≥4 chars)\n    func_starts: from .eh_frame FDEs + callee augmentation\n    call_edges: [(from, to, label)] from disassembly"]:::primary
+    D:::primary --> E["XRefGraph.build():\n  Build call graph + string xref index\n  Support: x86_64, arm64, arm32/Thumb\n  build_xref_index() → number of xrefs added"]:::secondary
+    E:::secondary --> F(["Serialize to cache\n  ~2-5s build time → <100ms reload"]):::output
 
-    G["ctx.callers_of(symbol_or_va) → List[Tuple[va, name]]\n  All call sites reaching this function"]
-    H["ctx.callees_of(func_va) → List[Tuple[va, name]]\n  All callees (PLT + internal) from this function"]
-    I["ctx.strings_in_func(func_va) → List[Tuple[va, str]]\n  All .rodata strings loaded in this function"]
-    J["ctx.name(va) → str\n  Human-readable name: 'fn_0x<va>' if unnamed\n  ctx.set_name(va, name, source='confirmed')"]
-    K["ctx.func_containing(va) → Optional[int]\n  Which function contains this VA"]
+    G(["ctx.callers_of(symbol_or_va) → List[Tuple[va, name]]\n  All call sites reaching this function"]):::input
+    H(["ctx.callees_of(func_va) → List[Tuple[va, name]]\n  All callees (PLT + internal) from this function"]):::input
+    I(["ctx.strings_in_func(func_va) → List[Tuple[va, str]]\n  All .rodata strings loaded in this function"]):::input
+    J(["ctx.name(va) → str\n  Human-readable name: 'fn_0x<va>' if unnamed\n  ctx.set_name(va, name, source='confirmed')"]):::input
+    K(["ctx.func_containing(va) → Optional[int]\n  Which function contains this VA"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#546e7a,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#bf360c,stroke-width:2px
+    linkStyle 3 stroke:#00695c,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

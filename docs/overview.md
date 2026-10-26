@@ -18,13 +18,20 @@ Ablation is a static analysis toolkit: it reads binaries without executing them.
 
 ```mermaid
 flowchart LR
-    A[/"binary.elf"/] --> B["Static analysis\nAblation\nall code paths visible\nbinary never executes"]
-    B --> C["TaintTracker\ncandidates"]
-    C --> D["PathSolver\nfeasibility check"]
-    D --> E["Dynamic confirmation\nfuzzing · instrumentation\nconcrete input triggers crash"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style E fill:#14532d,stroke:#166534,color:#dcfce7
+    A(["binary.elf"]):::input --> B["Static analysis\nAblation\nall code paths visible\nbinary never executes"]:::primary
+    B:::primary --> C["TaintTracker\ncandidates"]:::secondary
+    C:::secondary --> D["PathSolver\nfeasibility check"]:::tertiary
+    D:::tertiary --> E(["Dynamic confirmation\nfuzzing · instrumentation\nconcrete input triggers crash"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 The tools use bounded static approximations and heuristics. A hit is a lead, a score is a ranking signal, and an apparent taint path is a model result. None should be presented as a confirmed vulnerability without validating reachability, input control, checks, sink behavior, and impact.
@@ -58,15 +65,22 @@ The core package contains ELF, PE, and Mach-O-related support, while analysis co
 
 ```mermaid
 flowchart TD
-    A[/"binary (ELF · PE · flat ROM)"/] --> B["LIEF\nformat detection\narch · segments · imports · exports · strings"]
-    B --> C["Capstone\ninstruction decode\nfunc_starts via DWARF .eh_frame + prologue scan\ncall_edges via vectorized numpy scan"]
-    C --> D["BinaryContext\nplt: {va → symbol}\nstrings: {va → content}\nfunc_starts: sorted VA list\ncall_edges: [(from, to, label)]\n_callers_idx / _callees_idx built once"]
-    D --> E[("~/.ablation/cache/<sha256[:16]>_name.json\nkeyed by SHA-256 of binary bytes\nreloads in under 100ms")]
-    E --> F["Shared by every tool\nSemanticSearcher · FuncProfiler · TaintTracker\nWindowAnalyzer · VersionDelta · MatrixProfileDiff"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style E fill:#1e3a5f,stroke:#1d4ed8,color:#bfdbfe
-    style F fill:#14532d,stroke:#166534,color:#dcfce7
+    A(["binary (ELF · PE · flat ROM)"]):::input --> B["LIEF\nformat detection\narch · segments · imports · exports · strings"]:::primary
+    B:::primary --> C["Capstone\ninstruction decode\nfunc_starts via DWARF .eh_frame + prologue scan\ncall_edges via vectorized numpy scan"]:::secondary
+    C:::secondary --> D["BinaryContext\nplt: {va → symbol}\nstrings: {va → content}\nfunc_starts: sorted VA list\ncall_edges: [(from, to, label)]\n_callers_idx / _callees_idx built once"]:::tertiary
+    D:::tertiary --> E["~/.ablation/cache/<sha256[:16]>_name.json\nkeyed by SHA-256 of binary bytes\nreloads in under 100ms"]:::tertiary
+    E:::tertiary --> F(["Shared by every tool\nSemanticSearcher · FuncProfiler · TaintTracker\nWindowAnalyzer · VersionDelta · MatrixProfileDiff"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 This is a binary analysis toolkit, not a general source-level decompiler equivalent to a full interactive commercial or open-source reverse-engineering suite. It offers disassembly, structural analysis, matching, and targeted analysis features; users should inspect each command's actual output and scope.
@@ -85,16 +99,26 @@ Two consequences follow from this. First, a function with no symbols, no recogni
 
 ```mermaid
 flowchart TD
-    A[/"stripped binary"/] --> B["CorpusBuilder\nnames · callees · strings · inferred role\none description per function"]
-    B --> C["sentence-transformers\nall-mpnet-base-v2\ndescription → 768-dim vector"]
-    C --> D[("~/.ablation/func_id.db\nvector index")]
-    E["query: 'network-controlled length\nreaches allocation or copy'"] --> F["embed query\nsame model"]
-    F --> G["cosine similarity\nagainst index"]
-    D --> G
-    G --> H["ranked candidates\nfn_0x1234 · copy_field · parse_pkt"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style H fill:#14532d,stroke:#166534,color:#dcfce7
+    A(["stripped binary"]):::input --> B["CorpusBuilder\nnames · callees · strings · inferred role\none description per function"]:::primary
+    B:::primary --> C["sentence-transformers\nall-mpnet-base-v2\ndescription → 768-dim vector"]:::tertiary
+    C:::tertiary --> D["~/.ablation/func_id.db\nvector index"]:::tertiary
+    E(["query: 'network-controlled length\nreaches allocation or copy'"]):::input --> F["embed query\nsame model"]:::secondary
+    F:::secondary --> G["cosine similarity\nagainst index"]:::tertiary
+    D:::tertiary --> G:::tertiary
+    G:::tertiary --> H(["ranked candidates\nfn_0x1234 · copy_field · parse_pkt"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#00695c,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
 ```
 
 `PatternLibrary` stores confirmed textual search patterns in a local JSON file under `~/.ablation`. A pattern is a natural-language description string confirmed to match a vulnerable function class. The `sweep` command applies every registered pattern against the current corpus and returns ranked candidates. The difference from `SemanticSearcher.query()` is persistence: a query runs once for the current session; a pattern persists to disk, records every confirmed hit, and replays automatically on every future target that runs `ablation sweep`. When a buffer overflow is confirmed in a Cisco router, the pattern that found it applies to every subsequent target without re-typing the query. `PatternLibrary.record_hit(confirmed=True)` updates the hit record so sweep scores calibrate over time.
@@ -109,18 +133,28 @@ The argument annotation uses `RegAnnotator`, which traces each argument register
 
 ```mermaid
 flowchart TD
-    A["SemanticSearcher\ncandidate VAs"] --> B["FuncProfiler.profile(va)"]
-    B --> C["RegAnnotator\ntrace each arg register\n≤20 instructions backward per call site"]
-    C --> D["string literals\n.rodata loads → actual content\narg0_entry · arg1_entry · ret(name)"]
-    B --> E["call site list\nwith annotated arguments"]
-    B --> F["*** SINK *** flags\ndangerous arg is arg1_entry\nor comes from recv return value"]
-    F --> G{"proceed to\nTaintTracker?"}
-    G -->|"sink arg is entry arg\nor tainted return"| H["run_interprocedural(depth=4)"]
-    G -->|"sink arg is RODATA_CONST"| I["SinkArgClassifier confirms safe\nskip this call site"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style H fill:#7f1d1d,stroke:#991b1b,color:#fecaca
-    style I fill:#14532d,stroke:#166534,color:#dcfce7
+    A(["SemanticSearcher\ncandidate VAs"]):::input --> B["FuncProfiler.profile(va)"]:::primary
+    B:::primary --> C["RegAnnotator\ntrace each arg register\n≤20 instructions backward per call site"]:::secondary
+    C:::secondary --> D(["string literals\n.rodata loads → actual content\narg0_entry · arg1_entry · ret(name)"]):::output
+    B:::primary --> E(["call site list\nwith annotated arguments"]):::output
+    B:::primary --> F["*** SINK *** flags\ndangerous arg is arg1_entry\nor comes from recv return value"]:::tertiary
+    F:::tertiary --> G{"proceed to\nTaintTracker?"}:::neutral
+    G:::neutral -->|"sink arg is entry arg\nor tainted return"| H(["run_interprocedural(depth=4)"]):::output
+    G:::neutral -->|"sink arg is RODATA_CONST"| I(["SinkArgClassifier confirms safe\nskip this call site"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#546e7a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
 ```
 
 A profile output showing `*** SINK cmd-exec ***` where the dangerous argument is labeled `arg1_entry` means a function parameter flows directly into a dangerous call. That is the input that makes `TaintTracker.run_interprocedural()` worth running.
@@ -157,18 +191,28 @@ Firmware wraps standard library functions in vendor-specific wrappers. A binary 
 
 ```mermaid
 flowchart TD
-    A["recv · recvfrom · read\nfgets · gets"] -->|"return value tainted"| B["TaintTracker\nforward slice"]
-    B --> C["SinkPropagator\ndiscover vendor wrappers\nadd to sink table"]
-    C --> D["SinkArgClassifier\nclassify each sink call site"]
-    D -->|"RODATA_CONST\nhardcoded string"| E["skip\nnot attacker-controlled"]
-    D -->|"ARG_PROPAGATED"| F["run_interprocedural()\nfollow taint across call graph"]
-    D -->|"UNKNOWN"| F
-    F -->|"taint reaches sink"| G[/"Finding\nsource · chain · sink · arg"/]
-    F -->|"no path found"| H["no finding\ncheck SinkPropagator coverage"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style G fill:#7f1d1d,stroke:#991b1b,color:#fecaca
-    style E fill:#14532d,stroke:#166534,color:#dcfce7
+    A(["recv · recvfrom · read\nfgets · gets"]):::input -->|"return value tainted"| B["TaintTracker\nforward slice"]:::primary
+    B:::primary --> C["SinkPropagator\ndiscover vendor wrappers\nadd to sink table"]:::secondary
+    C:::secondary --> D["SinkArgClassifier\nclassify each sink call site"]:::tertiary
+    D:::tertiary -->|"RODATA_CONST\nhardcoded string"| E(["skip\nnot attacker-controlled"]):::output
+    D:::tertiary -->|"ARG_PROPAGATED"| F["run_interprocedural()\nfollow taint across call graph"]:::tertiary
+    D:::tertiary -->|"UNKNOWN"| F:::tertiary
+    F:::tertiary -->|"taint reaches sink"| G(["Finding\nsource · chain · sink · arg"]):::output
+    F:::tertiary -->|"no path found"| H(["no finding\ncheck SinkPropagator coverage"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
 ```
 
 **Control flow and data flow.** The `cfg` command builds a Control Flow Graph (CFG): nodes are basic blocks, edges are possible branches. This is control flow analysis. It answers whether one instruction can execute after another. It says nothing about what values the registers hold. Taint analysis is data flow analysis built on top of a CFG: it propagates facts tainted or clean along CFG edges through each instruction's transfer function. `dataflow_engine.py` provides the shared CFG worklist and fixed-point machinery; architecture modules define the transfer functions. Correctness depends on the modeled instruction subset, the calling convention model, and CFG recovery quality.
@@ -177,16 +221,22 @@ The data flow analysis runs to a fixed point: it propagates facts around the CFG
 
 ```mermaid
 flowchart TD
-    A["Block A\nr3 = recv()\nr3 = TAINTED"] -->|"r3 = TAINTED"| B{"Block B\nbranch on r3 > 0"}
-    B -->|"yes · TAINTED"| C["Block C\nprocess(r3)"]
-    B -->|"no · TAINTED"| D["Block D\nreturn -1"]
-    C -->|"r3 = TAINTED"| E["Block E\nstrcpy(dst, r3)\nFINDING"]
+    A(["Block A\nr3 = recv()\nr3 = TAINTED"]):::input -->|"r3 = TAINTED"| B{"Block B\nbranch on r3 > 0"}:::neutral
+    B:::neutral -->|"yes · TAINTED"| C["Block C\nprocess(r3)"]:::primary
+    B:::neutral -->|"no · TAINTED"| D(["Block D\nreturn -1"]):::output
+    C:::primary -->|"r3 = TAINTED"| E(["Block E\nstrcpy(dst, r3)\nFINDING"]):::output
 
-    note["Control flow: are B→C and B→D reachable?\nData flow: is r3 tainted at Block E?\nBoth answers come from the same CFG.\nThe CFG provides the paths; the taint facts travel the edges."]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style E fill:#7f1d1d,stroke:#991b1b,color:#fecaca
-    style note fill:#0f172a,stroke:#334155,color:#94a3b8
+    note(["Control flow: are B→C and B→D reachable?\nData flow: is r3 tainted at Block E?\nBoth answers come from the same CFG.\nThe CFG provides the paths; the taint facts travel the edges."]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#546e7a,stroke-width:2px
+    linkStyle 1 stroke:#bf360c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 **Flow sensitivity vs path sensitivity.** Flow-sensitive analysis tracks the order of operations: `r3 = recv(); r3 = 0; system(r3)` produces no finding because the clean assignment came after the taint. Flow-insensitive analysis ignores order and flags a finding regardless of sequence.
@@ -195,16 +245,24 @@ Path-insensitive analysis merges facts from all branches when they join:
 
 ```mermaid
 flowchart TD
-    A["entry"] --> B{"x > 0?"}
-    B -->|"yes"| C["r3 = recv()\nr3 = TAINTED"]
-    B -->|"no"| D["r3 = 0\nr3 = CLEAN"]
-    C --> E["merge point\npath-insensitive: r3 = TAINTED\npath-sensitive: TAINTED on yes-path only"]
-    D --> E
-    E --> F["system(r3)\npath-insensitive: FINDING\npath-sensitive: PathSolver filters this"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style E fill:#92400e,stroke:#b45309,color:#fef3c7
-    style F fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    A(["entry"]):::input --> B{"x > 0?"}:::neutral
+    B:::neutral -->|"yes"| C["r3 = recv()\nr3 = TAINTED"]:::primary
+    B:::neutral -->|"no"| D["r3 = 0\nr3 = CLEAN"]:::secondary
+    C:::primary --> E["merge point\npath-insensitive: r3 = TAINTED\npath-sensitive: TAINTED on yes-path only"]:::tertiary
+    D:::secondary --> E:::tertiary
+    E:::tertiary --> F(["system(r3)\npath-insensitive: FINDING\npath-sensitive: PathSolver filters this"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#546e7a,stroke-width:2px
+    linkStyle 1 stroke:#bf360c,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 A path-sensitive analysis would track each branch separately and know `r3` is only tainted on the `x > 0` path. Tracking separate facts per path costs exponential time in the number of branches, so it does not scale to firmware binaries.
@@ -216,17 +274,25 @@ Ablation's trackers are flow-sensitive and path-insensitive. Findings at branch 
 ```mermaid
 flowchart TD
     subgraph "Intraprocedural (run)"
-        I1["process_input(data)\nr3 = data\nr3 = TAINTED"] --> I2["sanitize(r3)\ncallee treated as black box\nreturn value: CLEAN (assumed)"]
-        I2 --> I3["strcpy(dst, r0)\nr0 = CLEAN\nno finding"]
+    I1(["process_input(data)\nr3 = data\nr3 = TAINTED"]):::input --> I2["sanitize(r3)\ncallee treated as black box\nreturn value: CLEAN (assumed)"]:::primary
+    I2:::primary --> I3(["strcpy(dst, r0)\nr0 = CLEAN\nno finding"]):::output
     end
     subgraph "Interprocedural (run_interprocedural depth=4)"
-        P1["process_input(data)\nr3 = data\nr3 = TAINTED"] --> P2["sanitize(r3)\ndescend into callee"]
-        P2 --> P3["sanitize body:\nreturn r3\nreturn value: TAINTED"]
-        P3 --> P4["strcpy(dst, r0)\nr0 = TAINTED\nFINDING"]
+    P1(["process_input(data)\nr3 = data\nr3 = TAINTED"]):::input --> P2["sanitize(r3)\ndescend into callee"]:::secondary
+    P2:::secondary --> P3["sanitize body:\nreturn r3\nreturn value: TAINTED"]:::tertiary
+    P3:::tertiary --> P4(["strcpy(dst, r0)\nr0 = TAINTED\nFINDING"]):::output
     end
-
-    style I3 fill:#14532d,stroke:#166534,color:#dcfce7
-    style P4 fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 **Calling conventions and ABI.** A calling convention defines which registers hold function arguments, which holds the return value, which the callee must preserve callee-saved, and which the callee may freely clobber caller-saved. Every taint tracker embeds a calling convention model. When `run_interprocedural()` reaches a call site, it uses the convention to determine which registers carry tainted arguments into the callee, which register holds the return value, and which caller-saved registers the callee may have clobbered.
@@ -235,27 +301,40 @@ Getting this wrong produces silent incorrect results. A big-endian MIPS32 binary
 
 ```mermaid
 flowchart LR
-    A["call site:\nstrcpy(r0, r1)"] --> B["ABI model:\nwhich register is arg0 (dest)?\nwhich is arg1 (src)?"]
-    B -->|"ARM32 AAPCS\nr0=dest · r1=src"| C["check r1 for taint\ncorrect finding"]
-    B -->|"MIPS32 O32\na0=dest · a1=src\n(r4 · r5)"| D["check r5 for taint\ncorrect finding"]
-    B -->|"wrong endian\nor wrong ISA set"| E["wrong register decoded\nsilent incorrect result\nfails byte-verification"]
-
-    style C fill:#14532d,stroke:#166534,color:#dcfce7
-    style D fill:#14532d,stroke:#166534,color:#dcfce7
-    style E fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    A(["call site:\nstrcpy(r0, r1)"]):::input --> B["ABI model:\nwhich register is arg0 (dest)?\nwhich is arg1 (src)?"]:::primary
+    B:::primary -->|"ARM32 AAPCS\nr0=dest · r1=src"| C(["check r1 for taint\ncorrect finding"]):::output
+    B:::primary -->|"MIPS32 O32\na0=dest · a1=src\n(r4 · r5)"| D(["check r5 for taint\ncorrect finding"]):::output
+    B:::primary -->|"wrong endian\nor wrong ISA set"| E(["wrong register decoded\nsilent incorrect result\nfails byte-verification"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 **Slicing and copy propagation.** A taint tracker computes a forward slice from a source: it tracks which registers and memory locations are reachable from `recv` and checks whether any path reaches a sink. Copy propagation makes register renaming transparent. Every `mov rd, rs` propagates taint from `rs` to `rd`. Without it, a tracker watching only the original source register misses the sink the moment the value is renamed. Some instructions clear taint because they bound the value to a fixed range. `uxtb`/`uxth` on HiSilicon RV32 bound a register to ≤255 or ≤65535. `andi rd, rj, mask` on LoongArch64 records the bound so PathSolver can check whether overflow is still possible past the mask. Address constants are not tainted because they load instruction addresses, not attacker-controlled data.
 
 ```mermaid
 flowchart LR
-    A["r3 = recv()\nr3 = TAINTED"] --> B["r5 = r3\nr5 = TAINTED\ncopy propagation"]
-    B --> C["r6 = r5 + 1\nr6 = TAINTED\narithmetic"]
-    C --> D["r7 = r6 & 0xFF\nr7 = TAINTED\nbound ≤ 255 recorded"]
-    D --> E["strcpy(dst, r7)\nFINDING\nbounds check needed"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style E fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    A(["r3 = recv()\nr3 = TAINTED"]):::input --> B["r5 = r3\nr5 = TAINTED\ncopy propagation"]:::primary
+    B:::primary --> C["r6 = r5 + 1\nr6 = TAINTED\narithmetic"]:::secondary
+    C:::secondary --> D["r7 = r6 & 0xFF\nr7 = TAINTED\nbound ≤ 255 recorded"]:::tertiary
+    D:::tertiary --> E(["strcpy(dst, r7)\nFINDING\nbounds check needed"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 **Alias analysis.** Register taint is precise: each register is a distinct name and the tracker follows renames exactly. Memory taint is harder because two pointers can reference the same address. A store through one pointer taints a memory location; a load through a different pointer that holds the same address should recover that taint. Determining whether two pointer expressions alias requires alias analysis.
@@ -266,28 +345,42 @@ This is why `readfd, buf, n` taints `r3` the byte count returned but not the buf
 
 ```mermaid
 flowchart TD
-    A["st.d r5, r3+8\ntaints slot (r3, 8)"] --> B{"load from where?"}
-    B -->|"ld.d r6, r3+8\nsame base+offset"| C["r6 = TAINTED\ntaint recovered"]
-    B -->|"ld.d r6, r5+0\nr5 may alias r3+8\nbut tracker does not know"| D["r6 = CLEAN\nalias not tracked\nmissed taint"]
-
-    style C fill:#14532d,stroke:#166534,color:#dcfce7
-    style D fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    A(["st.d r5, r3+8\ntaints slot (r3, 8)"]):::input --> B{"load from where?"}:::neutral
+    B:::neutral -->|"ld.d r6, r3+8\nsame base+offset"| C(["r6 = TAINTED\ntaint recovered"]):::output
+    B:::neutral -->|"ld.d r6, r5+0\nr5 may alias r3+8\nbut tracker does not know"| D(["r6 = CLEAN\nalias not tracked\nmissed taint"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#546e7a,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 **Taint analysis vs symbolic execution.** Taint analysis answers whether attacker data can reach a sink. It does not answer whether the attacker can trigger that path or what value would be needed. `PathSolver` is symbolic execution: it assigns symbolic variables to source values, accumulates path constraints at each branch, and asks a constraint solver whether any concrete input satisfies all constraints. Taint produces candidates with false positives. PathSolver confirms one candidate with no false positives. PathSolver does not scale to a whole binary because branches multiply the paths that must be explored exponentially. The correct order is `TaintTracker.run_interprocedural()` on the whole binary to build the candidate list, then `PathSolver.solve_path()` on one candidate.
 
 ```mermaid
 flowchart TD
-    A[/"binary.elf"/] --> B["TaintTracker.run_interprocedural()\nforward slice from all sources\npath-insensitive · scales to whole binary"]
-    B --> C["candidate list\ne.g. 30 functions · 12 source-sink paths\nmay include false positives"]
-    C --> D{"for each candidate"}
-    D --> E["PathSolver.solve_path()\nsymbolic execution on one function\nZ3 constraint solver"]
-    E -->|"satisfiable"| F[/"confirmed path\nconcrete input exists"/]
-    E -->|"unsatisfiable"| G["false positive\nbranch guards block path"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style F fill:#7f1d1d,stroke:#991b1b,color:#fecaca
-    style G fill:#14532d,stroke:#166534,color:#dcfce7
+    A(["binary.elf"]):::input --> B["TaintTracker.run_interprocedural()\nforward slice from all sources\npath-insensitive · scales to whole binary"]:::primary
+    B:::primary --> C["candidate list\ne.g. 30 functions · 12 source-sink paths\nmay include false positives"]:::secondary
+    C:::secondary --> D{"for each candidate"}:::neutral
+    D:::neutral --> E["PathSolver.solve_path()\nsymbolic execution on one function\nZ3 constraint solver"]:::tertiary
+    E:::tertiary -->|"satisfiable"| F(["confirmed path\nconcrete input exists"]):::output
+    E:::tertiary -->|"unsatisfiable"| G(["false positive\nbranch guards block path"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#546e7a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 The x86 taint family includes intraprocedural and interprocedural modes, with a flow-sensitive CFG/MFP mode exposed by the CLI. Other ISA implementations have their own ABI assumptions, sink/source sets, and analysis limits. The CLI currently routes generic `taint` to ARM32 when detected and otherwise to its x86 tracker; other architectures have explicit commands. Always consult `ablation --help` and the command's implementation for routing and coverage.
@@ -300,16 +393,24 @@ Three tools answer three distinct questions. DTWMatcher answers whether two func
 
 ```mermaid
 flowchart TD
-    A["confirmed function\nva=0x4000 in v1"] --> B["DTWMatcher.find_homologs(va_v1)\npre-filter by opcode histogram\nrun DTW on top 200 candidates"]
-    B -->|"same_era ≥ 0.85\nrecompiled, no logic change"| C["port name overlay directly\nctx.set_name(va_v2, name)"]
-    B -->|"patched 0.45-0.85\nlogic changed"| D["MatrixProfileDiff.compare_functions()\nSTOMP: find most changed subsequence\nanomaly region = new bounds check / removed block"]
-    D --> E["VersionDelta.track(va_v1)\nstage 1: structural pre-filter\nstage 2: 4-gram Jaccard\nstage 3: BERT tiebreaker if tie\noutput: unified diff"]
-    B -->|"rewritten < 0.45\nstructural rewrite"| F["VersionDelta.changed_functions()\nrank all changed functions\nchange_score ≥ 0.20 = meaningful change"]
-    B -->|"different < 0.20\nunrelated"| G["function may be split · merged · removed\ncheck VersionDelta.changed_functions()"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style C fill:#14532d,stroke:#166534,color:#dcfce7
-    style E fill:#14532d,stroke:#166534,color:#dcfce7
+    A(["confirmed function\nva=0x4000 in v1"]):::input --> B["DTWMatcher.find_homologs(va_v1)\npre-filter by opcode histogram\nrun DTW on top 200 candidates"]:::primary
+    B:::primary -->|"same_era ≥ 0.85\nrecompiled, no logic change"| C(["port name overlay directly\nctx.set_name(va_v2, name)"]):::output
+    B:::primary -->|"patched 0.45-0.85\nlogic changed"| D["MatrixProfileDiff.compare_functions()\nSTOMP: find most changed subsequence\nanomaly region = new bounds check / removed block"]:::secondary
+    D:::secondary --> E(["VersionDelta.track(va_v1)\nstage 1: structural pre-filter\nstage 2: 4-gram Jaccard\nstage 3: BERT tiebreaker if tie\noutput: unified diff"]):::output
+    B:::primary -->|"rewritten < 0.45\nstructural rewrite"| F(["VersionDelta.changed_functions()\nrank all changed functions\nchange_score ≥ 0.20 = meaningful change"]):::output
+    B:::primary -->|"different < 0.20\nunrelated"| G(["function may be split · merged · removed\ncheck VersionDelta.changed_functions()"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 **DTWMatcher.** DTWMatcher uses Dynamic Time Warping over opcode category sequences. Opcode categories are a 12-bucket classification DATA, ARITH, BIT, CMP, BRANCH, CALL, RET, FRAME, MEMOP, FLOAT, SIMD, OTHER that normalizes away ISA-specific encoding differences. DTW is warp-invariant so it handles insertions and deletions of basic blocks that Jaccard penalizes unfairly. A function that gained one bounds-check block between firmware versions scores ~0.91 DTW versus ~0.65 4-gram Jaccard because DTW stretches the alignment to absorb the inserted block and scores the structural remainder as a match. The Sakoe-Chiba band default 20% of sequence length prevents pathological alignments where a 5-instruction stub matches a 200-instruction function.
@@ -330,15 +431,24 @@ Firmware images arrive encrypted or compressed. Before analyzing binary code you
 
 ```mermaid
 flowchart TD
-    A[/"firmware.bin"/] --> B["EntropyMapper\nsliding-window Shannon entropy\nH 8.0 = encrypted · compressed\nH 4.0-6.0 = code · data\nH 0.0-4.0 = ASCII · padding"]
-    B --> C{"high entropy\nH above 7.5?"}
-    C -->|"yes"| D["XorKeyRecoverer\nKPA against known plaintext\nELF magic 0x7f454c46\ngzip magic 0x1f8b08\nkey repeats at 64-byte NAND period"]
-    C -->|"no, code region"| E["CryptoAuditor\nhardcoded keys · weak algorithms\nmode misuse: ECB, zero IV\nRC4 in 2024+ firmware"]
-    D --> F["decrypted payload\nrerun EntropyMapper\nfeed to firmware extraction"]
-    E --> G["HashAlgoDiscriminator\nK-table constants in .rodata\nSHA-1/256/512 round constants\nidentify algorithm from constant set"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style F fill:#14532d,stroke:#166534,color:#dcfce7
+    A(["firmware.bin"]):::input --> B["EntropyMapper\nsliding-window Shannon entropy\nH 8.0 = encrypted · compressed\nH 4.0-6.0 = code · data\nH 0.0-4.0 = ASCII · padding"]:::primary
+    B:::primary --> C{"high entropy\nH above 7.5?"}:::neutral
+    C:::neutral -->|"yes"| D["XorKeyRecoverer\nKPA against known plaintext\nELF magic 0x7f454c46\ngzip magic 0x1f8b08\nkey repeats at 64-byte NAND period"]:::secondary
+    C:::neutral -->|"no, code region"| E["CryptoAuditor\nhardcoded keys · weak algorithms\nmode misuse: ECB, zero IV\nRC4 in 2024+ firmware"]:::tertiary
+    D:::secondary --> F(["decrypted payload\nrerun EntropyMapper\nfeed to firmware extraction"]):::output
+    E:::tertiary --> G(["HashAlgoDiscriminator\nK-table constants in .rodata\nSHA-1/256/512 round constants\nidentify algorithm from constant set"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 **EntropyMapper.** EntropyMapper runs a sliding-window Shannon entropy scan across the binary. Shannon entropy measures information density: H = 8.0 means all 256 byte values appear with equal probability, which is the expected distribution of AES ciphertext. H between 4.0 and 6.0 is typical of compiled code. H below 4.0 indicates ASCII text or sparse data. EntropyMapper produces a region list so you can immediately identify where encrypted blobs, compressed payloads, and key material live before extracting anything.
@@ -355,14 +465,22 @@ Vendor firmware uses proprietary container formats and layered encryption. `binw
 
 ```mermaid
 flowchart TD
-    A[/"encrypted.bin or .out"/] --> B["Stage 1: outer XOR\nKPA against ELF 0x7f454c46\nkeystream[0:4] = encrypted[0:4] XOR known_plain\nkey repeats at 64-byte period"]
-    B --> C["partially decrypted binary"]
-    C --> D["Stage 2: PKCS#1 v1.5 block scan\n0x00 0x02 nonzero bytes 0x00 message\n256-byte RSA-2048 encrypted RC4 session key\n128 bytes from cert partition start"]
-    D --> E["Stage 3: RC4 KPA\ngzip magic 0x1f8b0800\nkeystream[0:4] = encrypted XOR magic\nfull session key recovered via PRGA inversion"]
-    E --> F[/"decrypted payload\nfilesystem image · ELF binaries\n/etc/shadow · SSH host keys"/]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style F fill:#14532d,stroke:#166534,color:#dcfce7
+    A(["encrypted.bin or .out"]):::input --> B["Stage 1: outer XOR\nKPA against ELF 0x7f454c46\nkeystream[0:4] = encrypted[0:4] XOR known_plain\nkey repeats at 64-byte period"]:::primary
+    B:::primary --> C["partially decrypted binary"]:::secondary
+    C:::secondary --> D["Stage 2: PKCS#1 v1.5 block scan\n0x00 0x02 nonzero bytes 0x00 message\n256-byte RSA-2048 encrypted RC4 session key\n128 bytes from cert partition start"]:::tertiary
+    D:::tertiary --> E["Stage 3: RC4 KPA\ngzip magic 0x1f8b0800\nkeystream[0:4] = encrypted XOR magic\nfull session key recovered via PRGA inversion"]:::tertiary
+    E:::tertiary --> F(["decrypted payload\nfilesystem image · ELF binaries\n/etc/shadow · SSH host keys"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 **FirmwareContainerKeyExtractor.** FirmwareContainerKeyExtractor runs the three-stage key recovery chain as one call: outer XOR layer, PKCS#1 v1.5 block scan, RC4 known-plaintext attack. The chain targets formats where each stage produces partial plaintext that unlocks the next stage.
@@ -377,17 +495,25 @@ TaintTracker finds paths from network sources to dangerous sinks. The specialize
 
 ```mermaid
 flowchart TD
-    A["binary function"] --> B["FormatStringScanner\nfind printf-family call sites\nfmt register: RDI for printf\nRSI for fprintf · syslog\nRDX for snprintf"]
-    B --> C["backward slice from fmt register\nup to 20 instructions"]
-    C -->|"LEA from .rodata\nstring literal"| D["safe\nnot a finding"]
-    C -->|"function arg register\nstack load · recv return"| E["FINDING\nHIGH: arg from entry register\nMEDIUM: provenance unclear"]
+    A(["binary function"]):::input --> B["FormatStringScanner\nfind printf-family call sites\nfmt register: RDI for printf\nRSI for fprintf · syslog\nRDX for snprintf"]:::primary
+    B:::primary --> C["backward slice from fmt register\nup to 20 instructions"]:::tertiary
+    C:::tertiary -->|"LEA from .rodata\nstring literal"| D(["safe\nnot a finding"]):::output
+    C:::tertiary -->|"function arg register\nstack load · recv return"| E(["FINDING\nHIGH: arg from entry register\nMEDIUM: provenance unclear"]):::output
 
-    A --> F["DeprecatedFuncScanner\nPLT scan for unsafe symbols\ngets · strcpy · sprintf · mktemp · rand"]
-    F --> G["FINDING per call site\nwith replacement recommendation"]
-
-    style D fill:#14532d,stroke:#166534,color:#dcfce7
-    style E fill:#7f1d1d,stroke:#991b1b,color:#fecaca
-    style G fill:#92400e,stroke:#b45309,color:#fef3c7
+    A:::input --> F["DeprecatedFuncScanner\nPLT scan for unsafe symbols\ngets · strcpy · sprintf · mktemp · rand"]:::secondary
+    F:::secondary --> G(["FINDING per call site\nwith replacement recommendation"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#00695c,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 **FormatStringScanner.** FormatStringScanner identifies format string vulnerabilities by tracing the fmt argument register backward from each printf-family call site. The fmt register varies by function: RDI for `printf`, RSI for `fprintf` and `syslog`, RDX for `snprintf`. A load from `.rodata` means the argument is a string literal and the call is safe. Any other provenance, function argument, stack variable, or register populated by a prior `recv` or `read`: it is a finding. Severity is HIGH when the fmt register holds a function entry argument, because the caller controls the format string directly.
@@ -402,25 +528,35 @@ Windows PE binaries use mechanisms, Control Flow Guard, SafeSEH, RPC server regi
 
 ```mermaid
 flowchart TD
-    A[/"Windows PE binary\n.exe · .dll · .sys"/] --> B["KernelDriverAnalyzer (.sys)\nframework: WDM · KMDF · minifilter\nDriverEntry + MajorFunction dispatch table\nIOCTL codes from IRP_MJ_DEVICE_CONTROL\n40+ kernel API patterns across 8 risk classes\nWRMSR · CR0 · CR4 write patterns"]
+    A(["Windows PE binary\n.exe · .dll · .sys"]):::input --> B(["KernelDriverAnalyzer (.sys)\nframework: WDM · KMDF · minifilter\nDriverEntry + MajorFunction dispatch table\nIOCTL codes from IRP_MJ_DEVICE_CONTROL\n40+ kernel API patterns across 8 risk classes\nWRMSR · CR0 · CR4 write patterns"]):::output
 
-    A --> C["CFGBypassDetector\nGuardFlags bits 8/9/28-31\nCFG function table\nexport not in CFG table = bypass"]
+    A:::input --> C(["CFGBypassDetector\nGuardFlags bits 8/9/28-31\nCFG function table\nexport not in CFG table = bypass"]):::output
 
-    A --> D["ByovdDetector\n8 capability classes\nphys mem · token steal · callback removal\nSMEP bypass · DSE bypass\nMSR write · CR0 write · debug register write"]
+    A:::input --> D(["ByovdDetector\n8 capability classes\nphys mem · token steal · callback removal\nSMEP bypass · DSE bypass\nMSR write · CR0 write · debug register write"]):::output
 
-    A --> E["WindowsPoolTaintTracker\nExAllocatePool size argument\nuser-controlled value reaches\nRtlCopyMemory size\nCWE-122"]
+    A:::input --> E(["WindowsPoolTaintTracker\nExAllocatePool size argument\nuser-controlled value reaches\nRtlCopyMemory size\nCWE-122"]):::output
 
-    A --> F["SEHChainAnalyzer (x86-32)\npush-handler · push FS:[0] patterns\nSafeseh registration check"]
+    A:::input --> F(["SEHChainAnalyzer (x86-32)\npush-handler · push FS:[0] patterns\nSafeseh registration check"]):::output
 
-    A --> G["ETWProviderExtractor\nEventRegister → provider GUID\nEventWrite call count\nzero EventWrite = detection gap"]
+    A:::input --> G(["ETWProviderExtractor\nEventRegister → provider GUID\nEventWrite call count\nzero EventWrite = detection gap"]):::output
 
-    A --> H["RPCServerAnalyzer\nRpcServerRegisterIf* calls\nRPC_C_AUTHN_LEVEL_NONE = HIGH"]
+    A:::input --> H(["RPCServerAnalyzer\nRpcServerRegisterIf* calls\nRPC_C_AUTHN_LEVEL_NONE = HIGH"]):::output
 
-    A --> I["COMAttackSurfaceMapper\nDllGetClassObject presence\nCLSID enumeration\nIStream marshal check"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style D fill:#7f1d1d,stroke:#991b1b,color:#fecaca
-    style E fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    A:::input --> I(["COMAttackSurfaceMapper\nDllGetClassObject presence\nCLSID enumeration\nIStream marshal check"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#2e7d32,stroke-width:3px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
 ```
 
 **KernelDriverAnalyzer.** KernelDriverAnalyzer detects PE machine type (0x014c for x86-32, 0x8664 for x64) and classifies the driver framework WDM, KMDF, or minifilter. It recovers the MajorFunction dispatch table from DRIVER_OBJECT, decodes every CTL_CODE in the IRP_MJ_DEVICE_CONTROL handler, audits 40+ kernel API patterns across 8 risk classes, and flags dangerous byte patterns including WRMSR, CR0 modification, and HLT. MSVC-compiled IOCTL switch handlers emit a register subtraction cascade rather than a jump table. The IoctlCascadeDecoder reconstructs every CTL_CODE from the cascade, including codes derived via the push-imm/pop-reg MSVC optimizer idiom.
@@ -439,15 +575,24 @@ Go binaries embed the pclntab PC line table in the binary for runtime stack trac
 
 ```mermaid
 flowchart TD
-    A[/"stripped Go binary"/] --> B["GoFuncTable.from_binary(data)\nscan for pclntab magic\n0xFFFFFFF1 (Go 1.20+)\n0xFFFFFFFA (Go 1.16-1.19)\n0xFFFFFFFB (Go 1.12-1.15)"]
-    B -->|"magic found"| C["parse function name table\nVA → function name\nfor every function in binary"]
-    B -->|"garble obfuscated"| D["go_garble_re\nfind decrypt stubs\nrecover obfuscated names"]
-    C --> E["CorpusBuilder\nfunction names improve descriptions\nSemanticSearcher accuracy: 0.20 → 0.70+"]
-    C --> F["GoStringResolver\ntrace runtime.concatstring* calls\nrecover string values from call sites"]
-    C --> G["GoSubprocessScanner\nfind exec.Command calls\nresolve static command-path via GoStringResolver"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style E fill:#14532d,stroke:#166534,color:#dcfce7
+    A(["stripped Go binary"]):::input --> B["GoFuncTable.from_binary(data)\nscan for pclntab magic\n0xFFFFFFF1 (Go 1.20+)\n0xFFFFFFFA (Go 1.16-1.19)\n0xFFFFFFFB (Go 1.12-1.15)"]:::primary
+    B:::primary -->|"magic found"| C["parse function name table\nVA → function name\nfor every function in binary"]:::secondary
+    B:::primary -->|"garble obfuscated"| D(["go_garble_re\nfind decrypt stubs\nrecover obfuscated names"]):::output
+    C:::secondary --> E(["CorpusBuilder\nfunction names improve descriptions\nSemanticSearcher accuracy: 0.20 → 0.70+"]):::output
+    C:::secondary --> F(["GoStringResolver\ntrace runtime.concatstring* calls\nrecover string values from call sites"]):::output
+    C:::secondary --> G(["GoSubprocessScanner\nfind exec.Command calls\nresolve static command-path via GoStringResolver"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 **GoFuncTable.** GoFuncTable supports pclntab format across Go 1.12 through 1.20+. It produces a `{VA: function_name}` map for every function in the binary. `CorpusBuilder.build()` uses these names to produce descriptions that BERT can match against natural-language queries.
@@ -462,18 +607,28 @@ Automotive ECU firmware is a flat binary image with no ELF headers. ISAs are non
 
 ```mermaid
 flowchart TD
-    A[/"flat ECU ROM .bin"/] --> B["EcuArchDetector\nidentify ISA from binary patterns\nTriCore · RH850 · C28x · SH-2A · CPU32 · VLE"]
-    B --> C["FlatBinaryFuncStartScanner\nISA-specific prologue patterns\nfunction boundaries without ELF metadata"]
-    C --> D["ISA-specific decoder\nTriCoreDecoder · RH850Decoder\nC28xDecoder · SH2aDecoder\nM68kCPU32Decoder · VLEDecoder"]
-    D --> E["CFG construction\nbasic blocks + branch edges\nISA-specific jump/call resolution"]
-    E --> F["Structurizer\ndominator tree analysis\ngoto CFG → if/while/for pseudo-C"]
-    E --> G["ISA-specific TaintTracker\nABI model for each ISA\nTaintTrackerTricore · TaintTrackerRH850\nforward slice to dangerous sinks"]
-    G --> H["ECUSecurityAccessScanner\nSeed-Key algorithm identification\nweak entropy detection"]
-    G --> I["ECURomLayoutAnalyzer\ncalibration regions · code regions\nOBD-II diagnostic surfaces"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style H fill:#7f1d1d,stroke:#991b1b,color:#fecaca
-    style I fill:#14532d,stroke:#166534,color:#dcfce7
+    A(["flat ECU ROM .bin"]):::input --> B["EcuArchDetector\nidentify ISA from binary patterns\nTriCore · RH850 · C28x · SH-2A · CPU32 · VLE"]:::primary
+    B:::primary --> C["FlatBinaryFuncStartScanner\nISA-specific prologue patterns\nfunction boundaries without ELF metadata"]:::secondary
+    C:::secondary --> D["ISA-specific decoder\nTriCoreDecoder · RH850Decoder\nC28xDecoder · SH2aDecoder\nM68kCPU32Decoder · VLEDecoder"]:::tertiary
+    D:::tertiary --> E["CFG construction\nbasic blocks + branch edges\nISA-specific jump/call resolution"]:::tertiary
+    E:::tertiary --> F(["Structurizer\ndominator tree analysis\ngoto CFG → if/while/for pseudo-C"]):::output
+    E:::tertiary --> G["ISA-specific TaintTracker\nABI model for each ISA\nTaintTrackerTricore · TaintTrackerRH850\nforward slice to dangerous sinks"]:::tertiary
+    G:::tertiary --> H(["ECUSecurityAccessScanner\nSeed-Key algorithm identification\nweak entropy detection"]):::output
+    G:::tertiary --> I(["ECURomLayoutAnalyzer\ncalibration regions · code regions\nOBD-II diagnostic surfaces"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
 ```
 
 Each ISA decoder handles the quirks of its architecture. TriCore uses a hardware-enforced Call Save Area (CSA) instead of a software stack frame. RH850 under GHS ABI defaults to 32-bit double and uses leading-underscore symbol prefixes. C28x is word-addressed: a byte offset and a word address refer to different locations unless the decoder applies the correct scale. VLE uses mixed 16/32-bit instruction widths that require per-instruction length detection.
@@ -488,16 +643,26 @@ TaintTracker and CFG analysis identify which code paths are dangerous. Reading t
 
 ```mermaid
 flowchart TD
-    A["CFG from ISA decoder\nbasic blocks + goto edges"] --> B["DomTree\nCooper-Harvey-Kennedy\nblock A dominates block B\nif every path to B passes through A"]
-    B --> C["LoopInfo\nback edges identify natural loop headers\nblock is loop header if it dominates a predecessor"]
-    B --> D["PostDomTree\nreversed CFG DomTree\nblock X post-dominates Y\nif every path from Y to exit passes through X\nfinds if/else join points"]
-    C --> E["Structurizer\nwalk in RPO order\ndominators visited before dominated nodes"]
-    D --> E
-    E --> F["loop header → WhileNode\ntwo-successor block → IfNode\nback-edge tail → ContinueNode\nno-successor block → ReturnNode"]
-    F --> G[/"pseudo-C\nif (x > 0) {\n  while (len > 0) {\n    copy(dst, src, len);\n  }\n}"/]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style G fill:#14532d,stroke:#166534,color:#dcfce7
+    A(["CFG from ISA decoder\nbasic blocks + goto edges"]):::input --> B["DomTree\nCooper-Harvey-Kennedy\nblock A dominates block B\nif every path to B passes through A"]:::primary
+    B:::primary --> C["LoopInfo\nback edges identify natural loop headers\nblock is loop header if it dominates a predecessor"]:::secondary
+    B:::primary --> D["PostDomTree\nreversed CFG DomTree\nblock X post-dominates Y\nif every path from Y to exit passes through X\nfinds if/else join points"]:::tertiary
+    C:::secondary --> E["Structurizer\nwalk in RPO order\ndominators visited before dominated nodes"]:::tertiary
+    D:::tertiary --> E:::tertiary
+    E:::tertiary --> F["loop header → WhileNode\ntwo-successor block → IfNode\nback-edge tail → ContinueNode\nno-successor block → ReturnNode"]:::tertiary
+    F:::tertiary --> G(["pseudo-C\nif (x > 0) {\n  while (len > 0) {\n    copy(dst, src, len);\n  }\n}"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
 ```
 
 Structurizer works on any CFG that exposes `.blocks`, `.entry`, `.flow`, and `.flow_r()`. The same module runs on CFGs from `cfg_sh2a`, `cfg_v850`, and every future ECU-family decoder without ISA-specific changes. The algorithm is O(n) in block count because RPO guarantees dominators are visited before the blocks they dominate, so the tree walk converges in one pass.
@@ -508,18 +673,30 @@ TaintTracker produces candidates. PathSolver confirms feasibility. The remaining
 
 ```mermaid
 flowchart TD
-    A["AgentLoop.run(va, task='vuln_hypothesis')"] --> B["ContextBuilder\nbinary summary\nnamed functions from NameRegistry\nRAGRetriever: prior confirmed findings\nby embedding similarity from func_id.db"]
-    B --> C["Claude claude-sonnet-5\nReAct loop\nreason about function at va"]
-    C -->|"get_callees(va)"| D["ToolRegistry\nexecutes against BinaryContext"]
-    C -->|"disassemble(va, n)"| D
-    C -->|"get_strings(va)"| D
-    C -->|"get_callers(va)"| D
-    D --> E["tool result injected into context"]
-    E --> C
-    C -->|"task complete"| F[/"name + confidence + hypothesis\n'arg1 is wire-supplied length\npassed to memcpy without upper bound check'"/]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style F fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    A(["AgentLoop.run(va, task='vuln_hypothesis')"]):::input --> B["ContextBuilder\nbinary summary\nnamed functions from NameRegistry\nRAGRetriever: prior confirmed findings\nby embedding similarity from func_id.db"]:::primary
+    B:::primary --> C["Claude claude-sonnet-5\nReAct loop\nreason about function at va"]:::secondary
+    C:::secondary -->|"get_callees(va)"| D["ToolRegistry\nexecutes against BinaryContext"]:::tertiary
+    C:::secondary -->|"disassemble(va, n)"| D:::tertiary
+    C:::secondary -->|"get_strings(va)"| D:::tertiary
+    C:::secondary -->|"get_callers(va)"| D:::tertiary
+    D:::tertiary --> E["tool result injected into context"]:::tertiary
+    E:::tertiary --> C:::secondary
+    C:::secondary -->|"task complete"| F(["name + confidence + hypothesis\n'arg1 is wire-supplied length\npassed to memcpy without upper bound check'"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#00695c,stroke-width:2px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
 ```
 
 **AgentLoop.** AgentLoop runs the ReAct Reasoning + Acting loop. Claude issues tool calls, receives results, reasons about them, and issues further tool calls until the task is complete. The two supported tasks are `name_function` and `vuln_hypothesis`.
@@ -536,13 +713,20 @@ LLM analyst requires `pip install ablation[llm]`.
 
 ```mermaid
 flowchart LR
-    A["ablation sweep firmware.so\n--sarif results.sarif\n--json results.json"] --> B["sweep_to_sarif()\none rule per pattern\none result per candidate\nlocation: binary path + function VA"]
-    B --> C["GitHub Code Scanning\ngh api repos/owner/repo/code-scanning/sarifs\nsweep results appear as PR annotations"]
-    B --> D["VS Code SARIF Viewer\nresults inline in editor"]
-    B --> E["ablation findings\nconfirmed findings from FindingRegistry\nseparate SARIF export"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style C fill:#14532d,stroke:#166534,color:#dcfce7
+    A(["ablation sweep firmware.so\n--sarif results.sarif\n--json results.json"]):::input --> B["sweep_to_sarif()\none rule per pattern\none result per candidate\nlocation: binary path + function VA"]:::primary
+    B:::primary --> C(["GitHub Code Scanning\ngh api repos/owner/repo/code-scanning/sarifs\nsweep results appear as PR annotations"]):::output
+    B:::primary --> D(["VS Code SARIF Viewer\nresults inline in editor"]):::output
+    B:::primary --> E(["ablation findings\nconfirmed findings from FindingRegistry\nseparate SARIF export"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 **JSON export.** `ablation sweep --json results.json` produces a flat JSON array with one entry per candidate: pattern text, score, function VA, binary path, and hit metadata. Use this for downstream scripts and custom reporting tools.

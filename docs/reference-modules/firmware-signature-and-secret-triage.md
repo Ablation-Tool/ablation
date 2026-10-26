@@ -18,11 +18,22 @@ Extract key material hidden in BMP pixel LSBs using a Shamir-style Lagrange poly
 
 ```mermaid
 flowchart TD
-    A["LSBStegoReader(bmp_data: bytes, seed: str)"] --> B["seed_offset(seed) → pixel_offset\n  Hash seed string → deterministic pixel index"]
-    B --> C["read_bytes(offset, n_bytes) → bytes\n  Read n_bytes from LSB channel starting at pixel_offset\n  Each pixel contributes 1 bit (R LSB)"]
-    C --> D["extract_coords() → List[CoordPair]\n  Read: type_count, n_groups from first LSB bytes\n  For each of (type_count * n_groups) pairs:\n    Read x, y as LSB-encoded hex fields\n  → List[CoordPair(x, y)]"]
-    D --> E["StegoKeyResult.recover() → List[str]\n  For each of type_count components:\n    Select n_pts = n_groups // type_count coordinate pairs\n    Lagrange interpolation at x=0 over imath rationals\n    Multi-prime CRT for exact integer reconstruction\n    Apply reverse-TC transform to negative values\n  → List[str]  (one hex string per component)"]
-    E --> F["StegoKeyResult:\n  components: List[str]  (hex-encoded key components)\n  seed: str\n  fmt() → str  (combined key in consuming-library format)"]
+    A(["LSBStegoReader(bmp_data: bytes, seed: str)"]):::input --> B["seed_offset(seed) → pixel_offset\n  Hash seed string → deterministic pixel index"]:::primary
+    B:::primary --> C["read_bytes(offset, n_bytes) → bytes\n  Read n_bytes from LSB channel starting at pixel_offset\n  Each pixel contributes 1 bit (R LSB)"]:::secondary
+    C:::secondary --> D["extract_coords() → List[CoordPair]\n  Read: type_count, n_groups from first LSB bytes\n  For each of (type_count * n_groups) pairs:\n    Read x, y as LSB-encoded hex fields\n  → List[CoordPair(x, y)]"]:::tertiary
+    D:::tertiary --> E["StegoKeyResult.recover() → List[str]\n  For each of type_count components:\n    Select n_pts = n_groups // type_count coordinate pairs\n    Lagrange interpolation at x=0 over imath rationals\n    Multi-prime CRT for exact integer reconstruction\n    Apply reverse-TC transform to negative values\n  → List[str]  (one hex string per component)"]:::tertiary
+    E:::tertiary --> F(["StegoKeyResult:\n  components: List[str]  (hex-encoded key components)\n  seed: str\n  fmt() → str  (combined key in consuming-library format)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

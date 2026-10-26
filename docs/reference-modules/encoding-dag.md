@@ -54,20 +54,29 @@ Three things were not possible before in Ablation:
 
 ```mermaid
 flowchart TD
-    A[/"Raw bytes from binary"/] --> B["Layer 1 · Raw bytes / RGB-style integer\nThree bytes pack into a 24-bit integer:\n  I24 = (B0 × 65536) + (B1 × 256) + B2\n       = (R  × 256²) + (G  × 256¹) + (B × 256⁰)\nHelpers: rgb_to_bytes · bytes_to_rgb · rgb_int"]
+    A(["Raw bytes from binary"]):::input --> B["Layer 1 · Raw bytes / RGB-style integer\nThree bytes pack into a 24-bit integer:\n  I24 = (B0 × 65536) + (B1 × 256) + B2\n       = (R  × 256²) + (G  × 256¹) + (B × 256⁰)\nHelpers: rgb_to_bytes · bytes_to_rgb · rgb_int"]:::primary
 
-    B --> C["ISASpec.decode()"]
+    B:::primary --> C["ISASpec.decode()"]:::secondary
 
-    C --> D["Layer 2 · Encoding DAG\nField: named bit range with optional fixed value\n  Field('opcode', width=6, fixed=0b000001)\n  Field('rA',     width=4, fixed=None)  ← variable\n\nTemplate: MSB-first sequence of Fields for one insn form\n  Template('LOAD_mem', [opcode, mode, rA, rB, imm8])\n  .encode({'rA': 0, 'rB': 5, 'imm8': 4}) → I24\n  .decode(I24) → {'opcode': 1, 'mode': 2, 'rA': 0, ...}\n\nEncodingNode: instantiated Template (DAG root)\n  node.to_hex() / to_bytes() / to_rgb() / show_layout()"]
+    C:::secondary --> D["Layer 2 · Encoding DAG\nField: named bit range with optional fixed value\n  Field('opcode', width=6, fixed=0b000001)\n  Field('rA',     width=4, fixed=None)  ← variable\n\nTemplate: MSB-first sequence of Fields for one insn form\n  Template('LOAD_mem', [opcode, mode, rA, rB, imm8])\n  .encode({'rA': 0, 'rB': 5, 'imm8': 4}) → I24\n  .decode(I24) → {'opcode': 1, 'mode': 2, 'rA': 0, ...}\n\nEncodingNode: instantiated Template (DAG root)\n  node.to_hex() / to_bytes() / to_rgb() / show_layout()"]:::tertiary
 
-    D --> E["ISASpec.decode() + Binding"]
+    D:::tertiary --> E["ISASpec.decode() + Binding"]:::tertiary
 
-    E --> F["Layer 3 · Semantic DAG / IR\nSemanticOp: one operation with typed operands\n  SemanticOp('LOAD', {'dst': 'r0', 'base': 'r5', 'offset': 4})\n  operands: registers (str), immediates (int), MemRef(base, off)\n\nDataflowEdge: explicit producer-consumer link\n  DataflowEdge(producer_id='n1', consumer_id='n3', reg='r0')\n\nSemanticBlock: basic block of SemanticOps with edges\n  SemanticBlock('entry').add_op(...).add_edge(...)"]
+    E:::tertiary --> F["Layer 3 · Semantic DAG / IR\nSemanticOp: one operation with typed operands\n  SemanticOp('LOAD', {'dst': 'r0', 'base': 'r5', 'offset': 4})\n  operands: registers (str), immediates (int), MemRef(base, off)\n\nDataflowEdge: explicit producer-consumer link\n  DataflowEdge(producer_id='n1', consumer_id='n3', reg='r0')\n\nSemanticBlock: basic block of SemanticOps with edges\n  SemanticBlock('entry').add_op(...).add_edge(...)"]:::tertiary
 
-    F --> G["ISASpec: ties all three layers together\n.encode(SemanticOp) → EncodingNode\n.decode(bytes)      → (EncodingNode, SemanticOp)"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style G fill:#14532d,stroke:#166534,color:#dcfce7
+    F:::tertiary --> G(["ISASpec: ties all three layers together\n.encode(SemanticOp) → EncodingNode\n.decode(bytes)      → (EncodingNode, SemanticOp)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---
@@ -506,10 +515,20 @@ distinguishable by color at a glance.
 
 ```mermaid
 flowchart LR
-    A["Define Field objects\nfor each bit range\nin the instruction encoding"] --> B["Group into Template instances\none per instruction form"]
-    B --> C["Write FieldBinding entries\nmapping semantic operand keys\nto template fields"]
-    C --> D["Wrap in a Binding\n(op name + template name + field bindings)"]
-    D --> E["Build ISASpec\nwith template registry\nand binding list"]
+    A(["Define Field objects\nfor each bit range\nin the instruction encoding"]):::input --> B["Group into Template instances\none per instruction form"]:::primary
+    B:::primary --> C["Write FieldBinding entries\nmapping semantic operand keys\nto template fields"]:::secondary
+    C:::secondary --> D["Wrap in a Binding\n(op name + template name + field bindings)"]:::tertiary
+    D:::tertiary --> E(["Build ISASpec\nwith template registry\nand binding list"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 **Step-by-step example: adding a RISC-V-style R-type instruction.**

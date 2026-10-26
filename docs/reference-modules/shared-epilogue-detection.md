@@ -18,10 +18,20 @@ Detect functions that share a tail block epilogue via unconditional jump: markin
 
 ```mermaid
 flowchart TD
-    A["EpilogueShareScanner.from_context(ctx)\n  or .from_bytes(data, base_va)"] --> B["scan() → List[EpilogueShareHit]\n  For each function in ctx.func_starts:\n    Find unconditional JMP/B at function end\n    If jump target VA is in ctx.func_starts:\n      Check target for standard epilogue signature:\n        x86-64: POP RBP / RET sequence\n        ARM32:  LDM SP!, {registers, PC}\n        ARM64:  LDP X29, X30 / RET sequence\n      If epilogue signature matches → EpilogueShareHit\n  Return sorted by shared_va"]
-    B --> C["EpilogueShareHit:\n  func_va: int\n  shared_va: int\n  reason: str  (x86_pop_ret | arm_ldm_pc | arm64_ldp_ret)\n  insn_offset: int"]
-    C --> D["inject(ctx) → int\n  Remove shared_va entries from ctx.func_starts\n  Return count of removed entries"]
-    D --> E["report(hits) → str\n  Format hits for session log"]
+    A(["EpilogueShareScanner.from_context(ctx)\n  or .from_bytes(data, base_va)"]):::input --> B["scan() → List[EpilogueShareHit]\n  For each function in ctx.func_starts:\n    Find unconditional JMP/B at function end\n    If jump target VA is in ctx.func_starts:\n      Check target for standard epilogue signature:\n        x86-64: POP RBP / RET sequence\n        ARM32:  LDM SP!, {registers, PC}\n        ARM64:  LDP X29, X30 / RET sequence\n      If epilogue signature matches → EpilogueShareHit\n  Return sorted by shared_va"]:::primary
+    B:::primary --> C["EpilogueShareHit:\n  func_va: int\n  shared_va: int\n  reason: str  (x86_pop_ret | arm_ldm_pc | arm64_ldp_ret)\n  insn_offset: int"]:::secondary
+    C:::secondary --> D["inject(ctx) → int\n  Remove shared_va entries from ctx.func_starts\n  Return count of removed entries"]:::tertiary
+    D:::tertiary --> E(["report(hits) → str\n  Format hits for session log"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,11 +18,22 @@ Scan Python bytecode (`.pyc`) files for dangerous patterns: parsing code object 
 
 ```mermaid
 flowchart TD
-    A["PycBytecodeScanner.scan_file(path)"] --> B["xdis: parse .pyc marshal header\n  version detection, magic bytes\n  unmarshal root code object"]
-    B --> C["Recursive walk of code object tree:\n  Root code object → nested code objects\n  (functions, comprehensions, class bodies)"]
-    C --> D["For each code object:\n  Inspect co_names:\n    'system' + 'os' → os.system() call\n    'subprocess' → subprocess module use\n    'eval', 'exec' → code execution\n    'popen', 'run', 'check_output' → subprocess patterns\n  Inspect co_consts:\n    Password/key patterns\n    Base64-encoded strings\n    Hardcoded IP/path patterns"]
-    D --> E["PycScanResult:\n  path: str\n  python_version: str\n  findings: List[dict]\n  is_clean() → bool\n  confidence() → str"]
-    E --> F["scan_dir(dir_path) → List[PycScanResult]\n  Recursive .pyc traversal\n  report(results) → formatted str"]
+    A(["PycBytecodeScanner.scan_file(path)"]):::input --> B["xdis: parse .pyc marshal header\n  version detection, magic bytes\n  unmarshal root code object"]:::primary
+    B:::primary --> C["Recursive walk of code object tree:\n  Root code object → nested code objects\n  (functions, comprehensions, class bodies)"]:::secondary
+    C:::secondary --> D["For each code object:\n  Inspect co_names:\n    'system' + 'os' → os.system() call\n    'subprocess' → subprocess module use\n    'eval', 'exec' → code execution\n    'popen', 'run', 'check_output' → subprocess patterns\n  Inspect co_consts:\n    Password/key patterns\n    Base64-encoded strings\n    Hardcoded IP/path patterns"]:::tertiary
+    D:::tertiary --> E["PycScanResult:\n  path: str\n  python_version: str\n  findings: List[dict]\n  is_clean() → bool\n  confidence() → str"]:::tertiary
+    E:::tertiary --> F(["scan_dir(dir_path) → List[PycScanResult]\n  Recursive .pyc traversal\n  report(results) → formatted str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

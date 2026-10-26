@@ -18,18 +18,36 @@ Determine whether a process runs inside a Kubernetes pod, extract the service ac
 
 ```mermaid
 flowchart TD
-    A["K8sEnumerator()"] --> B["check_in_k8s()\n/var/run/secrets/kubernetes.io/serviceaccount exists?\nKUBERNETES_SERVICE_HOST env var set?\n/proc/1/cgroup contains 'kubepods'?"]
-    B --> C{in_k8s?}
-    C -->|yes| D["extract_service_account_bundle()\nRead token, ca.crt, namespace\nfrom /var/run/secrets/kubernetes.io/serviceaccount/"]
-    D --> E["resolve_api_server()\nhttps://{KUBERNETES_SERVICE_HOST}:{PORT}\nor https://kubernetes.default.svc"]
-    E --> F["_api_get(path): urllib HTTPS + Bearer token + cluster CA trust"]
-    F --> G["api_enum_namespaces() → /api/v1/namespaces"]
-    F --> H["api_enum_pods() → /api/v1/pods"]
-    F --> I["api_extract_secrets() → /api/v1/secrets\nbase64 decode all values\nFlag keys matching _CRED_KEYS pattern"]
-    F --> J["api_extract_configmaps() → /api/v1/configmaps\nFlag values matching credential key patterns"]
-    F --> K["check_rbac_clusteradmin()\n/apis/rbac.authorization.k8s.io/v1/clusterrolebindings\nFilter roleRef.name == 'cluster-admin'\nServiceAccount subject → CRITICAL\ndefault namespace subject → HIGH"]
-    F --> L["check_privileged_pods()\n/api/v1/pods\nPer container: privileged:true, hostNetwork/PID/IPC, missing readOnlyRootFilesystem"]
-    C -->|no| M["in_k8s=False — skip API calls\nStill runs kubectl-based checks if kubectl present"]
+    A(["K8sEnumerator()"]):::input --> B["check_in_k8s()\n/var/run/secrets/kubernetes.io/serviceaccount exists?\nKUBERNETES_SERVICE_HOST env var set?\n/proc/1/cgroup contains 'kubepods'?"]:::primary
+    B:::primary --> C{"in_k8s?"}:::neutral
+    C:::neutral -->|yes| D["extract_service_account_bundle()\nRead token, ca.crt, namespace\nfrom /var/run/secrets/kubernetes.io/serviceaccount/"]:::secondary
+    D:::secondary --> E["resolve_api_server()\nhttps://{KUBERNETES_SERVICE_HOST}:{PORT}\nor https://kubernetes.default.svc"]:::tertiary
+    E:::tertiary --> F["_api_get(path): urllib HTTPS + Bearer token + cluster CA trust"]:::tertiary
+    F:::tertiary --> G(["api_enum_namespaces() → /api/v1/namespaces"]):::output
+    F:::tertiary --> H(["api_enum_pods() → /api/v1/pods"]):::output
+    F:::tertiary --> I(["api_extract_secrets() → /api/v1/secrets\nbase64 decode all values\nFlag keys matching _CRED_KEYS pattern"]):::output
+    F:::tertiary --> J(["api_extract_configmaps() → /api/v1/configmaps\nFlag values matching credential key patterns"]):::output
+    F:::tertiary --> K(["check_rbac_clusteradmin()\n/apis/rbac.authorization.k8s.io/v1/clusterrolebindings\nFilter roleRef.name == 'cluster-admin'\nServiceAccount subject → CRITICAL\ndefault namespace subject → HIGH"]):::output
+    F:::tertiary --> L(["check_privileged_pods()\n/api/v1/pods\nPer container: privileged:true, hostNetwork/PID/IPC, missing readOnlyRootFilesystem"]):::output
+    C:::neutral -->|no| M(["in_k8s=False · skip API calls\nStill runs kubectl-based checks if kubectl present"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

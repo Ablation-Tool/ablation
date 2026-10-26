@@ -18,11 +18,22 @@ Decode flatui framework HTTP method integer IDs to HTTP verb sets: scanning rout
 
 ```mermaid
 flowchart TD
-    A["FlatuiMethodDecoder.from_path(binary_path)"] --> B["Stage 1: Known-operation scan\n  Find routes with *Import in handler name → POST\n  Find routes with read-only suffixes → GET\n  Build partial method_id → verb mapping"]
-    B --> C["Stage 2: RouterHandler vtable probe\n  Find method-string comparison code\n  Extract method_id → string pairs\n  Fill remaining gaps in mapping"]
-    C --> D["Stage 3: Calibration table fallback\n  Apply built-in FMG 8.0.0 calibration\n  for any still-unmapped IDs"]
-    D --> E["decode(method_id) → FrozenSet[str]\n  Return set of HTTP verbs for this ID\n  decode_ids(ids) → Set[str]\n  decode_all() → Dict[int, FrozenSet[str]]\n  is_likely_write(ids) → bool"]
-    E --> F["fmt_table() → str\n  Print ID → verbs mapping table"]
+    A(["FlatuiMethodDecoder.from_path(binary_path)"]):::input --> B["Stage 1: Known-operation scan\n  Find routes with *Import in handler name → POST\n  Find routes with read-only suffixes → GET\n  Build partial method_id → verb mapping"]:::primary
+    B:::primary --> C["Stage 2: RouterHandler vtable probe\n  Find method-string comparison code\n  Extract method_id → string pairs\n  Fill remaining gaps in mapping"]:::secondary
+    C:::secondary --> D["Stage 3: Calibration table fallback\n  Apply built-in FMG 8.0.0 calibration\n  for any still-unmapped IDs"]:::tertiary
+    D:::tertiary --> E["decode(method_id) → FrozenSet[str]\n  Return set of HTTP verbs for this ID\n  decode_ids(ids) → Set[str]\n  decode_all() → Dict[int, FrozenSet[str]]\n  is_likely_write(ids) → bool"]:::tertiary
+    E:::tertiary --> F(["fmt_table() → str\n  Print ID → verbs mapping table"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

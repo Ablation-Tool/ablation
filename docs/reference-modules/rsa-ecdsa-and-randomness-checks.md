@@ -18,9 +18,18 @@ Identify hash algorithm implementations in compiled ARM32/Thumb2 code from K-tab
 
 ```mermaid
 flowchart TD
-    A["HashAlgoDiscriminator(data: bytes, base_addr: int)\n  .scan() → List[HashAlgoMatch]\n  Scan for K-table constants:\n    SHA-256: 0x428a2f98, 0x71374491, 0xb5c0fbcf ...\n    MD5: 0xd76aa478, 0xe8c7b756, 0x242070db ...\n    SHA-1: 0x5a827999, 0x6ed9eba1, 0x8f1bbcdc ...\n    SHA-512: 64-bit K constants\n  Histogram confidence: N_found / N_total > 0.8\n  → [{algo, confidence, const_va, first_const_va}]"] --> B["CustomCBCDetector(data, base_addr, cs_md: int)\n  .scan() → List[CBCPattern]\n  Pattern: BSS ptr load + VLDM/VLDMIA block load\n    XOR with prev CT (VEOR instruction)\n    VST1 store + ptr update\n    IV from .rodata (LDR immediate offset)\n  → [{iv_va, iv_value, block_ptr_va, chain_xor_va}]"]
-    B --> C["check_rng_weakness(binary_data: bytes) → list\n  Regex scan on ASCII-decoded binary:\n    rand()/srand()/random() refs → WEAK_RNG_LIBC_RAND (HIGH)\n    srand(time(...)) or 10-digit Unix timestamp literal → TIME_SEEDED_RNG (CRITICAL)\n    /dev/random present but /dev/urandom absent → DEV_RANDOM_BLOCKING_RNG (MEDIUM)\n    Math.random in binary → MATH_RANDOM_WEAK_RNG (HIGH)\n    RC4 strings + rand() refs → RC4_WITH_WEAK_RNG (CRITICAL)\n  → [{severity, title, detail, host: 'localhost', port: 0}]\n\ncheck_weak_prime(n) → dict\n  miller_rabin_primality(n, rounds=5) → bool\n  Fermat test: a^(n-1) mod n != 1 → composite\n  GCD(n, common_small_primes_product) > 1 → small factor\n  → {prime: bool, fermat_fail: bool, small_factor: int|None}"]
-    C --> D["check_birthday_collision_risk(hash_bits, num_samples) → dict\n  Birthday bound: P(collision) ≈ 1 - e^(-n²/2m)\n    m = 2^hash_bits\n  Flag: P > 0.01 for MD5 (128-bit) with >18M samples\n  Flag: P > 0.01 for SHA-1 (160-bit) with >300M samples\n  → {hash_bits, num_samples, collision_prob, safe: bool}"]
+    A(["HashAlgoDiscriminator(data: bytes, base_addr: int)\n  .scan() → List[HashAlgoMatch]\n  Scan for K-table constants:\n    SHA-256: 0x428a2f98, 0x71374491, 0xb5c0fbcf ...\n    MD5: 0xd76aa478, 0xe8c7b756, 0x242070db ...\n    SHA-1: 0x5a827999, 0x6ed9eba1, 0x8f1bbcdc ...\n    SHA-512: 64-bit K constants\n  Histogram confidence: N_found / N_total > 0.8\n  → [{algo, confidence, const_va, first_const_va}]"]):::input --> B["CustomCBCDetector(data, base_addr, cs_md: int)\n  .scan() → List[CBCPattern]\n  Pattern: BSS ptr load + VLDM/VLDMIA block load\n    XOR with prev CT (VEOR instruction)\n    VST1 store + ptr update\n    IV from .rodata (LDR immediate offset)\n  → [{iv_va, iv_value, block_ptr_va, chain_xor_va}]"]:::primary
+    B:::primary --> C["check_rng_weakness(binary_data: bytes) → list\n  Regex scan on ASCII-decoded binary:\n    rand()/srand()/random() refs → WEAK_RNG_LIBC_RAND (HIGH)\n    srand(time(...)) or 10-digit Unix timestamp literal → TIME_SEEDED_RNG (CRITICAL)\n    /dev/random present but /dev/urandom absent → DEV_RANDOM_BLOCKING_RNG (MEDIUM)\n    Math.random in binary → MATH_RANDOM_WEAK_RNG (HIGH)\n    RC4 strings + rand() refs → RC4_WITH_WEAK_RNG (CRITICAL)\n  → [{severity, title, detail, host: 'localhost', port: 0}]\n\ncheck_weak_prime(n) → dict\n  miller_rabin_primality(n, rounds=5) → bool\n  Fermat test: a^(n-1) mod n != 1 → composite\n  GCD(n, common_small_primes_product) > 1 → small factor\n  → {prime: bool, fermat_fail: bool, small_factor: int|None}"]:::secondary
+    C:::secondary --> D(["check_birthday_collision_risk(hash_bits, num_samples) → dict\n  Birthday bound: P(collision) ≈ 1 - e^(-n²/2m)\n    m = 2^hash_bits\n  Flag: P > 0.01 for MD5 (128-bit) with >18M samples\n  Flag: P > 0.01 for SHA-1 (160-bit) with >300M samples\n  → {hash_bits, num_samples, collision_prob, safe: bool}"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

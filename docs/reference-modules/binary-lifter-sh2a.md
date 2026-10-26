@@ -96,27 +96,46 @@ Example output:
 
 ```mermaid
 flowchart TD
-    A[/"flat ROM\nsh7058_ecu.bin\nVA == file offset (base 0x00000000)"/] --> B["BinaryLifter.from_path(arch='sh2a')\nLIEF fails to parse ELF/PE header\n_sections = [] — flat ROM path active"]
-    B --> C["EcuSH2aDecoder\nSH-2A ISA decode\nyields SH2aInsn with insn_type field"]
-    C --> D["_SH2aState.emit(insn)\ndispatch on insn_type — no mnemonic regex"]
-    D --> E{"insn_type"}
-    E -->|"CALL (BSR · resolved)"| F["uint32_t vN = name(arg0..arg3);"]
-    E -->|"CALL (JSR · unresolved)"| G["uint32_t vN = (*rM)(arg0..arg3);"]
-    E -->|"BRANCH BT/BF"| H["if (T) / if (!T) goto loc_X;\n+ delay-slot insn"]
-    E -->|"LOAD / STORE"| I["*(uint32_t*)rM = rN;"]
-    E -->|"RETURN"| J["return rX;\n+ delay-slot · then stop"]
-    E -->|"MISC"| K["// mnemonic"]
-    F --> L[/"pseudo-C output"/]
-    G --> L
-    H --> L
-    I --> L
-    J --> L
-    K --> L
-    M["_taint_map[func_va] = {r4}"] -.->|"/* TAINTED */ on\ntainted-arg calls"| F
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style M fill:#92400e,stroke:#b45309,color:#fef3c7
-    style L fill:#14532d,stroke:#166534,color:#dcfce7
+    A(["flat ROM\nsh7058_ecu.bin\nVA == file offset (base 0x00000000)"]):::input --> B["BinaryLifter.from_path(arch='sh2a')\nLIEF fails to parse ELF/PE header\n_sections = [] · flat ROM path active"]:::primary
+    B:::primary --> C["EcuSH2aDecoder\nSH-2A ISA decode\nyields SH2aInsn with insn_type field"]:::tertiary
+    C:::tertiary --> D["_SH2aState.emit(insn)\ndispatch on insn_type · no mnemonic regex"]:::tertiary
+    D:::tertiary --> E{"insn_type"}:::neutral
+    E:::neutral -->|"CALL (BSR · resolved)"| F["uint32_t vN = name(arg0..arg3);"]:::secondary
+    E:::neutral -->|"CALL (JSR · unresolved)"| G["uint32_t vN = (*rM)(arg0..arg3);"]:::tertiary
+    E:::neutral -->|"BRANCH BT/BF"| H["if (T) / if (!T) goto loc_X;\n+ delay-slot insn"]:::tertiary
+    E:::neutral -->|"LOAD / STORE"| I["*(uint32_t*)rM = rN;"]:::tertiary
+    E:::neutral -->|"RETURN"| J["return rX;\n+ delay-slot · then stop"]:::tertiary
+    E:::neutral -->|"MISC"| K["// mnemonic"]:::tertiary
+    F:::secondary --> L(["pseudo-C output"]):::output
+    G:::tertiary --> L:::output
+    H:::tertiary --> L:::output
+    I:::tertiary --> L:::output
+    J:::tertiary --> L:::output
+    K:::tertiary --> L:::output
+    M(["_taint_map[func_va] = {r4}"]):::input -.->|"/* TAINTED */ on\ntainted-arg calls"| F:::secondary
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#546e7a,stroke-width:2px
+    linkStyle 4 stroke:#00695c,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
+    linkStyle 12 stroke:#2e7d32,stroke-width:3px
+    linkStyle 13 stroke:#2e7d32,stroke-width:3px
+    linkStyle 14 stroke:#2e7d32,stroke-width:3px
+    linkStyle 15 stroke:#2e7d32,stroke-width:3px
+    linkStyle 16 stroke:#00695c,stroke-width:2px
 ```
 
 `_lift_sh2a()` uses `EcuSH2aDecoder` the pre-existing SH-2A decoder to produce `SH2aInsn`

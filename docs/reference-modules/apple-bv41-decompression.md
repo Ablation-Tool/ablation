@@ -18,13 +18,26 @@ Decode Apple Compression.framework's proprietary chunked LZ4 container format: p
 
 ```mermaid
 flowchart TD
-    A["is_bv41(data): data[:4] in {b'bv41', b'bv4-'}"] --> B["probe_bv41(data):\nBytesIO cursor through stream\nPer chunk: read magic (4B)\nbv4$ or EOF → stop\nbv41/bv4-: read uncomp_size + comp_size (LE uint32 × 2)\nseek past comp_size bytes\nAccumulate chunk metadata (no decompression)"]
-    B --> C["Returns: {chunk_count, total_uncompressed_bytes,\ntotal_compressed_bytes, overall_ratio, chunks:[...]}"]
-    D["decode_bv41(data) → bytes:"] --> E["import lz4.block\nBytesIO cursor + output BytesIO\nLoop:\n  magic = buf.read(4)\n  bv4$: break\n  bv41/bv4-: uncomp_size, comp_size = struct.unpack '<II'\n  payload = buf.read(comp_size)\n  bv41: lz4block.decompress(payload, uncompressed_size=uncomp_size)\n  bv4-: payload[:uncomp_size] (verbatim passthrough)\n  Append to output BytesIO"]
-    E --> F["Returns complete decompressed bytes\n(holds 2× uncompressed size in RAM simultaneously)"]
-    G["decode_bv41_to_file(data, output_path, progress_cb):"] --> H["Same loop as decode_bv41 but writes\neach chunk directly to output file\nNo output BytesIO accumulation\n→ suitable for 500MB+ layers\nReturns: total bytes written\nprogress_cb(chunks_done, bytes_written) called per chunk"]
-    I["iter_bv41_chunks(data):"] --> J["Yields (chunk_type, uncomp_size, payload_bytes)\nchunk_type: 'compressed' | 'passthrough'\nDoes NOT decompress — caller decides\nSuitable for layer diffing / partial inspection"]
-    K["decode_bv41_file(path, output_path=None):"] --> L["Read file → decode_bv41(data)\nIf output_path: write to disk\nReturns decoded bytes"]
+    A(["is_bv41(data): data[:4] in {b'bv41', b'bv4-'}"]):::input --> B["probe_bv41(data):\nBytesIO cursor through stream\nPer chunk: read magic (4B)\nbv4$ or EOF → stop\nbv41/bv4-: read uncomp_size + comp_size (LE uint32 × 2)\nseek past comp_size bytes\nAccumulate chunk metadata (no decompression)"]:::primary
+    B:::primary --> C(["Returns: {chunk_count, total_uncompressed_bytes,\ntotal_compressed_bytes, overall_ratio, chunks:[...]}"]):::output
+    D(["decode_bv41(data) → bytes:"]):::input --> E["import lz4.block\nBytesIO cursor + output BytesIO\nLoop:\n  magic = buf.read(4)\n  bv4$: break\n  bv41/bv4-: uncomp_size, comp_size = struct.unpack '<II'\n  payload = buf.read(comp_size)\n  bv41: lz4block.decompress(payload, uncompressed_size=uncomp_size)\n  bv4-: payload[:uncomp_size] (verbatim passthrough)\n  Append to output BytesIO"]:::secondary
+    E:::secondary --> F(["Returns complete decompressed bytes\n(holds 2× uncompressed size in RAM simultaneously)"]):::output
+    G(["decode_bv41_to_file(data, output_path, progress_cb):"]):::input --> H(["Same loop as decode_bv41 but writes\neach chunk directly to output file\nNo output BytesIO accumulation\n→ suitable for 500MB+ layers\nReturns: total bytes written\nprogress_cb(chunks_done, bytes_written) called per chunk"]):::output
+    I(["iter_bv41_chunks(data):"]):::input --> J(["Yields (chunk_type, uncomp_size, payload_bytes)\nchunk_type: 'compressed' | 'passthrough'\nDoes NOT decompress · caller decides\nSuitable for layer diffing / partial inspection"]):::output
+    K(["decode_bv41_file(path, output_path=None):"]):::input --> L(["Read file → decode_bv41(data)\nIf output_path: write to disk\nReturns decoded bytes"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Chunk format

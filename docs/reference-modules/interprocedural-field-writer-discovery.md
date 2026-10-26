@@ -18,12 +18,22 @@ N-hop forward symbolic register pass across function call chains: extending `Reg
 
 ```mermaid
 flowchart TD
-    A["IPRegAnnotator.from_context(ctx)\n  or .from_lib_graph(lg)"] --> B["annotate_chain(entry_va, max_hops=2) → IPChain\n  Step 1: RegAnnotator.annotate_calls(entry_va) → initial state"]
-    B --> C["At each call site in the result:\n  Get args: {reg: RegVal} at call site\n  Resolve callee VA from ctx or LibGraph\n  Seed callee entry state with caller args:\n    callee_init[rdi] = caller.args['rdi']\n    callee_init[rsi] = caller.args['rsi']  etc."]
-    C --> D["Recurse: RegAnnotator.annotate_calls(callee_va,\n  initial_state=callee_init)\n  Until max_hops reached or leaf function"]
-    D --> E["IPChain:\n  root_va, root_binary\n  hops: List[ChainResult]\n  all_sinks(sink_names) → List[(hop, call_va, ChainCallSite)]\n  sink_report(sink_names) → formatted sink summary\n  fmt() → full chain trace"]
+    A(["IPRegAnnotator.from_context(ctx)\n  or .from_lib_graph(lg)"]):::input --> B["annotate_chain(entry_va, max_hops=2) → IPChain\n  Step 1: RegAnnotator.annotate_calls(entry_va) → initial state"]:::primary
+    B:::primary --> C["At each call site in the result:\n  Get args: {reg: RegVal} at call site\n  Resolve callee VA from ctx or LibGraph\n  Seed callee entry state with caller args:\n    callee_init[rdi] = caller.args['rdi']\n    callee_init[rsi] = caller.args['rsi']  etc."]:::secondary
+    C:::secondary --> D["Recurse: RegAnnotator.annotate_calls(callee_va,\n  initial_state=callee_init)\n  Until max_hops reached or leaf function"]:::tertiary
+    D:::tertiary --> E(["IPChain:\n  root_va, root_binary\n  hops: List[ChainResult]\n  all_sinks(sink_names) → List[(hop, call_va, ChainCallSite)]\n  sink_report(sink_names) → formatted sink summary\n  fmt() → full chain trace"]):::output
 
-    F["LibGraph + IPRegAnnotator:\n  Cross-binary chains follow LibGraph.callers_of()\n  LibCaller: binary, caller_va, fn\n  Seeding crosses binary boundaries via LibGraph.context(binary)"]
+    F(["LibGraph + IPRegAnnotator:\n  Cross-binary chains follow LibGraph.callers_of()\n  LibCaller: binary, caller_va, fn\n  Seeding crosses binary boundaries via LibGraph.context(binary)"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,18 +18,34 @@ The Binary Ninja plugin reads the ablation session cache and applies function na
 
 ```mermaid
 flowchart TD
-    A["Binary Ninja opens binary"] --> B["binja_plugin.py:\n  sha256(bv.file.filename)[:16]\n  _db_has_binary(sha) → bool"]
-    B -->|"corpus entry exists"| C["_load_corpus(sha)\n  SELECT va, name FROM functions\n  WHERE binary_id.sha256 LIKE sha%\n  → {va: name}"]
-    C --> D["For each func in bv.functions:\n  if va in corpus and name not sub_/fn_:\n    func.name = corpus[va]\n  Tag type: Ablation-Sig"]
+    A(["Binary Ninja opens binary"]):::input --> B["binja_plugin.py:\n  sha256(bv.file.filename)[:16]\n  _db_has_binary(sha) → bool"]:::primary
+    B:::primary -->|"corpus entry exists"| C["_load_corpus(sha)\n  SELECT va, name FROM functions\n  WHERE binary_id.sha256 LIKE sha%\n  → {va: name}"]:::tertiary
+    C:::tertiary --> D(["For each func in bv.functions:\n  if va in corpus and name not sub_/fn_:\n    func.name = corpus[va]\n  Tag type: Ablation-Sig"]):::output
 
-    E["Ablation > Sweep Binary"] --> F["CorpusBuilder.build(path)\n  → /tmp/ablation_binja_<stem>.db"]
-    F --> G["SemanticSearcher.build_corpus()"]
-    G --> H["PatternLibrary.sweep(searcher, top_k=5, min_score=0.30)\n  → {query: SearchResult}"]
-    H --> I["bv.get_function_at(va).add_tag(Ablation-Sweep, score)\n  for each hit"]
+    E(["Ablation > Sweep Binary"]):::input --> F["CorpusBuilder.build(path)\n  → /tmp/ablation_binja_<stem>.db"]:::secondary
+    F:::secondary --> G["SemanticSearcher.build_corpus()"]:::tertiary
+    G:::tertiary --> H["PatternLibrary.sweep(searcher, top_k=5, min_score=0.30)\n  → {query: SearchResult}"]:::tertiary
+    H:::tertiary --> I(["bv.get_function_at(va).add_tag(Ablation-Sweep, score)\n  for each hit"]):::output
 
-    J["Ablation > Semantic Search"] --> K["bn.get_text_line_input('Query')"]
-    K --> L["SemanticSearcher.query(query, top_k=10)\n  → List[FuncMatch]"]
-    L --> M["bv.navigate(bv.view, results[0].va)\n  show top-10 summary"]
+    J(["Ablation > Semantic Search"]):::input --> K["bn.get_text_line_input('Query')"]:::tertiary
+    K:::tertiary --> L["SemanticSearcher.query(query, top_k=10)\n  → List[FuncMatch]"]:::tertiary
+    L:::tertiary --> M(["bv.navigate(bv.view, results[0].va)\n  show top-10 summary"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#00695c,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

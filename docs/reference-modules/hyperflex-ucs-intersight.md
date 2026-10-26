@@ -18,10 +18,20 @@ Probe Cisco HyperFlex Connect REST APIs, iSCSI/NFS storage interfaces, UCS Manag
 
 ```mermaid
 flowchart TD
-    A["hyperflex_enum.py"] --> B["probe_hx_connect(host, creds=None) → dict\n  POST /coreapi/v1/auth/login\n  Default cred list: admin/C1sco12345 etc.\n  On success:\n    GET /coreapi/v1/cluster/info → cluster health\n    GET /coreapi/v1/cluster/nodes → node list\n    GET /coreapi/v1/datastore/list → volumes"]
-    B --> C["_probe_iscsi(host) → list\n  TCP port 3260: iSCSI\n  SendIscsiLoginRequest PDU → target list\n  _probe_nfs(host) → list\n    RPC portmap (UDP 111) → NFS mount points"]
-    C --> D["probe_ucs_manager_api(host) → list\n  POST /nuova  aaaCimcLoginReq (capability query)\n  probe_intersight_api(host) → list\n    GET /api/v1  version disclosure\n  probe_hyperflex_storage(host, port=9440)\n    Nutanix-compatible API (HX uses Prism-like interface)"]
-    D --> E["enumerate_hyperflex_cluster(hosts) → list\n  Run all probes across all provided hosts\n  Deduplicate by cluster UUID\n  Return consolidated cluster profile"]
+    A(["hyperflex_enum.py"]):::input --> B["probe_hx_connect(host, creds=None) → dict\n  POST /coreapi/v1/auth/login\n  Default cred list: admin/C1sco12345 etc.\n  On success:\n    GET /coreapi/v1/cluster/info → cluster health\n    GET /coreapi/v1/cluster/nodes → node list\n    GET /coreapi/v1/datastore/list → volumes"]:::primary
+    B:::primary --> C["_probe_iscsi(host) → list\n  TCP port 3260: iSCSI\n  SendIscsiLoginRequest PDU → target list\n  _probe_nfs(host) → list\n    RPC portmap (UDP 111) → NFS mount points"]:::secondary
+    C:::secondary --> D["probe_ucs_manager_api(host) → list\n  POST /nuova  aaaCimcLoginReq (capability query)\n  probe_intersight_api(host) → list\n    GET /api/v1  version disclosure\n  probe_hyperflex_storage(host, port=9440)\n    Nutanix-compatible API (HX uses Prism-like interface)"]:::tertiary
+    D:::tertiary --> E(["enumerate_hyperflex_cluster(hosts) → list\n  Run all probes across all provided hosts\n  Deduplicate by cluster UUID\n  Return consolidated cluster profile"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

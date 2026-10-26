@@ -18,10 +18,20 @@ Enumerate COM hijacking candidates HKCU vs. HKLM CLSID delta, active RPC endpoin
 
 ```mermaid
 flowchart TD
-    A["WindowsEnumerator()\n  enumerate_all() → dict[str, list[Finding]]\n    keys: com, rpc, etw, pipes, secfeatures,\n          servicedll, autoruns, token, modules"] --> B["com_hijack_candidates() → list[Finding]\n  HKLM SOFTWARE\\Classes\\CLSID → all CLSIDs\n  HKCU Software\\Classes\\CLSID → user CLSIDs\n  Delta: HKLM CLSIDs absent in HKCU with writable InprocServer32 path\n  Finding(severity, category='com', title, detail, evidence)"]
-    B --> C["rpc_endpoints() → list[Finding]\n  rpcping / Win32_DCOMApplication\n  Parse ncacn_* transport endpoints\n  Flag: SAMR, SVCCTL, IWbemServices, TaskScheduler\n  Finding(severity, category='rpc', title, detail, evidence)\n\netw_sessions() → list[Finding]\n  logman query -ets\n  NT Kernel Logger, threat-detection session consumers\n  Finding(severity, category='etw', title, detail, evidence)"]
-    C --> D["named_pipes() → list[Finding]\n  \\\\.\\pipe\\\\ enumeration\n  Flag: writable pipes not owned by SYSTEM\n  Finding(severity, category='pipes', title, detail, evidence)\n\nservice_dlls() → list[Finding]\n  HKLM SYSTEM\\CurrentControlSet\\Services\\*/Parameters/ServiceDll\n  Flag: DLL path in user-writable directory\n  Finding(severity, category='servicedll', title, detail, evidence)"]
-    D --> E["token_privileges() → list[Finding]\n  whoami /priv\n  Flag: SeImpersonatePrivilege, SeAssignPrimaryTokenPrivilege\n  Finding(severity, category='token', title, detail, evidence)\n\nsystem_security_features() → list[Finding]\n  CFG, DEP, ASLR policy reads via NtQuerySystemInformation\n  Finding(severity, category='secfeatures', title, detail, evidence)"]
+    A(["WindowsEnumerator()\n  enumerate_all() → dict[str, list[Finding]]\n    keys: com, rpc, etw, pipes, secfeatures,\n          servicedll, autoruns, token, modules"]):::input --> B["com_hijack_candidates() → list[Finding]\n  HKLM SOFTWARE\\Classes\\CLSID → all CLSIDs\n  HKCU Software\\Classes\\CLSID → user CLSIDs\n  Delta: HKLM CLSIDs absent in HKCU with writable InprocServer32 path\n  Finding(severity, category='com', title, detail, evidence)"]:::primary
+    B:::primary --> C["rpc_endpoints() → list[Finding]\n  rpcping / Win32_DCOMApplication\n  Parse ncacn_* transport endpoints\n  Flag: SAMR, SVCCTL, IWbemServices, TaskScheduler\n  Finding(severity, category='rpc', title, detail, evidence)\n\netw_sessions() → list[Finding]\n  logman query -ets\n  NT Kernel Logger, threat-detection session consumers\n  Finding(severity, category='etw', title, detail, evidence)"]:::secondary
+    C:::secondary --> D["named_pipes() → list[Finding]\n  \\\\.\\pipe\\\\ enumeration\n  Flag: writable pipes not owned by SYSTEM\n  Finding(severity, category='pipes', title, detail, evidence)\n\nservice_dlls() → list[Finding]\n  HKLM SYSTEM\\CurrentControlSet\\Services\\*/Parameters/ServiceDll\n  Flag: DLL path in user-writable directory\n  Finding(severity, category='servicedll', title, detail, evidence)"]:::tertiary
+    D:::tertiary --> E(["token_privileges() → list[Finding]\n  whoami /priv\n  Flag: SeImpersonatePrivilege, SeAssignPrimaryTokenPrivilege\n  Finding(severity, category='token', title, detail, evidence)\n\nsystem_security_features() → list[Finding]\n  CFG, DEP, ASLR policy reads via NtQuerySystemInformation\n  Finding(severity, category='secfeatures', title, detail, evidence)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

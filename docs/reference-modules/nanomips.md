@@ -89,21 +89,32 @@ MIPS32 delay slots required the instruction after a branch or call to execute be
 
 ```mermaid
 flowchart TD
-    A["NanoMIPSTaintTracker.from_path(elf)"] --> B{"capstone.__version__\n>= '6.0.0a1'?"}
+    A(["NanoMIPSTaintTracker.from_path(elf)"]):::input --> B{"capstone.__version__\n>= '6.0.0a1'?"}:::neutral
 
-    B -->|"YES (Capstone 6.x: nanoMIPS support present)"| C["Full decode path\nCapstone 6.x decodes P16/P32/P48\noperand-by-operand taint propagation\nXFER / ALU / CLR / LEA rules\nstack slot tracking\nhas_full_decode = True"]
+    B:::neutral -->|"YES (Capstone 6.x: nanoMIPS support present)"| C["Full decode path\nCapstone 6.x decodes P16/P32/P48\noperand-by-operand taint propagation\nXFER / ALU / CLR / LEA rules\nstack slot tracking\nhas_full_decode = True"]:::primary
 
-    B -->|"NO (5.x or absent)"| D["Conservative fallback path\nBALC targets extracted via manual\nbitfield parsing of P32 and P16 forms\nAfter any source call:\nmark ALL $a0-$a3 tainted on entry\nto next function\nhas_full_decode = False"]
+    B:::neutral -->|"NO (5.x or absent)"| D["Conservative fallback path\nBALC targets extracted via manual\nbitfield parsing of P32 and P16 forms\nAfter any source call:\nmark ALL $a0-$a3 tainted on entry\nto next function\nhas_full_decode = False"]:::secondary
 
-    C --> E["tracker.run_interprocedural(depth=4)"]
-    D --> E
+    C:::primary --> E["tracker.run_interprocedural(depth=4)"]:::tertiary
+    D:::secondary --> E:::tertiary
 
-    E --> F{"Finding\nemitted?"}
-    F -->|"Tainted arg reaches sink"| G[/"TaintFinding\nsink · source · chain · path"/]
-    F -->|No| H["Continue walk"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style G fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    E:::tertiary --> F{"Finding\nemitted?"}:::neutral
+    F:::neutral -->|"Tainted arg reaches sink"| G(["TaintFinding\nsink · source · chain · path"]):::output
+    F:::neutral -->|No| H(["Continue walk"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#546e7a,stroke-width:2px
+    linkStyle 1 stroke:#bf360c,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#546e7a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
 ```
 
 The fallback is deliberately conservative. After any call to a known source `recv`, `read`, etc., all four argument registers are marked tainted on entry to the next function. This avoids false negatives at the cost of more candidates to triage manually. The decode path is precise: only the actual register that receives the `recv` return value carries taint.
@@ -116,12 +127,24 @@ nanoMIPS PLT stubs are 12 bytes. Each stub loads the GOT address and jumps throu
 
 ```mermaid
 flowchart LR
-    A["BALC 0x3210"] --> B{"0x3210 within\n.plt range [0x3000, 0x3400)?"}
-    B -->|Yes| C["plt_map[0x3210] = 'strcpy'\nLook up import name via relocation table"]
-    B -->|No| D["Internal function\nPush callee_va to worklist"]
-    C --> E{"'strcpy' in\nsink_table?"}
-    E -->|Yes| F["Arg tainted?\n→ emit TaintFinding"]
-    E -->|No| G["Continue tracking\nthrough return value"]
+    A(["BALC 0x3210"]):::input --> B{"0x3210 within\n.plt range [0x3000, 0x3400)?"}:::neutral
+    B:::neutral -->|Yes| C["plt_map[0x3210] = 'strcpy'\nLook up import name via relocation table"]:::primary
+    B:::neutral -->|No| D(["Internal function\nPush callee_va to worklist"]):::output
+    C:::primary --> E{"'strcpy' in\nsink_table?"}:::neutral
+    E:::neutral -->|Yes| F(["Arg tainted?\n→ emit TaintFinding"]):::output
+    E:::neutral -->|No| G(["Continue tracking\nthrough return value"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#546e7a,stroke-width:2px
+    linkStyle 1 stroke:#bf360c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#546e7a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 Without PLT unwrapping, every call to `strcpy` or `system` terminates the interprocedural trace at the stub VA. The trace stops before it can confirm the dangerous sink was reached.

@@ -18,11 +18,22 @@ Dump a configurable-size disassembly window centered on any target VA: annotatin
 
 ```mermaid
 flowchart TD
-    A["WindowAnalyzer.from_path(path)\n  or .from_context(ctx)"] --> B["dump(va, window=1536) → List[str]\n  Decode [va - window//2, va + window//2]\n  Using Capstone for the binary's ISA\n  Return raw annotated instruction strings"]
-    B --> C["Per instruction annotation:\n  CALL target → resolve PLT name:\n    'call 0x3000  ; PLT -> recv'\n  LEA [rip+disp] → resolve .rodata string:\n    'lea rdi, [...]  ; \"error loading config\"'\n  CALL internal → if named: '; -> parse_request'"]
-    C --> D["dump_text(va, window=1536) → str\n  Joins dump() list as formatted text block\n  Suitable for LLM context injection"]
-    D --> E["find_func_starts(va, window, align_back) → List[int]\n  Scan window for endbr64 (0xF3 0x0F 0x1E 0xFA)\n  and PUSH RBP (0x55) prologue patterns\n  Returns sorted list of heuristic starts"]
-    E --> F["calls_in_window(va, window, align_back) → List[Tuple[int,int,str]]\n  All CALL instructions in window:\n  (call_va, target_va, resolved_name)"]
+    A(["WindowAnalyzer.from_path(path)\n  or .from_context(ctx)"]):::input --> B["dump(va, window=1536) → List[str]\n  Decode [va - window//2, va + window//2]\n  Using Capstone for the binary's ISA\n  Return raw annotated instruction strings"]:::primary
+    B:::primary --> C["Per instruction annotation:\n  CALL target → resolve PLT name:\n    'call 0x3000  ; PLT -> recv'\n  LEA [rip+disp] → resolve .rodata string:\n    'lea rdi, [...]  ; \"error loading config\"'\n  CALL internal → if named: '; -> parse_request'"]:::secondary
+    C:::secondary --> D["dump_text(va, window=1536) → str\n  Joins dump() list as formatted text block\n  Suitable for LLM context injection"]:::tertiary
+    D:::tertiary --> E["find_func_starts(va, window, align_back) → List[int]\n  Scan window for endbr64 (0xF3 0x0F 0x1E 0xFA)\n  and PUSH RBP (0x55) prologue patterns\n  Returns sorted list of heuristic starts"]:::tertiary
+    E:::tertiary --> F(["calls_in_window(va, window, align_back) → List[Tuple[int,int,str]]\n  All CALL instructions in window:\n  (call_va, target_va, resolved_name)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

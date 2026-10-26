@@ -18,15 +18,27 @@ Fast approximate nearest-neighbor function lookup using SAX (Symbolic Aggregate 
 
 ```mermaid
 flowchart TD
-    A["SAXIndex(word_size=8, alphabet_size=8)"] --> B["add_binary(binary_path, ctx=ctx)\n  OpSeqEncoder: for each function in binary:\n    Disassemble → operation-category sequence\n    (int codes: COMPARISON, CONDITIONAL, CALL, etc.)\n  encode_va(start, end) → List[int] sequence"]
-    B --> C["sax_word(seq) → str (8 chars from alphabet a-h)\n  Divide seq into word_size equal-length windows\n  Compute mean of each window\n  Map mean to breakpoint of alphabet (Gaussian distribution)"]
-    C --> D["Internal index: Dict[sax_word, List[IndexEntry]]\n  IndexEntry: binary, va, seq_len\n  One word per function"]
+    A(["SAXIndex(word_size=8, alphabet_size=8)"]):::input --> B["add_binary(binary_path, ctx=ctx)\n  OpSeqEncoder: for each function in binary:\n    Disassemble → operation-category sequence\n    (int codes: COMPARISON, CONDITIONAL, CALL, etc.)\n  encode_va(start, end) → List[int] sequence"]:::primary
+    B:::primary --> C["sax_word(seq) → str (8 chars from alphabet a-h)\n  Divide seq into word_size equal-length windows\n  Compute mean of each window\n  Map mean to breakpoint of alphabet (Gaussian distribution)"]:::tertiary
+    C:::tertiary --> D(["Internal index: Dict[sax_word, List[IndexEntry]]\n  IndexEntry: binary, va, seq_len\n  One word per function"]):::output
 
-    E["query_seq(seq, top_k=10, max_edit=1) → List[SAXMatch]"] --> F["Encode query seq → query_word\n  Find all index words within max_edit edit distance\n  Collect matching IndexEntry records\n  Sort by seq_len similarity → return top_k"]
+    E(["query_seq(seq, top_k=10, max_edit=1) → List[SAXMatch]"]):::input --> F["Encode query seq → query_word\n  Find all index words within max_edit edit distance\n  Collect matching IndexEntry records\n  Sort by seq_len similarity → return top_k"]:::secondary
 
-    G["query_va(binary, va, top_k=10) → List[SAXMatch]"] --> H["Look up VA's own sequence from index\n  Encode → query_word\n  Run same lookup as query_seq()"]
+    G(["query_va(binary, va, top_k=10) → List[SAXMatch]"]):::input --> H(["Look up VA's own sequence from index\n  Encode → query_word\n  Run same lookup as query_seq()"]):::output
 
-    F --> I["SAXMatch: binary, va, sax_word, edit_dist, seq_len_delta"]
+    F:::secondary --> I(["SAXMatch: binary, va, sax_word, edit_dist, seq_len_delta"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#00695c,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

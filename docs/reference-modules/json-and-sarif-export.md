@@ -18,9 +18,18 @@ Export Ablation sweep results and confirmed findings to structured JSON or SARIF
 
 ```mermaid
 flowchart TD
-    A["sweep_results = PatternLibrary.sweep()\nfindings = FindingRegistry.all()"] --> B["sarif.py:\n  sweep_to_sarif(sweep_results, binary_path) → dict\n    SARIF 2.1.0 document:\n      tool.driver.version = ablation package version\n      runs[0].artifacts[0].uri = binary_path\n      rules[] = one per (tag, pattern) pair\n      results[] = one per hit, level='warning'\n  findings_to_sarif(findings, binary_path) → dict\n    Confirmed findings → results level per severity_to_sarif():\n      CRITICAL/HIGH → 'error'\n      MEDIUM/LOW → 'warning'\n      INFO → 'note'"]
-    B --> C["json_export.py:\n  sweep_to_json(sweep_results, binary_path, min_score) → dict\n    Filter hits by min_score\n    → {binary, findings:[{tag, pattern, hits:[{va, score}]}]}\n  findings_to_json(findings) → dict\n    → {findings: [...], total: N}"]
-    C --> D["write_json(data, path)\nwrite_sarif(data, path)\n  Both call json.dumps(data, indent=2).write_text()"]
+    A(["sweep_results = PatternLibrary.sweep()\nfindings = FindingRegistry.all()"]):::input --> B["sarif.py:\n  sweep_to_sarif(sweep_results, binary_path) → dict\n    SARIF 2.1.0 document:\n      tool.driver.version = ablation package version\n      runs[0].artifacts[0].uri = binary_path\n      rules[] = one per (tag, pattern) pair\n      results[] = one per hit, level='warning'\n  findings_to_sarif(findings, binary_path) → dict\n    Confirmed findings → results level per severity_to_sarif():\n      CRITICAL/HIGH → 'error'\n      MEDIUM/LOW → 'warning'\n      INFO → 'note'"]:::primary
+    B:::primary --> C["json_export.py:\n  sweep_to_json(sweep_results, binary_path, min_score) → dict\n    Filter hits by min_score\n    → {binary, findings:[{tag, pattern, hits:[{va, score}]}]}\n  findings_to_json(findings) → dict\n    → {findings: [...], total: N}"]:::secondary
+    C:::secondary --> D(["write_json(data, path)\nwrite_sarif(data, path)\n  Both call json.dumps(data, indent=2).write_text()"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

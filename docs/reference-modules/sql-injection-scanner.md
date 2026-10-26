@@ -18,11 +18,22 @@ Detect raw SQL injection in x86-64 ELF binaries that call the MySQL C API `mysql
 
 ```mermaid
 flowchart TD
-    A["SqlSinkScanner.from_path(path)\nor .from_context(ctx)"] --> B["_init():\n_extract_plt_x86(): {plt_va: symbol_name}\n_extract_func_starts(): function start VAs\nRODATA sections: {(va_start, va_end)}\n_count_plt_callers(): {plt_va: caller_count}\n_init_snprintf_plts(): {snprintf_plt_va: fmt_arg_pos}"]
-    B --> C["scan():\nBuild active_sinks = {plt_va: (name, arg_pos)}\n  for each SQL sink in _SQL_SINKS (5 sinks)\n  plt_caller_count == 0 → dead_sinks list (report only)\nScan all SHF_EXECINSTR sections for 0xE8 rel32 calls\n  target in active_sinks → append (call_va, plt_va, name)"]
-    C --> D["Per call site:\n_enclosing_func_va(call_va): nearest func_start ≤ call_va\nDisasm up to _MAX_FN_SZ=8192 bytes from func_va\nFind call instruction index in disassembly\n_classify_sql_arg(insns, call_idx) → (verdict, desc, fmt_str, fmt_va)"]
-    D --> E["_classify_sql_arg: walk backward up to _LOOKBACK=40 instructions\nTrack target register (starts as 'rsi' = arg1 for all 5 sinks)\nLEA target, [rip+N]:\n  N in RODATA → read c-string → check %s → INJECTABLE_LITERAL or RODATA_CONST\n  N not in RODATA → UNKNOWN\n  [rbp/rsp+N] → _find_snprintf_for_slot(insns, call_idx, slot)\nMOV target, <entry_reg> → ARG_PROPAGATED\nMOV target, <other_reg> → follow chain (update target, continue loop)\nMOV target, [rbp/rsp+N] → _find_snprintf_for_slot()\nEnd of lookback → UNKNOWN"]
-    E --> F["_find_snprintf_for_slot(insns, from_idx, slot):\nScan back up to 2×_LOOKBACK=80 instructions\nFind CALL to snprintf_plt (fmt_arg_pos known)\nWalk back from snprintf call to find fmt argument:\n  LEA [rip+N] in RODATA → read fmt string\n  check _STRING_SPECIFIERS (%s) → INJECTABLE\n  check _NUMERIC_SPECIFIERS (%d/%u/etc) → SAFE_NUMERIC\n  else → RODATA_CONST\n  MOVABS imm64 in RODATA → same checks"]
+    A(["SqlSinkScanner.from_path(path)\nor .from_context(ctx)"]):::input --> B["_init():\n_extract_plt_x86(): {plt_va: symbol_name}\n_extract_func_starts(): function start VAs\nRODATA sections: {(va_start, va_end)}\n_count_plt_callers(): {plt_va: caller_count}\n_init_snprintf_plts(): {snprintf_plt_va: fmt_arg_pos}"]:::primary
+    B:::primary --> C["scan():\nBuild active_sinks = {plt_va: (name, arg_pos)}\n  for each SQL sink in _SQL_SINKS (5 sinks)\n  plt_caller_count == 0 → dead_sinks list (report only)\nScan all SHF_EXECINSTR sections for 0xE8 rel32 calls\n  target in active_sinks → append (call_va, plt_va, name)"]:::secondary
+    C:::secondary --> D["Per call site:\n_enclosing_func_va(call_va): nearest func_start ≤ call_va\nDisasm up to _MAX_FN_SZ=8192 bytes from func_va\nFind call instruction index in disassembly\n_classify_sql_arg(insns, call_idx) → (verdict, desc, fmt_str, fmt_va)"]:::tertiary
+    D:::tertiary --> E["_classify_sql_arg: walk backward up to _LOOKBACK=40 instructions\nTrack target register (starts as 'rsi' = arg1 for all 5 sinks)\nLEA target, [rip+N]:\n  N in RODATA → read c-string → check %s → INJECTABLE_LITERAL or RODATA_CONST\n  N not in RODATA → UNKNOWN\n  [rbp/rsp+N] → _find_snprintf_for_slot(insns, call_idx, slot)\nMOV target, <entry_reg> → ARG_PROPAGATED\nMOV target, <other_reg> → follow chain (update target, continue loop)\nMOV target, [rbp/rsp+N] → _find_snprintf_for_slot()\nEnd of lookback → UNKNOWN"]:::tertiary
+    E:::tertiary --> F(["_find_snprintf_for_slot(insns, from_idx, slot):\nScan back up to 2×_LOOKBACK=80 instructions\nFind CALL to snprintf_plt (fmt_arg_pos known)\nWalk back from snprintf call to find fmt argument:\n  LEA [rip+N] in RODATA → read fmt string\n  check _STRING_SPECIFIERS (%s) → INJECTABLE\n  check _NUMERIC_SPECIFIERS (%d/%u/etc) → SAFE_NUMERIC\n  else → RODATA_CONST\n  MOVABS imm64 in RODATA → same checks"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Verdict definitions

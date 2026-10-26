@@ -18,9 +18,18 @@ Find dangerous code patterns across a source repository: detecting `eval`/`vm.ru
 
 ```mermaid
 flowchart TD
-    A["SourceSinkScanner.from_context(ctx)"] --> B["scan(files=None) → List[SinkHit]\n  For each source file (JS/TS/Python):\n    Pattern match per SinkDef:\n      CODE_EVAL: eval() / vm.runInContext / exec()\n      SUBPROCESS: child_process.exec / subprocess.run\n      SSRF: fetch() / axios.get() with non-const URL\n      PATH_TRAVERSAL: fs.readFile / open() with concat path\n      UNGUARDED_ENDPOINT: express route without auth middleware\n    Guard condition check:\n      if sink inside env-var conditional gate → severity -1\n    → SinkHit"]
-    B --> C["SinkHit:\n  file: Path\n  line: int\n  sink_def: SinkDef\n  snippet: str\n  gated: bool\n  severity: CRITICAL | HIGH | MEDIUM | LOW\n  cwe: str\n  as_dict() → dict"]
-    C --> D["report(findings, severity_filter) → str"]
+    A(["SourceSinkScanner.from_context(ctx)"]):::input --> B["scan(files=None) → List[SinkHit]\n  For each source file (JS/TS/Python):\n    Pattern match per SinkDef:\n      CODE_EVAL: eval() / vm.runInContext / exec()\n      SUBPROCESS: child_process.exec / subprocess.run\n      SSRF: fetch() / axios.get() with non-const URL\n      PATH_TRAVERSAL: fs.readFile / open() with concat path\n      UNGUARDED_ENDPOINT: express route without auth middleware\n    Guard condition check:\n      if sink inside env-var conditional gate → severity -1\n    → SinkHit"]:::primary
+    B:::primary --> C["SinkHit:\n  file: Path\n  line: int\n  sink_def: SinkDef\n  snippet: str\n  gated: bool\n  severity: CRITICAL | HIGH | MEDIUM | LOW\n  cwe: str\n  as_dict() → dict"]:::secondary
+    C:::secondary --> D(["report(findings, severity_filter) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

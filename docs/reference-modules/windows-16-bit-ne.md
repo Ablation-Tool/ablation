@@ -18,10 +18,20 @@ Parse Windows 16-bit New Executable (NE) binaries: resolving per-segment relocat
 
 ```mermaid
 flowchart TD
-    A["win16_ne_sweep.py --vendor <v> --product <p> <binary>"] --> B["Parse NE header:\n  MZ stub → NE offset (DWORD at 0x3c)\n  NE magic 'NE' at NE offset\n  ne_cseg: segment count\n  ne_cmod: module reference count\n  ne_cnim: imported names count\n  → NEBinary(segment_table, module_ref_table, imported_names)"]
-    B --> C["NEBinary.build_segment_import_map(seg) → Dict[int, str]\n  Parse segment relocation records\n  Resolve (module_ref, ordinal) → KERNEL.GetProcAddress etc.\n  → {call_site_offset: import_name}"]
-    C --> D["NEBinary.code_segments() → List[dict]\n  Filter segments with CODE flag set\n  Yield {data, base_va, import_map} per segment"]
-    D --> E["Semantic sweep on each segment:\n  Capstone CS_ARCH_X86 + CS_MODE_16\n  Function starts: PUSH BP; MOV BP, SP prologue\n  NEAR call recovery: E8 rel16 targets\n  SemanticSearcher.query() on all vuln classes\n  → findings ranked by score"]
+    A(["win16_ne_sweep.py --vendor <v> --product <p> <binary>"]):::input --> B["Parse NE header:\n  MZ stub → NE offset (DWORD at 0x3c)\n  NE magic 'NE' at NE offset\n  ne_cseg: segment count\n  ne_cmod: module reference count\n  ne_cnim: imported names count\n  → NEBinary(segment_table, module_ref_table, imported_names)"]:::primary
+    B:::primary --> C["NEBinary.build_segment_import_map(seg) → Dict[int, str]\n  Parse segment relocation records\n  Resolve (module_ref, ordinal) → KERNEL.GetProcAddress etc.\n  → {call_site_offset: import_name}"]:::secondary
+    C:::secondary --> D["NEBinary.code_segments() → List[dict]\n  Filter segments with CODE flag set\n  Yield {data, base_va, import_map} per segment"]:::tertiary
+    D:::tertiary --> E(["Semantic sweep on each segment:\n  Capstone CS_ARCH_X86 + CS_MODE_16\n  Function starts: PUSH BP; MOV BP, SP prologue\n  NEAR call recovery: E8 rel16 targets\n  SemanticSearcher.query() on all vuln classes\n  → findings ranked by score"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

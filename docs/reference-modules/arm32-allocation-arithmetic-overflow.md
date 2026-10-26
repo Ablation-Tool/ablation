@@ -18,12 +18,23 @@ Detect integer overflow in allocation size arithmetic on ARM32/Thumb2: finding p
 
 ```mermaid
 flowchart TD
-    A["analyze_cfg(insns, initial=TaintState) → CFGResult\n  (analysis_arm64.py pattern — same API for ARM32)"] --> B["build_cfg(insns) → CFG\n  ARM32/Thumb2 conditional execution handling\n  Delay slots: not applicable (ARM32 has no delay slots)"]
-    B --> C["DFS from entry block:\n  Forward taint propagation per instruction:\n  TaintState: tainted registers + memory slots\n  Transfer functions: MOV/LDR/STR/MUL/ADD/SUB"]
-    C --> D["At each BL instruction to malloc/calloc/kmalloc:\n  Check r0 (ARM32 first arg):\n    Is r0 tainted? → ALLOC_OVERFLOW_CANDIDATE\n  Check r0 for MUL/SMULL pattern:\n    r0 = tainted_reg * constant → ALLOC_MULTIPLY_OVERFLOW"]
-    D --> E["CFGResult:\n  findings: List[Finding]\n  final_state: TaintState"]
+    A(["analyze_cfg(insns, initial=TaintState) → CFGResult\n  (analysis_arm64.py pattern · same API for ARM32)"]):::input --> B["build_cfg(insns) → CFG\n  ARM32/Thumb2 conditional execution handling\n  Delay slots: not applicable (ARM32 has no delay slots)"]:::primary
+    B:::primary --> C["DFS from entry block:\n  Forward taint propagation per instruction:\n  TaintState: tainted registers + memory slots\n  Transfer functions: MOV/LDR/STR/MUL/ADD/SUB"]:::secondary
+    C:::secondary --> D["At each BL instruction to malloc/calloc/kmalloc:\n  Check r0 (ARM32 first arg):\n    Is r0 tainted? → ALLOC_OVERFLOW_CANDIDATE\n  Check r0 for MUL/SMULL pattern:\n    r0 = tainted_reg * constant → ALLOC_MULTIPLY_OVERFLOW"]:::tertiary
+    D:::tertiary --> E(["CFGResult:\n  findings: List[Finding]\n  final_state: TaintState"]):::output
 
-    F["ARM32FunctionScanner.from_path(path)"] --> G["scan() → List[int]\n  Prologue scan: PUSH {rN.., lr} in ARM and Thumb mode\n  Returns function start VAs\n  inject_into_context(ctx) → int\n  (adds discovered starts to BinaryContext)"]
+    F(["ARM32FunctionScanner.from_path(path)"]):::input --> G(["scan() → List[int]\n  Prologue scan: PUSH {rN.., lr} in ARM and Thumb mode\n  Returns function start VAs\n  inject_into_context(ctx) → int\n  (adds discovered starts to BinaryContext)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

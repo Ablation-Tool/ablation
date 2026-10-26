@@ -19,17 +19,29 @@ KASAN/KCOV-aware LoongArch64 instruction decoder that tags and strips instrument
 
 ```mermaid
 flowchart TD
-    A["LoongArchDecoderV2.from_system_map(System.map)"] --> B["Parse System.map\n  Match __asan_* / __kasan_* / __sanitizer_cov_*\n  Build instrumentation_vas: FrozenSet[int]"]
+    A(["LoongArchDecoderV2.from_system_map(System.map)"]):::input --> B["Parse System.map\n  Match __asan_* / __kasan_* / __sanitizer_cov_*\n  Build instrumentation_vas: FrozenSet[int]"]:::primary
 
-    B --> C["decode_frames_v2(data, base_addr)\n  Step 1: V1 fixed-width decode of 32-bit LE stream\n    → List[LoongArchFrameV2] (is_instrumentation=False)"]
+    B:::primary --> C["decode_frames_v2(data, base_addr)\n  Step 1: V1 fixed-width decode of 32-bit LE stream\n    → List[LoongArchFrameV2] (is_instrumentation=False)"]:::secondary
 
-    C --> D["Pass 1: _tag_instrumentation(frames)\n  For each frame: if is_call and target in instrumentation_vas\n    → is_instrumentation=True, idiom='kasan'"]
+    C:::secondary --> D["Pass 1: _tag_instrumentation(frames)\n  For each frame: if is_call and target in instrumentation_vas\n    → is_instrumentation=True, idiom='kasan'"]:::tertiary
 
-    D --> E["Pass 2: _tag_kasan_preamble(frames)\n  For each tagged BL, walk back up to max_preamble=6 insns\n  Tag srli.d / lu12i.w / addi.d / ld.b / andi / add.d\n    → is_instrumentation=True, idiom='kasan_shadow'\n  Stop at: call / ret / branch / store / start of list"]
+    D:::tertiary --> E["Pass 2: _tag_kasan_preamble(frames)\n  For each tagged BL, walk back up to max_preamble=6 insns\n  Tag srli.d / lu12i.w / addi.d / ld.b / andi / add.d\n    → is_instrumentation=True, idiom='kasan_shadow'\n  Stop at: call / ret / branch / store / start of list"]:::tertiary
 
-    E --> F["decode_frames_clean(data, base_addr)\n  Yields frames where is_instrumentation=False\n  Only real program logic remains"]
+    E:::tertiary --> F["decode_frames_clean(data, base_addr)\n  Yields frames where is_instrumentation=False\n  Only real program logic remains"]:::tertiary
 
-    F --> G["LoongArch64TaintTracker consumes clean frames\n  No false edges into __asan_load8 / sanitizer_cov_trace_pc\n  ~40% instruction reduction on debug kernels"]
+    F:::tertiary --> G(["LoongArch64TaintTracker consumes clean frames\n  No false edges into __asan_load8 / sanitizer_cov_trace_pc\n  ~40% instruction reduction on debug kernels"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

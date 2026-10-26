@@ -18,9 +18,18 @@ Probe vCenter/vSphere management APIs, Rancher cluster management, Kong Gateway 
 
 ```mermaid
 flowchart TD
-    A["probe_vsphere_vcenter(host, port=443) → list\n  GET https://host/ui/ → version string extraction\n  POST /api/session {} → check 200/401\n  GET /rest/com/vmware/cis/session → legacy auth bypass\n  → [{finding, vcenter_version, auth_bypass_surface}]"] --> B["probe_consul_service_mesh(host, port=8500) → list\n  GET http://host:8500/v1/catalog/services\n    → {service_name: [tag, ...]} (no auth needed in default)\n  GET /v1/acl/tokens\n    → list of ACL tokens if ACL bootstrap not complete\n  GET /v1/kv/?recurse → KV store keys\n  → [{finding, services, tokens_accessible, kv_keys}]"]
-    B --> C["probe_kong_gateway_admin(host, port=8001) → list\n  GET http://host:8001/ → {version, tagline}\n  GET /services → all upstream service definitions\n  GET /consumers → consumer list + key-auth credentials\n  → [{finding, services_count, consumers, plugins}]\n\nprobe_traefik_dashboard(host, port=8080) → list\n  GET http://host:8080/api/rawdata → full route/middleware config\n  GET /api/overview → entrypoints + enabled providers\n  → [{finding, routes_count, backends}]"]
-    C --> D["probe_linkerd_control_plane(host, port=8085) → list\n  GET http://host:8085/metrics → Prometheus metrics\n  GET /api/v1/version → Linkerd version\n  → [{finding, version, metrics_exposed}]\n\nprobe_rancher_management(host, port=443) → list\n  GET https://host/v3 → API version info\n  GET /v3/principals?me=true → current user\n  → [{finding, version, cluster_count}]"]
+    A(["probe_vsphere_vcenter(host, port=443) → list\n  GET https://host/ui/ → version string extraction\n  POST /api/session {} → check 200/401\n  GET /rest/com/vmware/cis/session → legacy auth bypass\n  → [{finding, vcenter_version, auth_bypass_surface}]"]):::input --> B["probe_consul_service_mesh(host, port=8500) → list\n  GET http://host:8500/v1/catalog/services\n    → {service_name: [tag, ...]} (no auth needed in default)\n  GET /v1/acl/tokens\n    → list of ACL tokens if ACL bootstrap not complete\n  GET /v1/kv/?recurse → KV store keys\n  → [{finding, services, tokens_accessible, kv_keys}]"]:::primary
+    B:::primary --> C["probe_kong_gateway_admin(host, port=8001) → list\n  GET http://host:8001/ → {version, tagline}\n  GET /services → all upstream service definitions\n  GET /consumers → consumer list + key-auth credentials\n  → [{finding, services_count, consumers, plugins}]\n\nprobe_traefik_dashboard(host, port=8080) → list\n  GET http://host:8080/api/rawdata → full route/middleware config\n  GET /api/overview → entrypoints + enabled providers\n  → [{finding, routes_count, backends}]"]:::secondary
+    C:::secondary --> D(["probe_linkerd_control_plane(host, port=8085) → list\n  GET http://host:8085/metrics → Prometheus metrics\n  GET /api/v1/version → Linkerd version\n  → [{finding, version, metrics_exposed}]\n\nprobe_rancher_management(host, port=443) → list\n  GET https://host/v3 → API version info\n  GET /v3/principals?me=true → current user\n  → [{finding, version, cluster_count}]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

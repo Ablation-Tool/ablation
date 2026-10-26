@@ -20,20 +20,40 @@ The searcher operates in three stages: **assembly normalization**, **embedding**
 
 ```mermaid
 flowchart TD
-    A[BinaryContext: named functions with call targets and strings] --> B[SemanticSearcher.from_context]
-    B --> C{func_id.db: binary already registered?}
-    C -->|no| D[ingest_binary: insert into binaries + functions tables]
-    C -->|yes| E[load live_addrs for this binary_id]
-    D --> F[build_corpus: fetch CONFIRMED / ANGR_INFERRED functions]
-    E --> F
-    F --> G[describe_function: normalize assembly for each function]
-    G --> G1["Strip addresses, immediates, register names from asm\nMap opcodes to BinFuse categories: 11 types\nAdd Markov transition string for structural fingerprinting\nAppend call_targets and string_xrefs as text"]
-    G1 --> H[fastembed BAAI/bge-small-en-v1.5: encode descriptions]
-    H --> I[WhiteningTransform: PCA-fit on corpus embeddings]
-    I --> J[corpus matrix cached as .pkl keyed on db_hash+live_hash]
-    J --> K[query: encode natural-language description]
-    K --> L[dot-product against whitened corpus matrix]
-    L --> M[top-k SimilarFunction results by cosine score]
+    A(["BinaryContext: named functions with call targets and strings"]):::input --> B["SemanticSearcher.from_context"]:::primary
+    B:::primary --> C{"func_id.db: binary already registered?"}:::neutral
+    C:::neutral -->|no| D["ingest_binary: insert into binaries + functions tables"]:::secondary
+    C:::neutral -->|yes| E["load live_addrs for this binary_id"]:::tertiary
+    D:::secondary --> F["build_corpus: fetch CONFIRMED / ANGR_INFERRED functions"]:::tertiary
+    E:::tertiary --> F:::tertiary
+    F:::tertiary --> G["describe_function: normalize assembly for each function"]:::tertiary
+    G:::tertiary --> G1["Strip addresses, immediates, register names from asm\nMap opcodes to BinFuse categories: 11 types\nAdd Markov transition string for structural fingerprinting\nAppend call_targets and string_xrefs as text"]:::tertiary
+    G1:::tertiary --> H["fastembed BAAI/bge-small-en-v1.5: encode descriptions"]:::tertiary
+    H:::tertiary --> I["WhiteningTransform: PCA-fit on corpus embeddings"]:::tertiary
+    I:::tertiary --> J["corpus matrix cached as .pkl keyed on db_hash+live_hash"]:::tertiary
+    J:::tertiary --> K["query: encode natural-language description"]:::tertiary
+    K:::tertiary --> L["dot-product against whitened corpus matrix"]:::tertiary
+    L:::tertiary --> M(["top-k SimilarFunction results by cosine score"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 11 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 12 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 13 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Assembly normalization

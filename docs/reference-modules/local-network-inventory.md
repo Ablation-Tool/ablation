@@ -18,10 +18,20 @@ Enumerate network interfaces, active connections, listening ports, firewall rule
 
 ```mermaid
 flowchart TD
-    A["NetworkAnalyzer()"] --> B["get_interfaces() → self.interfaces\n  Linux: /proc/net/dev + ip addr show\n  macOS: ifconfig -a\n  → [{name, ip}]"]
-    B --> C["get_connections() → self.connections\n  /proc/net/tcp, tcp6 — state hex → string\n  LISTEN state → appended to self.listening instead\n  → [{protocol, local_ip, local_port, remote_ip, remote_port, state, uid}]"]
-    C --> D["get_listening_ports() → self.listening (from get_connections state 0x0A)\n  get_firewall_rules() — iptables -L -n / pfctl -sr\n  → self.firewall_rules"]
-    D --> E["enumerate_all() → dict:\n  {interfaces, connections, listening, firewall}\n  run_network_analysis(target) → separate function:\n    ICMPScanner.scan(subnet) or WebDirBrute(url).scan()\n    → {target, icmp, web, findings}"]
+    A(["NetworkAnalyzer()"]):::input --> B["get_interfaces() → self.interfaces\n  Linux: /proc/net/dev + ip addr show\n  macOS: ifconfig -a\n  → [{name, ip}]"]:::primary
+    B:::primary --> C["get_connections() → self.connections\n  /proc/net/tcp, tcp6 · state hex → string\n  LISTEN state → appended to self.listening instead\n  → [{protocol, local_ip, local_port, remote_ip, remote_port, state, uid}]"]:::secondary
+    C:::secondary --> D["get_listening_ports() → self.listening (from get_connections state 0x0A)\n  get_firewall_rules() · iptables -L -n / pfctl -sr\n  → self.firewall_rules"]:::tertiary
+    D:::tertiary --> E(["enumerate_all() → dict:\n  {interfaces, connections, listening, firewall}\n  run_network_analysis(target) → separate function:\n    ICMPScanner.scan(subnet) or WebDirBrute(url).scan()\n    → {target, icmp, web, findings}"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

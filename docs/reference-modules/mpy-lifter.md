@@ -26,22 +26,36 @@ Standard RE tools stop at the native ELF or flat ROM. The MicroPython runtime ex
 
 ```mermaid
 flowchart TD
-    A["IoT firmware image\nESP32 / STM32 / CC13xx"] --> B["BinaryContext\nnative runtime analysis"]
-    A --> C["Extract .mpy files\ngrep for M\\x06 magic in firmware"]
-    C --> D{"Version check\nheader byte 1 == 6?"}
-    D -->|"v6\nMicroPython 1.19+\nCircuitPython"| E["MpyLifter.from_bytes(data)"]
-    D -->|"v5 or unknown\nraises ValueError"| F["Unsupported\ncheck MicroPython version"]
-    E --> G["lift_module()\npseudo-Python output"]
-    E --> H["dangerous_calls()\nsecurity findings"]
-    E --> I["imports()\nmodule dependency map"]
-    H --> J[/"Finding\ntype · severity · function"/]
-    B --> K["TaintTracker findings\nnative C layer"]
-    J --> L["Combined report\nnative and application layers"]
-    K --> L
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style J fill:#7f1d1d,stroke:#991b1b,color:#fecaca
-    style F fill:#92400e,stroke:#b45309,color:#fef3c7
+    A(["IoT firmware image\nESP32 / STM32 / CC13xx"]):::input --> B["BinaryContext\nnative runtime analysis"]:::primary
+    A:::input --> C["Extract .mpy files\ngrep for M\\x06 magic in firmware"]:::secondary
+    C:::secondary --> D{"Version check\nheader byte 1 == 6?"}:::neutral
+    D:::neutral -->|"v6\nMicroPython 1.19+\nCircuitPython"| E["MpyLifter.from_bytes(data)"]:::tertiary
+    D:::neutral -->|"v5 or unknown\nraises ValueError"| F(["Unsupported\ncheck MicroPython version"]):::output
+    E:::tertiary --> G(["lift_module()\npseudo-Python output"]):::output
+    E:::tertiary --> H["dangerous_calls()\nsecurity findings"]:::tertiary
+    E:::tertiary --> I(["imports()\nmodule dependency map"]):::output
+    H:::tertiary --> J(["Finding\ntype · severity · function"]):::tertiary
+    B:::primary --> K["TaintTracker findings\nnative C layer"]:::tertiary
+    J:::tertiary --> L(["Combined report\nnative and application layers"]):::output
+    K:::tertiary --> L:::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#546e7a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,9 +18,18 @@ Detect PE-format firmware update executables that lack Authenticode signature ve
 
 ```mermaid
 flowchart TD
-    A["KernelDriverAnalyzer(data: bytes)\n  PE header parse: IMAGE_NT_HEADERS\n  data_dirs[4]: IMAGE_DIRECTORY_ENTRY_SECURITY\n    cert_offset, cert_size\n    cert_offset==0 → no Authenticode table → unsigned"] --> B["Import table analysis:\n  Import by name: WinVerifyTrust → wintrust.dll\n  Import by name: CryptVerifyMessageSignature → crypt32.dll\n  Absent: no signature verification capability\n  Present: verify it's called before IOCTL flash write"]
-    B --> C["IOCTL surface scan:\n  _extract_ioctl_codes():\n    MOV/PUSH immediate patterns → IOCTL code values\n    decode_ioctl_code() → device_type, function, access\n    IOCTL_STORAGE_FIRMWARE_DOWNLOAD (0x07C088)\n    FILE_DEVICE_UNKNOWN + WRITE_ACCESS\n  Cross-ref: WinVerifyTrust call before firmware IOCTL?\n  → [{ioctl_code, function, trust_check_present}]"]
-    C --> D["KernelDriverReport:\n  signed: bool  (Authenticode cert present)\n  wintrust_imported: bool\n  ioctl_codes: List[IoctlCode]\n  dangerous_patterns: List[DangerousPattern]\n  → finding: FIRMWARE_UPDATE_UNSIGNED or\n    FIRMWARE_FLASHER_TRUST_GAP"]
+    A(["KernelDriverAnalyzer(data: bytes)\n  PE header parse: IMAGE_NT_HEADERS\n  data_dirs[4]: IMAGE_DIRECTORY_ENTRY_SECURITY\n    cert_offset, cert_size\n    cert_offset==0 → no Authenticode table → unsigned"]):::input --> B["Import table analysis:\n  Import by name: WinVerifyTrust → wintrust.dll\n  Import by name: CryptVerifyMessageSignature → crypt32.dll\n  Absent: no signature verification capability\n  Present: verify it's called before IOCTL flash write"]:::primary
+    B:::primary --> C["IOCTL surface scan:\n  _extract_ioctl_codes():\n    MOV/PUSH immediate patterns → IOCTL code values\n    decode_ioctl_code() → device_type, function, access\n    IOCTL_STORAGE_FIRMWARE_DOWNLOAD (0x07C088)\n    FILE_DEVICE_UNKNOWN + WRITE_ACCESS\n  Cross-ref: WinVerifyTrust call before firmware IOCTL?\n  → [{ioctl_code, function, trust_check_present}]"]:::secondary
+    C:::secondary --> D(["KernelDriverReport:\n  signed: bool  (Authenticode cert present)\n  wintrust_imported: bool\n  ioctl_codes: List[IoctlCode]\n  dangerous_patterns: List[DangerousPattern]\n  → finding: FIRMWARE_UPDATE_UNSIGNED or\n    FIRMWARE_FLASHER_TRUST_GAP"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

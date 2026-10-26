@@ -18,10 +18,21 @@ Parse ECU calibration definition files: ASAM/ASAP2 A2L industry standard for Bos
 
 ```mermaid
 flowchart TD
-    A["EcuA2LParser.from_file(a2l_path)"] --> B["calibration_tables() → list[CalibrationTable]\n  Parse A2L: CHARACTERISTIC, MEASUREMENT, AXIS_DESCR\n  For each CHARACTERISTIC:\n    name, description, category, table_type (MAP/CURVE/VALUE)\n    address (file offset), rows, cols, scale, bias, unit\n    x_axis, y_axis: CalibrationAxis objects\n  → CalibrationTable with effective_address property"]
-    A --> C["EcuOpenDamosParser.from_file(json_path)"] --> D["locate_in_rom(rom: bytes) → dict[str, int]\n  For each table: match axis fingerprint in rom bytes\n  Return: table_name → file_offset (sets relocated_address)"]
-    D --> E["calibration_tables() → list[CalibrationTable]\n  As above, but with relocated_address set from fingerprint scan"]
-    B --> F["CalibrationTable.label_map() → dict[int, str]\n  Inject into BinaryContext:\n    for addr, label in table.label_map().items():\n        ctx.set_name(addr, label, source='a2l')\n  → named in FuncProfiler / WindowAnalyzer output"]
+    A(["EcuA2LParser.from_file(a2l_path)"]):::input --> B["calibration_tables() → list[CalibrationTable]\n  Parse A2L: CHARACTERISTIC, MEASUREMENT, AXIS_DESCR\n  For each CHARACTERISTIC:\n    name, description, category, table_type (MAP/CURVE/VALUE)\n    address (file offset), rows, cols, scale, bias, unit\n    x_axis, y_axis: CalibrationAxis objects\n  → CalibrationTable with effective_address property"]:::primary
+    A:::input --> C["EcuOpenDamosParser.from_file(json_path)"]:::secondary --> D["locate_in_rom(rom: bytes) → dict[str, int]\n  For each table: match axis fingerprint in rom bytes\n  Return: table_name → file_offset (sets relocated_address)"]:::tertiary
+    D:::tertiary --> E(["calibration_tables() → list[CalibrationTable]\n  As above, but with relocated_address set from fingerprint scan"]):::output
+    B:::primary --> F(["CalibrationTable.label_map() → dict[int, str]\n  Inject into BinaryContext:\n    for addr, label in table.label_map().items():\n        ctx.set_name(addr, label, source='a2l')\n  → named in FuncProfiler / WindowAnalyzer output"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

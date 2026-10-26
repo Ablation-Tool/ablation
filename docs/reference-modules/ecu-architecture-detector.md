@@ -18,17 +18,26 @@ Fingerprint the ISA of flat ECU ROM images: scoring ARM Cortex-M, Infineon TriCo
 
 ```mermaid
 flowchart TD
-    A["EcuArchDetector(data, sample_size=4096)\nor .from_path(path)\nor .from_bytes(data)"] --> B["data[:sample_size] → _sample (4KB default)\nFull _data retained for TriCore full-image scan"]
-    B --> C["detect() calls candidates():\nRuns 8 discriminator functions in order:\n_score_arm_cortex_m, _score_tricore, _score_m68k,\n_score_ppc32, _score_ppc_vle, _score_sh2a,\n_score_m32r, _score_c166\nFilters None returns → sort by score desc"]
-    C --> D["detect() → ArchDetectResult:\nbest.score >= 0.75 → HIGH\nbest.score >= 0.40 → MEDIUM\nbest.score < 0.40 → LOW\nbest.score < 0.20 → arch='unknown'"]
-    E["_score_arm_cortex_m:\ndata[0:4] LE uint32 = MSP → SRAM_LO(0x20000000) ≤ MSP < SRAM_HI(0x40000000)\ndata[4:8] LE uint32 = reset_vec → LSB=1 AND in flash range\nBoth → 0.90; MSP only → 0.55"]
-    F["_score_tricore:\nELF magic + EI_DATA=LE + e_machine=44 → 0.90\nFlat: scan FULL image for LE uint32 with upper byte 0x80-0xBF (PFLASH)\nand upper byte 0xE0-0xFF (peripheral SFR)\npflash≥3% + periph≥1% → 0.85; pflash≥3% → 0.75\nBMHD gate: first_le==0x0 → None\nSH-2 vector gate: BE reset_va≤0x100000 AND init_SP>>24==0xFF → None\nBE artifact guard: periph>15% AND periph>pflash×1.2 → None"]
-    G["_score_m68k:\nBE reset vector at off 4 in image range\nLINK.W A6 (0x4E56 + high-bit next word) density in 4KB sample\nBoth → 0.85; reset only → 0.70; LINK≥2% only → 0.35"]
-    H["_score_ppc32:\nPrimary opcode (word>>26) in PPC32 Book E ranges\n[0x08-0x0F], [0x38-0x3F], [0x14-0x16], [0x48-0x4B], [0x7C-0x7D], [0x80-0x9F]\nDensity≥35% → score=density (capped 1.0)"]
-    I["_score_ppc_vle:\n(byte0 & 0x90)==0x10 halfword density ≥15%\nscore=min(density×2.5, 0.92)"]
-    J["_score_sh2a:\nBE reset VA at off 0 in range, RTS (0x000B) density, STS.L PR (0x4F22) density\nreset + STS.L≥0.1% → 0.88; reset + RTS≥0.2% → 0.75; reset only → 0.60"]
-    K["_score_m32r:\n9 IVT16 slots (16-byte stride 0x00-0x80) starting with FF 00 00\n16 dense4 slots (4-byte stride 0x40-0x7F) starting with FF 00 00\n16+9 → 0.96; ≥12+6 → 0.88; ≥8+3 → 0.70"]
-    L["_score_c166:\n64 IVT entries (4-byte stride, offset 0-255) with opcode 0xFA (JMPS)\nAll 64 → 0.97; ≥56 → 0.88; ≥40 → 0.70"]
+    A(["EcuArchDetector(data, sample_size=4096)\nor .from_path(path)\nor .from_bytes(data)"]):::input --> B["data[:sample_size] → _sample (4KB default)\nFull _data retained for TriCore full-image scan"]:::primary
+    B:::primary --> C["detect() calls candidates():\nRuns 8 discriminator functions in order:\n_score_arm_cortex_m, _score_tricore, _score_m68k,\n_score_ppc32, _score_ppc_vle, _score_sh2a,\n_score_m32r, _score_c166\nFilters None returns → sort by score desc"]:::secondary
+    C:::secondary --> D(["detect() → ArchDetectResult:\nbest.score >= 0.75 → HIGH\nbest.score >= 0.40 → MEDIUM\nbest.score < 0.40 → LOW\nbest.score < 0.20 → arch='unknown'"]):::output
+    E(["_score_arm_cortex_m:\ndata[0:4] LE uint32 = MSP → SRAM_LO(0x20000000) ≤ MSP < SRAM_HI(0x40000000)\ndata[4:8] LE uint32 = reset_vec → LSB=1 AND in flash range\nBoth → 0.90; MSP only → 0.55"]):::input
+    F(["_score_tricore:\nELF magic + EI_DATA=LE + e_machine=44 → 0.90\nFlat: scan FULL image for LE uint32 with upper byte 0x80-0xBF (PFLASH)\nand upper byte 0xE0-0xFF (peripheral SFR)\npflash≥3% + periph≥1% → 0.85; pflash≥3% → 0.75\nBMHD gate: first_le==0x0 → None\nSH-2 vector gate: BE reset_va≤0x100000 AND init_SP>>24==0xFF → None\nBE artifact guard: periph>15% AND periph>pflash×1.2 → None"]):::input
+    G(["_score_m68k:\nBE reset vector at off 4 in image range\nLINK.W A6 (0x4E56 + high-bit next word) density in 4KB sample\nBoth → 0.85; reset only → 0.70; LINK≥2% only → 0.35"]):::input
+    H(["_score_ppc32:\nPrimary opcode (word>>26) in PPC32 Book E ranges\n[0x08-0x0F], [0x38-0x3F], [0x14-0x16], [0x48-0x4B], [0x7C-0x7D], [0x80-0x9F]\nDensity≥35% → score=density (capped 1.0)"]):::input
+    I(["_score_ppc_vle:\n(byte0 & 0x90)==0x10 halfword density ≥15%\nscore=min(density×2.5, 0.92)"]):::input
+    J(["_score_sh2a:\nBE reset VA at off 0 in range, RTS (0x000B) density, STS.L PR (0x4F22) density\nreset + STS.L≥0.1% → 0.88; reset + RTS≥0.2% → 0.75; reset only → 0.60"]):::input
+    K(["_score_m32r:\n9 IVT16 slots (16-byte stride 0x00-0x80) starting with FF 00 00\n16 dense4 slots (4-byte stride 0x40-0x7F) starting with FF 00 00\n16+9 → 0.96; ≥12+6 → 0.88; ≥8+3 → 0.70"]):::input
+    L(["_score_c166:\n64 IVT entries (4-byte stride, offset 0-255) with opcode 0xFA (JMPS)\nAll 64 → 0.97; ≥56 → 0.88; ≥40 → 0.70"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Confidence thresholds

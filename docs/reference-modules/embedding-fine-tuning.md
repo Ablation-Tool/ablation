@@ -18,11 +18,22 @@ Match unknown stripped functions against a behavioral signature library: using t
 
 ```mermaid
 flowchart TD
-    A["SigLibrary.load(sigs_path='~/.ablation/sigs.json')"] --> B["load_model()\n  BAAI/bge-small-en-v1.5 via fastembed\n  (shared instance with SemanticSearcher if already loaded)"]
-    B --> C["Encode all signature descriptions at load time\n  sigs.json: [{name, description, arch, ...},...]\n  embeddings: ndarray (N × 384)"]
-    C --> D["match_description(description: str) → Optional[SigMatch]\n  Encode description → query vector\n  Cosine similarity against all sig embeddings\n  If max_similarity > threshold: return SigMatch\n  Else: return None"]
-    D --> E["SigMatch:\n  name: str   (signature function name)\n  score: float  (cosine similarity, 0.0–1.0)\n  label() → 'likely:memcpy'  (prefixed for BinaryContext)"]
-    C --> F["auto_name(corpus_db) → int\n  For each ANGR_INFERRED function in corpus:\n    match_description(func.description)\n    If match: ctx.set_name(func.va, match.label())\n  Returns: count of functions named"]
+    A(["SigLibrary.load(sigs_path='~/.ablation/sigs.json')"]):::input --> B["load_model()\n  BAAI/bge-small-en-v1.5 via fastembed\n  (shared instance with SemanticSearcher if already loaded)"]:::primary
+    B:::primary --> C["Encode all signature descriptions at load time\n  sigs.json: [{name, description, arch, ...},...]\n  embeddings: ndarray (N × 384)"]:::secondary
+    C:::secondary --> D["match_description(description: str) → Optional[SigMatch]\n  Encode description → query vector\n  Cosine similarity against all sig embeddings\n  If max_similarity > threshold: return SigMatch\n  Else: return None"]:::tertiary
+    D:::tertiary --> E(["SigMatch:\n  name: str   (signature function name)\n  score: float  (cosine similarity, 0.0·1.0)\n  label() → 'likely:memcpy'  (prefixed for BinaryContext)"]):::output
+    C:::secondary --> F(["auto_name(corpus_db) → int\n  For each ANGR_INFERRED function in corpus:\n    match_description(func.description)\n    If match: ctx.set_name(func.va, match.label())\n  Returns: count of functions named"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

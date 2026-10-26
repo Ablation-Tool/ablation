@@ -18,9 +18,18 @@ Extend `RegAnnotator`'s single-function forward symbolic pass to follow call cha
 
 ```mermaid
 flowchart TD
-    A["IPRegAnnotator(ctx, lib_graph=None)"] --> B["annotate_chain(entry_va, max_hops=2) → IPChain\n  Run RegAnnotator for root function\n  For each BL/CALL in the result:\n    If callee is resolvable (PLT name in ctx or lib_graph):\n      Load callee function\n      Seed callee entry registers with caller's live RegVals at site_va\n      Run RegAnnotator for callee with seeded state\n      → ChainCallSite(site_va, target_va, target_name, target_binary, args, callee_chain)\n  Recurse up to max_hops"]
-    B --> C["IPChain:\n  root_va: int\n  root_binary: str\n  max_hops: int\n  root: ChainResult\n  all_sinks(sink_names) → List[Tuple[int, str, ChainCallSite]]\n  fmt() → str"]
-    C --> D["ChainResult:\n  func_va: int\n  func_end_va: int\n  binary: str\n  hop: int\n  calls: List[ChainCallSite]\n  all_sinks(sink_names) → List[Tuple[int, str, ChainCallSite]]"]
+    A(["IPRegAnnotator(ctx, lib_graph=None)"]):::input --> B["annotate_chain(entry_va, max_hops=2) → IPChain\n  Run RegAnnotator for root function\n  For each BL/CALL in the result:\n    If callee is resolvable (PLT name in ctx or lib_graph):\n      Load callee function\n      Seed callee entry registers with caller's live RegVals at site_va\n      Run RegAnnotator for callee with seeded state\n      → ChainCallSite(site_va, target_va, target_name, target_binary, args, callee_chain)\n  Recurse up to max_hops"]:::primary
+    B:::primary --> C["IPChain:\n  root_va: int\n  root_binary: str\n  max_hops: int\n  root: ChainResult\n  all_sinks(sink_names) → List[Tuple[int, str, ChainCallSite]]\n  fmt() → str"]:::secondary
+    C:::secondary --> D(["ChainResult:\n  func_va: int\n  func_end_va: int\n  binary: str\n  hop: int\n  calls: List[ChainCallSite]\n  all_sinks(sink_names) → List[Tuple[int, str, ChainCallSite]]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,9 +18,18 @@ Batch-triage all native ELF shared libraries in a directory: producing a per-lib
 
 ```mermaid
 flowchart TD
-    A["LibraryInventory.from_dir(dir_path, pattern='*.so')\n  or .from_paths(paths)"] --> B["scan_one(elf_path) → LibInventoryEntry\n  For each .so:\n    Parse ELF header: arch, class (32/64), size_kb\n    Count exports (dynamic symbol table)\n    Count internal functions (func_starts)\n    Count JNI exports (Java_*)\n    has_jni_on_load: JNI_OnLoad in exports\n    Compute security_score:\n      exports + jni_count * 3 + has_jni_on_load * 10\n    Extract security_strings_sample (key/token/pass/...)"]
-    B --> C["LibInventoryEntry:\n  path: str\n  size_kb: int\n  arch: str\n  exports: int\n  internal_funcs: int\n  jni_count: int\n  has_jni_on_load: bool\n  security_score: int\n  security_strings_sample: List[str]"]
-    C --> D["report() → str\n  Sorted table by security_score descending\n  Format: name | size | arch | exports | jni | score"]
+    A(["LibraryInventory.from_dir(dir_path, pattern='*.so')\n  or .from_paths(paths)"]):::input --> B["scan_one(elf_path) → LibInventoryEntry\n  For each .so:\n    Parse ELF header: arch, class (32/64), size_kb\n    Count exports (dynamic symbol table)\n    Count internal functions (func_starts)\n    Count JNI exports (Java_*)\n    has_jni_on_load: JNI_OnLoad in exports\n    Compute security_score:\n      exports + jni_count * 3 + has_jni_on_load * 10\n    Extract security_strings_sample (key/token/pass/...)"]:::primary
+    B:::primary --> C["LibInventoryEntry:\n  path: str\n  size_kb: int\n  arch: str\n  exports: int\n  internal_funcs: int\n  jni_count: int\n  has_jni_on_load: bool\n  security_score: int\n  security_strings_sample: List[str]"]:::secondary
+    C:::secondary --> D(["report() → str\n  Sorted table by security_score descending\n  Format: name | size | arch | exports | jni | score"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

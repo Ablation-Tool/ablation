@@ -51,26 +51,39 @@ Knowing which Java methods have native implementations and whether those impleme
 
 ```mermaid
 flowchart TD
-    A[/"app.apk (or app.xapk)"/] --> B["APKParser.from_path(path)\nZIP container:\n  AndroidManifest.xml (binary AXML)\n  classes.dex · classes2.dex (multidex)\n  lib/arm64-v8a/*.so\n  assets/keys.bmp (optional steganographic keys)\nXAPK: outer ZIP lacks AndroidManifest.xml\n  → extract inner base.apk first"]
+    A(["app.apk (or app.xapk)"]):::input --> B["APKParser.from_path(path)\nZIP container:\n  AndroidManifest.xml (binary AXML)\n  classes.dex · classes2.dex (multidex)\n  lib/arm64-v8a/*.so\n  assets/keys.bmp (optional steganographic keys)\nXAPK: outer ZIP lacks AndroidManifest.xml\n  → extract inner base.apk first"]:::primary
 
-    B --> C["AXML parser\nBinary XML: ResXMLTree chunks\nSTART_ELEMENT + ATTRIBUTE chunks\nOffset fix: attr_base = body + _attr_start\n  NOT body+8+start\n  (garbage reads without this fix)"]
+    B:::primary --> C["AXML parser\nBinary XML: ResXMLTree chunks\nSTART_ELEMENT + ATTRIBUTE chunks\nOffset fix: attr_base = body + _attr_start\n  NOT body+8+start\n  (garbage reads without this fix)"]:::secondary
 
-    B --> D["DEX parser (all classes*.dex)\nFlat-table structure:\n  string_ids → type_ids → proto_ids\n  field_ids → method_ids → class_defs → data\n  code_items · string data"]
+    B:::primary --> D["DEX parser (all classes*.dex)\nFlat-table structure:\n  string_ids → type_ids → proto_ids\n  field_ids → method_ids → class_defs → data\n  code_items · string data"]:::tertiary
 
-    C --> E["Manifest fields\npackage · min/target SDK · permissions\ncomponents · security flags\ndebugable · allowBackup · cleartext traffic"]
+    C:::secondary --> E(["Manifest fields\npackage · min/target SDK · permissions\ncomponents · security flags\ndebugable · allowBackup · cleartext traffic"]):::output
 
-    D --> F["DexAnalyzer.scan()\nString pool: AKIA* / AIza* (cloud keys)\nMethod refs: addJavascriptInterface / exec / Runtime\nManifest flags: debuggable / allowBackup\n→ findings by severity"]
+    D:::tertiary --> F["DexAnalyzer.scan()\nString pool: AKIA* / AIza* (cloud keys)\nMethod refs: addJavascriptInterface / exec / Runtime\nManifest flags: debuggable / allowBackup\n→ findings by severity"]:::tertiary
 
-    D --> G["JniBridgeScanner.scan()\nDEX: ACC_NATIVE (0x0100) flag on methods\nELF: Java_* exports (canonical naming)\n     JNI_OnLoad export (dynamic registration)\n→ bridge map + risk tier"]
+    D:::tertiary --> G["JniBridgeScanner.scan()\nDEX: ACC_NATIVE (0x0100) flag on methods\nELF: Java_* exports (canonical naming)\n     JNI_OnLoad export (dynamic registration)\n→ bridge map + risk tier"]:::tertiary
 
-    D --> H["BinderScanner.scan()\nService subclasses\nRaw onTransact override\nAIDL $Stub classes\n→ exported Binder surface"]
+    D:::tertiary --> H["BinderScanner.scan()\nService subclasses\nRaw onTransact override\nAIDL $Stub classes\n→ exported Binder surface"]:::tertiary
 
-    F --> I["LibraryInventory.from_dir()\nARM64 BL-target count\nSecurity string scoring\nPLT hook detection\n→ ranked .so triage table"]
-    G --> I
-    H --> I
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style I fill:#14532d,stroke:#166534,color:#dcfce7
+    F:::tertiary --> I(["LibraryInventory.from_dir()\nARM64 BL-target count\nSecurity string scoring\nPLT hook detection\n→ ranked .so triage table"]):::output
+    G:::tertiary --> I:::output
+    H:::tertiary --> I:::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

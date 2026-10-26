@@ -22,31 +22,62 @@ Identify unknown functions in stripped binaries by matching their byte patterns,
 
 ```mermaid
 flowchart TD
-    A["FuncDB.open('~/.ablation/func_id.db')"] --> B["SQLite WAL mode\nbinaries, functions, struct_fields, call_chains, call_chain_steps\nschema_version=2 via PRAGMA user_version"]
-    B --> C[FuncDB ready]
-    C --> D["add_binary(BinaryRecord): register sha256 + product + version"]
-    D --> E["add_func(FuncRecord): INSERT OR REPLACE by (binary_id, va)\nsig_len = len(sig_bytes)//2 from hex string"]
-    C --> F["match_by_sig(code_bytes, va, window=16, threshold=0.75)\nLoad CONFIRMED records with sig_len > 0\nFor each: match_len = min(sig_len, window)\nhits = bytes where mask==0x00 OR code==sig\nscore = hits/match_len; keep if >= threshold\nSort by score descending"]
-    C --> G["match_by_struct_offset(field_name, offset, tolerance=0)\nSELECT WHERE field_name=? AND ABS(offset-?)<=tolerance\nUseful for STRUCT_INIT identification across versions"]
-    C --> H["match_by_role(role, product='')\nFind all CONFIRMED functions with a given role in a product"]
-    C --> I["match_by_name(name)\nExact name or demangled match across all binaries"]
-    C --> J["add_call_chain(CallChain): name, steps [{va, name, role, note}]\nNormalized: stored as call_chains + call_chain_steps (1NF)"]
-    C --> K["summary() → {binaries, functions, struct_fields, call_chains, ...}"]
+    A(["FuncDB.open('~/.ablation/func_id.db')"]):::input --> B["SQLite WAL mode\nbinaries, functions, struct_fields, call_chains, call_chain_steps\nschema_version=2 via PRAGMA user_version"]:::primary
+    B:::primary --> C["FuncDB ready"]:::secondary
+    C:::secondary --> D["add_binary(BinaryRecord): register sha256 + product + version"]:::tertiary
+    D:::tertiary --> E(["add_func(FuncRecord): INSERT OR REPLACE by (binary_id, va)\nsig_len = len(sig_bytes)//2 from hex string"]):::output
+    C:::secondary --> F(["match_by_sig(code_bytes, va, window=16, threshold=0.75)\nLoad CONFIRMED records with sig_len > 0\nFor each: match_len = min(sig_len, window)\nhits = bytes where mask==0x00 OR code==sig\nscore = hits/match_len; keep if >= threshold\nSort by score descending"]):::output
+    C:::secondary --> G(["match_by_struct_offset(field_name, offset, tolerance=0)\nSELECT WHERE field_name=? AND ABS(offset-?)<=tolerance\nUseful for STRUCT_INIT identification across versions"]):::output
+    C:::secondary --> H(["match_by_role(role, product='')\nFind all CONFIRMED functions with a given role in a product"]):::output
+    C:::secondary --> I(["match_by_name(name)\nExact name or demangled match across all binaries"]):::output
+    C:::secondary --> J(["add_call_chain(CallChain): name, steps [{va, name, role, note}]\nNormalized: stored as call_chains + call_chain_steps (1NF)"]):::output
+    C:::secondary --> K(["summary() → {binaries, functions, struct_fields, call_chains, ...}"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### CorpusBuilder: initial indexing pass
 
 ```mermaid
 flowchart TD
-    A["CorpusBuilder.build(binary_path, product, version)"] --> B["BinaryContext.load_or_build(path)\nBuilds xref index if not present"]
-    B --> C["Iterate ctx.func_starts (from eh_frame FDEs)"]
-    C --> D["ctx.callees_of(func_va) → [(va, label), ...]\ncallee_labels: PLT names or '0x<va>' hex strings"]
-    D --> E["ctx.strings_in_func(func_va) → [(sva, content), ...]\nstr_contents: .rodata strings referenced in function"]
-    E --> F["_infer_role(callee_labels, str_contents)\nString hints checked first (more specific): sctp/radius/http/ssl/dns/ipsec\nCallee hints second: malloc/strcpy/memcpy/socket/EVP_/printf/Tcl_Eval"]
-    F --> G["_build_notes: '4 callees; sinks: strcpy sprintf; proto: RADIUS'"]
-    G --> H["FuncRecord(name='fn_0x<va>', confidence='ANGR_INFERRED')\ncall_targets: first 16 callee labels\nstring_xrefs: first 12 string contents (80 chars each)"]
-    H --> I["db._batch_add_funcs: single transaction for all records"]
-    I --> J["SemanticSearcher.build_corpus() picks up ANGR_INFERRED records\nEncodes by all-mpnet-base-v2"]
+    A(["CorpusBuilder.build(binary_path, product, version)"]):::input --> B["BinaryContext.load_or_build(path)\nBuilds xref index if not present"]:::primary
+    B:::primary --> C["Iterate ctx.func_starts (from eh_frame FDEs)"]:::secondary
+    C:::secondary --> D["ctx.callees_of(func_va) → [(va, label), ...]\ncallee_labels: PLT names or '0x<va>' hex strings"]:::tertiary
+    D:::tertiary --> E["ctx.strings_in_func(func_va) → [(sva, content), ...]\nstr_contents: .rodata strings referenced in function"]:::tertiary
+    E:::tertiary --> F["_infer_role(callee_labels, str_contents)\nString hints checked first (more specific): sctp/radius/http/ssl/dns/ipsec\nCallee hints second: malloc/strcpy/memcpy/socket/EVP_/printf/Tcl_Eval"]:::tertiary
+    F:::tertiary --> G["_build_notes: '4 callees; sinks: strcpy sprintf; proto: RADIUS'"]:::tertiary
+    G:::tertiary --> H["FuncRecord(name='fn_0x<va>', confidence='ANGR_INFERRED')\ncall_targets: first 16 callee labels\nstring_xrefs: first 12 string contents (80 chars each)"]:::tertiary
+    H:::tertiary --> I["db._batch_add_funcs: single transaction for all records"]:::tertiary
+    I:::tertiary --> J(["SemanticSearcher.build_corpus() picks up ANGR_INFERRED records\nEncodes by all-mpnet-base-v2"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Function confidence levels

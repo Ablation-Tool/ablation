@@ -18,10 +18,20 @@ Propose and apply function names for stripped binaries using the LLM analyst loo
 
 ```mermaid
 flowchart TD
-    A["AgentLoop.run(func_addr, task='propose a concise function name')"] --> B["RAGRetriever.retrieve(func_addr):\n  1. Exact VA+binary match\n  2. Callee-set overlap\n  3. Role-based match\n  4. Name fuzzy match\n  → up to 8 prior records injected as context"]
-    B --> C["LLM tool calls (up to max_tool_calls=10):\n  get_disassembly, get_strings, get_xrefs\n  get_imports, query_func_db"]
-    C --> D["AnalysisResult.name: proposed function name\n  confidence: 0.0–1.0\n  evidence: rationale from LLM"]
-    D --> E["Analyst reviews proposals:\n  High confidence → ctx.set_name(va, name, source='llm_inferred')\n  Low confidence → discard or manual re-check"]
+    A(["AgentLoop.run(func_addr, task='propose a concise function name')"]):::input --> B["RAGRetriever.retrieve(func_addr):\n  1. Exact VA+binary match\n  2. Callee-set overlap\n  3. Role-based match\n  4. Name fuzzy match\n  → up to 8 prior records injected as context"]:::primary
+    B:::primary --> C["LLM tool calls (up to max_tool_calls=10):\n  get_disassembly, get_strings, get_xrefs\n  get_imports, query_func_db"]:::secondary
+    C:::secondary --> D["AnalysisResult.name: proposed function name\n  confidence: 0.0·1.0\n  evidence: rationale from LLM"]:::tertiary
+    D:::tertiary --> E(["Analyst reviews proposals:\n  High confidence → ctx.set_name(va, name, source='llm_inferred')\n  Low confidence → discard or manual re-check"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

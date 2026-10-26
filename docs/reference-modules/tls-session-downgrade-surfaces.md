@@ -18,10 +18,20 @@ Detect TLS protocol downgrade weaknesses: absence of `TLS_FALLBACK_SCSV` protect
 
 ```mermaid
 flowchart TD
-    A["probe_tls_downgrade_attack(host, port=443) → list\n  findings: [{severity, title, detail, host, port}]"] --> B["TLS_FALLBACK_SCSV probe:\n  Build ClientHello: max_version=TLS1.1 (0x0302)\n  Ciphers: AES128(0x002F), AES256(0x0035), FALLBACK_SCSV(0x5600)\n  Send raw record over TCP\n  Response: content_type=21, level=2, desc=86 → PASS\n  No alert or different desc → NO_FALLBACK_SCSV_PROTECTION (HIGH)"]
-    B --> C["Legacy version acceptance:\n  ssl.TLSVersion.TLSv1 → TLS 1.0 handshake attempt\n  ssl.TLSVersion.TLSv1_1 → TLS 1.1 handshake attempt\n  Handshake succeeds → TLS10_ACCEPTED (HIGH)\n                      → TLS11_ACCEPTED (MEDIUM)\n  ssl.SSLError raised → version rejected (no finding)"]
-    C --> D["HSTS policy check:\n  GET https://host/ → Strict-Transport-Security header\n  max-age < 31536000 → SHORT_HSTS_MAX_AGE (MEDIUM)\n  Missing includeSubDomains or preload → HSTS_NOT_PRELOAD_READY (MEDIUM)"]
-    D --> E["probe_tls_session_resumption(host, port=443) → list\n  Connection 1: capture ssl.SSLSocket.session object\n  Session ticket issued → TLS_SESSION_TICKET_ISSUED (INFO)\n  Connection 2: inject captured session before handshake\n    ssl.SSLSocket.session = session_obj; do_handshake()\n    session_reused=True → TLS_SESSION_TICKET_REUSE (MEDIUM)\n    version=TLSv1.3 AND reused → TLS13_SESSION_0RTT_SURFACE (HIGH)"]
+    A(["probe_tls_downgrade_attack(host, port=443) → list\n  findings: [{severity, title, detail, host, port}]"]):::input --> B["TLS_FALLBACK_SCSV probe:\n  Build ClientHello: max_version=TLS1.1 (0x0302)\n  Ciphers: AES128(0x002F), AES256(0x0035), FALLBACK_SCSV(0x5600)\n  Send raw record over TCP\n  Response: content_type=21, level=2, desc=86 → PASS\n  No alert or different desc → NO_FALLBACK_SCSV_PROTECTION (HIGH)"]:::primary
+    B:::primary --> C["Legacy version acceptance:\n  ssl.TLSVersion.TLSv1 → TLS 1.0 handshake attempt\n  ssl.TLSVersion.TLSv1_1 → TLS 1.1 handshake attempt\n  Handshake succeeds → TLS10_ACCEPTED (HIGH)\n                      → TLS11_ACCEPTED (MEDIUM)\n  ssl.SSLError raised → version rejected (no finding)"]:::secondary
+    C:::secondary --> D["HSTS policy check:\n  GET https://host/ → Strict-Transport-Security header\n  max-age < 31536000 → SHORT_HSTS_MAX_AGE (MEDIUM)\n  Missing includeSubDomains or preload → HSTS_NOT_PRELOAD_READY (MEDIUM)"]:::tertiary
+    D:::tertiary --> E(["probe_tls_session_resumption(host, port=443) → list\n  Connection 1: capture ssl.SSLSocket.session object\n  Session ticket issued → TLS_SESSION_TICKET_ISSUED (INFO)\n  Connection 2: inject captured session before handshake\n    ssl.SSLSocket.session = session_obj; do_handshake()\n    session_reused=True → TLS_SESSION_TICKET_REUSE (MEDIUM)\n    version=TLSv1.3 AND reused → TLS13_SESSION_0RTT_SURFACE (HIGH)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

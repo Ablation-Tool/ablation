@@ -18,9 +18,18 @@ Detect shell injection vulnerabilities in Perl source code: finding `qx//`, `sys
 
 ```mermaid
 flowchart TD
-    A["PerlTaintScanner.from_path(path)\n  or .from_files(paths)"] --> B["scan() → List[SinkHit]\n  Parse .pl/.pm source files\n  Find shell sink calls:\n    qx// / backtick: shell execution\n    system($cmd): direct execution\n    exec(@args): exec-class\n  For each sink: trace interpolated vars:\n    $var from @ARGV / GetOptions → ARGV source\n    $var from shift(@_) → PARAM source\n    $var from internal constant → safe, skip\n  Check sanitization on taint path:\n    quotemeta($var) → SANITIZED\n    single-quote wrapping → SANITIZED\n    s/'/ /g → SANITIZED\n  → SinkHit(verdict=TAINTED|SANITIZED|UNKNOWN)"]
-    B --> C["SinkHit:\n  file: str\n  line: int\n  sink: str   (qx / system / exec)\n  var: str\n  source: str  (ARGV | PARAM | INTERNAL)\n  verdict: str  (TAINTED | SANITIZED | UNKNOWN)\n  severity: HIGH (TAINTED) | MEDIUM (UNKNOWN)\n  fmt() → str"]
-    C --> D["report(hits) → str"]
+    A(["PerlTaintScanner.from_path(path)\n  or .from_files(paths)"]):::input --> B["scan() → List[SinkHit]\n  Parse .pl/.pm source files\n  Find shell sink calls:\n    qx// / backtick: shell execution\n    system($cmd): direct execution\n    exec(@args): exec-class\n  For each sink: trace interpolated vars:\n    $var from @ARGV / GetOptions → ARGV source\n    $var from shift(@_) → PARAM source\n    $var from internal constant → safe, skip\n  Check sanitization on taint path:\n    quotemeta($var) → SANITIZED\n    single-quote wrapping → SANITIZED\n    s/'/ /g → SANITIZED\n  → SinkHit(verdict=TAINTED|SANITIZED|UNKNOWN)"]:::primary
+    B:::primary --> C["SinkHit:\n  file: str\n  line: int\n  sink: str   (qx / system / exec)\n  var: str\n  source: str  (ARGV | PARAM | INTERNAL)\n  verdict: str  (TAINTED | SANITIZED | UNKNOWN)\n  severity: HIGH (TAINTED) | MEDIUM (UNKNOWN)\n  fmt() → str"]:::secondary
+    C:::secondary --> D(["report(hits) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

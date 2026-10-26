@@ -18,12 +18,24 @@ Build dominator tree, post-dominator tree, and identify natural loops from a CFG
 
 ```mermaid
 flowchart TD
-    A["CFG (from CFGBuilder.build_function(va))"] --> B["CFG.dominator_tree() → DomTree\n  Cooper-Harvey-Kennedy algorithm:\n    Reverse-post-order traversal\n    Iterative intersection of predecessor dominators\n    O(N·α(N)) time for reducible CFGs\n  DomTree.idom(n) → immediate dominator of n\n  DomTree.dominates(a, b) → bool\n  DomTree.children(n) → dominated blocks"]
-    A --> C["PostDomTree.from_cfg(cfg) → PostDomTree\n  Reverse CFG (exit → entry) + DomTree computation\n  PostDomTree.ipdom(n) → immediate post-dominator\n  Used by Structurizer for if/else join block detection"]
-    A --> D["LoopInfo.from_cfg_and_domtree(cfg, domtree) → LoopInfo\n  Back edges: (src, dst) where domtree.dominates(dst, src)\n  Natural loop of back edge (src→dst):\n    All nodes reachable from src by backward BFS not through dst\n  LoopInfo.loop_header(block) → Optional[block]\n  LoopInfo.is_loop_header(block) → bool"]
-    B --> E["Structurizer(cfg, domtree, loopinfo) → AST\n  Uses idom() for sequence detection\n  Uses ipdom() for if/else join\n  Uses is_loop_header() for WhileNode emission"]
-    C --> E
-    D --> E
+    A(["CFG (from CFGBuilder.build_function(va))"]):::input --> B["CFG.dominator_tree() → DomTree\n  Cooper-Harvey-Kennedy algorithm:\n    Reverse-post-order traversal\n    Iterative intersection of predecessor dominators\n    O(N·α(N)) time for reducible CFGs\n  DomTree.idom(n) → immediate dominator of n\n  DomTree.dominates(a, b) → bool\n  DomTree.children(n) → dominated blocks"]:::primary
+    A:::input --> C["PostDomTree.from_cfg(cfg) → PostDomTree\n  Reverse CFG (exit → entry) + DomTree computation\n  PostDomTree.ipdom(n) → immediate post-dominator\n  Used by Structurizer for if/else join block detection"]:::secondary
+    A:::input --> D["LoopInfo.from_cfg_and_domtree(cfg, domtree) → LoopInfo\n  Back edges: (src, dst) where domtree.dominates(dst, src)\n  Natural loop of back edge (src→dst):\n    All nodes reachable from src by backward BFS not through dst\n  LoopInfo.loop_header(block) → Optional[block]\n  LoopInfo.is_loop_header(block) → bool"]:::tertiary
+    B:::primary --> E(["Structurizer(cfg, domtree, loopinfo) → AST\n  Uses idom() for sequence detection\n  Uses ipdom() for if/else join\n  Uses is_loop_header() for WhileNode emission"]):::output
+    C:::secondary --> E:::output
+    D:::tertiary --> E:::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

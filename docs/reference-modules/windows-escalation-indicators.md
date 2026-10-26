@@ -18,10 +18,20 @@ Analyze Structured Exception Handler (SEH) chains in x86 (32-bit) Windows PE bin
 
 ```mermaid
 flowchart TD
-    A["SEHChainAnalyzer.from_path(pe_path)"] --> B["safe_seh_handlers() → List[int]\n  Parse IMAGE_LOAD_CONFIG_DIRECTORY\n  Read SEHandlerTable VAs\n  Empty list → No SafeSEH protection"]
-    B --> C["seh_frames() → List[SEHFrame]\n  Scan .text for __try/__except prolog:\n    PUSH handler_va     (handler installed on stack)\n    PUSH saved_esp\n    MOV FS:[0], ESP     (link into FS:[0] chain)\n  → SEHFrame(install_va, handler_va)"]
-    C --> D["scan() → List[SEHFinding]\n  no_safe_seh: SEHandlerTable absent\n  unregistered_handler: handler_va not in SEHandlerTable\n  continue_execution: __except handler returns EXCEPTION_CONTINUE_EXECUTION\n  SEHFinding: finding_class, va, severity, fmt()"]
-    D --> E["report(findings) → str"]
+    A(["SEHChainAnalyzer.from_path(pe_path)"]):::input --> B["safe_seh_handlers() → List[int]\n  Parse IMAGE_LOAD_CONFIG_DIRECTORY\n  Read SEHandlerTable VAs\n  Empty list → No SafeSEH protection"]:::primary
+    B:::primary --> C["seh_frames() → List[SEHFrame]\n  Scan .text for __try/__except prolog:\n    PUSH handler_va     (handler installed on stack)\n    PUSH saved_esp\n    MOV FS:[0], ESP     (link into FS:[0] chain)\n  → SEHFrame(install_va, handler_va)"]:::secondary
+    C:::secondary --> D["scan() → List[SEHFinding]\n  no_safe_seh: SEHandlerTable absent\n  unregistered_handler: handler_va not in SEHandlerTable\n  continue_execution: __except handler returns EXCEPTION_CONTINUE_EXECUTION\n  SEHFinding: finding_class, va, severity, fmt()"]:::tertiary
+    D:::tertiary --> E(["report(findings) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,10 +18,20 @@ Automate the four-step process of identifying pre-authentication attack surface 
 
 ```mermaid
 flowchart TD
-    A["PreAuthRouteAuditor(ctx)"] --> B["audit() → PreAuthAuditResult\n  1. Scan route_init function:\n     Find register_route() call sites\n     Check permission class argument:\n       WorkflowLockWithoutSessionPermit only → pre-auth\n     → List[RouteEntry(path, handler_class)]"]
-    B --> C["  2. Resolve handler factory:\n     Find handler_class in PLT names\n     Trace factory to GET/POST handler VAs\n     → List[HandlerEntry(method, va)]"]
-    C --> D["  3. Profile each handler:\n     FuncProfiler.profile(handler_va)\n     Check for exec-class sinks in profile\n     → HandlerEntry.has_sink"]
-    D --> E["PreAuthAuditResult:\n  routes: List[RouteEntry]\n  handlers: List[HandlerEntry]\n  preauth_with_sinks() → List[Tuple[RouteEntry, HandlerEntry]]\n    Routes where handler has a sink\n  fmt() → str"]
+    A(["PreAuthRouteAuditor(ctx)"]):::input --> B["audit() → PreAuthAuditResult\n  1. Scan route_init function:\n     Find register_route() call sites\n     Check permission class argument:\n       WorkflowLockWithoutSessionPermit only → pre-auth\n     → List[RouteEntry(path, handler_class)]"]:::primary
+    B:::primary --> C["  2. Resolve handler factory:\n     Find handler_class in PLT names\n     Trace factory to GET/POST handler VAs\n     → List[HandlerEntry(method, va)]"]:::secondary
+    C:::secondary --> D["  3. Profile each handler:\n     FuncProfiler.profile(handler_va)\n     Check for exec-class sinks in profile\n     → HandlerEntry.has_sink"]:::tertiary
+    D:::tertiary --> E(["PreAuthAuditResult:\n  routes: List[RouteEntry]\n  handlers: List[HandlerEntry]\n  preauth_with_sinks() → List[Tuple[RouteEntry, HandlerEntry]]\n    Routes where handler has a sink\n  fmt() → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

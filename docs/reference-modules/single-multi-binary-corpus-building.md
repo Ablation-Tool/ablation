@@ -18,10 +18,20 @@ Build a unified import/export graph for all ELF binaries in a firmware directory
 
 ```mermaid
 flowchart TD
-    A["LibGraph.from_dir(dir_path)\n  or .from_paths(paths)"] --> B["For each ELF in dir:\n  BinaryContext.load_or_build() (cached)\n  Extract exports: dynamic symbol table → (name, va)\n  Extract PLT imports: (name, plt_va)\n  → Dict[binary_path, exports], Dict[symbol, List[LibCaller]]"]
-    B --> C["callers_of(symbol) → List[LibCaller]\n  Look up symbol in import index\n  Return: all binaries that import+call symbol\n  LibCaller: binary_path, call_va, symbol_name"]
-    B --> D["exporters_of(symbol) → List[str]\n  Return: binary paths that export symbol\n  (the implementing binaries)"]
-    B --> E["cross_edges() → List[Tuple[str, str, str]]\n  All (caller_binary, callee_binary, symbol) triples\n  representing cross-binary calls"]
+    A(["LibGraph.from_dir(dir_path)\n  or .from_paths(paths)"]):::input --> B["For each ELF in dir:\n  BinaryContext.load_or_build() (cached)\n  Extract exports: dynamic symbol table → (name, va)\n  Extract PLT imports: (name, plt_va)\n  → Dict[binary_path, exports], Dict[symbol, List[LibCaller]]"]:::primary
+    B:::primary --> C(["callers_of(symbol) → List[LibCaller]\n  Look up symbol in import index\n  Return: all binaries that import+call symbol\n  LibCaller: binary_path, call_va, symbol_name"]):::output
+    B:::primary --> D(["exporters_of(symbol) → List[str]\n  Return: binary paths that export symbol\n  (the implementing binaries)"]):::output
+    B:::primary --> E(["cross_edges() → List[Tuple[str, str, str]]\n  All (caller_binary, callee_binary, symbol) triples\n  representing cross-binary calls"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

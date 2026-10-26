@@ -18,9 +18,18 @@ Scan Electron application JavaScript source for security misconfigurations: dete
 
 ```mermaid
 flowchart TD
-    A["ElectronSecurityScanner.from_path(root)\n  where root = extracted .asar directory"] --> B["scan() → List[ElectronFinding]\n  rglob('*.js') across root\n  Quick filter: _ELECTRON_QUICK_RE (contains 'BrowserWindow'\n    or 'ipcMain' or 'webContents')\n  For each matching JS file: scan_path(p)"]
-    B --> C["Per-file checks:\n  _check_node_integration: nodeIntegration:true in BrowserWindow options\n  _check_ipc_no_sender_check: ipcMain.on without event.sender validation\n  _check_server_url_in_ni_window: webContents.loadURL with variable in nodeInt window\n  _check_devtools_in_prod: openDevTools() without isDev guard\n  _check_deep_link_no_validation: app.setAsDefaultProtocolClient without input check\n  _check_tls_bypass: rejectUnauthorized:false / NODE_TLS_REJECT_UNAUTHORIZED\n  _check_context_bridge_missing: BrowserWindow without contextBridge setup"]
-    C --> D["ElectronFinding:\n  path: Path\n  rel_path: str\n  lineno: int\n  finding_class: str\n  severity: CRITICAL | HIGH | MEDIUM | LOW\n  cwe: str\n  title: str\n  detail: str\n  snippet: str\n  fmt() → str"]
+    A(["ElectronSecurityScanner.from_path(root)\n  where root = extracted .asar directory"]):::input --> B["scan() → List[ElectronFinding]\n  rglob('*.js') across root\n  Quick filter: _ELECTRON_QUICK_RE (contains 'BrowserWindow'\n    or 'ipcMain' or 'webContents')\n  For each matching JS file: scan_path(p)"]:::primary
+    B:::primary --> C["Per-file checks:\n  _check_node_integration: nodeIntegration:true in BrowserWindow options\n  _check_ipc_no_sender_check: ipcMain.on without event.sender validation\n  _check_server_url_in_ni_window: webContents.loadURL with variable in nodeInt window\n  _check_devtools_in_prod: openDevTools() without isDev guard\n  _check_deep_link_no_validation: app.setAsDefaultProtocolClient without input check\n  _check_tls_bypass: rejectUnauthorized:false / NODE_TLS_REJECT_UNAUTHORIZED\n  _check_context_bridge_missing: BrowserWindow without contextBridge setup"]:::secondary
+    C:::secondary --> D(["ElectronFinding:\n  path: Path\n  rel_path: str\n  lineno: int\n  finding_class: str\n  severity: CRITICAL | HIGH | MEDIUM | LOW\n  cwe: str\n  title: str\n  detail: str\n  snippet: str\n  fmt() → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

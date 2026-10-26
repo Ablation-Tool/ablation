@@ -18,9 +18,18 @@ Detect missing tenant-scope predicates in database queries: finding `findUnique`
 
 ```mermaid
 flowchart TD
-    A["SourceIsolationChecker.from_context(ctx)"] --> B["scan(files=None) → List[IsolationFinding]\n  For each source file (Python/JS/TS):\n    Find ORM query calls:\n      Prisma: findUnique/findFirst/findMany/update/delete/upsert\n      Mongoose: .find()/.findOne()/.update()/.delete()\n      SQLAlchemy: .query()/.filter()/.update()\n      Raw SQL: SELECT/UPDATE/DELETE patterns\n    For each query: check where clause for tenant fields\n      Missing: orgId / projectId / tenantId / userId → IsolationFinding\n    Severity: CRITICAL (no scope on shared resource) | HIGH (partial scope)"]
-    B --> C["IsolationFinding:\n  file: Path\n  line: int\n  query_type: str   (findFirst / findMany / ...)\n  orm: str          (prisma / mongoose / sqlalchemy / raw)\n  missing_field: str  (orgId / projectId / tenantId)\n  snippet: str\n  severity: CRITICAL | HIGH | MEDIUM\n  as_dict() → dict"]
-    C --> D["report(findings, ctx) → str"]
+    A(["SourceIsolationChecker.from_context(ctx)"]):::input --> B["scan(files=None) → List[IsolationFinding]\n  For each source file (Python/JS/TS):\n    Find ORM query calls:\n      Prisma: findUnique/findFirst/findMany/update/delete/upsert\n      Mongoose: .find()/.findOne()/.update()/.delete()\n      SQLAlchemy: .query()/.filter()/.update()\n      Raw SQL: SELECT/UPDATE/DELETE patterns\n    For each query: check where clause for tenant fields\n      Missing: orgId / projectId / tenantId / userId → IsolationFinding\n    Severity: CRITICAL (no scope on shared resource) | HIGH (partial scope)"]:::primary
+    B:::primary --> C["IsolationFinding:\n  file: Path\n  line: int\n  query_type: str   (findFirst / findMany / ...)\n  orm: str          (prisma / mongoose / sqlalchemy / raw)\n  missing_field: str  (orgId / projectId / tenantId)\n  snippet: str\n  severity: CRITICAL | HIGH | MEDIUM\n  as_dict() → dict"]:::secondary
+    C:::secondary --> D(["report(findings, ctx) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

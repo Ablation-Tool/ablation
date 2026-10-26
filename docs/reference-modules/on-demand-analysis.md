@@ -26,14 +26,22 @@ The build phase runs once per binary. Understanding each of the five steps tells
 
 ```mermaid
 flowchart TD
-    A[/"Binary file on disk"/] --> B["Step 1 · lief.parse\nPLT stubs · exports · strings"]
-    B --> F["Step 2 · Function start recovery\nPass 1: unwind tables\nPass 2: callee augmentation"]
-    F --> J["Step 3 · Call graph construction\nCapstone per function body"]
-    J --> K["Step 4 · String xref indexing\narch-specific load detection"]
-    K --> L["Step 5 · Serialize to JSON cache\nkey = SHA-256 of binary bytes"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style L fill:#14532d,stroke:#166534,color:#dcfce7
+    A(["Binary file on disk"]):::input --> B["Step 1 · lief.parse\nPLT stubs · exports · strings"]:::primary
+    B:::primary --> F["Step 2 · Function start recovery\nPass 1: unwind tables\nPass 2: callee augmentation"]:::secondary
+    F:::secondary --> J["Step 3 · Call graph construction\nCapstone per function body"]:::tertiary
+    J:::tertiary --> K["Step 4 · String xref indexing\narch-specific load detection"]:::tertiary
+    K:::tertiary --> L(["Step 5 · Serialize to JSON cache\nkey = SHA-256 of binary bytes"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---
@@ -118,18 +126,32 @@ Unwind tables are but not complete. Hand-written assembly, early-exit stubs, and
 
 ```mermaid
 flowchart TD
-    A["Known func_starts\nfrom unwind tables"] --> B["For each function,\nCapstone scan to next start"]
-    B --> C{"Instruction is\ndirect CALL/BL?"}
-    C -->|No| B
-    C -->|Yes| D{"target_va already\nin func_starts?"}
-    D -->|Yes| B
-    D -->|No| E{"target_va\nin .text range?"}
-    E -->|No| B
-    E -->|Yes| F["Add target_va\nto func_starts"]
-    F --> B
-    B --> G[/"Augmented func_starts\nsorted + deduplicated"/]
-
-    style G fill:#14532d,stroke:#166534,color:#dcfce7
+    A(["Known func_starts\nfrom unwind tables"]):::input --> B["For each function,\nCapstone scan to next start"]:::primary
+    B:::primary --> C{"Instruction is\ndirect CALL/BL?"}:::neutral
+    C:::neutral -->|No| B:::primary
+    C:::neutral -->|Yes| D{"target_va already\nin func_starts?"}:::neutral
+    D:::neutral -->|Yes| B:::primary
+    D:::neutral -->|No| E{"target_va\nin .text range?"}:::neutral
+    E:::neutral -->|No| B:::primary
+    E:::neutral -->|Yes| F["Add target_va\nto func_starts"]:::secondary
+    F:::secondary --> B:::primary
+    B:::primary --> G(["Augmented func_starts\nsorted + deduplicated"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#bf360c,stroke-width:2px
+    linkStyle 3 stroke:#546e7a,stroke-width:2px
+    linkStyle 4 stroke:#bf360c,stroke-width:2px
+    linkStyle 5 stroke:#546e7a,stroke-width:2px
+    linkStyle 6 stroke:#bf360c,stroke-width:2px
+    linkStyle 7 stroke:#00695c,stroke-width:2px
+    linkStyle 8 stroke:#bf360c,stroke-width:2px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
 ```
 
 The pass runs once. Newly discovered callees are added to `func_starts` but their own bodies are not rescanned in the same pass.
@@ -212,17 +234,30 @@ Build timing for a 50 MB stripped ELF with 19,000 functions:
 
 ```mermaid
 flowchart TD
-    A[/"load_or_build(path)"/] --> B["Compute SHA-256\nof binary bytes"]
-    B --> C{"Cache file\nexists?"}
-    C -->|No| E["Run full build phase\n~4 s"]
-    C -->|Yes| D{"Stored sha256\nmatches?"}
-    D -->|Yes| F["Deserialize JSON\n~130 ms"]
-    D -->|No| E
-    E --> G["Write cache file"]
-    G --> H[/"Return BinaryContext"/]
-    F --> H
-
-    style H fill:#14532d,stroke:#166534,color:#dcfce7
+    A(["load_or_build(path)"]):::input --> B["Compute SHA-256\nof binary bytes"]:::primary
+    B:::primary --> C{"Cache file\nexists?"}:::neutral
+    C:::neutral -->|No| E["Run full build phase\n~4 s"]:::secondary
+    C:::neutral -->|Yes| D{"Stored sha256\nmatches?"}:::neutral
+    D:::neutral -->|Yes| F["Deserialize JSON\n~130 ms"]:::tertiary
+    D:::neutral -->|No| E:::secondary
+    E:::secondary --> G["Write cache file"]:::tertiary
+    G:::tertiary --> H(["Return BinaryContext"]):::output
+    F:::tertiary --> H:::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#546e7a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#00695c,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
 ```
 
 A "stored sha256 doesn't match" case happens when two different binaries share a filename and their first 16 SHA-256 hex digits collide. The inner check forces a rebuild so stale data is never returned.
@@ -248,16 +283,26 @@ A "stored sha256 doesn't match" case happens when two different binaries share a
 
 ```mermaid
 flowchart TD
-    A["ctx.name(va)"] --> B{"NameRegistry\nSQLite · keyed by\nbinary_sha256 + va"}
-    B -->|Found| Z[/"Return confirmed name"/]
-    B -->|"Not found"| C{"exports dict\n.dynsym / .symtab"}
-    C -->|Found| Z
-    C -->|"Not found"| D{"PLT map\nstub VAs only"}
-    D -->|Found| Z
-    D -->|"Not found"| E[/"Return 0x{va:x}"/]
-
-    style Z fill:#14532d,stroke:#166534,color:#dcfce7
-    style E fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    A(["ctx.name(va)"]):::input --> B{"NameRegistry\nSQLite · keyed by\nbinary_sha256 + va"}:::neutral
+    B:::neutral -->|Found| Z(["Return confirmed name"]):::output
+    B:::neutral -->|"Not found"| C{"exports dict\n.dynsym / .symtab"}:::neutral
+    C:::neutral -->|Found| Z:::output
+    C:::neutral -->|"Not found"| D{"PLT map\nstub VAs only"}:::neutral
+    D:::neutral -->|Found| Z:::output
+    D:::neutral -->|"Not found"| E(["Return 0x{va:x}"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#546e7a,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#546e7a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#546e7a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
 ```
 
 The NameRegistry stores names in a SQLite database at `~/.ablation/names.db`:
@@ -313,16 +358,26 @@ BinaryContext is the foundation every other Ablation tool builds on.
 
 ```mermaid
 flowchart TD
-    BC["BinaryContext\nfunc_starts · call_edges\nplt_map · str_xref_idx · name()"]
+    BC(["BinaryContext\nfunc_starts · call_edges\nplt_map · str_xref_idx · name()"]):::input
 
-    BC --> SS["SemanticSearcher\nfunc_starts + call_edges\n→ BERT corpus"]
-    BC --> FP["FuncProfiler\ncallers_of / callees_of\n→ sink mapping"]
-    BC --> TT["TaintTracker\nplt_map + func_starts + call_edges\n→ interprocedural BFS"]
-    BC --> PL["PatternLibrary\nctx.name() for finding labels"]
-    BC --> VD["VersionDelta\nctx for v1 and v2 binaries"]
-    BC --> HE["HypothesisEngine\nctx as probe accelerator"]
-
-    style BC fill:#1e3a5f,stroke:#3b82f6,color:#dbeafe
+    BC:::input --> SS(["SemanticSearcher\nfunc_starts + call_edges\n→ BERT corpus"]):::output
+    BC:::input --> FP(["FuncProfiler\ncallers_of / callees_of\n→ sink mapping"]):::output
+    BC:::input --> TT(["TaintTracker\nplt_map + func_starts + call_edges\n→ interprocedural BFS"]):::output
+    BC:::input --> PL(["PatternLibrary\nctx.name() for finding labels"]):::output
+    BC:::input --> VD(["VersionDelta\nctx for v1 and v2 binaries"]):::output
+    BC:::input --> HE(["HypothesisEngine\nctx as probe accelerator"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#2e7d32,stroke-width:3px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,18 +18,36 @@ Scan live API responses for JWT tokens, test `alg=none` bypass and weak HMAC sec
 
 ```mermaid
 flowchart TD
-    A["analyze_tokens_in_response(base, endpoints)"] --> B["For each endpoint: GET url\nSearch body + headers for JWT pattern:\neyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]*"]
-    B --> C["decode_jwt_unsafe(token):\nSplit on '.': 3 parts\nBase64url-decode header + payload\nReturn (header_dict, payload_dict)"]
-    C --> D["forge_jwt_alg_none(token):\nSet header['alg']='none'\nRe-encode header.payload, append empty signature '.'"]
-    D --> E["Replay: GET url with 'Authorization: Bearer <forged>'\nIf status != 401: JWT_ALG_NONE confirmed"]
-    C --> F["crack_jwt_secret(token):\nFor alg in HS256/HS384/HS512:\nFor each secret in JWT_WEAK_SECRETS (18 entries):\nhmac.new(secret, header.payload, h_fn).digest() == sig_bytes?"]
-    C --> G["Check header for kid, jku, x5u, jwks_uri:\nkid present → SQLi/path traversal in key lookup\njku/x5u present → JWK Set URL SSRF possible"]
-    H["probe_oauth2(base)"] --> I["Discover: GET 13 paths\n/.well-known/openid-configuration\n/.well-known/jwks.json\n/oauth/authorize, /oauth2/token\n/realms/master/..."]
-    I --> J{Auth server metadata found?}
-    J -->|yes| K["redirect_uri manipulation:\nProbe evil.com, javascript:alert(1), localhost\nIf status != 400/422: open redirect confirmed"]
-    J -->|yes| L["Client credentials grant:\nPOST token_endpoint with 6 default client:secret pairs\ngrant_type=client_credentials scope=openid admin\nIf access_token in response: default creds confirmed"]
-    J -->|yes| M["JWKS fetch:\nGET jwks_uri (from metadata)\nExpose: key IDs, algorithms, public key material"]
-    J -->|no| N["Return empty findings (no OAuth2 present)"]
+    A(["analyze_tokens_in_response(base, endpoints)"]):::input --> B["For each endpoint: GET url\nSearch body + headers for JWT pattern:\neyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]*"]:::primary
+    B:::primary --> C["decode_jwt_unsafe(token):\nSplit on '.': 3 parts\nBase64url-decode header + payload\nReturn (header_dict, payload_dict)"]:::tertiary
+    C:::tertiary --> D["forge_jwt_alg_none(token):\nSet header['alg']='none'\nRe-encode header.payload, append empty signature '.'"]:::tertiary
+    D:::tertiary --> E(["Replay: GET url with 'Authorization: Bearer <forged>'\nIf status != 401: JWT_ALG_NONE confirmed"]):::output
+    C:::tertiary --> F(["crack_jwt_secret(token):\nFor alg in HS256/HS384/HS512:\nFor each secret in JWT_WEAK_SECRETS (18 entries):\nhmac.new(secret, header.payload, h_fn).digest() == sig_bytes?"]):::output
+    C:::tertiary --> G(["Check header for kid, jku, x5u, jwks_uri:\nkid present → SQLi/path traversal in key lookup\njku/x5u present → JWK Set URL SSRF possible"]):::output
+    H(["probe_oauth2(base)"]):::input --> I["Discover: GET 13 paths\n/.well-known/openid-configuration\n/.well-known/jwks.json\n/oauth/authorize, /oauth2/token\n/realms/master/..."]:::secondary
+    I:::secondary --> J{"Auth server metadata found?"}:::neutral
+    J:::neutral -->|yes| K(["redirect_uri manipulation:\nProbe evil.com, javascript:alert(1), localhost\nIf status != 400/422: open redirect confirmed"]):::output
+    J:::neutral -->|yes| L(["Client credentials grant:\nPOST token_endpoint with 6 default client:secret pairs\ngrant_type=client_credentials scope=openid admin\nIf access_token in response: default creds confirmed"]):::output
+    J:::neutral -->|yes| M(["JWKS fetch:\nGET jwks_uri (from metadata)\nExpose: key IDs, algorithms, public key material"]):::output
+    J:::neutral -->|no| N(["Return empty findings (no OAuth2 present)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#00695c,stroke-width:2px
+    linkStyle 7 stroke:#546e7a,stroke-width:2px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### JWT weak secret dictionary 18 entries

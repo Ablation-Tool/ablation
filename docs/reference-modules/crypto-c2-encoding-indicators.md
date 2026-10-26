@@ -18,9 +18,18 @@ Classify stripped PPC64/Cell PPU functions as instances of dynamic data structur
 
 ```mermaid
 flowchart TD
-    A["DynDSClassifier.from_context(ctx)\n  or .from_path(path)"] --> B["classify(min_insns=4) → List[DynDSFinding]\n  For each function in ctx.func_starts (PPC64 BE):\n    DynDSFeatures extraction:\n      recursive_calls: self-call count\n      backward_branches: loop back-edge count\n      blr_count: return site count\n      literal_01_returns: BLR preceded by li r3,0 or li r3,1\n      has_large_frame: stdu r1,-N(r1) with N > 0x80\n    Pattern match:\n      recursive + no loop → BST_TRAVERSAL\n      loop + no recursive → LINKED_LIST_ITER\n      recursive + loop → CTREE_TRAVERSAL\n      blr_count > 2 + literal_01 → COROUTINE_ITER\n      large_frame + loop + blr_count=1 → BTREE_MUTATE\n    → DynDSFinding if pattern matches"]
-    B --> C["DynDSFinding:\n  func_va: int\n  pattern: str\n  features: DynDSFeatures\n  fmt(name_fn) → str"]
-    C --> D["by_pattern(pattern) → List[DynDSFinding]\n  Filter by specific pattern class"]
+    A(["DynDSClassifier.from_context(ctx)\n  or .from_path(path)"]):::input --> B["classify(min_insns=4) → List[DynDSFinding]\n  For each function in ctx.func_starts (PPC64 BE):\n    DynDSFeatures extraction:\n      recursive_calls: self-call count\n      backward_branches: loop back-edge count\n      blr_count: return site count\n      literal_01_returns: BLR preceded by li r3,0 or li r3,1\n      has_large_frame: stdu r1,-N(r1) with N > 0x80\n    Pattern match:\n      recursive + no loop → BST_TRAVERSAL\n      loop + no recursive → LINKED_LIST_ITER\n      recursive + loop → CTREE_TRAVERSAL\n      blr_count > 2 + literal_01 → COROUTINE_ITER\n      large_frame + loop + blr_count=1 → BTREE_MUTATE\n    → DynDSFinding if pattern matches"]:::primary
+    B:::primary --> C["DynDSFinding:\n  func_va: int\n  pattern: str\n  features: DynDSFeatures\n  fmt(name_fn) → str"]:::secondary
+    C:::secondary --> D(["by_pattern(pattern) → List[DynDSFinding]\n  Filter by specific pattern class"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

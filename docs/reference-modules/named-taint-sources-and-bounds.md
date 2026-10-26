@@ -18,9 +18,18 @@ Forward labeled-taint tracking for x86/x86-64 instruction streams with full sub-
 
 ```mermaid
 flowchart TD
-    A["TaintState (taint_tracker_x86_labeled):\n  regs: Dict[reg_family, Taint]\n  mem: Dict[(sp|bp_family, disp), Taint]\n  ranges: List[TaintRange]  (syscall buffers, rep movs)\n  consts: Dict[reg, int]  (mov r, imm; lea r,[rip+d])\n  frame_ptrs: Dict[reg, (region, disp)]\n  mem_ptrs: Dict[slot, pointer_fact]\n  ra_slots: Set[slot]  (return address frame slots)\n  eq: UnionFind[reg]  (full-width copy aliases)"] --> B["Taint(label, bound):\n  tainted() → bool\n  bound: max attacker-controllable bytes\n    movzx eax, dl     → bound=0xff\n    lea rax,[rbx+rax*8] → bound=0xff*8 (if rbx clean)\n    mul unknown        → bound=∞\n    add unbounded      → bound=∞"]
-    B --> C["Policy transfer functions per instruction:\n  XFER: MOV/LEA/PUSH/POP propagate Taint + update bound\n  ALU:  ADD/SUB/AND/OR/XOR preserve taint, update bound\n  CLR:  XOR r,r / MOV r,0 clears taint + bound\n  SPEC: MOVSX/MOVZX sign/zero-extend: bound updated\n  CALL: caller-saved regs cleared; taint source calls re-seed"]
-    C --> D["Finding:\n  sink_va, sink_name, tainted_args, sources: List[str]\n  (label from initial TaintState seed)"]
+    A(["TaintState (taint_tracker_x86_labeled):\n  regs: Dict[reg_family, Taint]\n  mem: Dict[(sp|bp_family, disp), Taint]\n  ranges: List[TaintRange]  (syscall buffers, rep movs)\n  consts: Dict[reg, int]  (mov r, imm; lea r,[rip+d])\n  frame_ptrs: Dict[reg, (region, disp)]\n  mem_ptrs: Dict[slot, pointer_fact]\n  ra_slots: Set[slot]  (return address frame slots)\n  eq: UnionFind[reg]  (full-width copy aliases)"]):::input --> B["Taint(label, bound):\n  tainted() → bool\n  bound: max attacker-controllable bytes\n    movzx eax, dl     → bound=0xff\n    lea rax,[rbx+rax*8] → bound=0xff*8 (if rbx clean)\n    mul unknown        → bound=∞\n    add unbounded      → bound=∞"]:::primary
+    B:::primary --> C["Policy transfer functions per instruction:\n  XFER: MOV/LEA/PUSH/POP propagate Taint + update bound\n  ALU:  ADD/SUB/AND/OR/XOR preserve taint, update bound\n  CLR:  XOR r,r / MOV r,0 clears taint + bound\n  SPEC: MOVSX/MOVZX sign/zero-extend: bound updated\n  CALL: caller-saved regs cleared; taint source calls re-seed"]:::secondary
+    C:::secondary --> D(["Finding:\n  sink_va, sink_name, tainted_args, sources: List[str]\n  (label from initial TaintState seed)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

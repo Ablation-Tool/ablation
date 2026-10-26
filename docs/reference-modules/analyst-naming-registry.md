@@ -18,17 +18,34 @@ Persist analyst-assigned function names across RE sessions so that confirmed fun
 
 ```mermaid
 flowchart TD
-    A["NameRegistry()"] --> B["Load ~/.ablation/function_names.json"]
-    B --> C{file exists?}
-    C -->|yes| D["Parse JSON: {sha256_16: {va_hex: {name, source, ts}}}"]
-    C -->|no| E["Init empty registry"]
-    D & E --> F[NameRegistry ready]
-    F --> G["set_name(sha256, va, name, source='manual')\nUpdate in-memory dict\nAuto-save to disk"]
-    F --> H["get_name(sha256, va) → Optional[str]\nKeyed by sha256[:16] + hex(va)"]
-    F --> I["set_names_bulk(sha256, {va: (name, source)})\nSave exactly once for all updates"]
-    F --> J["all_names(sha256) → [(va, name, source)] sorted by VA"]
-    F --> K["names_map(sha256) → {va: name}"]
-    F --> L["BinaryContext.name(va)\n→ overlay lookup → export → plt → hex"]
+    A(["NameRegistry()"]):::input --> B["Load ~/.ablation/function_names.json"]:::primary
+    B:::primary --> C{"file exists?"}:::neutral
+    C:::neutral -->|yes| D["Parse JSON: {sha256_16: {va_hex: {name, source, ts}}}"]:::secondary
+    C:::neutral -->|no| E(["Init empty registry"]):::output
+    D:::secondary --> F["NameRegistry ready"]:::tertiary
+    F:::tertiary --> G(["set_name(sha256, va, name, source='manual')\nUpdate in-memory dict\nAuto-save to disk"]):::output
+    F:::tertiary --> H(["get_name(sha256, va) → Optional[str]\nKeyed by sha256[:16] + hex(va)"]):::output
+    F:::tertiary --> I(["set_names_bulk(sha256, {va: (name, source)})\nSave exactly once for all updates"]):::output
+    F:::tertiary --> J(["all_names(sha256) → [(va, name, source)] sorted by VA"]):::output
+    F:::tertiary --> K(["names_map(sha256) → {va: name}"]):::output
+    F:::tertiary --> L(["BinaryContext.name(va)\n→ overlay lookup → export → plt → hex"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Storage format

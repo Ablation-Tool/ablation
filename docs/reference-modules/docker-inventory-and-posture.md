@@ -18,10 +18,20 @@ Enumerate running Docker containers, images, volumes, and network configurations
 
 ```mermaid
 flowchart TD
-    A["DockerEnumerator()"] --> B["enumerate_containers() → List[dict]\n  docker ps -a --format json\n  or docker API at /var/run/docker.sock\n  → ID, image, command, status, ports"]
-    B --> C["enumerate_images() → List[dict]\n  docker images --format json\n  → repository, tag, image_id, size, created"]
-    C --> D["check_container_isolation(host='localhost') → List[dict]\n  Reads /proc/1/cgroup to detect container runtime\n  Checks /proc/self/status CapEff for CAP_SYS_ADMIN\n  Checks /proc/self/mounts for docker.sock bind-mount\n  Checks PID/net namespace inode vs host init\n  → [{severity, title, detail, host, port}]"]
-    D --> E["check_image_security(registry_host, port) → List[dict]\n  Pull image manifests from registry\n  Flag: missing content-trust, unsigned, stale base\n  check_dependency_confusion_indicators(registry_host)\n    Compare internal image names vs Docker Hub catalog"]
+    A(["DockerEnumerator()"]):::input --> B["enumerate_containers() → List[dict]\n  docker ps -a --format json\n  or docker API at /var/run/docker.sock\n  → ID, image, command, status, ports"]:::primary
+    B:::primary --> C["enumerate_images() → List[dict]\n  docker images --format json\n  → repository, tag, image_id, size, created"]:::secondary
+    C:::secondary --> D["check_container_isolation(host='localhost') → List[dict]\n  Reads /proc/1/cgroup to detect container runtime\n  Checks /proc/self/status CapEff for CAP_SYS_ADMIN\n  Checks /proc/self/mounts for docker.sock bind-mount\n  Checks PID/net namespace inode vs host init\n  → [{severity, title, detail, host, port}]"]:::tertiary
+    D:::tertiary --> E(["check_image_security(registry_host, port) → List[dict]\n  Pull image manifests from registry\n  Flag: missing content-trust, unsigned, stale base\n  check_dependency_confusion_indicators(registry_host)\n    Compare internal image names vs Docker Hub catalog"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,12 +18,24 @@ Disassemble DEX bytecode to annotated smali and lift it to readable pseudo-Java 
 
 ```mermaid
 flowchart TD
-    A["APKParser.from_path(apk_path)"] --> B["parse_manifest() → ManifestInfo\nFilter components where tag=='service'\nis_exported_or_implicit() == True\n→ exported service list"]
-    B --> C["iter_dex() → DEXFile list\nFor each exported service class name:\nDEXDisasm(dex)._build_code_map()\nBuilds (class_name, method_name) → (code_off, access_flags)"]
-    C --> D["DEXDisasm.disasm_method(class_name, 'onTransact'):\ndecode_code_item(dex, code_off):\nParse code_item header: registers_size, ins_size, insns_size (16B)\nDecode insns[] array: opcode from word0[0:8], hi_byte from word0[8:16]\nFor each instruction: _OPCODES[opcode] → (mnemonic, fmt)\n_FMT_SIZE[fmt] → code unit count\n_decode_fmt() → DEXInstruction(cu_offset, opcode, mnemonic, fmt, regs, ref_idx, literal, branch)"]
-    D --> E["For instructions with ref_idx: _resolve_ref(dex, opcode, idx)\nString ref → dex.string_at(idx) → escaped string literal\nType ref → dex.type_name(idx) → 'Landroid/os/Parcel;'\nField ref → 'Lclass;->field:Ltype;'\nMethod ref → 'Lclass;->name(params)Lreturn;'\nInstructions rendered to smali lines with cu_offset prefix"]
-    D --> F["DEXLifter(dex).lift_method(class_name, 'onTransact'):\nparams_start = registers_size - ins_size\nFor each instruction:\nconst-string → String vN = \"literal\";\ninvoke-virtual → pending=(ret_type, call_expr)\nmove-result → ret_type vN = call_expr;\niput/iget → obj.field = val; / type vN = obj.field;\nif-eq/ne → if (cond) goto :LXX;\ngoto backward → // ↑ back-edge (loop marker)"]
-    F --> G["Output: readable pseudo-Java showing:\nParcel.readInt() transaction code dispatch\ncheckCallingPermission() / enforceCallingPermission() presence\nParcel.readString() / readParcelable() data sources\nMethod calls downstream of IPC data"]
+    A(["APKParser.from_path(apk_path)"]):::input --> B["parse_manifest() → ManifestInfo\nFilter components where tag=='service'\nis_exported_or_implicit() == True\n→ exported service list"]:::primary
+    B:::primary --> C["iter_dex() → DEXFile list\nFor each exported service class name:\nDEXDisasm(dex)._build_code_map()\nBuilds (class_name, method_name) → (code_off, access_flags)"]:::secondary
+    C:::secondary --> D["DEXDisasm.disasm_method(class_name, 'onTransact'):\ndecode_code_item(dex, code_off):\nParse code_item header: registers_size, ins_size, insns_size (16B)\nDecode insns[] array: opcode from word0[0:8], hi_byte from word0[8:16]\nFor each instruction: _OPCODES[opcode] → (mnemonic, fmt)\n_FMT_SIZE[fmt] → code unit count\n_decode_fmt() → DEXInstruction(cu_offset, opcode, mnemonic, fmt, regs, ref_idx, literal, branch)"]:::tertiary
+    D:::tertiary --> E(["For instructions with ref_idx: _resolve_ref(dex, opcode, idx)\nString ref → dex.string_at(idx) → escaped string literal\nType ref → dex.type_name(idx) → 'Landroid/os/Parcel;'\nField ref → 'Lclass;->field:Ltype;'\nMethod ref → 'Lclass;->name(params)Lreturn;'\nInstructions rendered to smali lines with cu_offset prefix"]):::output
+    D:::tertiary --> F["DEXLifter(dex).lift_method(class_name, 'onTransact'):\nparams_start = registers_size - ins_size\nFor each instruction:\nconst-string → String vN = \"literal\";\ninvoke-virtual → pending=(ret_type, call_expr)\nmove-result → ret_type vN = call_expr;\niput/iget → obj.field = val; / type vN = obj.field;\nif-eq/ne → if (cond) goto :LXX;\ngoto backward → // ↑ back-edge (loop marker)"]:::tertiary
+    F:::tertiary --> G(["Output: readable pseudo-Java showing:\nParcel.readInt() transaction code dispatch\ncheckCallingPermission() / enforceCallingPermission() presence\nParcel.readString() / readParcelable() data sources\nMethod calls downstream of IPC data"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### DEX instruction format summary selected

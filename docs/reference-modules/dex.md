@@ -18,15 +18,30 @@ Scan Android APK packages for hardcoded secrets, dangerous API invocations, cryp
 
 ```mermaid
 flowchart TD
-    A["DexAnalyzer.from_path(apk_path)"] --> B["APKParser(apk_path)\nOpen ZIP, extract META-INF\nParse AndroidManifest.xml (AXML)\nParse all classes*.dex files"]
-    B --> C["DexAnalyzer.scan()"]
-    C --> D["_scan_manifest(mf: ManifestInfo):\nExported components: Activity/Service/BroadcastReceiver\n  exported=True + no permission= → HIGH EXPORTED_COMPONENT\nDangerous permission combinations:\n  READ_CONTACTS + INTERNET → MEDIUM DANGEROUS_PERMISSION_COMBO\n  WRITE_CONTACTS + INTERNET → MEDIUM\n  READ_CALL_LOG + INTERNET → HIGH\n  RECEIVE_SMS + INTERNET → HIGH\n  RECORD_AUDIO + INTERNET → HIGH\n  CAMERA + INTERNET → HIGH"]
-    C --> E["_scan_dex_strings(dex: DEXFile):\nFor each string in DEX string table:\n  SECRET_PATTERNS: api_key, api_secret, auth_token,\n    bearer, password, secret, private_key, access_key\n    + entropy gate → CRITICAL HARDCODED_SECRET\n  CLEARTEXT_URL: http:// (not localhost) → MEDIUM CLEARTEXT_URL\n  SQLCIPHER: passphrase, encryption_key, pragma key\n    → HIGH SQLCIPHER_KEY\n  AWS_KEY: AKIA[0-9A-Z]{16} → CRITICAL AWS_KEY\n  CLOUD_KEY: gcp_sa_, google_api_, azure_client_ → HIGH CLOUD_KEY"]
-    C --> F["_scan_dex_apis(dex: DEXFile):\nFor each method reference in bytecode:\n  DANGEROUS_API_PATTERNS:\n    Runtime.getRuntime/exec → CRITICAL EXEC_CALL\n    ProcessBuilder.command → CRITICAL EXEC_CALL\n    Class.forName/Method.invoke → HIGH REFLECTION\n    DexClassLoader/PathClassLoader → CRITICAL DYNAMIC_CODE_LOAD\n    URL.openConnection (http://) → MEDIUM CLEARTEXT_NETWORK\n  CRYPTO_PATTERNS:\n    Cipher.getInstance('AES/ECB') → HIGH WEAK_CIPHER_ECB\n    MessageDigest.getInstance('MD5') → MEDIUM WEAK_HASH\n    MessageDigest.getInstance('SHA1') → LOW WEAK_HASH\n    SecureRandom fallback patterns → MEDIUM WEAK_RNG\n    IvParameterSpec(new byte[16]) (zero IV) → HIGH STATIC_IV"]
-    D --> G["List[DexFinding]\nDexFinding: severity, category, detail, class_name, method_name"]
-    E --> G
-    F --> G
-    G --> H["DexAnalyzer.report(findings) → str\nSorted by severity: CRITICAL → HIGH → MEDIUM → LOW\nGrouped by category with count header"]
+    A(["DexAnalyzer.from_path(apk_path)"]):::input --> B["APKParser(apk_path)\nOpen ZIP, extract META-INF\nParse AndroidManifest.xml (AXML)\nParse all classes*.dex files"]:::primary
+    B:::primary --> C["DexAnalyzer.scan()"]:::secondary
+    C:::secondary --> D["_scan_manifest(mf: ManifestInfo):\nExported components: Activity/Service/BroadcastReceiver\n  exported=True + no permission= → HIGH EXPORTED_COMPONENT\nDangerous permission combinations:\n  READ_CONTACTS + INTERNET → MEDIUM DANGEROUS_PERMISSION_COMBO\n  WRITE_CONTACTS + INTERNET → MEDIUM\n  READ_CALL_LOG + INTERNET → HIGH\n  RECEIVE_SMS + INTERNET → HIGH\n  RECORD_AUDIO + INTERNET → HIGH\n  CAMERA + INTERNET → HIGH"]:::tertiary
+    C:::secondary --> E["_scan_dex_strings(dex: DEXFile):\nFor each string in DEX string table:\n  SECRET_PATTERNS: api_key, api_secret, auth_token,\n    bearer, password, secret, private_key, access_key\n    + entropy gate → CRITICAL HARDCODED_SECRET\n  CLEARTEXT_URL: http:// (not localhost) → MEDIUM CLEARTEXT_URL\n  SQLCIPHER: passphrase, encryption_key, pragma key\n    → HIGH SQLCIPHER_KEY\n  AWS_KEY: AKIA[0-9A-Z]{16} → CRITICAL AWS_KEY\n  CLOUD_KEY: gcp_sa_, google_api_, azure_client_ → HIGH CLOUD_KEY"]:::tertiary
+    C:::secondary --> F["_scan_dex_apis(dex: DEXFile):\nFor each method reference in bytecode:\n  DANGEROUS_API_PATTERNS:\n    Runtime.getRuntime/exec → CRITICAL EXEC_CALL\n    ProcessBuilder.command → CRITICAL EXEC_CALL\n    Class.forName/Method.invoke → HIGH REFLECTION\n    DexClassLoader/PathClassLoader → CRITICAL DYNAMIC_CODE_LOAD\n    URL.openConnection (http://) → MEDIUM CLEARTEXT_NETWORK\n  CRYPTO_PATTERNS:\n    Cipher.getInstance('AES/ECB') → HIGH WEAK_CIPHER_ECB\n    MessageDigest.getInstance('MD5') → MEDIUM WEAK_HASH\n    MessageDigest.getInstance('SHA1') → LOW WEAK_HASH\n    SecureRandom fallback patterns → MEDIUM WEAK_RNG\n    IvParameterSpec(new byte[16]) (zero IV) → HIGH STATIC_IV"]:::tertiary
+    D:::tertiary --> G["List[DexFinding]\nDexFinding: severity, category, detail, class_name, method_name"]:::tertiary
+    E:::tertiary --> G:::tertiary
+    F:::tertiary --> G:::tertiary
+    G:::tertiary --> H(["DexAnalyzer.report(findings) → str\nSorted by severity: CRITICAL → HIGH → MEDIUM → LOW\nGrouped by category with count header"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Finding reference

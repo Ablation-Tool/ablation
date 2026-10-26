@@ -18,10 +18,20 @@ Detect Python-to-Lua code injection vulnerabilities: finding `str.format()`, f-s
 
 ```mermaid
 flowchart TD
-    A["LuaInjectionAnalyzer.scan(path)"] --> B["Parse Python source via ast module:\n  Find str.format() / f-string / %-format calls\n  where the format template contains Lua syntax:\n    '--' or '[[' or 'end' or 'function'\n  Extract: template string, variable names"]
-    B --> C["Classify injection context:\n  COMMENT: embedded in Lua comment -- {var}\n    \\n in var breaks comment → code injection\n  STRING: embedded in [[ {var} ]] literal\n    ]] in var breaks string → code injection\n  EXPRESSION: bare {var} in Lua expression\n    any Lua operator char in var → code injection\n  → LuaInjectionFinding"]
-    C --> D["LuaInjectionFinding:\n  file: str\n  line: int\n  context: str  (COMMENT | STRING | EXPRESSION)\n  template: str\n  var_names: List[str]\n  escape_needed: str\n  severity: CRITICAL | HIGH\n  as_dict() → dict"]
-    D --> E["LuaInjectionAnalyzer.report(findings) → str"]
+    A(["LuaInjectionAnalyzer.scan(path)"]):::input --> B["Parse Python source via ast module:\n  Find str.format() / f-string / %-format calls\n  where the format template contains Lua syntax:\n    '--' or '[[' or 'end' or 'function'\n  Extract: template string, variable names"]:::primary
+    B:::primary --> C["Classify injection context:\n  COMMENT: embedded in Lua comment · {var}\n    \\n in var breaks comment → code injection\n  STRING: embedded in [[ {var} ]] literal\n    ]] in var breaks string → code injection\n  EXPRESSION: bare {var} in Lua expression\n    any Lua operator char in var → code injection\n  → LuaInjectionFinding"]:::secondary
+    C:::secondary --> D["LuaInjectionFinding:\n  file: str\n  line: int\n  context: str  (COMMENT | STRING | EXPRESSION)\n  template: str\n  var_names: List[str]\n  escape_needed: str\n  severity: CRITICAL | HIGH\n  as_dict() → dict"]:::tertiary
+    D:::tertiary --> E(["LuaInjectionAnalyzer.report(findings) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

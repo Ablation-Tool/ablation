@@ -18,10 +18,20 @@ Scan AI/MCP server source code Python, JavaScript, TypeScript for security vulne
 
 ```mermaid
 flowchart TD
-    A["MCPToolTaintScanner.from_path(root)"] --> B["scan() → List[MCPTaintFinding]\n  Scan all .py/.js/.ts in root:\n  Finding classes:\n    COOKIE_CLI: request.COOKIES/session_token passed as CLI arg\n      subprocess.run(['cmd', '--cookies', cookies_json])\n    PROMPT_INJECTION: user input in system_role/system prompt\n      messages=[{'role':'system','content':user_supplied}]\n    INPUT_VALIDATION: tool handler with no type check on args\n    SECRET_TOOL_OUTPUT: API key / secret in tool return value\n    SSRF: external URL built from tool argument\n  → MCPTaintFinding"]
-    B --> C["MCPTaintFinding:\n  file: str\n  line: int\n  finding_class: str\n  severity: CRITICAL | HIGH | MEDIUM | LOW\n  cwe: str\n  detail: str\n  snippet: str\n  fmt() → str"]
-    B --> D["scan_file(path) → List[MCPTaintFinding]\n  Scan a single file"]
-    C --> E["report(findings) → str"]
+    A(["MCPToolTaintScanner.from_path(root)"]):::input --> B["scan() → List[MCPTaintFinding]\n  Scan all .py/.js/.ts in root:\n  Finding classes:\n    COOKIE_CLI: request.COOKIES/session_token passed as CLI arg\n      subprocess.run(['cmd', '--cookies', cookies_json])\n    PROMPT_INJECTION: user input in system_role/system prompt\n      messages=[{'role':'system','content':user_supplied}]\n    INPUT_VALIDATION: tool handler with no type check on args\n    SECRET_TOOL_OUTPUT: API key / secret in tool return value\n    SSRF: external URL built from tool argument\n  → MCPTaintFinding"]:::primary
+    B:::primary --> C["MCPTaintFinding:\n  file: str\n  line: int\n  finding_class: str\n  severity: CRITICAL | HIGH | MEDIUM | LOW\n  cwe: str\n  detail: str\n  snippet: str\n  fmt() → str"]:::secondary
+    B:::primary --> D(["scan_file(path) → List[MCPTaintFinding]\n  Scan a single file"]):::output
+    C:::secondary --> E(["report(findings) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

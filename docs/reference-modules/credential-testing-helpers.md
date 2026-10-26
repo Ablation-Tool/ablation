@@ -18,9 +18,18 @@ Test SSH and FTP service authentication with credential lists using parallel thr
 
 ```mermaid
 flowchart TD
-    A["ssh_credential_spray(targets, usernames, passwords,\n    timeout=3.0, max_workers=20) → list\n  in: modules/lateral_movement.py\n  ThreadPoolExecutor(max_workers)\n  Per target:\n    TCP connect → port 22\n    Receive server banner (SSH-2.0-...)\n    Send client banner: SSH-2.0-OpenSSH_8.0\n    Banner accepted → SSH_SERVICE_EXPOSED (LOW)\n    Credential framing accepted → SSH_SPRAY_CANDIDATE (CRITICAL)\n  → [{severity, title, detail, host, port}]"] --> B["ftp_credential_spray(targets, usernames, passwords,\n    timeout=3.0) → list\n  in: modules/lateral_movement.py\n  TCP connect → port 21\n  Receive 220 banner\n  anonymous / x@x.com login attempt\n  Default pairs: admin/admin, ftp/ftp, admin/ftp, user/user\n  230 login successful → CRITICAL finding\n  → [{severity, title, detail, host, port}]"]
-    B --> C["LateralMovementEnumerator(host, port=445)\n  .probe_smb_null_session() → dict\n  in: modules/lateral_movement.py\n  SMBv1 Negotiate: dialects LANMAN1.0 / LM1.2X002 / NT LM 0.12\n  Session Setup ANDX: empty ANSI + Unicode passwords\n  NT Status 0x00000000 → null session accepted\n  → {null_session: bool, dialect: str, os: str,\n      security_mode: str, shares: list, error: str}"]
-    C --> D["detect_ssh_weak_auth_surface(host, port=22, timeout=10.0) → list\n  in: modules/lateral_movement.py\n  TCP connect → port 22\n  Read server banner\n  SSHv1 banner → SSH_LEGACY_VERSION (CRITICAL)\n  Known-vulnerable impl string → SSH_VULNERABLE_IMPLEMENTATION\n  → [{severity, title, detail, host, port}]"]
+    A(["ssh_credential_spray(targets, usernames, passwords,\n    timeout=3.0, max_workers=20) → list\n  in: modules/lateral_movement.py\n  ThreadPoolExecutor(max_workers)\n  Per target:\n    TCP connect → port 22\n    Receive server banner (SSH-2.0-...)\n    Send client banner: SSH-2.0-OpenSSH_8.0\n    Banner accepted → SSH_SERVICE_EXPOSED (LOW)\n    Credential framing accepted → SSH_SPRAY_CANDIDATE (CRITICAL)\n  → [{severity, title, detail, host, port}]"]):::input --> B["ftp_credential_spray(targets, usernames, passwords,\n    timeout=3.0) → list\n  in: modules/lateral_movement.py\n  TCP connect → port 21\n  Receive 220 banner\n  anonymous / x@x.com login attempt\n  Default pairs: admin/admin, ftp/ftp, admin/ftp, user/user\n  230 login successful → CRITICAL finding\n  → [{severity, title, detail, host, port}]"]:::primary
+    B:::primary --> C["LateralMovementEnumerator(host, port=445)\n  .probe_smb_null_session() → dict\n  in: modules/lateral_movement.py\n  SMBv1 Negotiate: dialects LANMAN1.0 / LM1.2X002 / NT LM 0.12\n  Session Setup ANDX: empty ANSI + Unicode passwords\n  NT Status 0x00000000 → null session accepted\n  → {null_session: bool, dialect: str, os: str,\n      security_mode: str, shares: list, error: str}"]:::secondary
+    C:::secondary --> D(["detect_ssh_weak_auth_surface(host, port=22, timeout=10.0) → list\n  in: modules/lateral_movement.py\n  TCP connect → port 22\n  Read server banner\n  SSHv1 banner → SSH_LEGACY_VERSION (CRITICAL)\n  Known-vulnerable impl string → SSH_VULNERABLE_IMPLEMENTATION\n  → [{severity, title, detail, host, port}]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

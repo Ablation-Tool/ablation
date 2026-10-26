@@ -18,23 +18,46 @@ Classify the provenance of command-string arguments at every exec-class sink cal
 
 ```mermaid
 flowchart TD
-    A["SinkArgClassifier.from_path(path)"] --> B["_init: parse PLT, .rodata ranges, func_starts\n_count_plt_callers: O(N) call-site count\nSkip dead sinks (0 callers)"]
-    B --> C["classify_all(): for each sink in plt"]
-    C --> D{sink PLT entry present?}
-    D -->|yes| E["_classify_sites(sink_name, plt_va, arg_pos)"]
-    E --> F["Find all call sites to plt_va via E8-rel32 scan"]
-    F --> G["For each call site VA: walk up to _LOOKBACK=40 insns backward"]
-    G --> H{Last write to arg_reg}
-    H -->|"LEA [rip+x] where x→.rodata range"| I[RODATA_CONST / LOW]
-    H -->|"MOV from entry-arg reg (rdi/rsi/rdx/rcx/r8/r9)"| J[ARG_PROPAGATED / HIGH]
-    H -->|"LEA/MOV reg, [rsp+x] or [rbp-x] (stack buffer)"| K["Snprintf recursion:\nsearch _SNPRINTF_SEARCH_WINDOW=60 insns before call for snprintf\nclassify snprintf format register (rdx for snprintf, r8 for __snprintf_chk)"]
-    K --> L{format reg provenance}
-    L -->|.rodata LEA| M[SNPRINTF_RODATA / MEDIUM]
-    L -->|entry-arg| N[ARG_PROPAGATED / HIGH]
-    L -->|not found| O[UNKNOWN / MEDIUM]
-    H -->|not resolved| O
-    I & J & M & N & O --> P[SinkClassification: sink_name, arg_pos, func_va, call_va, verdict, detail, severity]
-    P --> C
+    A(["SinkArgClassifier.from_path(path)"]):::input --> B["_init: parse PLT, .rodata ranges, func_starts\n_count_plt_callers: O(N) call-site count\nSkip dead sinks (0 callers)"]:::primary
+    B:::primary --> C["classify_all(): for each sink in plt"]:::secondary
+    C:::secondary --> D{"sink PLT entry present?"}:::neutral
+    D:::neutral -->|yes| E["_classify_sites(sink_name, plt_va, arg_pos)"]:::tertiary
+    E:::tertiary --> F["Find all call sites to plt_va via E8-rel32 scan"]:::tertiary
+    F:::tertiary --> G["For each call site VA: walk up to _LOOKBACK=40 insns backward"]:::tertiary
+    G:::tertiary --> H{"Last write to arg_reg"}:::neutral
+    H:::neutral -->|"LEA [rip+x] where x→.rodata range"| I["RODATA_CONST / LOW"]:::tertiary
+    H:::neutral -->|"MOV from entry-arg reg (rdi/rsi/rdx/rcx/r8/r9)"| J(["ARG_PROPAGATED / HIGH"]):::output
+    H:::neutral -->|"LEA/MOV reg, [rsp+x] or [rbp-x] (stack buffer)"| K["Snprintf recursion:\nsearch _SNPRINTF_SEARCH_WINDOW=60 insns before call for snprintf\nclassify snprintf format register (rdx for snprintf, r8 for __snprintf_chk)"]:::tertiary
+    K:::tertiary --> L{"format reg provenance"}:::neutral
+    L:::neutral -->|.rodata LEA| M(["SNPRINTF_RODATA / MEDIUM"]):::output
+    L:::neutral -->|entry-arg| N(["ARG_PROPAGATED / HIGH"]):::output
+    L:::neutral -->|not found| O(["UNKNOWN / MEDIUM"]):::output
+    H:::neutral -->|not resolved| O:::output
+    I:::tertiary --> P["SinkClassification: sink_name, arg_pos, func_va, call_va, verdict, detail, severity"]:::tertiary
+    P:::tertiary --> C:::secondary
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#546e7a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#546e7a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#546e7a,stroke-width:2px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
+    linkStyle 12 stroke:#2e7d32,stroke-width:3px
+    linkStyle 13 stroke:#2e7d32,stroke-width:3px
+    linkStyle 14 stroke:#2e7d32,stroke-width:3px
+    linkStyle 15 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 16 stroke:#00695c,stroke-width:2px
 ```
 
 ### The four verdicts

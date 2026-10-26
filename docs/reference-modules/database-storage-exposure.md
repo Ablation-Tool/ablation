@@ -18,9 +18,18 @@ Detect raw SQL injection in C/C++ ELF binaries that call the MySQL C API or SQLi
 
 ```mermaid
 flowchart TD
-    A["SqlSinkScanner.from_path(elf_path)\n  or .from_context(ctx)"] --> B["scan() → List[SqlFinding]\n  Step 1: Find SQL sink call sites\n    mysql_query, mysql_real_query\n    sqlite3_exec, sqlite3_prepare, sqlite3_prepare_v2\n  Step 2: Trace SQL string argument to builder\n    Follow backward from sink arg to snprintf/sprintf call\n    Extract format string from snprintf arg 3 (fmt pos)\n  Step 3: Inspect format string\n    Contains %s → SqlFinding(HIGH, CWE-89)\n    Contains %d only → SqlFinding(LOW)\n    Arg-propagated format string → SqlFinding(MEDIUM)"]
-    B --> C["SqlFinding:\n  sink_va: int   (address of mysql_query/sqlite3_exec call)\n  sink_name: str\n  fmt_va: int    (address of snprintf/sprintf call)\n  fmt_str: str   (format string if recoverable)\n  severity() → HIGH | MEDIUM | LOW\n  fmt() → str\n  as_dict() → dict"]
-    C --> D["report(findings) → str"]
+    A(["SqlSinkScanner.from_path(elf_path)\n  or .from_context(ctx)"]):::input --> B["scan() → List[SqlFinding]\n  Step 1: Find SQL sink call sites\n    mysql_query, mysql_real_query\n    sqlite3_exec, sqlite3_prepare, sqlite3_prepare_v2\n  Step 2: Trace SQL string argument to builder\n    Follow backward from sink arg to snprintf/sprintf call\n    Extract format string from snprintf arg 3 (fmt pos)\n  Step 3: Inspect format string\n    Contains %s → SqlFinding(HIGH, CWE-89)\n    Contains %d only → SqlFinding(LOW)\n    Arg-propagated format string → SqlFinding(MEDIUM)"]:::primary
+    B:::primary --> C["SqlFinding:\n  sink_va: int   (address of mysql_query/sqlite3_exec call)\n  sink_name: str\n  fmt_va: int    (address of snprintf/sprintf call)\n  fmt_str: str   (format string if recoverable)\n  severity() → HIGH | MEDIUM | LOW\n  fmt() → str\n  as_dict() → dict"]:::secondary
+    C:::secondary --> D(["report(findings) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

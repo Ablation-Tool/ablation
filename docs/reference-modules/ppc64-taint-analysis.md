@@ -18,9 +18,18 @@ Track data flow through PPC64 big-endian and little-endian ELF binaries: support
 
 ```mermaid
 flowchart TD
-    A["PPC64TaintTracker.from_context(ctx, endian='big')\n  or .from_path(path, endian='big')"] --> B["run() → List[TaintFindingPPC64]\n  For each function in ctx.func_starts:\n    Source detection:\n      BL recv/recvfrom/read/fgets → r3 tainted\n    Propagation (PPC64 RISC rules):\n      mr Rd, Rs: copy taint\n      lwz/lbz/lhz: load-from-tainted-ptr → tainted\n      stw/stb: store (track taint to stack)\n      ori/addi/rlwinm: arithmetic preserves taint\n      BL callee: caller-saved r0/r3-r12 cleared\n    Sink detection:\n      BL system/execv/popen: r3 arg checked\n      → TaintFindingPPC64 if r3 tainted at sink call"]
-    B --> C["run_on_function(func_va, func_end_va) → List[TaintFindingPPC64]\n  Run taint only for specified function range\n  Used by IPRegAnnotator for hop-by-hop tracing"]
-    C --> D["TaintFindingPPC64 fields:\n  binary: str  func_va: int  func_name: str\n  sink_va: int  sink_name: str\n  tainted_args: List[int]  (0-indexed, 0 = r3)\n  source_name: str"]
+    A(["PPC64TaintTracker.from_context(ctx, endian='big')\n  or .from_path(path, endian='big')"]):::input --> B["run() → List[TaintFindingPPC64]\n  For each function in ctx.func_starts:\n    Source detection:\n      BL recv/recvfrom/read/fgets → r3 tainted\n    Propagation (PPC64 RISC rules):\n      mr Rd, Rs: copy taint\n      lwz/lbz/lhz: load-from-tainted-ptr → tainted\n      stw/stb: store (track taint to stack)\n      ori/addi/rlwinm: arithmetic preserves taint\n      BL callee: caller-saved r0/r3-r12 cleared\n    Sink detection:\n      BL system/execv/popen: r3 arg checked\n      → TaintFindingPPC64 if r3 tainted at sink call"]:::primary
+    B:::primary --> C["run_on_function(func_va, func_end_va) → List[TaintFindingPPC64]\n  Run taint only for specified function range\n  Used by IPRegAnnotator for hop-by-hop tracing"]:::secondary
+    C:::secondary --> D(["TaintFindingPPC64 fields:\n  binary: str  func_va: int  func_name: str\n  sink_va: int  sink_name: str\n  tainted_args: List[int]  (0-indexed, 0 = r3)\n  source_name: str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

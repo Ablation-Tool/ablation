@@ -18,10 +18,20 @@ Execute leaf functions with controlled register inputs using Unicorn: capturing 
 
 ```mermaid
 flowchart TD
-    A["LeafFunctionChecker.from_path(binary_path)\n  or .from_xref_graph(xg, plt_range)"] --> B["is_leaf(va, ctx) → bool\n  Check: does function make any calls?\n  A call to a PLT stub = non-leaf\n  A call to an internal function = non-leaf\n  check_report(va, ctx) → str  (reason if non-leaf)"]
-    B --> C["DynamicSandbox.from_path(binary_path, arch)"]
-    C --> D["probe(func_va, inputs: Dict[reg, int],\n       input_mem: Optional[bytes] = None) → SandboxResult\n  Map binary into Unicorn memory\n  Set registers from inputs dict\n  Run from func_va until ret instruction\n  Abort if: PLT hook, insn count > 100K, memory fault"]
-    D --> E["SandboxResult:\n  outputs: Dict[reg, int]  (register values at return)\n  insn_count: int\n  status: 'ok' | 'timeout' | 'fault' | 'abort'\n  behavioral_signature() → str\n    (compact string encoding of output values for clustering)"]
+    A(["LeafFunctionChecker.from_path(binary_path)\n  or .from_xref_graph(xg, plt_range)"]):::input --> B["is_leaf(va, ctx) → bool\n  Check: does function make any calls?\n  A call to a PLT stub = non-leaf\n  A call to an internal function = non-leaf\n  check_report(va, ctx) → str  (reason if non-leaf)"]:::primary
+    B:::primary --> C["DynamicSandbox.from_path(binary_path, arch)"]:::secondary
+    C:::secondary --> D["probe(func_va, inputs: Dict[reg, int],\n       input_mem: Optional[bytes] = None) → SandboxResult\n  Map binary into Unicorn memory\n  Set registers from inputs dict\n  Run from func_va until ret instruction\n  Abort if: PLT hook, insn count > 100K, memory fault"]:::tertiary
+    D:::tertiary --> E(["SandboxResult:\n  outputs: Dict[reg, int]  (register values at return)\n  insn_count: int\n  status: 'ok' | 'timeout' | 'fault' | 'abort'\n  behavioral_signature() → str\n    (compact string encoding of output values for clustering)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

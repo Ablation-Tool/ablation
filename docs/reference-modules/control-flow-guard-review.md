@@ -18,10 +18,20 @@ Analyze Windows PE binaries for Control Flow Guard (CFG) bypass opportunities: d
 
 ```mermaid
 flowchart TD
-    A["CFGBypassDetector.from_path('ntdll.dll')"] --> B["Parse IMAGE_LOAD_CONFIG_DIRECTORY:\n  CFGConfig:\n    instrumented(): IMAGE_GUARD_CF_INSTRUMENTED flag\n    table_present(): IMAGE_GUARD_CF_FUNCTION_TABLE_PRESENT\n    export_suppression(): IMAGE_GUARD_RF_EXPORT_SUPPRESSION\n    longjump_table(): IMAGE_GUARD_CF_LONGJUMP_TABLE_PRESENT\n    xfg_enabled(): IMAGE_GUARD_RF_ENABLE_XFG\n    entry_stride(): bytes per CFG table entry (4 or 8)"]
-    B --> C["scan() → List[CFGBypassFinding]\n  Finding 1: CFG_ABSENT if not instrumented()\n  Finding 2: EXPORT_SUPPRESSION_MISSING if instrumented() and not export_suppression()\n  Finding 3: For each export not in CFG table → CFG_TARGET_NOT_SUPPRESSED\n    (only when export_suppression() is True but entry is missing)"]
-    C --> D["CFGBypassFinding:\n  category: 'cfg_disabled' | 'no_export_suppression' | 'export_not_in_table'\n  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM'\n  title: str\n  location: str\n  description: str\n  va: int\n  cwe: str"]
-    D --> E["report(findings) → str"]
+    A(["CFGBypassDetector.from_path('ntdll.dll')"]):::input --> B["Parse IMAGE_LOAD_CONFIG_DIRECTORY:\n  CFGConfig:\n    instrumented(): IMAGE_GUARD_CF_INSTRUMENTED flag\n    table_present(): IMAGE_GUARD_CF_FUNCTION_TABLE_PRESENT\n    export_suppression(): IMAGE_GUARD_RF_EXPORT_SUPPRESSION\n    longjump_table(): IMAGE_GUARD_CF_LONGJUMP_TABLE_PRESENT\n    xfg_enabled(): IMAGE_GUARD_RF_ENABLE_XFG\n    entry_stride(): bytes per CFG table entry (4 or 8)"]:::primary
+    B:::primary --> C["scan() → List[CFGBypassFinding]\n  Finding 1: CFG_ABSENT if not instrumented()\n  Finding 2: EXPORT_SUPPRESSION_MISSING if instrumented() and not export_suppression()\n  Finding 3: For each export not in CFG table → CFG_TARGET_NOT_SUPPRESSED\n    (only when export_suppression() is True but entry is missing)"]:::secondary
+    C:::secondary --> D["CFGBypassFinding:\n  category: 'cfg_disabled' | 'no_export_suppression' | 'export_not_in_table'\n  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM'\n  title: str\n  location: str\n  description: str\n  va: int\n  cwe: str"]:::tertiary
+    D:::tertiary --> E(["report(findings) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,10 +18,19 @@ Recover repeating multi-byte XOR keys from firmware images using three attack mo
 
 ```mermaid
 flowchart TD
-    A["XorSolver.solve(data: bytes,\n  hint_key_length: Optional[int]) → XorSolverResult\n  Stage 1: kpa_attack(data, magic_dict)\n    Try all known firmware magic bytes\n    Return if repeating key found (fast path)\n  Stage 2: ic_key_length(data) → int\n    IC analysis, top key-length candidates\n  Stage 3: freq_attack(data, key_length) → bytes\n    Per-position byte frequency → key bytes\n  → XorSolverResult(key, confidence, method)"]
-    A --> B["XorSolverResult:\n  key: bytes\n  confidence: float  (0.0–1.0)\n  method: str  ('kpa' | 'ic_freq' | 'failed')\n  decrypt(data: bytes) → bytes\n  fmt() → str"]
-    A --> C["recover_by_frequency(data, key_length) → XorSolverResult\n  Direct frequency attack without IC estimation\n  Use when key length is known from external source"]
-    A --> D["guess_key_length(data) → List[(length, ic_score)]\n  Return ranked list of key-length candidates\n  Use when debugging IC estimation"]
+    A(["XorSolver.solve(data: bytes,\n  hint_key_length: Optional[int]) → XorSolverResult\n  Stage 1: kpa_attack(data, magic_dict)\n    Try all known firmware magic bytes\n    Return if repeating key found (fast path)\n  Stage 2: ic_key_length(data) → int\n    IC analysis, top key-length candidates\n  Stage 3: freq_attack(data, key_length) → bytes\n    Per-position byte frequency → key bytes\n  → XorSolverResult(key, confidence, method)"]):::input
+    A:::input --> B(["XorSolverResult:\n  key: bytes\n  confidence: float  (0.0·1.0)\n  method: str  ('kpa' | 'ic_freq' | 'failed')\n  decrypt(data: bytes) → bytes\n  fmt() → str"]):::output
+    A:::input --> C(["recover_by_frequency(data, key_length) → XorSolverResult\n  Direct frequency attack without IC estimation\n  Use when key length is known from external source"]):::output
+    A:::input --> D(["guess_key_length(data) → List[(length, ic_score)]\n  Return ranked list of key-length candidates\n  Use when debugging IC estimation"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#2e7d32,stroke-width:3px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

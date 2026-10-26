@@ -18,8 +18,16 @@ Detect format string vulnerabilities in x86-64 ELF binaries: finding `printf`/`f
 
 ```mermaid
 flowchart TD
-    A["FormatStringScanner.from_context(ctx)\n  or .from_path(path)"] --> B["scan() → List[FmtStringFinding]\n  For each printf-family PLT call site:\n    Identify format register:\n      printf/puts: RDI\n      fprintf/dprintf: RSI\n      syslog/err/warn: second arg\n    Backward trace from call site:\n      LEA [RIP+disp] in .rodata → safe, skip\n      MOV from stack variable → POTENTIAL\n      Load from argument register → LIKELY\n      Direct recv/read return → CONFIRMED\n  → FmtStringFinding"]
-    B --> C["FmtStringFinding:\n  call_va: int\n  callee_name: str\n  format_reg: str\n  def_va: int\n  def_type: str\n  verdict() → str   (POTENTIAL | LIKELY | CONFIRMED)\n  severity: MEDIUM | HIGH | CRITICAL\n  as_dict() → dict\n  fmt() → str"]
+    A(["FormatStringScanner.from_context(ctx)\n  or .from_path(path)"]):::input --> B["scan() → List[FmtStringFinding]\n  For each printf-family PLT call site:\n    Identify format register:\n      printf/puts: RDI\n      fprintf/dprintf: RSI\n      syslog/err/warn: second arg\n    Backward trace from call site:\n      LEA [RIP+disp] in .rodata → safe, skip\n      MOV from stack variable → POTENTIAL\n      Load from argument register → LIKELY\n      Direct recv/read return → CONFIRMED\n  → FmtStringFinding"]:::primary
+    B:::primary --> C(["FmtStringFinding:\n  call_va: int\n  callee_name: str\n  format_reg: str\n  def_va: int\n  def_type: str\n  verdict() → str   (POTENTIAL | LIKELY | CONFIRMED)\n  severity: MEDIUM | HIGH | CRITICAL\n  as_dict() → dict\n  fmt() → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,11 +18,22 @@ Extract PKI private key material `fgt_512.key`, `fgt_2048.key` from FortiMail VM
 
 ```mermaid
 flowchart TD
-    A["FortiMailVmdkExtractor.from_zip(zip_path, output_dir)\n  or .from_vmdk(vmdk_path, output_dir)"] --> B["Stage 1: OVF zip extraction\n  Find VMDK member in .zip archive\n  Extract to working directory"]
-    B --> C["Stage 2: VMDK → raw conversion\n  qemu-img convert -f vmdk -O raw vmdk_path raw_path\n  raw_path: byte-addressable flat disk image"]
-    C --> D["Stage 3: MBR partition parse\n  Read 446-byte partition table from offset 0x1BE\n  Find P2 (type 0x83 Linux ext4)\n  dd bs=512 skip=lba_start count=lba_size → p2.img"]
-    D --> E["Stage 4: debugfs key extraction\n  debugfs -R 'dump /datafs.tar.gz' p2.img\n  tar -xz datafs.tar.gz → extract etc/fgt_*.key\n  → List[ExtractedKey(name, path, md5, sha256, bit_size)]"]
-    E --> F["VmdkExtractionResult:\n  keys: List[ExtractedKey]\n  partitions: List[PartitionInfo]\n  report() → str\n  cleanup() → removes tmpdir"]
+    A(["FortiMailVmdkExtractor.from_zip(zip_path, output_dir)\n  or .from_vmdk(vmdk_path, output_dir)"]):::input --> B["Stage 1: OVF zip extraction\n  Find VMDK member in .zip archive\n  Extract to working directory"]:::primary
+    B:::primary --> C["Stage 2: VMDK → raw conversion\n  qemu-img convert -f vmdk -O raw vmdk_path raw_path\n  raw_path: byte-addressable flat disk image"]:::secondary
+    C:::secondary --> D["Stage 3: MBR partition parse\n  Read 446-byte partition table from offset 0x1BE\n  Find P2 (type 0x83 Linux ext4)\n  dd bs=512 skip=lba_start count=lba_size → p2.img"]:::tertiary
+    D:::tertiary --> E["Stage 4: debugfs key extraction\n  debugfs -R 'dump /datafs.tar.gz' p2.img\n  tar -xz datafs.tar.gz → extract etc/fgt_*.key\n  → List[ExtractedKey(name, path, md5, sha256, bit_size)]"]:::tertiary
+    E:::tertiary --> F(["VmdkExtractionResult:\n  keys: List[ExtractedKey]\n  partitions: List[PartitionInfo]\n  report() → str\n  cleanup() → removes tmpdir"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

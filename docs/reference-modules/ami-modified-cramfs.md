@@ -18,16 +18,32 @@ Parse and extract AMI-modified CramFS filesystem images from BMC firmware: handl
 
 ```mermaid
 flowchart TD
-    A["AmiCramFSExtractor.from_image(image_path, offset)"] --> B["Seek to offset\nRead 8 bytes: magic (0x28cd3d45) + total_size\nVerify magic; guard total_size ≤ 256 MB\nRead total_size bytes → cramfs buffer"]
-    B --> C["__init__(cramfs):\nRoot inode at fixed _ROOT_INODE_OFF=0x40\n_parse_inode(cramfs, 0x40):\nw0,w1,w2,w3 = struct.unpack '<IIII'\nmode=w0[0:16], uid=w0[16:32]\nsize=w1[0:24], gid=w1[24:32]\nnamelen = (w2 >> 8) & 0x3F\ndata_off = w3\nnext_off = off + 16 + namelen*4"]
-    C --> D["list_files() or extract_all(out_dir):\n_walk_paths(root_data_va, root_size, '')"]
-    D --> E["_parse_entries(cramfs, byte_off, dir_size):\nRead 16-byte inodes from byte_off to byte_off+dir_size\nFor each inode: read name = cramfs[off+16 : off+16+namelen*4]\nrstrip(null), decode ascii\nAppend AmiCramFSEntry(name, mode, uid, gid, size, data_off)"]
-    E --> F{"is_dir?"}
-    F -->|yes| G["Recurse: _walk_paths(entry.byte_offset, entry.size, rel)"]
-    F -->|no: regular file| H["_decompress_file(cramfs, data_off, size):\nnblocks = ceil(size / 4096)\nptr_base = data_off * 4\nRead nblocks×4 end-pointers at ptr_base\nFor block i: blk_start=ptrs[i-1], blk_end=ptrs[i]\nzlib.decompress(compressed)\nIf zlib.error: scan for CMF byte 0x78 {0x01,0x5e,0x9c,0xda}\nIf no valid zlib found: use raw bytes"]
-    F -->|no: symlink| I["_decompress_file → target path bytes\nResolve vs out_dir realpath\nSkip if escape detected (../../ etc.)"]
-    H --> J["Write file to out_dir; chmod(mode & 0o777)"]
-    I --> J
+    A(["AmiCramFSExtractor.from_image(image_path, offset)"]):::input --> B["Seek to offset\nRead 8 bytes: magic (0x28cd3d45) + total_size\nVerify magic; guard total_size ≤ 256 MB\nRead total_size bytes → cramfs buffer"]:::primary
+    B:::primary --> C["__init__(cramfs):\nRoot inode at fixed _ROOT_INODE_OFF=0x40\n_parse_inode(cramfs, 0x40):\nw0,w1,w2,w3 = struct.unpack '<IIII'\nmode=w0[0:16], uid=w0[16:32]\nsize=w1[0:24], gid=w1[24:32]\nnamelen = (w2 >> 8) & 0x3F\ndata_off = w3\nnext_off = off + 16 + namelen*4"]:::secondary
+    C:::secondary --> D["list_files() or extract_all(out_dir):\n_walk_paths(root_data_va, root_size, '')"]:::tertiary
+    D:::tertiary --> E["_parse_entries(cramfs, byte_off, dir_size):\nRead 16-byte inodes from byte_off to byte_off+dir_size\nFor each inode: read name = cramfs[off+16 : off+16+namelen*4]\nrstrip(null), decode ascii\nAppend AmiCramFSEntry(name, mode, uid, gid, size, data_off)"]:::tertiary
+    E:::tertiary --> F{"is_dir?"}:::neutral
+    F:::neutral -->|yes| G(["Recurse: _walk_paths(entry.byte_offset, entry.size, rel)"]):::output
+    F:::neutral -->|no: regular file| H["_decompress_file(cramfs, data_off, size):\nnblocks = ceil(size / 4096)\nptr_base = data_off * 4\nRead nblocks×4 end-pointers at ptr_base\nFor block i: blk_start=ptrs[i-1], blk_end=ptrs[i]\nzlib.decompress(compressed)\nIf zlib.error: scan for CMF byte 0x78 {0x01,0x5e,0x9c,0xda}\nIf no valid zlib found: use raw bytes"]:::tertiary
+    F:::neutral -->|no: symlink| I["_decompress_file → target path bytes\nResolve vs out_dir realpath\nSkip if escape detected (../../ etc.)"]:::tertiary
+    H:::tertiary --> J(["Write file to out_dir; chmod(mode & 0o777)"]):::output
+    I:::tertiary --> J:::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#546e7a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Inode layout comparison

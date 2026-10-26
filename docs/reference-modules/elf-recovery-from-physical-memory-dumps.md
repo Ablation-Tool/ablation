@@ -18,9 +18,18 @@ Decrypt PS3 SELF Signed ELF files programmatically inside a Python pipeline: aut
 
 ```mermaid
 flowchart TD
-    A["PS3SELFDecryptor.from_path(self_path)\n  Read SCE header (0x53434500 magic)\n  Extract key_rev (bytes 6-7)\n  Select keyset: ERK, RIV from registered key table"] --> B["decrypt(in_path, out_path) → SELFDecryptResult\n  Read SELF sections from header\n  AES-128-CBC with ERK/RIV → decrypt encrypted sections\n  Reconstruct ELF segments in output file\n  → SELFDecryptResult(out_path, success, error_msg)"]
-    A --> C["decrypt_to_tmp(in_path, suffix='.elf') → str\n  Creates temp file, calls decrypt()\n  Returns temp file path\n  Caller responsible for cleanup"]
-    A --> D["register_keyset(key_rev, erk, riv)\n  Register additional ERK/RIV pairs\n  Enables support for new PS3 firmware eras"]
+    A(["PS3SELFDecryptor.from_path(self_path)\n  Read SCE header (0x53434500 magic)\n  Extract key_rev (bytes 6-7)\n  Select keyset: ERK, RIV from registered key table"]):::input --> B(["decrypt(in_path, out_path) → SELFDecryptResult\n  Read SELF sections from header\n  AES-128-CBC with ERK/RIV → decrypt encrypted sections\n  Reconstruct ELF segments in output file\n  → SELFDecryptResult(out_path, success, error_msg)"]):::output
+    A:::input --> C(["decrypt_to_tmp(in_path, suffix='.elf') → str\n  Creates temp file, calls decrypt()\n  Returns temp file path\n  Caller responsible for cleanup"]):::output
+    A:::input --> D(["register_keyset(key_rev, erk, riv)\n  Register additional ERK/RIV pairs\n  Enables support for new PS3 firmware eras"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#2e7d32,stroke-width:3px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

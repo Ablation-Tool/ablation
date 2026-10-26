@@ -18,10 +18,20 @@ Identify PowerPC64/PPC32 functions with high concentrations of VMX (AltiVec) vec
 
 ```mermaid
 flowchart TD
-    A["VMXDensityScanner.from_path(elf_path)\n  or .from_context(ctx)"] --> B["scan(threshold=0.5, min_insn=8) → List[VMXFunctionResult]\n  For each function (func_va in ctx.func_starts):\n    Read words from func_va to next function start\n    Count word-aligned instructions where byte[0] ∈ {0x10, 0x11, 0x12, 0x13}\n    density = vmx_count / total_word_count\n    If density >= threshold AND total_insns >= min_insn:\n      → VMXFunctionResult(func_va, vmx_count, total_insns, density)"]
-    B --> C["VMXFunctionResult:\n  func_va: int\n  vmx_count: int\n  total_insns: int\n  density: float  (0.0–1.0)\n  label() → 'vector_math' if density >= threshold else 'general'"]
-    C --> D["report(results) → str\n  Sorted by density descending\n  Shows VA, density%, function name if available"]
-    B --> E["inject_labels(ctx, threshold=0.5) → int\n  ctx.set_name(va, 'vector_math_<va>', source='vmx_density')\n  Returns count of labeled functions"]
+    A(["VMXDensityScanner.from_path(elf_path)\n  or .from_context(ctx)"]):::input --> B["scan(threshold=0.5, min_insn=8) → List[VMXFunctionResult]\n  For each function (func_va in ctx.func_starts):\n    Read words from func_va to next function start\n    Count word-aligned instructions where byte[0] ∈ {0x10, 0x11, 0x12, 0x13}\n    density = vmx_count / total_word_count\n    If density >= threshold AND total_insns >= min_insn:\n      → VMXFunctionResult(func_va, vmx_count, total_insns, density)"]:::primary
+    B:::primary --> C["VMXFunctionResult:\n  func_va: int\n  vmx_count: int\n  total_insns: int\n  density: float  (0.0·1.0)\n  label() → 'vector_math' if density >= threshold else 'general'"]:::secondary
+    C:::secondary --> D(["report(results) → str\n  Sorted by density descending\n  Shows VA, density%, function name if available"]):::output
+    B:::primary --> E(["inject_labels(ctx, threshold=0.5) → int\n  ctx.set_name(va, 'vector_math_<va>', source='vmx_density')\n  Returns count of labeled functions"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

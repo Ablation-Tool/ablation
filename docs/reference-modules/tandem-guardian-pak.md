@@ -18,10 +18,20 @@ Extract and enumerate files from Tandem NonStop Guardian PAK archives: the propr
 
 ```mermaid
 flowchart TD
-    A["extract_to(data, dest) → List[GuardianFile]\n  or iter_files(data) → Iterator[GuardianFile]"] --> B["iter_chunks(data):\n  Walk zlib-compressed chunk sequence\n  Each chunk: decompress via zlib.decompress()\n  Yield decompressed chunk bytes"]
-    B --> C["Per chunk classification:\n  _is_tape_label(chunk) → skip\n  _is_file_catalog(chunk) → parse catalog entry\n  _is_file_header(chunk) → parse GuardianFile metadata\n    _parse_guardian_path(record) → (volume, subvolume, filename)\n  other → file data bytes"]
-    C --> D["GuardianFile:\n  volume: str    e.g. '$SYSTEM'\n  subvolume: str e.g. 'ZFILE'\n  filename: str  e.g. 'TGTCP100'\n  data: bytes    raw binary content\n  size: int"]
-    D --> E["extract_to(data, dest):\n  Write each GuardianFile.data to\n  dest / volume / subvolume / filename\n  Return List[GuardianFile] for inventory"]
+    A(["extract_to(data, dest) → List[GuardianFile]\n  or iter_files(data) → Iterator[GuardianFile]"]):::input --> B["iter_chunks(data):\n  Walk zlib-compressed chunk sequence\n  Each chunk: decompress via zlib.decompress()\n  Yield decompressed chunk bytes"]:::primary
+    B:::primary --> C["Per chunk classification:\n  _is_tape_label(chunk) → skip\n  _is_file_catalog(chunk) → parse catalog entry\n  _is_file_header(chunk) → parse GuardianFile metadata\n    _parse_guardian_path(record) → (volume, subvolume, filename)\n  other → file data bytes"]:::secondary
+    C:::secondary --> D["GuardianFile:\n  volume: str    e.g. '$SYSTEM'\n  subvolume: str e.g. 'ZFILE'\n  filename: str  e.g. 'TGTCP100'\n  data: bytes    raw binary content\n  size: int"]:::tertiary
+    D:::tertiary --> E(["extract_to(data, dest):\n  Write each GuardianFile.data to\n  dest / volume / subvolume / filename\n  Return List[GuardianFile] for inventory"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

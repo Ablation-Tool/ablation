@@ -18,10 +18,20 @@ Enumerate SUID/SGID binaries, `sudo` rules, Linux capabilities `cap_net_raw`, `c
 
 ```mermaid
 flowchart TD
-    A["PrivescEnumerator()"] --> B["check_suid_binaries() → List[dict]\n  find / -perm -4000 (SUID) -perm -2000 (SGID)\n  Cross-reference GTFOBins-known exploitable binaries\n  → [{path, suid, sgid, gtfobins_known}]"]
-    B --> C["check_sudo_access() → List[dict]\n  subprocess sudo -l (no exec)\n  Parse (ALL) NOPASSWD entries\n  → [{command, nopasswd, runasuser}]\n\ncheck_sudo_nopasswd() → List[dict]\n  Dedicated NOPASSWD extraction\n  → [{command, context}]"]
-    C --> D["check_capabilities() → List[dict]\n  /proc/PID/status → CapPrm/CapEff bitmask\n  filesystem: getcap -r / (if available)\n  Flagged caps: net_raw/setuid/dac_override/sys_ptrace\n  → [{binary_or_pid, capabilities, exploitable}]"]
-    D --> E["check_docker_group() → dict\n  id | grep docker\n  check_docker_socket(): /var/run/docker.sock writable?\n  → {in_group, socket_writable, lxd_group}\n\ncheck_world_writable_cron() → List[str]\n  /etc/cron.* world-writable scripts\n  → [path, ...]"]
+    A(["PrivescEnumerator()"]):::input --> B["check_suid_binaries() → List[dict]\n  find / -perm -4000 (SUID) -perm -2000 (SGID)\n  Cross-reference GTFOBins-known exploitable binaries\n  → [{path, suid, sgid, gtfobins_known}]"]:::primary
+    B:::primary --> C["check_sudo_access() → List[dict]\n  subprocess sudo -l (no exec)\n  Parse (ALL) NOPASSWD entries\n  → [{command, nopasswd, runasuser}]\n\ncheck_sudo_nopasswd() → List[dict]\n  Dedicated NOPASSWD extraction\n  → [{command, context}]"]:::secondary
+    C:::secondary --> D["check_capabilities() → List[dict]\n  /proc/PID/status → CapPrm/CapEff bitmask\n  filesystem: getcap -r / (if available)\n  Flagged caps: net_raw/setuid/dac_override/sys_ptrace\n  → [{binary_or_pid, capabilities, exploitable}]"]:::tertiary
+    D:::tertiary --> E(["check_docker_group() → dict\n  id | grep docker\n  check_docker_socket(): /var/run/docker.sock writable?\n  → {in_group, socket_writable, lxd_group}\n\ncheck_world_writable_cron() → List[str]\n  /etc/cron.* world-writable scripts\n  → [path, ...]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

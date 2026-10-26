@@ -18,11 +18,22 @@ Classify PPC64 big-endian ELFv1 `bl` branch-link call sites to dangerous sinks: 
 
 ```mermaid
 flowchart TD
-    A["Ppc64BeSinkClassifier.from_path(elf_path)\n  or .from_context(ctx)"] --> B["add_sink(name, dest_pos=1, src_pos=2)\n  Register a sink by PLT name and argument positions\n  Default sinks pre-loaded: strcpy, strcat, sprintf, snprintf,\n    system, popen, execve (with correct r3/r4/r5 positions)"]
-    B --> C["classify_all() → List[Ppc64SinkSite]\n  For each `bl` instruction targeting a registered sink PLT entry:\n    Backward walk from bl site in same basic block\n    Track: r3, r4, r5 → RegVal (Const/Arg/String/Ret/Unknown)\n    Apply verdict logic (same as SinkArgClassifier)"]
-    C --> D["Ppc64SinkSite:\n  va: int  (address of bl instruction)\n  sink_name: str\n  verdict: str  RODATA_CONST | SNPRINTF_RODATA | ARG_PROPAGATED | UNKNOWN\n  arg_vals: Dict[str, RegVal]  (r3/r4/r5 values at call)"]
-    D --> E["classify_sink(sink_name) → List[Ppc64SinkSite]\n  Classify only call sites for a specific sink"]
-    E --> F["report(results) → str"]
+    A(["Ppc64BeSinkClassifier.from_path(elf_path)\n  or .from_context(ctx)"]):::input --> B["add_sink(name, dest_pos=1, src_pos=2)\n  Register a sink by PLT name and argument positions\n  Default sinks pre-loaded: strcpy, strcat, sprintf, snprintf,\n    system, popen, execve (with correct r3/r4/r5 positions)"]:::primary
+    B:::primary --> C["classify_all() → List[Ppc64SinkSite]\n  For each `bl` instruction targeting a registered sink PLT entry:\n    Backward walk from bl site in same basic block\n    Track: r3, r4, r5 → RegVal (Const/Arg/String/Ret/Unknown)\n    Apply verdict logic (same as SinkArgClassifier)"]:::secondary
+    C:::secondary --> D["Ppc64SinkSite:\n  va: int  (address of bl instruction)\n  sink_name: str\n  verdict: str  RODATA_CONST | SNPRINTF_RODATA | ARG_PROPAGATED | UNKNOWN\n  arg_vals: Dict[str, RegVal]  (r3/r4/r5 values at call)"]:::tertiary
+    D:::tertiary --> E["classify_sink(sink_name) → List[Ppc64SinkSite]\n  Classify only call sites for a specific sink"]:::tertiary
+    E:::tertiary --> F(["report(results) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

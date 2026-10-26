@@ -18,13 +18,25 @@ Per-function control-flow graph construction for x86-64 ELF binaries using itera
 
 ```mermaid
 flowchart TD
-    A["CFGBuilder(binary_path, xg=xref_graph)"] --> B["build_function(func_va) → CFG\n  Push func_va onto work queue\n  Disassemble from each queued VA:\n    Stop at: ret, jmp (unconditional), hlt\n    Stop at: conditional branch (push both targets)\n    Stop at: call (push fall-through only)\n  Build BasicBlock: start, end, succs, insns\n  Loop until queue empty"]
-    B --> C["CFG:\n  func_va: int\n  blocks: Dict[int, BasicBlock]  — keyed by block start VA\n  entry: int  == func_va"]
-    C --> D["CFG.dominator_tree() → Dict[int, int]\n  {block_va: immediate_dominator_va}\n  Computed via Cooper-Harvey-Kennedy O(n log n) algorithm"]
-    C --> E["CFG.reaching_defs() → None\n  Populates def/use sets for register reaching defs\n  Used by flow-sensitive taint analysis"]
-    C --> F["CFG.stats() → dict\n  n_blocks, n_edges, n_loops, has_indirect_branch"]
-    A --> G["build_all() → Dict[int, CFG]\n  Build CFGs for all functions\n  detected by XRefGraph prologue scan"]
-    H["BasicBlock:\n  start: int (first insn VA)\n  end:   int (last insn VA, inclusive)\n  succs: List[int] (successor block start VAs)\n  insns: List[(va, mnemonic, op_str)]"]
+    A(["CFGBuilder(binary_path, xg=xref_graph)"]):::input --> B["build_function(func_va) → CFG\n  Push func_va onto work queue\n  Disassemble from each queued VA:\n    Stop at: ret, jmp (unconditional), hlt\n    Stop at: conditional branch (push both targets)\n    Stop at: call (push fall-through only)\n  Build BasicBlock: start, end, succs, insns\n  Loop until queue empty"]:::primary
+    B:::primary --> C["CFG:\n  func_va: int\n  blocks: Dict[int, BasicBlock]  · keyed by block start VA\n  entry: int  == func_va"]:::secondary
+    C:::secondary --> D(["CFG.dominator_tree() → Dict[int, int]\n  {block_va: immediate_dominator_va}\n  Computed via Cooper-Harvey-Kennedy O(n log n) algorithm"]):::output
+    C:::secondary --> E(["CFG.reaching_defs() → None\n  Populates def/use sets for register reaching defs\n  Used by flow-sensitive taint analysis"]):::output
+    C:::secondary --> F(["CFG.stats() → dict\n  n_blocks, n_edges, n_loops, has_indirect_branch"]):::output
+    A:::input --> G(["build_all() → Dict[int, CFG]\n  Build CFGs for all functions\n  detected by XRefGraph prologue scan"]):::output
+    H(["BasicBlock:\n  start: int (first insn VA)\n  end:   int (last insn VA, inclusive)\n  succs: List[int] (successor block start VAs)\n  insns: List[(va, mnemonic, op_str)]"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### ISA-specific CFG builders

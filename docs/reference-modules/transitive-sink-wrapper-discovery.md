@@ -18,11 +18,22 @@ Compute the transitive closure of passthrough wrappers around known exec sinks: 
 
 ```mermaid
 flowchart TD
-    A["SinkPropagator.from_path(path)\n  or .from_context(ctx)"] --> B["propagate() → List[SinkWrapper]\n  Initial seed: all known PLT sinks\n    (system, popen, execve, execl, execvp, etc.)\n  add_sink(name, arg_pos) to extend"]
-    B --> C["Level 1 scan:\n  For each function in binary:\n    Does it call a known sink with its own arg at sink_arg_pos?\n    i.e., 'call system' where rdi ← rdi (function entry arg 0)?\n    → new SinkWrapper(name=func, arg_pos=0, chain=['system'])"]
-    C --> D["Iterate to fixed point:\n  Use Level 1 wrappers as new sinks\n  Find Level 2 wrappers that call Level 1 wrappers\n  Repeat until no new wrappers found\n  Max depth: configurable (default: unlimited)"]
-    D --> E["SinkWrapper:\n  wrapper_name: str\n  wrapper_arg_pos: int\n  chain: List[str]  (full call chain to base sink)\n  depth: int  (1 = direct wrapper, 2 = wrapper of wrapper, ...)\n  fmt() → formatted chain\n  as_dict() → structured output"]
-    E --> F["report(wrappers) → str\n  Group by depth level\n  Show wrapper name + chain for each"]
+    A(["SinkPropagator.from_path(path)\n  or .from_context(ctx)"]):::input --> B["propagate() → List[SinkWrapper]\n  Initial seed: all known PLT sinks\n    (system, popen, execve, execl, execvp, etc.)\n  add_sink(name, arg_pos) to extend"]:::primary
+    B:::primary --> C["Level 1 scan:\n  For each function in binary:\n    Does it call a known sink with its own arg at sink_arg_pos?\n    i.e., 'call system' where rdi ← rdi (function entry arg 0)?\n    → new SinkWrapper(name=func, arg_pos=0, chain=['system'])"]:::secondary
+    C:::secondary --> D["Iterate to fixed point:\n  Use Level 1 wrappers as new sinks\n  Find Level 2 wrappers that call Level 1 wrappers\n  Repeat until no new wrappers found\n  Max depth: configurable (default: unlimited)"]:::tertiary
+    D:::tertiary --> E["SinkWrapper:\n  wrapper_name: str\n  wrapper_arg_pos: int\n  chain: List[str]  (full call chain to base sink)\n  depth: int  (1 = direct wrapper, 2 = wrapper of wrapper, ...)\n  fmt() → formatted chain\n  as_dict() → structured output"]:::tertiary
+    E:::tertiary --> F(["report(wrappers) → str\n  Group by depth level\n  Show wrapper name + chain for each"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,16 +18,32 @@ Track a specific function across binary versions using a three-stage homolog mat
 
 ```mermaid
 flowchart TD
-    A["version_delta: seed_binary + seed_va → target_binary"] --> B["BinaryClassification.from_path(target)\n  ELF32/ELF64, arch detection"]
-    B --> C["FuncFeatures.from_disasm_lines(disasm) for each target function\n  Stage 1: structural pre-filter\n    block_count ±2, edge_count ±30% of seed function"]
-    C --> D["Stage 2: mnemonic 4-gram Jaccard\n  Keep top-10 structural candidates\n  Rank by Jaccard(seed.ngrams, candidate.ngrams)"]
-    D --> E{"top-2 within 0.05?"}
-    E -->|"Yes"| F["Stage 3: SemanticSearcher tiebreaker\n  semantic_score breaks the tie"]
-    E -->|"No"| G["Accept top-1 candidate"]
-    F --> G
-    G --> H["compute_patch_delta(features_a, features_b) → PatchDelta\n  difflib.SequenceMatcher on normalized instruction lines\n  added, removed, context, ratio"]
-    H --> I["HomologMatch:\n  va, name, jaccard, semantic_score\n  confidence: HIGH/MEDIUM/LOW\n  delta: PatchDelta\n  new_callees: List[str]\n  removed_callees: List[str]\n  callee_changed: bool"]
-    I --> J["DeltaReport:\n  era_confirmed → Optional[int]\n  summary() → str\n  match.delta.unified_diff()"]
+    A(["version_delta: seed_binary + seed_va → target_binary"]):::input --> B["BinaryClassification.from_path(target)\n  ELF32/ELF64, arch detection"]:::primary
+    B:::primary --> C["FuncFeatures.from_disasm_lines(disasm) for each target function\n  Stage 1: structural pre-filter\n    block_count ±2, edge_count ±30% of seed function"]:::secondary
+    C:::secondary --> D["Stage 2: mnemonic 4-gram Jaccard\n  Keep top-10 structural candidates\n  Rank by Jaccard(seed.ngrams, candidate.ngrams)"]:::tertiary
+    D:::tertiary --> E{"top-2 within 0.05?"}:::neutral
+    E:::neutral -->|"Yes"| F["Stage 3: SemanticSearcher tiebreaker\n  semantic_score breaks the tie"]:::tertiary
+    E:::neutral -->|"No"| G["Accept top-1 candidate"]:::tertiary
+    F:::tertiary --> G:::tertiary
+    G:::tertiary --> H["compute_patch_delta(features_a, features_b) → PatchDelta\n  difflib.SequenceMatcher on normalized instruction lines\n  added, removed, context, ratio"]:::tertiary
+    H:::tertiary --> I["HomologMatch:\n  va, name, jaccard, semantic_score\n  confidence: HIGH/MEDIUM/LOW\n  delta: PatchDelta\n  new_callees: List[str]\n  removed_callees: List[str]\n  callee_changed: bool"]:::tertiary
+    I:::tertiary --> J(["DeltaReport:\n  era_confirmed → Optional[int]\n  summary() → str\n  match.delta.unified_diff()"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#546e7a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

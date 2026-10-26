@@ -18,17 +18,32 @@ Convert a flat basic-block CFG into a tree of structured control-flow nodes `Seq
 
 ```mermaid
 flowchart TD
-    A["Structurizer(cfg, domtree, loopinfo, insn_emitter)"] --> B["structurize() → StructuredNode\n  Walk blocks in RPO (reverse post-order)\n  (dominators before dominated nodes)"]
-    B --> C{"Block is loop header?\n(LoopInfo.is_loop_header)"}
-    C -->|Yes| D["WhileNode: cover all natural loop body blocks\n  Recurse on blocks beyond loop exit\n  Back-edge branches → ContinueNode\n  Loop exit branches → BreakNode"]
-    C -->|No| E{"Block has 2 successors?\n(conditional branch)"}
-    E -->|Yes| F["IfNode(then_tree, else_tree)\n  Find join = PostDomTree.ipdom(block)\n  then_tree = blocks dominated by taken target, up to join\n  else_tree = blocks dominated by fall-through target, up to join\n  Recurse on blocks from join onward"]
-    E -->|No| G["SequenceNode: emit block instructions\n  via insn_emitter (caller-supplied)"]
-    D --> H["Return StructuredNode tree"]
-    F --> H
-    G --> H
+    A(["Structurizer(cfg, domtree, loopinfo, insn_emitter)"]):::input --> B["structurize() → StructuredNode\n  Walk blocks in RPO (reverse post-order)\n  (dominators before dominated nodes)"]:::primary
+    B:::primary --> C{"Block is loop header?\n(LoopInfo.is_loop_header)"}:::neutral
+    C:::neutral -->|Yes| D["WhileNode: cover all natural loop body blocks\n  Recurse on blocks beyond loop exit\n  Back-edge branches → ContinueNode\n  Loop exit branches → BreakNode"]:::secondary
+    C:::neutral -->|No| E{"Block has 2 successors?\n(conditional branch)"}:::neutral
+    E:::neutral -->|Yes| F["IfNode(then_tree, else_tree)\n  Find join = PostDomTree.ipdom(block)\n  then_tree = blocks dominated by taken target, up to join\n  else_tree = blocks dominated by fall-through target, up to join\n  Recurse on blocks from join onward"]:::tertiary
+    E:::neutral -->|No| G["SequenceNode: emit block instructions\n  via insn_emitter (caller-supplied)"]:::tertiary
+    D:::secondary --> H(["Return StructuredNode tree"]):::output
+    F:::tertiary --> H:::output
+    G:::tertiary --> H:::output
 
-    I["StructuredNode hierarchy:\n  SequenceNode(insns: List[InsnNode])\n  IfNode(cond_insn, then_node, else_node)\n  WhileNode(header_insn, body_node)\n  BreakNode  — replaces back-exit branch to loop exit\n  ContinueNode — replaces back-edge branch to loop header\n  ReturnNode  — replaces ret/reti"]
+    I(["StructuredNode hierarchy:\n  SequenceNode(insns: List[InsnNode])\n  IfNode(cond_insn, then_node, else_node)\n  WhileNode(header_insn, body_node)\n  BreakNode  · replaces back-exit branch to loop exit\n  ContinueNode · replaces back-edge branch to loop header\n  ReturnNode  · replaces ret/reti"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#546e7a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

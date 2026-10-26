@@ -18,11 +18,22 @@ Detect C12-class integer underflow bugs in protocol parsers across any x86-64 bi
 
 ```mermaid
 flowchart TD
-    A["LengthUnderflowScanner.from_path(path)\n  or .from_context(ctx)"] --> B["scan() → List[UnderflowFinding]\n  Disassemble all functions\n  For each function, search for:\n    1. movzwl/movzbl [mem], reg  (narrow load)\n    ...subsequent instructions...\n    2. lea -N(reg), dest OR sub $N, reg  (N in 4..256)\n    ...subsequent instructions...\n    3. movzwl %?x, dest  (uint16 truncation)\n    ...subsequent instructions...\n    4. call target  (pass wrapped value as arg)"]
-    B --> C["Bounds check detection:\n  Between steps 2 and 4:\n  Is there a cmp/test on the register?\n  If yes → guarded (lower confidence)\n  If no → unguarded (higher confidence)"]
-    C --> D["UnderflowFinding:\n  func_va, narrow_load_va, sub_va, truncate_va, call_va\n  header_size: N (subtracted constant)\n  register, call_target\n  guarded: bool\n  fmt() → formatted finding"]
-    D --> E["scan_unguarded() → List[UnderflowFinding]\n  Returns only findings where guarded == False"]
-    E --> F["report(findings) → str\n  Summary table + per-finding detail"]
+    A(["LengthUnderflowScanner.from_path(path)\n  or .from_context(ctx)"]):::input --> B["scan() → List[UnderflowFinding]\n  Disassemble all functions\n  For each function, search for:\n    1. movzwl/movzbl [mem], reg  (narrow load)\n    ...subsequent instructions...\n    2. lea -N(reg), dest OR sub $N, reg  (N in 4..256)\n    ...subsequent instructions...\n    3. movzwl %?x, dest  (uint16 truncation)\n    ...subsequent instructions...\n    4. call target  (pass wrapped value as arg)"]:::primary
+    B:::primary --> C["Bounds check detection:\n  Between steps 2 and 4:\n  Is there a cmp/test on the register?\n  If yes → guarded (lower confidence)\n  If no → unguarded (higher confidence)"]:::secondary
+    C:::secondary --> D["UnderflowFinding:\n  func_va, narrow_load_va, sub_va, truncate_va, call_va\n  header_size: N (subtracted constant)\n  register, call_target\n  guarded: bool\n  fmt() → formatted finding"]:::tertiary
+    D:::tertiary --> E["scan_unguarded() → List[UnderflowFinding]\n  Returns only findings where guarded == False"]:::tertiary
+    E:::tertiary --> F(["report(findings) → str\n  Summary table + per-finding detail"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

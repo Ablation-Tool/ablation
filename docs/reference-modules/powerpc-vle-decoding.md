@@ -18,10 +18,20 @@ Decode PowerPC VLE Variable Length Encoding firmware for NXP e200z4/z6/z7 ECU co
 
 ```mermaid
 flowchart TD
-    A["EcuVLEDecoder.from_path(path, base_va)\n  or .from_bytes(data, base_va)"] --> B["insn_length(offset) → int\n  Read byte0 at offset\n  (byte0 & 0x90) == 0x10 → 4 bytes\n  else → 2 bytes  (SE instruction)"]
-    B --> C["decode_one(offset) → Optional[VLEInsn]\n  Decode 2 or 4-byte instruction\n  Security-relevant subset:\n    SE branches: BL/BLR/BCR (calls, returns)\n    SE loads: LBZ/LHZ/LWZ\n    SE stores: STB/STH/STW\n    VLE 32-bit: full Book E arithmetic + branches\n  VLEInsn: address, mnemonic, op_str, size"]
-    C --> D["disassemble(start_va, end_va) → Iterator[VLEInsn]"]
-    C --> E["function_starts() → List[int]\n  Scan full ROM for SE/VLE function prologue patterns:\n    STWU r1, -N(r1)  (stack frame allocation)\n    MFLR r0          (link register save)\n  Return sorted start addresses"]
+    A(["EcuVLEDecoder.from_path(path, base_va)\n  or .from_bytes(data, base_va)"]):::input --> B["insn_length(offset) → int\n  Read byte0 at offset\n  (byte0 & 0x90) == 0x10 → 4 bytes\n  else → 2 bytes  (SE instruction)"]:::primary
+    B:::primary --> C["decode_one(offset) → Optional[VLEInsn]\n  Decode 2 or 4-byte instruction\n  Security-relevant subset:\n    SE branches: BL/BLR/BCR (calls, returns)\n    SE loads: LBZ/LHZ/LWZ\n    SE stores: STB/STH/STW\n    VLE 32-bit: full Book E arithmetic + branches\n  VLEInsn: address, mnemonic, op_str, size"]:::secondary
+    C:::secondary --> D(["disassemble(start_va, end_va) → Iterator[VLEInsn]"]):::output
+    C:::secondary --> E(["function_starts() → List[int]\n  Scan full ROM for SE/VLE function prologue patterns:\n    STWU r1, -N(r1)  (stack frame allocation)\n    MFLR r0          (link register save)\n  Return sorted start addresses"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

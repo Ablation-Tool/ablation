@@ -18,19 +18,38 @@ Navigate the binary's call graph and string reference index: find every caller o
 
 ```mermaid
 flowchart TD
-    A["BinaryContext._build()"] --> B["_build_call_graph(data, binary)\nScan all instructions for CALL targets\nBuild call_edges: [(from_va, to_va, label)]"]
-    B --> C["_build_indices()\nBuild _callers_idx: {sym_name: [(va, name)]}\nBuild _callees_idx: {func_va: [(target_va, label)]}"]
-    A --> D["_build_string_xref_index(data, binary)\nnumpy displacement scan over all instructions\nFor each RIP-relative LEA/MOV, compute target VA\nIf target in strings: record (string_va, insn_va)"]
-    D --> E["_str_xref_idx: {string_va: [code_va, ...]}\n_func_str_idx: {func_va: [string_va, ...]}"]
-    C & E --> F[BinaryContext ready]
-    F --> G[Query API]
-    G --> G1["callers_of('malloc') → [(va, name), ...]"]
-    G --> G2["callees_of(0x22ccc0) → [(va, name), ...]"]
-    G --> G3["string_xrefs(0x4038a0) → [code_va, ...]"]
-    G --> G4["funcs_referencing_string(0x4038a0) → [func_va, ...]"]
-    G --> G5["strings_in_func(0x22ccc0) → [(string_va, content), ...]"]
-    G --> G6["strings_near(0x22d100, radius=128) → [(va, content), ...]"]
-    G --> G7["func_containing(0x22d440) → func_start_va (binary search)"]
+    A(["BinaryContext._build()"]):::input --> B["_build_call_graph(data, binary)\nScan all instructions for CALL targets\nBuild call_edges: [(from_va, to_va, label)]"]:::primary
+    B:::primary --> C["_build_indices()\nBuild _callers_idx: {sym_name: [(va, name)]}\nBuild _callees_idx: {func_va: [(target_va, label)]}"]:::tertiary
+    A:::input --> D["_build_string_xref_index(data, binary)\nnumpy displacement scan over all instructions\nFor each RIP-relative LEA/MOV, compute target VA\nIf target in strings: record (string_va, insn_va)"]:::secondary
+    D:::secondary --> E(["_str_xref_idx: {string_va: [code_va, ...]}\n_func_str_idx: {func_va: [string_va, ...]}"]):::output
+    C:::tertiary --> F["BinaryContext ready"]:::tertiary
+    F:::tertiary --> G["Query API"]:::tertiary
+    G:::tertiary --> G1(["callers_of('malloc') → [(va, name), ...]"]):::output
+    G:::tertiary --> G2(["callees_of(0x22ccc0) → [(va, name), ...]"]):::output
+    G:::tertiary --> G3(["string_xrefs(0x4038a0) → [code_va, ...]"]):::output
+    G:::tertiary --> G4(["funcs_referencing_string(0x4038a0) → [func_va, ...]"]):::output
+    G:::tertiary --> G5(["strings_in_func(0x22ccc0) → [(string_va, content), ...]"]):::output
+    G:::tertiary --> G6(["strings_near(0x22d100, radius=128) → [(va, content), ...]"]):::output
+    G:::tertiary --> G7(["func_containing(0x22d440) → func_start_va (binary search)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
+    linkStyle 12 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Call graph queries

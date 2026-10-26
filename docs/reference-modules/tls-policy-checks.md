@@ -18,11 +18,22 @@ Probe TLS policy enforcement: HSTS header presence and max-age, HTTP→HTTPS red
 
 ```mermaid
 flowchart TD
-    A["tls_enum.py — policy probes"] --> B["HSTS:\n  _http_get_headers(host, port, path='/')\n  Check: Strict-Transport-Security header present\n  Check: max-age >= 31536000 (1 year)\n  Check: includeSubDomains directive"]
-    B --> C["mTLS:\n  probe_mtls_enforcement(host, port):\n    Connect without client cert (ssl_ctx_no_verify)\n    200 OK → mTLS NOT enforced\n    403/400/SSL_ERROR_HANDSHAKE → mTLS enforced or partial"]
-    C --> D["Certificate Transparency:\n  check_certificate_transparency(host, port):\n    Check TLS extension 18 (SCT list) in ServerHello\n    Query: crt.sh API for cert SHA256\n    Missing SCTs → CT non-compliance finding"]
-    D --> E["ACME exposure:\n  probe_acme_endpoint_exposure(host):\n    GET /.well-known/acme-challenge/\n    200 OK → challenge path accessible externally\n    304/200 → ACME validation surface exposed"]
-    E --> F["Zero trust / SSL inspection:\n  probe_zero_trust_bypass_surface(host):\n    Extract chain; check intermediate CA against known corporate roots\n    Substituted CA → TLS inspection proxy detected\n  probe_tls_downgrade_attack(host, port):\n    POODLE/DROWN: SSLv3 + EXPORT cipher combo"]
+    A(["tls_enum.py · policy probes"]):::input --> B["HSTS:\n  _http_get_headers(host, port, path='/')\n  Check: Strict-Transport-Security header present\n  Check: max-age >= 31536000 (1 year)\n  Check: includeSubDomains directive"]:::primary
+    B:::primary --> C["mTLS:\n  probe_mtls_enforcement(host, port):\n    Connect without client cert (ssl_ctx_no_verify)\n    200 OK → mTLS NOT enforced\n    403/400/SSL_ERROR_HANDSHAKE → mTLS enforced or partial"]:::secondary
+    C:::secondary --> D["Certificate Transparency:\n  check_certificate_transparency(host, port):\n    Check TLS extension 18 (SCT list) in ServerHello\n    Query: crt.sh API for cert SHA256\n    Missing SCTs → CT non-compliance finding"]:::tertiary
+    D:::tertiary --> E["ACME exposure:\n  probe_acme_endpoint_exposure(host):\n    GET /.well-known/acme-challenge/\n    200 OK → challenge path accessible externally\n    304/200 → ACME validation surface exposed"]:::tertiary
+    E:::tertiary --> F(["Zero trust / SSL inspection:\n  probe_zero_trust_bypass_surface(host):\n    Extract chain; check intermediate CA against known corporate roots\n    Substituted CA → TLS inspection proxy detected\n  probe_tls_downgrade_attack(host, port):\n    POODLE/DROWN: SSLv3 + EXPORT cipher combo"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,12 +18,24 @@ Enumerate and attack GraphQL, gRPC, SOAP/WSDL, JSON-RPC, and WebSocket interface
 
 ```mermaid
 flowchart TD
-    A["api_re.py protocol probes"] --> B["probe_graphql(base):\nGRAPHQL_PATHS: /graphql, /api/graphql, /gql, /query, /v1/graphql, /graphiql\nPOST INTROSPECTION_QUERY → __schema in response\nPOST MUTATION_PROBE → 'mutation' in body\nIf errors → 'did you mean' → suggestion leak"]
-    B --> C["probe_graphql_advanced(base):\nBatch probe: POST array of 3 queries → array response (rate-limit bypass)\nAlias flood: u1: user(id:1) ... u10: user(id:10) → populated aliases\nField suggestion: POST '{userr { id }}' → 'did you mean' in errors\nDepth bomb: 5-level nested query → timeout or 200"]
-    A --> D["probe_grpc(base):\nGRPC_REFLECTION_PAYLOAD = b'\\x00\\x00\\x00\\x00\\x02\\x0a\\x00' (ListServices)\nPOST to /grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo\n+ /grpc.health.v1.Health/Check + v1 reflection path\nHeaders: Content-Type=application/grpc-web+proto, X-Grpc-Web=1\nREST probe: GET /v1/services, /grpc/services, /api/grpc/services, /reflection"]
-    A --> E["probe_wsdl_soap(base):\nWSDL_PATHS: /?wsdl, /service?wsdl, /wsdl, /soap, /xmlrpc, /?disco (14 paths)\nGET each path → check for 'wsdl'/'<definitions'/'soap:' in body\nExtract <operation name=...> and <xs:element name=...>\nPOST SOAP_XXE to base path → 'root:' or '/bin' in response = file read confirmed"]
-    A --> F["probe_jsonrpc(base):\nJSONRPC_PATHS: /rpc, /jsonrpc, /api/rpc, /api/jsonrpc, /json-rpc, /rpc.php...\nPOST JSONRPC_INTROSPECT: system.listMethods / system.describe / rpc.discover\nCheck 'result' not None → methods list exposed\nError code -32601 = method-not-found (expected); other codes = RPC endpoint confirmed\nBatch probe: array of requests → array response"]
-    A --> G["probe_websocket(base):\nWS_UPGRADE_PATHS: /ws, /websocket, /graphql, /subscriptions, /live, /events, /stream (11 paths)\nGET with Accept: text/event-stream → SSE stream (content-type: text/event-stream)\nGET with Upgrade: websocket headers → 101 Switching Protocols\nGET with Connection: Upgrade hint check in response headers\nPOST /graphql subscription query → 'not support' in errors = WS required"]
+    A(["api_re.py protocol probes"]):::input --> B["probe_graphql(base):\nGRAPHQL_PATHS: /graphql, /api/graphql, /gql, /query, /v1/graphql, /graphiql\nPOST INTROSPECTION_QUERY → __schema in response\nPOST MUTATION_PROBE → 'mutation' in body\nIf errors → 'did you mean' → suggestion leak"]:::primary
+    B:::primary --> C(["probe_graphql_advanced(base):\nBatch probe: POST array of 3 queries → array response (rate-limit bypass)\nAlias flood: u1: user(id:1) ... u10: user(id:10) → populated aliases\nField suggestion: POST '{userr { id }}' → 'did you mean' in errors\nDepth bomb: 5-level nested query → timeout or 200"]):::output
+    A:::input --> D(["probe_grpc(base):\nGRPC_REFLECTION_PAYLOAD = b'\\x00\\x00\\x00\\x00\\x02\\x0a\\x00' (ListServices)\nPOST to /grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo\n+ /grpc.health.v1.Health/Check + v1 reflection path\nHeaders: Content-Type=application/grpc-web+proto, X-Grpc-Web=1\nREST probe: GET /v1/services, /grpc/services, /api/grpc/services, /reflection"]):::output
+    A:::input --> E(["probe_wsdl_soap(base):\nWSDL_PATHS: /?wsdl, /service?wsdl, /wsdl, /soap, /xmlrpc, /?disco (14 paths)\nGET each path → check for 'wsdl'/'<definitions'/'soap:' in body\nExtract <operation name=...> and <xs:element name=...>\nPOST SOAP_XXE to base path → 'root:' or '/bin' in response = file read confirmed"]):::output
+    A:::input --> F(["probe_jsonrpc(base):\nJSONRPC_PATHS: /rpc, /jsonrpc, /api/rpc, /api/jsonrpc, /json-rpc, /rpc.php...\nPOST JSONRPC_INTROSPECT: system.listMethods / system.describe / rpc.discover\nCheck 'result' not None → methods list exposed\nError code -32601 = method-not-found (expected); other codes = RPC endpoint confirmed\nBatch probe: array of requests → array response"]):::output
+    A:::input --> G(["probe_websocket(base):\nWS_UPGRADE_PATHS: /ws, /websocket, /graphql, /subscriptions, /live, /events, /stream (11 paths)\nGET with Accept: text/event-stream → SSE stream (content-type: text/event-stream)\nGET with Upgrade: websocket headers → 101 Switching Protocols\nGET with Connection: Upgrade hint check in response headers\nPOST /graphql subscription query → 'not support' in errors = WS required"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Protocol findings severity

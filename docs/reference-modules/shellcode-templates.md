@@ -18,17 +18,34 @@ Generate position-independent shellcode for x86, x86-64, and ARM64 targets: reve
 
 ```mermaid
 flowchart TD
-    A["shellcode_reverse_tcp_linux_x86_64(lhost, lport)"] --> B["_pack_ip() + _pack_port()\nBuild sockaddr_in push sequence"]
-    B --> C["Assemble raw x86-64 bytes:\nsocket(AF_INET=2, SOCK_STREAM=1, 0) → SYS_socket=41\nconnect(sockfd, &sockaddr_in, 16) → SYS_connect=42\ndup2(sockfd, 0/1/2) loop → SYS_dup2=33\nexecve('/bin//sh', NULL, NULL) → SYS_execve=59"]
-    A2["shellcode_reverse_tcp_linux_arm64(lhost, lport, darwin=False)"] --> D["Select syscall table:\nLinux: socket=198, connect=203, dup3=24, execve=221\nDarwin: socket=0x2000061, connect=0x2000062, dup2=0x200005A, execve=0x200003B"]
-    D --> E["Emit ARM64 instructions via mov_imm8/mov_wide/movk helpers\nsvc #0 (0xD4000001) as syscall instruction\nExecutable '/bin/sh' embedded via ADR + branch-over pattern"]
-    A3["shellcode_execve_linux_x86(path)"] --> F["JMP/CALL/POP string embedding:\njmp forward → call back → pop esi (esi = &path)\nnull terminator written in-place via mov byte [esi+N], al\nno null bytes in instruction stream"]
-    A4["shellcode_bind_tcp_linux_x86_64(port)"] --> G["socket + bind(INADDR_ANY, port) + listen(backlog=1)\naccept() → r14=clientfd\ndup2(clientfd, 0/1/2) loop\nexecve('/bin//sh')"]
-    H["shellcode_staged_loader(fd, map_size, platform)"] --> I["mmap(NULL, map_size, PROT_RWX=7, MAP_ANON|MAP_PRIVATE=0x22, -1, 0)\nread(fd, mmap_addr, map_size)\njmp/call mmap_addr (execute second stage)"]
-    J["find_rop_gadgets(binary_data, base_addr)"] --> K["Scan for 8 patterns: ret, pop_rdi/rsi/rdx/rax ; ret, pop_rsp ; ret, syscall, int 0x80\nStep by 1 to catch overlapping matches\nReturn sorted List[RopGadget(addr, insns, source, type)]"]
-    L["compute_rop_chain_execve(gadgets, bin_sh_addr)"] --> M["Select first matching gadget per type: pop rax, pop rdi, pop rsi, pop rdx, syscall\n9 x 8-byte entries = 72 bytes total\nRaises ValueError naming missing gadget"]
-    N["detect_bad_bytes(shellcode, bad_set)"] --> O["Scan buffer, collect (offset, byte) pairs\nReturn {found, clean, offsets, bad_bytes_present, summary}"]
-    P["encode_xor_rolling(shellcode, key=0xAA)"] --> Q["Each byte XOR (initial_key + position) % 256\nReturn (encoded_payload, decoder_stub_x86_64)\nDecoder stub locates payload via call/pop, decodes in place, jmps"]
+    A(["shellcode_reverse_tcp_linux_x86_64(lhost, lport)"]):::input --> B["_pack_ip() + _pack_port()\nBuild sockaddr_in push sequence"]:::primary
+    B:::primary --> C(["Assemble raw x86-64 bytes:\nsocket(AF_INET=2, SOCK_STREAM=1, 0) → SYS_socket=41\nconnect(sockfd, &sockaddr_in, 16) → SYS_connect=42\ndup2(sockfd, 0/1/2) loop → SYS_dup2=33\nexecve('/bin//sh', NULL, NULL) → SYS_execve=59"]):::output
+    A2(["shellcode_reverse_tcp_linux_arm64(lhost, lport, darwin=False)"]):::input --> D["Select syscall table:\nLinux: socket=198, connect=203, dup3=24, execve=221\nDarwin: socket=0x2000061, connect=0x2000062, dup2=0x200005A, execve=0x200003B"]:::secondary
+    D:::secondary --> E(["Emit ARM64 instructions via mov_imm8/mov_wide/movk helpers\nsvc #0 (0xD4000001) as syscall instruction\nExecutable '/bin/sh' embedded via ADR + branch-over pattern"]):::output
+    A3(["shellcode_execve_linux_x86(path)"]):::input --> F(["JMP/CALL/POP string embedding:\njmp forward → call back → pop esi (esi = &path)\nnull terminator written in-place via mov byte [esi+N], al\nno null bytes in instruction stream"]):::output
+    A4(["shellcode_bind_tcp_linux_x86_64(port)"]):::input --> G(["socket + bind(INADDR_ANY, port) + listen(backlog=1)\naccept() → r14=clientfd\ndup2(clientfd, 0/1/2) loop\nexecve('/bin//sh')"]):::output
+    H(["shellcode_staged_loader(fd, map_size, platform)"]):::input --> I(["mmap(NULL, map_size, PROT_RWX=7, MAP_ANON|MAP_PRIVATE=0x22, -1, 0)\nread(fd, mmap_addr, map_size)\njmp/call mmap_addr (execute second stage)"]):::output
+    J(["find_rop_gadgets(binary_data, base_addr)"]):::input --> K(["Scan for 8 patterns: ret, pop_rdi/rsi/rdx/rax ; ret, pop_rsp ; ret, syscall, int 0x80\nStep by 1 to catch overlapping matches\nReturn sorted List[RopGadget(addr, insns, source, type)]"]):::output
+    L(["compute_rop_chain_execve(gadgets, bin_sh_addr)"]):::input --> M(["Select first matching gadget per type: pop rax, pop rdi, pop rsi, pop rdx, syscall\n9 x 8-byte entries = 72 bytes total\nRaises ValueError naming missing gadget"]):::output
+    N(["detect_bad_bytes(shellcode, bad_set)"]):::input --> O(["Scan buffer, collect (offset, byte) pairs\nReturn {found, clean, offsets, bad_bytes_present, summary}"]):::output
+    P(["encode_xor_rolling(shellcode, key=0xAA)"]):::input --> Q(["Each byte XOR (initial_key + position) % 256\nReturn (encoded_payload, decoder_stub_x86_64)\nDecoder stub locates payload via call/pop, decodes in place, jmps"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Syscall tables

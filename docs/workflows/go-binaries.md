@@ -49,16 +49,23 @@ The format is architecture-independent. x86-64, arm64, mips, and riscv64 Go bina
 
 ```mermaid
 flowchart TD
-    A[/"Go binary (stripped ELF)"/] --> B["GoPclntab / GoFuncTable\nLocate pclntab by magic scan or section header\nParse function table: VA → name string\nAll function names extracted without symbol table"]
+    A(["Go binary (stripped ELF)"]):::input --> B["GoPclntab / GoFuncTable\nLocate pclntab by magic scan or section header\nParse function table: VA → name string\nAll function names extracted without symbol table"]:::primary
 
-    B --> C["NameRegistry (via ctx.set_name)\nRegister all pclntab names with source='pclntab'\nNames appear in callee/caller output automatically"]
+    B:::primary --> C["NameRegistry (via ctx.set_name)\nRegister all pclntab names with source='pclntab'\nNames appear in callee/caller output automatically"]:::secondary
 
-    C --> D["BinaryContext\nNames visible in ctx.name(va), ctx.names_table()\nctx.callers_of('main.handleWebsocketUpgrade') works"]
+    C:::secondary --> D["BinaryContext\nNames visible in ctx.name(va), ctx.names_table()\nctx.callers_of('main.handleWebsocketUpgrade') works"]:::tertiary
 
-    D --> E[/"SemanticSearcher\nBERT corpus descriptions change from:\n  'func_0xABCD calls: runtime_memmove'\nto:\n  'main.handleWebsocketUpgrade calls:\n   runtime_memmove, net_http_ServeHTTP'\nAccuracy: ~0.20 unnamed → ~0.70+ named"/]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style E fill:#14532d,stroke:#166534,color:#dcfce7
+    D:::tertiary --> E(["SemanticSearcher\nBERT corpus descriptions change from:\n  'func_0xABCD calls: runtime_memmove'\nto:\n  'main.handleWebsocketUpgrade calls:\n   runtime_memmove, net_http_ServeHTTP'\nAccuracy: ~0.20 unnamed → ~0.70+ named"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---
@@ -136,14 +143,20 @@ Scans for: `os/exec.Command`, `exec.CommandContext`, `syscall.Exec`, `os.StartPr
 
 ```mermaid
 flowchart TD
-    A[/"Garble binary"/] --> B["runtime.morestack anchor\nmorestack is always present (stack growth is required)\nRecognized by its prologue pattern (architecture-specific)\nProvides ground-truth VA-to-file-offset mapping"]
+    A(["Garble binary"]):::input --> B["runtime.morestack anchor\nmorestack is always present (stack growth is required)\nRecognized by its prologue pattern (architecture-specific)\nProvides ground-truth VA-to-file-offset mapping"]:::primary
 
-    B --> C["Entry point tracing\nGarble disrupts standard ELF layout\nentry_point = Go runtime bootstrap VA\nTrace bootstrap → goroutine spawn → main.main"]
+    B:::primary --> C["Entry point tracing\nGarble disrupts standard ELF layout\nentry_point = Go runtime bootstrap VA\nTrace bootstrap → goroutine spawn → main.main"]:::secondary
 
-    C --> D[/"HTTP handler registration\nmux.HandleFunc pattern:\n  string literal (route) + function pointer (handler VA)\nRoutes visible even when handler names are hashed"/]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style D fill:#14532d,stroke:#166534,color:#dcfce7
+    C:::secondary --> D(["HTTP handler registration\nmux.HandleFunc pattern:\n  string literal (route) + function pointer (handler VA)\nRoutes visible even when handler names are hashed"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ```python

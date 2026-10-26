@@ -18,10 +18,20 @@ Parse Windows 3.x Linear Executable (LE) Virtual Device Driver binaries: resolvi
 
 ```mermaid
 flowchart TD
-    A["win16_le_vxd_sweep.py <binary.386> --vendor <v> --product <p>"] --> B["Detect LE magic at MZ[0x3C]:\n  Read 2 bytes == 'LE' (0x4C45)\n  Parse LE header:\n    le_ldrpages: loader page count\n    le_objcnt: object count\n    le_objoff: object table offset\n    le_pagoff: page data offset\n  Object page table: 3-byte BE page numbers + 1-byte flags\n  Compute data pages base: le_off + obj_table + loader_size + fixup_size"]
-    B --> C["LEBinary.code_objects() → List[dict]\n  Filter objects with EXEC attribute\n  Return {data: bytes, base_va: int} per code object"]
-    C --> D["LEBinary.scan_ddb(code_bytes) → Optional[dict]\n  Scan for VxD DDB signature (DDK magic)\n  Extract entry-point table from DDB\n  → {dev_name, dev_num, ctrl_proc, pm_api_proc, v86_api_proc, sdk_ver}"]
-    D --> E["Semantic sweep:\n  Capstone CS_ARCH_X86 + CS_MODE_32\n  Function starts: 32-bit prologue (PUSH EBP; MOV EBP, ESP)\n  Resolve INT 0x20 + DWORD → VMM service name\n  Ring-0-specific query set + standard queries\n  Output: reports/sweep_le_<vendor>_<product>_<ts>.md"]
+    A(["win16_le_vxd_sweep.py <binary.386> --vendor <v> --product <p>"]):::input --> B["Detect LE magic at MZ[0x3C]:\n  Read 2 bytes == 'LE' (0x4C45)\n  Parse LE header:\n    le_ldrpages: loader page count\n    le_objcnt: object count\n    le_objoff: object table offset\n    le_pagoff: page data offset\n  Object page table: 3-byte BE page numbers + 1-byte flags\n  Compute data pages base: le_off + obj_table + loader_size + fixup_size"]:::primary
+    B:::primary --> C["LEBinary.code_objects() → List[dict]\n  Filter objects with EXEC attribute\n  Return {data: bytes, base_va: int} per code object"]:::secondary
+    C:::secondary --> D["LEBinary.scan_ddb(code_bytes) → Optional[dict]\n  Scan for VxD DDB signature (DDK magic)\n  Extract entry-point table from DDB\n  → {dev_name, dev_num, ctrl_proc, pm_api_proc, v86_api_proc, sdk_ver}"]:::tertiary
+    D:::tertiary --> E(["Semantic sweep:\n  Capstone CS_ARCH_X86 + CS_MODE_32\n  Function starts: 32-bit prologue (PUSH EBP; MOV EBP, ESP)\n  Resolve INT 0x20 + DWORD → VMM service name\n  Ring-0-specific query set + standard queries\n  Output: reports/sweep_le_<vendor>_<product>_<ts>.md"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

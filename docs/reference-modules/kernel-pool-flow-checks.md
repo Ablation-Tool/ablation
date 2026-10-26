@@ -18,9 +18,18 @@ Detect Windows kernel pool buffer overflow candidates in driver PE binaries: tra
 
 ```mermaid
 flowchart TD
-    A["WindowsPoolTaintTracker.from_path(driver_path)"] --> B["scan() → List[PoolTaintFinding]\n  Step 1: Find ExAllocatePool*/ExAllocatePoolWithTag* call sites\n  Step 2: Backward slice on size argument (arg 0 or 1)\n    If size == IoStackLocation->Parameters...InputBufferLength:\n      → candidate (user-controlled)\n    If size == METHOD_NEITHER Type3InputBuffer pointer:\n      → candidate (user-controlled, direct)\n  Step 3: Bounds check scan\n    Is there a CMP/TEST + JBE/JLE before the allocation?\n    → severity: HIGH (no check) | MEDIUM (check present but weak)"]
-    B --> C["PoolTaintFinding:\n  alloc_va: int   (ExAllocatePool* call address)\n  size_source: str  (InputBufferLength / Type3InputBuffer / unknown)\n  transfer_type: str  (METHOD_BUFFERED | METHOD_NEITHER)\n  bounds_checked: bool\n  severity: str   HIGH | MEDIUM\n  fmt() → str"]
-    C --> D["report(findings) → str"]
+    A(["WindowsPoolTaintTracker.from_path(driver_path)"]):::input --> B["scan() → List[PoolTaintFinding]\n  Step 1: Find ExAllocatePool*/ExAllocatePoolWithTag* call sites\n  Step 2: Backward slice on size argument (arg 0 or 1)\n    If size == IoStackLocation->Parameters...InputBufferLength:\n      → candidate (user-controlled)\n    If size == METHOD_NEITHER Type3InputBuffer pointer:\n      → candidate (user-controlled, direct)\n  Step 3: Bounds check scan\n    Is there a CMP/TEST + JBE/JLE before the allocation?\n    → severity: HIGH (no check) | MEDIUM (check present but weak)"]:::primary
+    B:::primary --> C["PoolTaintFinding:\n  alloc_va: int   (ExAllocatePool* call address)\n  size_source: str  (InputBufferLength / Type3InputBuffer / unknown)\n  transfer_type: str  (METHOD_BUFFERED | METHOD_NEITHER)\n  bounds_checked: bool\n  severity: str   HIGH | MEDIUM\n  fmt() → str"]:::secondary
+    C:::secondary --> D(["report(findings) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

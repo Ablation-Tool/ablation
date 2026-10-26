@@ -18,9 +18,18 @@ Find every `CALL [reg+disp]` indirect dispatch site in x86-64 ELF `.text`: deter
 
 ```mermaid
 flowchart TD
-    A["VtableDispatchScanner(data, base_va)"] --> B["Scan .text for FF /2 encodings:\n  Walk bytes sequentially\n  At each FF byte: decode REX prefix, ModRM, SIB\n  CALL [reg+disp8]:  FF 50–57  (+ REX.B for r8–r15)\n  CALL [reg+disp32]: FF 90–97\n  CALL [SIB+disp]:   FF 14/54/94 SIB ...\n  → DispatchSite(va, reg_name, disp, encoding)"]
-    B --> C["DispatchReport:\n  sites: List[DispatchSite]\n  dead() → Dict[key, List[DispatchSite]]\n    slots with 0 callers (never dispatched)\n  live() → Dict[key, List[DispatchSite]]\n    slots with ≥1 caller\n  is_dead(key) → bool\n  sites_for(key) → List[DispatchSite]"]
-    C --> D["DispatchSite:\n  va: int\n  reg_name: str  (rax/rbx/.../r15)\n  disp: int\n  encoding: str  (disp8/disp32/sib)"]
+    A(["VtableDispatchScanner(data, base_va)"]):::input --> B["Scan .text for FF /2 encodings:\n  Walk bytes sequentially\n  At each FF byte: decode REX prefix, ModRM, SIB\n  CALL [reg+disp8]:  FF 50·57  (+ REX.B for r8·r15)\n  CALL [reg+disp32]: FF 90·97\n  CALL [SIB+disp]:   FF 14/54/94 SIB ...\n  → DispatchSite(va, reg_name, disp, encoding)"]:::primary
+    B:::primary --> C["DispatchReport:\n  sites: List[DispatchSite]\n  dead() → Dict[key, List[DispatchSite]]\n    slots with 0 callers (never dispatched)\n  live() → Dict[key, List[DispatchSite]]\n    slots with ≥1 caller\n  is_dead(key) → bool\n  sites_for(key) → List[DispatchSite]"]:::secondary
+    C:::secondary --> D(["DispatchSite:\n  va: int\n  reg_name: str  (rax/rbx/.../r15)\n  disp: int\n  encoding: str  (disp8/disp32/sib)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

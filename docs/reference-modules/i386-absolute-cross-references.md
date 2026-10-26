@@ -18,9 +18,18 @@ Discover function starts in stripped statically-linked i386 ELF binaries: where 
 
 ```mermaid
 flowchart TD
-    A["StaticELF32FuncStartScanner.from_path(elf_path)\n  or .from_context(ctx)"] --> B["scan() → List[int]\n  For each PT_LOAD + PF_X segment:\n    Primary scan: 55 89 e5 (push ebp; mov ebp, esp)\n      ~95% of CDECL functions\n    Secondary scan: 55 57 56 (push ebp; push edi; push esi)\n      callee-save without frame setup\n    Call-target fallback: scan for CALL rel32 (0xe8)\n      Collect all call targets not already in starts\n  Return sorted unique start addresses"]
-    B --> C["scan_full() → ScanResult\n  primary_count: int\n  secondary_count: int\n  call_target_count: int\n  starts: List[int]\n  report() → str"]
-    B --> D["inject(ctx: BinaryContext) → int\n  ctx.func_starts.extend(scan())\n  ctx.func_starts.sort() + dedup\n  Returns: count of new starts added"]
+    A(["StaticELF32FuncStartScanner.from_path(elf_path)\n  or .from_context(ctx)"]):::input --> B["scan() → List[int]\n  For each PT_LOAD + PF_X segment:\n    Primary scan: 55 89 e5 (push ebp; mov ebp, esp)\n      ~95% of CDECL functions\n    Secondary scan: 55 57 56 (push ebp; push edi; push esi)\n      callee-save without frame setup\n    Call-target fallback: scan for CALL rel32 (0xe8)\n      Collect all call targets not already in starts\n  Return sorted unique start addresses"]:::primary
+    B:::primary --> C(["scan_full() → ScanResult\n  primary_count: int\n  secondary_count: int\n  call_target_count: int\n  starts: List[int]\n  report() → str"]):::output
+    B:::primary --> D(["inject(ctx: BinaryContext) → int\n  ctx.func_starts.extend(scan())\n  ctx.func_starts.sort() + dedup\n  Returns: count of new starts added"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

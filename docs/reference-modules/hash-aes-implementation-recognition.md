@@ -18,11 +18,21 @@ Identify hash algorithm implementations MD5, SHA-1, SHA-256, SHA-512, CRC32 and 
 
 ```mermaid
 flowchart TD
-    A["HashAlgoDiscriminator(binary_data, base_va, arch='arm32')"] --> B["extract_constants(va, size) → List[(va, value)]\n  Capstone ARM32 disassembly of range\n  Collect: LDR [pc, #N] pool loads\n  Collect: MOVW/MOVT constant pairs\n  Collect: MOV #imm (12-bit ARM immediates)"]
-    B --> C["identify(constants) → HashAlgoMatch:\n  Match collected 32-bit values against:\n  MD5: {0xd76aa478, 0xe8c7b756, 0x242070db, ...}\n  SHA-1: {0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, ...}\n  SHA-256: {0x428a2f98, 0x71374491, 0xb5c0fbcf, ...}\n  SHA-512: {0x428a2f98d728ae22, ...} (64-bit)\n  CRC32: {0x77073096, 0xee0e612c, ...}\n  Returns algorithm name + match count"]
+    A(["HashAlgoDiscriminator(binary_data, base_va, arch='arm32')"]):::input --> B["extract_constants(va, size) → List[(va, value)]\n  Capstone ARM32 disassembly of range\n  Collect: LDR [pc, #N] pool loads\n  Collect: MOVW/MOVT constant pairs\n  Collect: MOV #imm (12-bit ARM immediates)"]:::primary
+    B:::primary --> C(["identify(constants) → HashAlgoMatch:\n  Match collected 32-bit values against:\n  MD5: {0xd76aa478, 0xe8c7b756, 0x242070db, ...}\n  SHA-1: {0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, ...}\n  SHA-256: {0x428a2f98, 0x71374491, 0xb5c0fbcf, ...}\n  SHA-512: {0x428a2f98d728ae22, ...} (64-bit)\n  CRC32: {0x77073096, 0xee0e612c, ...}\n  Returns algorithm name + match count"]):::output
 
-    D["CustomCBCDetector(binary_data, base_va)"] --> E["scan_range(va, size) → List[CBCPattern]:\n  Look for behavioral CBC signature:\n  1. BSS pointer load (global block pointer)\n  2. XOR r_N, r_N, r_prev (chaining: CT_block XOR prev_CT)\n  3. IV load from .rodata (ldr [pc, #N] where target is in .rodata)\n  4. AES round constant loads (0x63, 0x9e, Rcon table)\n  Returns CBCPattern: block_ptr_va, iv_va, xor_va, confidence"]
-    E --> F["scan_function(va, size) → Optional[CBCPattern]\n  Wrapper for single-function scan"]
+    D(["CustomCBCDetector(binary_data, base_va)"]):::input --> E["scan_range(va, size) → List[CBCPattern]:\n  Look for behavioral CBC signature:\n  1. BSS pointer load (global block pointer)\n  2. XOR r_N, r_N, r_prev (chaining: CT_block XOR prev_CT)\n  3. IV load from .rodata (ldr [pc, #N] where target is in .rodata)\n  4. AES round constant loads (0x63, 0x9e, Rcon table)\n  Returns CBCPattern: block_ptr_va, iv_va, xor_va, confidence"]:::secondary
+    E:::secondary --> F(["scan_function(va, size) → Optional[CBCPattern]\n  Wrapper for single-function scan"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

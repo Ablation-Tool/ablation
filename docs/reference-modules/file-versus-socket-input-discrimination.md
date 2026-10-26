@@ -18,9 +18,18 @@ Classify `fgets`-sourced `TaintFindingARM64` results by whether the `FILE*` argu
 
 ```mermaid
 flowchart TD
-    A["ARM64FgetsFdDiscriminator.from_context(ctx)"] --> B["classify(findings: List[TaintFindingARM64]) → List[FgetsClassifiedFinding]\n  For each finding where source_calls include 'fgets':\n    Locate the fgets call in the function\n    Get the FILE* argument (x0 register)\n    Backward walk x0 to find origin:"]
-    B --> C["FILE* origin classification:\n  Case 1: x0 ← fopen/fopen64/freopen/tmpfile?\n    → fd_class = 'file'\n  Case 2: x0 ← fdopen(socket(...)) or fdopen(accept(...))?\n    → fd_class = 'network'\n  Case 3: x0 ← passed from caller or unknown?\n    → fd_class = 'unknown'"]
-    C --> D["FgetsClassifiedFinding:\n  original_finding: TaintFindingARM64\n  fd_class: 'file' | 'network' | 'unknown'\n  severity() → str\n    network → original severity\n    file    → 'INFORMATIONAL'\n    unknown → 'MEDIUM'\n  source_name() → str"]
+    A(["ARM64FgetsFdDiscriminator.from_context(ctx)"]):::input --> B["classify(findings: List[TaintFindingARM64]) → List[FgetsClassifiedFinding]\n  For each finding where source_calls include 'fgets':\n    Locate the fgets call in the function\n    Get the FILE* argument (x0 register)\n    Backward walk x0 to find origin:"]:::primary
+    B:::primary --> C["FILE* origin classification:\n  Case 1: x0 ← fopen/fopen64/freopen/tmpfile?\n    → fd_class = 'file'\n  Case 2: x0 ← fdopen(socket(...)) or fdopen(accept(...))?\n    → fd_class = 'network'\n  Case 3: x0 ← passed from caller or unknown?\n    → fd_class = 'unknown'"]:::secondary
+    C:::secondary --> D(["FgetsClassifiedFinding:\n  original_finding: TaintFindingARM64\n  fd_class: 'file' | 'network' | 'unknown'\n  severity() → str\n    network → original severity\n    file    → 'INFORMATIONAL'\n    unknown → 'MEDIUM'\n  source_name() → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

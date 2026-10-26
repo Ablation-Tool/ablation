@@ -18,9 +18,18 @@ Capture volatile host state running processes, network connections, kernel modul
 
 ```mermaid
 flowchart TD
-    A["enumerate_volatile_forensics(output_dir=None) → dict\n  Process list: /proc/[pid]/cmdline, status, maps\n  Network: /proc/net/tcp, tcp6, udp\n  Kernel modules: /proc/modules\n  Hollow process suspects, DLL hijack candidates\n  → {hollow_suspects, dll_hijacks, suspicious_sockets,\n      cron_persistence, process_list}"] --> B["analyze_elf_binary_indicators(binary_data, host, port) → list\n  LD_PRELOAD injection strings\n  GOT overwrite / PLT hook surface\n  dlopen('/tmp/...') or dlopen(getenv(...))\n  /etc/ld.so.preload write pattern\n  ptrace(PTRACE_ATTACH) in non-debugger binary\n  → [{severity, title, detail, host, port}]"]
-    B --> C["detect_elf_runtime_injection_techniques(binary_data, host, port) → list\n  ptrace PTRACE_POKETEXT sequence (code injection)\n  /proc/%d/mem write (memory injection)\n  memfd_create + fexecve (fileless ELF execution)\n  syscall() with raw NR_execve (syscall table obfuscation)\n  → [{severity, title, detail, host, port}]"]
-    C --> D["Linux persistence artifacts:\n  Cron: /etc/cron.d/*, /var/spool/cron/*\n    World-writable entries, non-standard commands\n  Systemd: /etc/systemd/system/*.service override\n    ExecStart pointing to /tmp/ or /dev/shm/\n  SSH: /home/*/.ssh/authorized_keys\n    Added keys not matching user baseline"]
+    A(["enumerate_volatile_forensics(output_dir=None) → dict\n  Process list: /proc/[pid]/cmdline, status, maps\n  Network: /proc/net/tcp, tcp6, udp\n  Kernel modules: /proc/modules\n  Hollow process suspects, DLL hijack candidates\n  → {hollow_suspects, dll_hijacks, suspicious_sockets,\n      cron_persistence, process_list}"]):::input --> B["analyze_elf_binary_indicators(binary_data, host, port) → list\n  LD_PRELOAD injection strings\n  GOT overwrite / PLT hook surface\n  dlopen('/tmp/...') or dlopen(getenv(...))\n  /etc/ld.so.preload write pattern\n  ptrace(PTRACE_ATTACH) in non-debugger binary\n  → [{severity, title, detail, host, port}]"]:::primary
+    B:::primary --> C["detect_elf_runtime_injection_techniques(binary_data, host, port) → list\n  ptrace PTRACE_POKETEXT sequence (code injection)\n  /proc/%d/mem write (memory injection)\n  memfd_create + fexecve (fileless ELF execution)\n  syscall() with raw NR_execve (syscall table obfuscation)\n  → [{severity, title, detail, host, port}]"]:::secondary
+    C:::secondary --> D(["Linux persistence artifacts:\n  Cron: /etc/cron.d/*, /var/spool/cron/*\n    World-writable entries, non-standard commands\n  Systemd: /etc/systemd/system/*.service override\n    ExecStart pointing to /tmp/ or /dev/shm/\n  SSH: /home/*/.ssh/authorized_keys\n    Added keys not matching user baseline"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

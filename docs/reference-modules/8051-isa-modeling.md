@@ -18,14 +18,28 @@ Model Intel MCS-51 / Enhanced 8051 (CC254x) instruction semantics, memory spaces
 
 ```mermaid
 flowchart TD
-    A["IntelHexLoader.from_file(path)"] --> B["Parse Intel HEX records:\nType 0x00: data → flat_address→byte dict\nType 0x04: extended linear address (base << 16)\nType 0x01: EOF\n_MAX_HEX_FILE_BYTES = 4MB guard"]
-    B --> C["loader.to_bytes(fill=0xFF) → dense bytes\naddress_range() → (lo, hi+1)\n_MAX_ADDRESS_RANGE = 512KB limit"]
-    C --> D["Mcs51Decoder(computed_call_stub=None)"]
-    D --> E["decode_one(data, offset) → Mcs51Insn:\nVariable-length: 1, 2, or 3 bytes\n1-byte: NOP,RET,RETI,JMP @A+DPTR,MOVC,MOVX,Rn ops,@Ri ops\n2-byte: MOV direct/imm, ADD/ADDC/SUBB, JC/JNC/JZ/JNZ/SJMP,\n  ACALL/AJMP (11-bit: b0[7:5] = page[2:0], b1 = offset)\n3-byte: LJMP/LCALL addr16, MOV direct,#imm, CJNE, DJNZ direct\nComputed-call: LCALL to stub → 6-byte COMP_CALL with inline target+param"]
-    E --> F["Mcs51Insn.insn_type: NORMAL/CALL/JUMP/BRANCH/RET/COMPUTED/COMP_CALL\n.reads_aes_sfr: raw[0]==0xE5 and raw[1] in {0xB1,0xB3}\n.writes_aes_sfr: raw[0]==0xF5 and raw[1] in {0xB1,0xB3}\n.changes_bank: raw[0] in {0xF5,0x75} and raw[1] in {0xC7,0xF1}"]
-    F --> G["decode_range(data, start, end) → List[Mcs51Insn]\nAdvances by insn.size; COMP_CALL advances by 6"]
-    C --> H["Cc254xBankResolver(num_banks=4)\nflat_to_logical(flat) → (bank, code_addr)\n0x00000–0x07FFF: common (bank=0xFF)\n0x08000+: bank = (flat-0x8000)//0x8000, code=0x8000+(rel%0x8000)\ncross_bank_candidates(insns) → [(insn, caller_flat, callee_code_addr)]"]
-    C --> I["scan_aes_accesses(data) → {reads:[Mcs51Insn], writes:[Mcs51Insn]}\nByte scan: F5 B1, F5 B3 → writes; E5 B1, E5 B3 → reads\nscan_bank_switches(data) → List[Mcs51Insn]\nByte scan: (F5|75) (C7|F1) → bank-select writes"]
+    A(["IntelHexLoader.from_file(path)"]):::input --> B["Parse Intel HEX records:\nType 0x00: data → flat_address→byte dict\nType 0x04: extended linear address (base << 16)\nType 0x01: EOF\n_MAX_HEX_FILE_BYTES = 4MB guard"]:::primary
+    B:::primary --> C["loader.to_bytes(fill=0xFF) → dense bytes\naddress_range() → (lo, hi+1)\n_MAX_ADDRESS_RANGE = 512KB limit"]:::secondary
+    C:::secondary --> D["Mcs51Decoder(computed_call_stub=None)"]:::tertiary
+    D:::tertiary --> E["decode_one(data, offset) → Mcs51Insn:\nVariable-length: 1, 2, or 3 bytes\n1-byte: NOP,RET,RETI,JMP @A+DPTR,MOVC,MOVX,Rn ops,@Ri ops\n2-byte: MOV direct/imm, ADD/ADDC/SUBB, JC/JNC/JZ/JNZ/SJMP,\n  ACALL/AJMP (11-bit: b0[7:5] = page[2:0], b1 = offset)\n3-byte: LJMP/LCALL addr16, MOV direct,#imm, CJNE, DJNZ direct\nComputed-call: LCALL to stub → 6-byte COMP_CALL with inline target+param"]:::tertiary
+    E:::tertiary --> F["Mcs51Insn.insn_type: NORMAL/CALL/JUMP/BRANCH/RET/COMPUTED/COMP_CALL\n.reads_aes_sfr: raw[0]==0xE5 and raw[1] in {0xB1,0xB3}\n.writes_aes_sfr: raw[0]==0xF5 and raw[1] in {0xB1,0xB3}\n.changes_bank: raw[0] in {0xF5,0x75} and raw[1] in {0xC7,0xF1}"]:::tertiary
+    F:::tertiary --> G(["decode_range(data, start, end) → List[Mcs51Insn]\nAdvances by insn.size; COMP_CALL advances by 6"]):::output
+    C:::secondary --> H(["Cc254xBankResolver(num_banks=4)\nflat_to_logical(flat) → (bank, code_addr)\n0x00000·0x07FFF: common (bank=0xFF)\n0x08000+: bank = (flat-0x8000)//0x8000, code=0x8000+(rel%0x8000)\ncross_bank_candidates(insns) → [(insn, caller_flat, callee_code_addr)]"]):::output
+    C:::secondary --> I(["scan_aes_accesses(data) → {reads:[Mcs51Insn], writes:[Mcs51Insn]}\nByte scan: F5 B1, F5 B3 → writes; E5 B1, E5 B3 → reads\nscan_bank_switches(data) → List[Mcs51Insn]\nByte scan: (F5|75) (C7|F1) → bank-select writes"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Memory space summary

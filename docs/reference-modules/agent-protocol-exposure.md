@@ -18,16 +18,32 @@ Enumerate unauthenticated agentic API surfaces on exposed LLM inference endpoint
 
 ```mermaid
 flowchart TD
-    A["LLMEnumerator(host, port, https)"] --> B["check_excessive_agency_surface():\nGET /v1/agents, /v1/assistants, /v1/threads, /v1/runs, /v1/tools\nGET /api/v1/agents, /api/agents, /api/assistants\nStatus 200 or 405 without auth = HIGH/CRITICAL"]
-    B --> C{"200 response at any AGENT_PATH?"}
-    C -->|yes| D["Parse response body for dangerous tool types:\n'computer_use', 'bash', 'file_search', 'code_interpreter'\nIf dangerous tools found: CRITICAL\nElse: HIGH (unauth assistant enumeration)"]
-    D --> E["Finding: LLM08 Excessive Agency\ntitle includes tool list\ndetail: unauthenticated access = direct code execution surface"]
-    C -->|no| F["Tool-calling probe at /v1/chat/completions:\nPOST with _TOOL_PROBE_PAYLOAD:\ntools=[{type:'function',function:{name:'execute_command',...}}]\nmessages=[{role:'user',content:'list files'}]\nmax_tokens=50"]
-    F --> G{"Response includes 'tool_calls' array?"}
-    G -->|yes| H["Finding: TOOL_CALLING_ACCEPTED\nModel emitted a tool call in response\nIf caller routes tool_calls to real shell: RCE without auth"]
-    G -->|no| I["No tool-calling surface confirmed\n(model refused or tool-calling not supported)"]
-    A --> J["probe_owasp_llm_controls() — LLM08 sub-check:\nGET /v1/assistants with dangerous tool types\nFinding: LLM08 + specific tool list in CRITICAL severity"]
-    A --> K["probe_ai_incident_response_surface() — runs audit:\nGET /v1/audit_log, /audit/events, /v1/audit\nPOST /v1/chat/completions + check x-request-id\nGET /v1/requests/{id} → REQUEST_REPLAY_POSSIBLE (MEDIUM)"]
+    A(["LLMEnumerator(host, port, https)"]):::input --> B["check_excessive_agency_surface():\nGET /v1/agents, /v1/assistants, /v1/threads, /v1/runs, /v1/tools\nGET /api/v1/agents, /api/agents, /api/assistants\nStatus 200 or 405 without auth = HIGH/CRITICAL"]:::primary
+    B:::primary --> C{"200 response at any AGENT_PATH?"}:::neutral
+    C:::neutral -->|yes| D["Parse response body for dangerous tool types:\n'computer_use', 'bash', 'file_search', 'code_interpreter'\nIf dangerous tools found: CRITICAL\nElse: HIGH (unauth assistant enumeration)"]:::secondary
+    D:::secondary --> E(["Finding: LLM08 Excessive Agency\ntitle includes tool list\ndetail: unauthenticated access = direct code execution surface"]):::output
+    C:::neutral -->|no| F["Tool-calling probe at /v1/chat/completions:\nPOST with _TOOL_PROBE_PAYLOAD:\ntools=[{type:'function',function:{name:'execute_command',...}}]\nmessages=[{role:'user',content:'list files'}]\nmax_tokens=50"]:::tertiary
+    F:::tertiary --> G{"Response includes 'tool_calls' array?"}:::neutral
+    G:::neutral -->|yes| H(["Finding: TOOL_CALLING_ACCEPTED\nModel emitted a tool call in response\nIf caller routes tool_calls to real shell: RCE without auth"]):::output
+    G:::neutral -->|no| I(["No tool-calling surface confirmed\n(model refused or tool-calling not supported)"]):::output
+    A:::input --> J(["probe_owasp_llm_controls() · LLM08 sub-check:\nGET /v1/assistants with dangerous tool types\nFinding: LLM08 + specific tool list in CRITICAL severity"]):::output
+    A:::input --> K(["probe_ai_incident_response_surface() · runs audit:\nGET /v1/audit_log, /audit/events, /v1/audit\nPOST /v1/chat/completions + check x-request-id\nGET /v1/requests/{id} → REQUEST_REPLAY_POSSIBLE (MEDIUM)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#546e7a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Dangerous tool type severity matrix

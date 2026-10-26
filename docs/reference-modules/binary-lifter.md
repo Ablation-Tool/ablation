@@ -18,38 +18,74 @@ Lift native binary functions to annotated C pseudocode across 18 ISA variants, f
 
 ```mermaid
 flowchart TD
-    A[/"binary\n(ELF · PE · flat ROM · .beam)"/] --> B["BinaryLifter.from_path(binary, arch='arm64')\nor from_context(ctx)"]
-    B --> C["_build_section_map(binary_path)\n→ [(va_start, size, file_offset), ...]"]
-    C --> D["lift_function(va, max_insns=512)\n→ arch string dispatch"]
-    D --> E{"arch"}
+    A(["binary\n(ELF · PE · flat ROM · .beam)"]):::input --> B["BinaryLifter.from_path(binary, arch='arm64')\nor from_context(ctx)"]:::primary
+    B:::primary --> C["_build_section_map(binary_path)\n→ [(va_start, size, file_offset), ...]"]:::secondary
+    C:::secondary --> D["lift_function(va, max_insns=512)\n→ arch string dispatch"]:::tertiary
+    D:::tertiary --> E{"arch"}:::neutral
 
-    E -->|"arm64 (default)"| F["_lift_arm64:\nfrom_capstone → build_cfg\n_ARM64State(tainted_params)\nper-insn state.emit(insn)\ntyped NativeVal IR + taint annotation"]
-    E -->|"x86_64 · amd64 · x86"| G["_lift_x86_64:\nCapstone CS_ARCH_X86 CS_MODE_64\n_X86_64State register tracking\ntyped NativeVal IR + taint annotation"]
-    E -->|"x86_32 · i386 · i686"| H["_lift_x86_32:\nCapstone CS_MODE_32\n_X86_32State CDECL (eax return, stack args)"]
-    E -->|"arm32 · arm · arm-32\nthumb · thumb2"| I["_lift_arm32(thumb=False/True):\ninsn_arm32 + cfg_arm32\n_walk_ablation_cfg + _make_arm32_emit\nAAPCS r0-r3 args"]
-    E -->|"mips32 · mips · mipsbe\nmips32el · mips64 · mips64el"| J["_lift_mips(bits=32/64, little=True/False):\ninsn_mips + cfg_mips\n_walk_ablation_cfg + _make_mips_emit\no32 $a0-$a3 / n64 $a0-$a7"]
-    E -->|"nanomips"| K["_lift_nanomips:\nNanoMIPSDecoder linear walk\n_walk_ablation_cfg + _make_nanomips_emit\no32 ABI $a0-$a3"]
-    E -->|"ppc32 · ppc · powerpc\nppc64 · powerpc64"| L["_lift_ppc(bits=32/64):\ninsn_ppc + cfg_ppc\n_walk_ablation_cfg + _make_ppc_emit\nSysV32 r3-r10 / ELFv2 r3-r10"]
-    E -->|"rv32 · riscv32\nrv64 · riscv64"| M["_lift_riscv(bits=32/64):\ninsn_riscv + cfg_riscv\n_walk_ablation_cfg + _make_riscv_emit\npsABI a0-a7"]
-    E -->|"la64 · loongarch64"| N["_lift_loongarch64:\nLoongArchDecoder + cfg_loongarch64\n_walk_ablation_cfg + _make_la64_emit\nlp64 $a0-$a7"]
-    E -->|"sh2a · sh-2a · sh2"| O["_lift_sh2a:\nEcuSH2aDecoder linear walk\n_walk_ablation_cfg + _make_sh2a_emit\nRenesas SuperH ABI R4-R7 args"]
-    E -->|"arc · archs · arcem"| P["_lift_arc:\nrequires arc-elf32-objdump in PATH\n_walk_ablation_cfg + _make_arc_emit"]
-    E -->|"v850 · rh850 · v850e2"| Q["_lift_v850:\nrequires v850-elf-objdump in PATH\n_walk_ablation_cfg + _make_v850_emit"]
-    E -->|"beam · erlang · elixir"| R["_lift_beam:\nBeamContext.from_path\nno VA space — module summary\nexports · dangerous imports · atoms"]
+    E:::neutral -->|"arm64 (default)"| F["_lift_arm64:\nfrom_capstone → build_cfg\n_ARM64State(tainted_params)\nper-insn state.emit(insn)\ntyped NativeVal IR + taint annotation"]:::tertiary
+    E:::neutral -->|"x86_64 · amd64 · x86"| G["_lift_x86_64:\nCapstone CS_ARCH_X86 CS_MODE_64\n_X86_64State register tracking\ntyped NativeVal IR + taint annotation"]:::tertiary
+    E:::neutral -->|"x86_32 · i386 · i686"| H["_lift_x86_32:\nCapstone CS_MODE_32\n_X86_32State CDECL (eax return, stack args)"]:::tertiary
+    E:::neutral -->|"arm32 · arm · arm-32\nthumb · thumb2"| I["_lift_arm32(thumb=False/True):\ninsn_arm32 + cfg_arm32\n_walk_ablation_cfg + _make_arm32_emit\nAAPCS r0-r3 args"]:::tertiary
+    E:::neutral -->|"mips32 · mips · mipsbe\nmips32el · mips64 · mips64el"| J["_lift_mips(bits=32/64, little=True/False):\ninsn_mips + cfg_mips\n_walk_ablation_cfg + _make_mips_emit\no32 $a0-$a3 / n64 $a0-$a7"]:::tertiary
+    E:::neutral -->|"nanomips"| K["_lift_nanomips:\nNanoMIPSDecoder linear walk\n_walk_ablation_cfg + _make_nanomips_emit\no32 ABI $a0-$a3"]:::tertiary
+    E:::neutral -->|"ppc32 · ppc · powerpc\nppc64 · powerpc64"| L["_lift_ppc(bits=32/64):\ninsn_ppc + cfg_ppc\n_walk_ablation_cfg + _make_ppc_emit\nSysV32 r3-r10 / ELFv2 r3-r10"]:::tertiary
+    E:::neutral -->|"rv32 · riscv32\nrv64 · riscv64"| M["_lift_riscv(bits=32/64):\ninsn_riscv + cfg_riscv\n_walk_ablation_cfg + _make_riscv_emit\npsABI a0-a7"]:::tertiary
+    E:::neutral -->|"la64 · loongarch64"| N["_lift_loongarch64:\nLoongArchDecoder + cfg_loongarch64\n_walk_ablation_cfg + _make_la64_emit\nlp64 $a0-$a7"]:::tertiary
+    E:::neutral -->|"sh2a · sh-2a · sh2"| O["_lift_sh2a:\nEcuSH2aDecoder linear walk\n_walk_ablation_cfg + _make_sh2a_emit\nRenesas SuperH ABI R4-R7 args"]:::tertiary
+    E:::neutral -->|"arc · archs · arcem"| P["_lift_arc:\nrequires arc-elf32-objdump in PATH\n_walk_ablation_cfg + _make_arc_emit"]:::tertiary
+    E:::neutral -->|"v850 · rh850 · v850e2"| Q["_lift_v850:\nrequires v850-elf-objdump in PATH\n_walk_ablation_cfg + _make_v850_emit"]:::tertiary
+    E:::neutral -->|"beam · erlang · elixir"| R["_lift_beam:\nBeamContext.from_path\nno VA space · module summary\nexports · dangerous imports · atoms"]:::tertiary
 
-    F --> S[/"pseudo-C string\n(ARM64/x86-64: typed register IR + taint)\n(other ISAs: calls+branches resolved;\n arithmetic as // comments)\n(beam: module summary block)"/]
-    G --> S
-    H --> S
-    I --> S
-    J --> S
-    K --> S
-    L --> S
-    M --> S
-    N --> S
-    O --> S
-    P --> S
-    Q --> S
-    R --> S
+    F:::tertiary --> S(["pseudo-C string\n(ARM64/x86-64: typed register IR + taint)\n(other ISAs: calls+branches resolved;\n arithmetic as // comments)\n(beam: module summary block)"]):::output
+    G:::tertiary --> S:::output
+    H:::tertiary --> S:::output
+    I:::tertiary --> S:::output
+    J:::tertiary --> S:::output
+    K:::tertiary --> S:::output
+    L:::tertiary --> S:::output
+    M:::tertiary --> S:::output
+    N:::tertiary --> S:::output
+    O:::tertiary --> S:::output
+    P:::tertiary --> S:::output
+    Q:::tertiary --> S:::output
+    R:::tertiary --> S:::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#546e7a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 11 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 12 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 13 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 14 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 15 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 16 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 17 stroke:#2e7d32,stroke-width:3px
+    linkStyle 18 stroke:#2e7d32,stroke-width:3px
+    linkStyle 19 stroke:#2e7d32,stroke-width:3px
+    linkStyle 20 stroke:#2e7d32,stroke-width:3px
+    linkStyle 21 stroke:#2e7d32,stroke-width:3px
+    linkStyle 22 stroke:#2e7d32,stroke-width:3px
+    linkStyle 23 stroke:#2e7d32,stroke-width:3px
+    linkStyle 24 stroke:#2e7d32,stroke-width:3px
+    linkStyle 25 stroke:#2e7d32,stroke-width:3px
+    linkStyle 26 stroke:#2e7d32,stroke-width:3px
+    linkStyle 27 stroke:#2e7d32,stroke-width:3px
+    linkStyle 28 stroke:#2e7d32,stroke-width:3px
+    linkStyle 29 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Architecture support

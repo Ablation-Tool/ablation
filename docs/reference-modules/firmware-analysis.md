@@ -20,22 +20,33 @@ Standard `unsquashfs` cannot extract Huawei VRP v600R024+ squashfs images becaus
 
 ```mermaid
 flowchart TD
-    A[/"Raw encrypted firmware (.out / .zip)"/] --> Z{"ZIP wrapper?\n(PK\\x03\\x04 magic)"}
-    Z -->|Yes: v8.0.0+| ZA["Unwrap: parse STORE-ZIP local header\nExtract .out from data offset\n30 + fname_len + extra_len"]
-    Z -->|No: v6.x / v7.x| B
-    ZA --> B
-    B["Stage 1 · Outer XOR layer\nFortiOSHardwareExtractor\nKPA against ELF magic 0x7f454c46\nor gzip magic 0x1f8b0800\n64-byte repeating key (NAND page boundary)"]
+    A(["Raw encrypted firmware (.out / .zip)"]):::input --> Z{"ZIP wrapper?\n(PK\\x03\\x04 magic)"}:::neutral
+    Z:::neutral -->|Yes: v8.0.0+| ZA["Unwrap: parse STORE-ZIP local header\nExtract .out from data offset\n30 + fname_len + extra_len"]:::primary
+    Z:::neutral -->|No: v6.x / v7.x| B["B"]:::secondary
+    ZA:::primary --> B:::secondary
+    B:::secondary
 
-    B --> C["Partially decrypted binary"]
+    B:::secondary --> C["Partially decrypted binary"]:::tertiary
 
-    C --> D["Stage 2 · PKCS#1 v1.5 block scan\nScan for 0x00 0x02 ... 0x00 padding\nExtract candidate RSA-encrypted\nRC4 session key (256 bytes, RSA-2048)"]
+    C:::tertiary --> D["Stage 2 · PKCS#1 v1.5 block scan\nScan for 0x00 0x02 ... 0x00 padding\nExtract candidate RSA-encrypted\nRC4 session key (256 bytes, RSA-2048)"]:::tertiary
 
-    D --> E["Stage 3 · RC4 known-plaintext attack\ngzip magic: 0x1f 0x8b 0x08 0x00\nkeystream[0:4] recovered via XOR\nFull session key recovered by\ninverting PRGA with KSA structure"]
+    D:::tertiary --> E["Stage 3 · RC4 known-plaintext attack\ngzip magic: 0x1f 0x8b 0x08 0x00\nkeystream[0:4] recovered via XOR\nFull session key recovered by\ninverting PRGA with KSA structure"]:::tertiary
 
-    E --> F[/"RC4 session key recovered\nDecrypt payload → result.datafs_path\n/etc/shadow · web service binary · SSH host keys"/]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style F fill:#14532d,stroke:#166534,color:#dcfce7
+    E:::tertiary --> F(["RC4 session key recovered\nDecrypt payload → result.datafs_path\n/etc/shadow · web service binary · SSH host keys"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#546e7a,stroke-width:2px
+    linkStyle 1 stroke:#bf360c,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#00695c,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Stage 1: Outer XOR layer
@@ -78,26 +89,40 @@ Override the key if already known: `override_key=bytes.fromhex('...')`.
 
 ```mermaid
 flowchart TD
-    A[/"Firmware image or bare disk"/] --> B{"Input format"}
-    B -->|"OVF ZIP"| C["Extract vmdk or qcow2 from ZIP\nLocate fgt_512.key / fgt2.key / fgt.key"]
-    B -->|"Bare disk (.qcow2 / .vhd / .vmdk)"| D["qemu-img convert to raw bytes\nRead P1 partition at LBA 2048\nLocate datafs.tar.gz\nExtract key files from archive"]
+    A(["Firmware image or bare disk"]):::input --> B{"Input format"}:::neutral
+    B:::neutral -->|"OVF ZIP"| C["Extract vmdk or qcow2 from ZIP\nLocate fgt_512.key / fgt2.key / fgt.key"]:::primary
+    B:::neutral -->|"Bare disk (.qcow2 / .vhd / .vmdk)"| D["qemu-img convert to raw bytes\nRead P1 partition at LBA 2048\nLocate datafs.tar.gz\nExtract key files from archive"]:::secondary
 
-    C --> E["Compute MD5 hash\nCompare against KNOWN_KEY_FAMILIES table"]
-    D --> E
+    C:::primary --> E["Compute MD5 hash\nCompare against KNOWN_KEY_FAMILIES table"]:::tertiary
+    D:::secondary --> E:::tertiary
 
-    E --> F{"Family\nknown?"}
-    F -->|Yes| G["Classify: Gen1 / Gen2 / maintenance / feature"]
-    F -->|No| H[/"Flag family=UNKNOWN\nNew finding: possible novel key family"/]
+    E:::tertiary --> F{"Family\nknown?"}:::neutral
+    F:::neutral -->|Yes| G["Classify: Gen1 / Gen2 / maintenance / feature"]:::tertiary
+    F:::neutral -->|No| H(["Flag family=UNKNOWN\nNew finding: possible novel key family"]):::output
 
-    G --> I["FortiBuildTrackClassifier\nParse filename: FGT_XXXX-vY.Z.W-buildNNNN.out\nExtract build_track (M=maintenance / F=feature)\nExtract key_generation from build number"]
+    G:::tertiary --> I["FortiBuildTrackClassifier\nParse filename: FGT_XXXX-vY.Z.W-buildNNNN.out\nExtract build_track (M=maintenance / F=feature)\nExtract key_generation from build number"]:::tertiary
 
-    I --> J{"result.discrepancy\n(actual_keys)?"}
-    J -->|"Expected Gen1, found Gen2"| K[/"Anomalous build\nPossible tampered image"/]
-    J -->|Consistent| L["Normal: archive or deploy"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style H fill:#7f1d1d,stroke:#991b1b,color:#fecaca
-    style K fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    I:::tertiary --> J{"result.discrepancy\n(actual_keys)?"}:::neutral
+    J:::neutral -->|"Expected Gen1, found Gen2"| K(["Anomalous build\nPossible tampered image"]):::output
+    J:::neutral -->|Consistent| L(["Normal: archive or deploy"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#546e7a,stroke-width:2px
+    linkStyle 1 stroke:#bf360c,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#546e7a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#546e7a,stroke-width:2px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
 ```
 
 The KNOWN_KEY_FAMILIES table is a cross-firmware corpus of MD5 hashes accumulated across engagements. Each new engagement that identifies a new key family adds to the corpus. `batch_scan(dir)` scans a directory of firmware images and reports all family classifications in one pass, flagging unknown families for immediate investigation.
@@ -114,19 +139,29 @@ XZ compression supports optional branch-and-call transformation (BCJ) filters th
 
 ```mermaid
 flowchart TD
-    A[/"Huawei VRP squashfs filesystem"/] --> B["Validate squashfs v4 superblock\nmagic = 0x73717368\ns_major = 4\ncompression = XZ (comp_id = 4)"]
+    A(["Huawei VRP squashfs filesystem"]):::input --> B["Validate squashfs v4 superblock\nmagic = 0x73717368\ns_major = 4\ncompression = XZ (comp_id = 4)"]:::primary
 
-    B --> C["Try standard xz.decompress(data)"]
-    C --> D{"Decompress\nsucceeded?"}
+    B:::primary --> C["Try standard xz.decompress(data)"]:::secondary
+    C:::secondary --> D{"Decompress\nsucceeded?"}:::neutral
 
-    D -->|Yes| E["Standard XZ decompression\n(x86 BCJ filter or no filter)"]
-    D -->|No: filter mismatch| F["Retry with lzma.decompress(data,\n  format=lzma.FORMAT_RAW,\n  filters=[{'id': 0x0A}])\nARM64 BCJ filter ID"]
+    D:::neutral -->|Yes| E["Standard XZ decompression\n(x86 BCJ filter or no filter)"]:::tertiary
+    D:::neutral -->|No: filter mismatch| F["Retry with lzma.decompress(data,\n  format=lzma.FORMAT_RAW,\n  filters=[{'id': 0x0A}])\nARM64 BCJ filter ID"]:::tertiary
 
-    E --> G[/"Filesystem extracted\next.list_files() → inner paths\next.extract(path) → bytes"/]
-    F --> G
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style G fill:#14532d,stroke:#166534,color:#dcfce7
+    E:::tertiary --> G(["Filesystem extracted\next.list_files() → inner paths\next.extract(path) → bytes"]):::output
+    F:::tertiary --> G:::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#546e7a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
 ```
 
 Decompression limits: 8 MB per metadata block, 512 MB per file. Use as a context manager: `with HuaweiSquashfsExtractor(path) as ext:`. Not thread-safe.

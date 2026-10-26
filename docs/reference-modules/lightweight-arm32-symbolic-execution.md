@@ -18,9 +18,18 @@ Classify exec-class sink argument provenance in ARM32 ELF binaries: producing th
 
 ```mermaid
 flowchart TD
-    A["SinkArgClassifierARM32.from_context(ctx)"] --> B["classify_all() → List[SinkClassification]\n  Find all BL/BLX sink call sites in .text\n  For each sink call site (sys call VA, sink_name):\n    Identify argument register: r0 for arg_pos=0, etc.\n    Walk backward from call site:\n      LDR r0, [PC, #N]  (literal pool) → RODATA_CONST\n      MOV r0, #imm      (immediate) → RODATA_CONST\n      BL snprintf + format in .rodata → SNPRINTF_RODATA\n      LDR r0, [r13, #N] (sp-relative, arg came from) → ARG_PROPAGATED\n      No match in window → UNKNOWN\n    → SinkClassification"]
-    B --> C["SinkClassification:\n  sink_va: int\n  sink_name: str\n  arg_pos: int\n  verdict: str  (RODATA_CONST|SNPRINTF_RODATA|ARG_PROPAGATED|UNKNOWN)\n  arg_reg: str  (r0/r1/r2/r3)\n  detail: str"]
-    C --> D["report(results) → str"]
+    A(["SinkArgClassifierARM32.from_context(ctx)"]):::input --> B["classify_all() → List[SinkClassification]\n  Find all BL/BLX sink call sites in .text\n  For each sink call site (sys call VA, sink_name):\n    Identify argument register: r0 for arg_pos=0, etc.\n    Walk backward from call site:\n      LDR r0, [PC, #N]  (literal pool) → RODATA_CONST\n      MOV r0, #imm      (immediate) → RODATA_CONST\n      BL snprintf + format in .rodata → SNPRINTF_RODATA\n      LDR r0, [r13, #N] (sp-relative, arg came from) → ARG_PROPAGATED\n      No match in window → UNKNOWN\n    → SinkClassification"]:::primary
+    B:::primary --> C["SinkClassification:\n  sink_va: int\n  sink_name: str\n  arg_pos: int\n  verdict: str  (RODATA_CONST|SNPRINTF_RODATA|ARG_PROPAGATED|UNKNOWN)\n  arg_reg: str  (r0/r1/r2/r3)\n  detail: str"]:::secondary
+    C:::secondary --> D(["report(results) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

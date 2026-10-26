@@ -18,9 +18,18 @@ Probe Consul KV store for unsealed secret material, enumerate GraphQL API schema
 
 ```mermaid
 flowchart TD
-    A["probe_consul_service_mesh(host, port=8500) → list\n  GET /v1/kv/?recurse → key list (no auth default)\n  GET /v1/kv/<key> → value (base64)\n  base64.decode → secret plaintext\n  Pattern match: password, token, cert, key\n  → [{finding, kv_path, secret_type, value_snippet}]"] --> B["probe_graphql_introspection(host, port=4000) → list\n  POST /graphql {query: introspection query}\n  Parse __schema response:\n    types → User/Token/Session (auth indicators)\n    mutations → createUser/updatePassword/revokeToken\n    queries → returning sensitive fields\n  → [{finding, endpoint, types_found, mutation_names}]"]
-    B --> C["probe_grpc_server_reflection(host, port=50051) → list\n  HTTP/2 + gRPC: ServerReflection.ServerReflectionInfo\n  ListServices → service names\n  FileContainingSymbol → proto file descriptor\n  Decode: service name, method names, message types\n  → [{finding, service_name, method_names, admin_methods}]"]
-    C --> D["probe_redis_exposure(host, port=6379) → list\n  PING → +PONG (unauthenticated)\n  KEYS * → all key names (credential cache patterns)\n  SMEMBERS session:* → session token enumeration\n  CONFIG GET requirepass → password check\n  → [{finding, key_count, session_keys, config_values}]"]
+    A(["probe_consul_service_mesh(host, port=8500) → list\n  GET /v1/kv/?recurse → key list (no auth default)\n  GET /v1/kv/<key> → value (base64)\n  base64.decode → secret plaintext\n  Pattern match: password, token, cert, key\n  → [{finding, kv_path, secret_type, value_snippet}]"]):::input --> B["probe_graphql_introspection(host, port=4000) → list\n  POST /graphql {query: introspection query}\n  Parse __schema response:\n    types → User/Token/Session (auth indicators)\n    mutations → createUser/updatePassword/revokeToken\n    queries → returning sensitive fields\n  → [{finding, endpoint, types_found, mutation_names}]"]:::primary
+    B:::primary --> C["probe_grpc_server_reflection(host, port=50051) → list\n  HTTP/2 + gRPC: ServerReflection.ServerReflectionInfo\n  ListServices → service names\n  FileContainingSymbol → proto file descriptor\n  Decode: service name, method names, message types\n  → [{finding, service_name, method_names, admin_methods}]"]:::secondary
+    C:::secondary --> D(["probe_redis_exposure(host, port=6379) → list\n  PING → +PONG (unauthenticated)\n  KEYS * → all key names (credential cache patterns)\n  SMEMBERS session:* → session token enumeration\n  CONFIG GET requirepass → password check\n  → [{finding, key_count, session_keys, config_values}]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

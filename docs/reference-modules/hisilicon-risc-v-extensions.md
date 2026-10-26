@@ -18,10 +18,20 @@ Extend LoongArch64 decoding with a two-pass semantic layer that identifies and s
 
 ```mermaid
 flowchart TD
-    A["LoongArchDecoderV2.from_system_map(map_path)\n  Load /boot/System.map or vmlinux symbol table\n  Extract KASAN function VAs: __asan_load1/2/4/8/16/N,\n    __asan_store*, __asan_report_*\n  Extract KCOV function VAs: __sanitizer_cov_trace_*"] --> B["decode_frames_v2(data, base_addr)\n  → List[LoongArchFrameV2]\n  Two-pass decode:\n  Pass 1 (SLED): decode all instructions\n  Pass 2 (SSL): identify semantic windows:\n    KASAN preamble:\n      srli.d + addi.d + ld.b/w → shadow address compute\n      followed by bl __asan_load* → ghost_class='kasan'\n    KCOV trace:\n      ld.d + addi.d → counter bump\n      bl __sanitizer_cov_trace_* → ghost_class='kcov'\n    Real instruction: ghost_class=None"]
-    B --> C["LoongArchFrameV2:\n  (inherits LoongArchFrame fields)\n  ghost_class: Optional[str]  ('kasan' | 'kcov' | None)"]
-    C --> D["decode_frames_clean(data, base_addr)\n  → Iterator[LoongArchFrameV2]\n  Yield only frames where ghost_class is None"]
-    C --> E["count_instrumentation(data, base_addr) → dict\n  Return: {'kasan': N, 'kcov': M, 'real': K}"]
+    A(["LoongArchDecoderV2.from_system_map(map_path)\n  Load /boot/System.map or vmlinux symbol table\n  Extract KASAN function VAs: __asan_load1/2/4/8/16/N,\n    __asan_store*, __asan_report_*\n  Extract KCOV function VAs: __sanitizer_cov_trace_*"]):::input --> B["decode_frames_v2(data, base_addr)\n  → List[LoongArchFrameV2]\n  Two-pass decode:\n  Pass 1 (SLED): decode all instructions\n  Pass 2 (SSL): identify semantic windows:\n    KASAN preamble:\n      srli.d + addi.d + ld.b/w → shadow address compute\n      followed by bl __asan_load* → ghost_class='kasan'\n    KCOV trace:\n      ld.d + addi.d → counter bump\n      bl __sanitizer_cov_trace_* → ghost_class='kcov'\n    Real instruction: ghost_class=None"]:::primary
+    B:::primary --> C["LoongArchFrameV2:\n  (inherits LoongArchFrame fields)\n  ghost_class: Optional[str]  ('kasan' | 'kcov' | None)"]:::secondary
+    C:::secondary --> D(["decode_frames_clean(data, base_addr)\n  → Iterator[LoongArchFrameV2]\n  Yield only frames where ghost_class is None"]):::output
+    C:::secondary --> E(["count_instrumentation(data, base_addr) → dict\n  Return: {'kasan': N, 'kcov': M, 'real': K}"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

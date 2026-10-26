@@ -18,11 +18,22 @@ Decode Cisco IOS Type-7 XOR passwords, enumerate running-config and CDP neighbor
 
 ```mermaid
 flowchart TD
-    A["decode_type7(enc)"] --> B["seed = int(enc[:2])\nciphertext = bytes.fromhex(enc[2:])\nplaintext = XOR each byte with _XLAT[(seed + i) % 53]"]
-    C["snmp_get(host, community, oid)"] --> D["_snmp_get_request(): build BER frame\n_ber_seq(version=0, community, GetRequest-PDU)\nSend UDP to port 161"]
-    D --> E["_parse_snmp_response(): extract OctetString (tag 0x04) values\nReturn {'responsive': True, 'values': [str, ...], 'raw': hex}"]
-    F["probe_tftp_config(host, filename='running-config')"] --> G["TFTP RRQ opcode 1 via UDP port 69\nReceive DATA opcode 3 → config text\nReceive ERROR opcode 5 → access denied"]
-    H["probe_telnet(host)"] --> I["TCP connect port 23\nRecv 1024 bytes\nExtract IOS/Cisco/Version line from banner"]
+    A(["decode_type7(enc)"]):::input --> B(["seed = int(enc[:2])\nciphertext = bytes.fromhex(enc[2:])\nplaintext = XOR each byte with _XLAT[(seed + i) % 53]"]):::output
+    C(["snmp_get(host, community, oid)"]):::input --> D["_snmp_get_request(): build BER frame\n_ber_seq(version=0, community, GetRequest-PDU)\nSend UDP to port 161"]:::primary
+    D:::primary --> E(["_parse_snmp_response(): extract OctetString (tag 0x04) values\nReturn {'responsive': True, 'values': [str, ...], 'raw': hex}"]):::output
+    F(["probe_tftp_config(host, filename='running-config')"]):::input --> G(["TFTP RRQ opcode 1 via UDP port 69\nReceive DATA opcode 3 → config text\nReceive ERROR opcode 5 → access denied"]):::output
+    H(["probe_telnet(host)"]):::input --> I(["TCP connect port 23\nRecv 1024 bytes\nExtract IOS/Cisco/Version line from banner"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#2e7d32,stroke-width:3px
+    linkStyle 1 stroke:#bf360c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Key OIDs for Cisco appliances

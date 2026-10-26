@@ -18,9 +18,18 @@ Find every call site that calls a named imported symbol in a PPC32 BE position-i
 
 ```mermaid
 flowchart TD
-    A["PPC32PLTTracer(elf: PPC32ELF)"] --> B["scan(sym_names=None) → Dict[str, List[PLTCallSite]]\n  For each symbol in sym_names (default: dangerous_imports()):\n    plt_slot(sym) → PLT VA\n    Find all thunks that load from plt_slot offset\n    For each thunk caller:\n      Trace backward to active r30 (mflr r30 or bl _init_r30)\n      Compute implied_r30 = plt_slot_va - d(r30)\n      If active_r30 == implied_r30 → PLTCallSite\n  → Dict[sym_name → List[PLTCallSite]]"]
-    B --> C["PLTCallSite:\n  call_va: int\n  sym_name: str\n  thunk_va: int\n  r3: Optional[int]  (register state at call, if determinable)\n  r4: Optional[int]\n  r5: Optional[int]"]
-    C --> D["report(call_sites) → str"]
+    A(["PPC32PLTTracer(elf: PPC32ELF)"]):::input --> B["scan(sym_names=None) → Dict[str, List[PLTCallSite]]\n  For each symbol in sym_names (default: dangerous_imports()):\n    plt_slot(sym) → PLT VA\n    Find all thunks that load from plt_slot offset\n    For each thunk caller:\n      Trace backward to active r30 (mflr r30 or bl _init_r30)\n      Compute implied_r30 = plt_slot_va - d(r30)\n      If active_r30 == implied_r30 → PLTCallSite\n  → Dict[sym_name → List[PLTCallSite]]"]:::primary
+    B:::primary --> C["PLTCallSite:\n  call_va: int\n  sym_name: str\n  thunk_va: int\n  r3: Optional[int]  (register state at call, if determinable)\n  r4: Optional[int]\n  r5: Optional[int]"]:::secondary
+    C:::secondary --> D(["report(call_sites) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

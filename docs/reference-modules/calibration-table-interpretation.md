@@ -18,14 +18,26 @@
 
 ```mermaid
 flowchart TD
-    A["CalibrationTable"] --> B["table_type: 'VALUE' | 'CURVE' | 'MAP'\n  VALUE: scalar (rows=1, cols=1)\n  CURVE: 1D (rows=1, cols=N) with x_axis\n  MAP: 2D (rows=M, cols=N) with x_axis + y_axis"]
-    A --> C["effective_address:\n  relocated_address if set (open_damos fingerprint)\n  else address (A2L or Conescan fixed)"]
-    A --> D["read_data(rom: bytes) → list\n  Extract raw values from rom[effective_address]\n  Unpack with struct using (element_bits, little_endian)\n  Flat list for CURVE; list-of-lists for MAP\n  Raises IndexError if slice exceeds ROM size"]
-    A --> E["label_map() → dict[int, str]\n  {effective_address: name}\n  + {x_axis.address: name.x_axis} if x_axis.address not None\n  + {y_axis.address: name.y_axis} if y_axis.address not None"]
+    A(["CalibrationTable"]):::input --> B(["table_type: 'VALUE' | 'CURVE' | 'MAP'\n  VALUE: scalar (rows=1, cols=1)\n  CURVE: 1D (rows=1, cols=N) with x_axis\n  MAP: 2D (rows=M, cols=N) with x_axis + y_axis"]):::output
+    A:::input --> C(["effective_address:\n  relocated_address if set (open_damos fingerprint)\n  else address (A2L or Conescan fixed)"]):::output
+    A:::input --> D(["read_data(rom: bytes) → list\n  Extract raw values from rom[effective_address]\n  Unpack with struct using (element_bits, little_endian)\n  Flat list for CURVE; list-of-lists for MAP\n  Raises IndexError if slice exceeds ROM size"]):::output
+    A:::input --> E(["label_map() → dict[int, str]\n  {effective_address: name}\n  + {x_axis.address: name.x_axis} if x_axis.address not None\n  + {y_axis.address: name.y_axis} if y_axis.address not None"]):::output
 
-    F["CalibrationAxis"] --> G["count: int  — number of breakpoints\n  element_bits: 8 | 16 | 32  — bit width per element\n  little_endian: bool\n  scale/bias: float  — physical = raw * scale + bias\n  unit: str  — e.g. 'rpm', 'Nm', 'mg/stroke'\n  shared_from: Optional[str]  — name of owning table if shared\n  address: Optional[int]  — None for DALINK (no physical storage)"]
+    F(["CalibrationAxis"]):::input --> G(["count: int  · number of breakpoints\n  element_bits: 8 | 16 | 32  · bit width per element\n  little_endian: bool\n  scale/bias: float  · physical = raw * scale + bias\n  unit: str  · e.g. 'rpm', 'Nm', 'mg/stroke'\n  shared_from: Optional[str]  · name of owning table if shared\n  address: Optional[int]  · None for DALINK (no physical storage)"]):::output
 
-    H["eval_math_equation(eq, raw)"] --> I["Evaluate TunerPro MATH string:\n  'X' → raw\n  'X*k' → raw * k\n  'X/k' → raw / k\n  'X*k+b' or '(X*k)+b' → raw * k + b\n  'X+b' → raw + b\n  Returns raw unchanged on parse failure"]
+    H(["eval_math_equation(eq, raw)"]):::input --> I(["Evaluate TunerPro MATH string:\n  'X' → raw\n  'X*k' → raw * k\n  'X/k' → raw / k\n  'X*k+b' or '(X*k)+b' → raw * k + b\n  'X+b' → raw + b\n  Returns raw unchanged on parse failure"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#2e7d32,stroke-width:3px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

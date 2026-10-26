@@ -18,10 +18,20 @@ Enumerate the FortiOS/FortiWeb CMDB attack surface: finding every `cmf_query_cre
 
 ```mermaid
 flowchart TD
-    A["CMDBSurfaceMapper.from_path(path)\n  or .from_context(ctx)"] --> B["map() → Dict[int, CMDBTableEntry]\n  Find all cmf_query_create() PLT call sites\n  Extract table_id argument (r7 on ARM64, r2 on x86-64)\n  → table_id → CMDBTableEntry"]
-    B --> C["For each CMDBTableEntry:\n  Find all functions that call cmf_query_create(table_id)\n  For each caller function:\n    Check if function body also calls exec-class sink\n    (system/execv/execl/popen/shell_exec)\n  CMDBTableEntry.has_exec_sink_caller = True if any match\n  CMDBTableEntry.exec_sink_callers = List[func_va]"]
-    C --> D["CMDBTableEntry:\n  table_id: int\n  callers: List[int]  (func VAs)\n  has_exec_sink_caller: bool\n  exec_sink_callers: List[int]\n  report_line() → str"]
-    D --> E["report(surface) → str"]
+    A(["CMDBSurfaceMapper.from_path(path)\n  or .from_context(ctx)"]):::input --> B["map() → Dict[int, CMDBTableEntry]\n  Find all cmf_query_create() PLT call sites\n  Extract table_id argument (r7 on ARM64, r2 on x86-64)\n  → table_id → CMDBTableEntry"]:::primary
+    B:::primary --> C["For each CMDBTableEntry:\n  Find all functions that call cmf_query_create(table_id)\n  For each caller function:\n    Check if function body also calls exec-class sink\n    (system/execv/execl/popen/shell_exec)\n  CMDBTableEntry.has_exec_sink_caller = True if any match\n  CMDBTableEntry.exec_sink_callers = List[func_va]"]:::secondary
+    C:::secondary --> D["CMDBTableEntry:\n  table_id: int\n  callers: List[int]  (func VAs)\n  has_exec_sink_caller: bool\n  exec_sink_callers: List[int]\n  report_line() → str"]:::tertiary
+    D:::tertiary --> E(["report(surface) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -418,21 +418,33 @@ virtual registers.
 
 ```mermaid
 flowchart TD
-    A[/"modules.abc\nARK Bytecode"/] --> B["ARKDisasm.iter_insns()\nyields ARKInstruction objects"]
-    B --> C["_lift(insn, state)\ntranslate each insn → pseudocode statement\n_acc + numbered vregs tracked in state dict"]
-    C --> D["flat statement list\n_acc = EXPR · return _acc · if cond goto L"]
+    A(["modules.abc\nARK Bytecode"]):::input --> B["ARKDisasm.iter_insns()\nyields ARKInstruction objects"]:::primary
+    B:::primary --> C["_lift(insn, state)\ntranslate each insn → pseudocode statement\n_acc + numbered vregs tracked in state dict"]:::secondary
+    C:::secondary --> D["flat statement list\n_acc = EXPR · return _acc · if cond goto L"]:::tertiary
 
-    D --> E["Pass 1: Accumulator copy-propagation\n_propagate_acc · Cifuentes §5.4.6\n_acc = EXPR; X uses _acc once → X = EXPR (inline)\ndead _acc assignment → drop"]
-    E --> F["_parse_blocks()\nbuild _BB basic blocks · label→index map"]
-    F --> G["Pass 2.5: Short-circuit merging\n_merge_short_circuit · Cifuentes 1995 Fig.7\ntwo consecutive cond jumps · same target\n→ cond1 || cond2 (iterate until stable)"]
-    G --> H["Pass 2: CFG structuring\n_structure_cfg · Cifuentes §6.6.1/§6.6.2\nwhile / if-else / simple-if\nconditions negated (ARK = jump-if-false)"]
-    H --> I[/"structured pseudo-JS\nwhile (!exit) { ... }\nif (a || b) { ... } else { ... }"/]
-    H -.->|"unrecognized CFG\nnon-reducible / exception handler"| J["raw label+goto fallback"]
-    J --> I
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style I fill:#14532d,stroke:#166534,color:#dcfce7
-    style J fill:#92400e,stroke:#b45309,color:#fef3c7
+    D:::tertiary --> E["Pass 1: Accumulator copy-propagation\n_propagate_acc · Cifuentes §5.4.6\n_acc = EXPR; X uses _acc once → X = EXPR (inline)\ndead _acc assignment → drop"]:::tertiary
+    E:::tertiary --> F["_parse_blocks()\nbuild _BB basic blocks · label→index map"]:::tertiary
+    F:::tertiary --> G["Pass 2.5: Short-circuit merging\n_merge_short_circuit · Cifuentes 1995 Fig.7\ntwo consecutive cond jumps · same target\n→ cond1 || cond2 (iterate until stable)"]:::tertiary
+    G:::tertiary --> H["Pass 2: CFG structuring\n_structure_cfg · Cifuentes §6.6.1/§6.6.2\nwhile / if-else / simple-if\nconditions negated (ARK = jump-if-false)"]:::tertiary
+    H:::tertiary --> I(["structured pseudo-JS\nwhile (!exit) { ... }\nif (a || b) { ... } else { ... }"]):::output
+    H:::tertiary -.->|"unrecognized CFG\nnon-reducible / exception handler"| J["raw label+goto fallback"]:::tertiary
+    J:::tertiary --> I:::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
 ```
 
 After all instructions are lifted, three post-processing passes run in order:

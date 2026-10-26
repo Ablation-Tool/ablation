@@ -18,11 +18,22 @@ Enumerate Windows RPC server interfaces registered in a PE binary: extracting in
 
 ```mermaid
 flowchart TD
-    A["RPCServerAnalyzer.from_path(pe_path)"] --> B["interfaces() → List[RPCInterface]\n  Find: RpcServerRegisterIf, RpcServerRegisterIfEx, RpcServerRegisterIfEx2 callers\n  For each call site:\n    Arg 0: pointer to RPC_SERVER_INTERFACE struct\n      Read: InterfaceId.SyntaxGUID (16 bytes) → UUID\n      Read: TransferSyntax.SyntaxGUID → transfer UUID\n    Arg 1 (IfEx only): UINT authLevel\n  → RPCInterface(uuid, transfer_syntax, auth_level)"]
-    B --> C["RPCInterface:\n  uuid: str  (formatted GUID)\n  transfer_syntax: str\n  auth_level: int\n  auth_level_name() → str  (e.g. 'RPC_C_AUTHN_LEVEL_NONE')\n  unauthenticated() → bool  (auth_level == 1)"]
-    C --> D["endpoint_strings() → List[str]\n  Find: RpcServerUseProtseqEp call sites\n  Arg 1: protocol sequence string (ncacn_ip_tcp, ncacn_np, etc.)\n  Arg 3: endpoint string (port or pipe name)\n  Return: list of endpoint strings"]
-    D --> E["scan() → List[RPCFinding]\n  For each RPCInterface where unauthenticated():\n    → RPCFinding(interface, severity='HIGH', description=...)"]
-    E --> F["report(findings) → str"]
+    A(["RPCServerAnalyzer.from_path(pe_path)"]):::input --> B["interfaces() → List[RPCInterface]\n  Find: RpcServerRegisterIf, RpcServerRegisterIfEx, RpcServerRegisterIfEx2 callers\n  For each call site:\n    Arg 0: pointer to RPC_SERVER_INTERFACE struct\n      Read: InterfaceId.SyntaxGUID (16 bytes) → UUID\n      Read: TransferSyntax.SyntaxGUID → transfer UUID\n    Arg 1 (IfEx only): UINT authLevel\n  → RPCInterface(uuid, transfer_syntax, auth_level)"]:::primary
+    B:::primary --> C["RPCInterface:\n  uuid: str  (formatted GUID)\n  transfer_syntax: str\n  auth_level: int\n  auth_level_name() → str  (e.g. 'RPC_C_AUTHN_LEVEL_NONE')\n  unauthenticated() → bool  (auth_level == 1)"]:::secondary
+    C:::secondary --> D["endpoint_strings() → List[str]\n  Find: RpcServerUseProtseqEp call sites\n  Arg 1: protocol sequence string (ncacn_ip_tcp, ncacn_np, etc.)\n  Arg 3: endpoint string (port or pipe name)\n  Return: list of endpoint strings"]:::tertiary
+    D:::tertiary --> E["scan() → List[RPCFinding]\n  For each RPCInterface where unauthenticated():\n    → RPCFinding(interface, severity='HIGH', description=...)"]:::tertiary
+    E:::tertiary --> F(["report(findings) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,12 +18,24 @@ Analyze x86 (32-bit) Windows PE binaries for Structured Exception Handler (SEH) 
 
 ```mermaid
 flowchart TD
-    A["SEHChainAnalyzer.from_path(path)"] --> B["Parse IMAGE_LOAD_CONFIG_DIRECTORY:\n  SEHandlerTable: VA of handler list\n  SEHandlerCount: number of registered handlers\n  Presence check: is SEHandlerTable populated?"]
-    B --> C["safe_seh_handlers() → List[int]\n  Read handler VAs from SEHandlerTable\n  Returns [] if SafeSEH not present"]
-    B --> D["seh_frames() → List[SEHFrame]\n  Scan .text for push handler / push FS:[0] / mov FS:[0], esp\n  Each match: SEHFrame(setup_va, handler_va, func_va)"]
-    B --> E["scan() → List[SEHFinding]\n  Finding: SEH_NO_SAFESEH if not present\n  Finding: SEH_EMPTY_TABLE if SEHandlerCount == 0\n  Finding: SEH_HANDLER_NOT_IN_TABLE for handlers in seh_frames() not in safe_seh_handlers()"]
-    E --> F["SEHFinding:\n  category: 'safeseh_disabled' | 'no_handlers' | 'handler_not_in_table'\n  severity: 'HIGH' | 'MEDIUM' | 'LOW'\n  title: str\n  location: str\n  description: str\n  va: int\n  cwe: str"]
-    F --> G["report(findings) → str"]
+    A(["SEHChainAnalyzer.from_path(path)"]):::input --> B["Parse IMAGE_LOAD_CONFIG_DIRECTORY:\n  SEHandlerTable: VA of handler list\n  SEHandlerCount: number of registered handlers\n  Presence check: is SEHandlerTable populated?"]:::primary
+    B:::primary --> C(["safe_seh_handlers() → List[int]\n  Read handler VAs from SEHandlerTable\n  Returns [] if SafeSEH not present"]):::output
+    B:::primary --> D(["seh_frames() → List[SEHFrame]\n  Scan .text for push handler / push FS:[0] / mov FS:[0], esp\n  Each match: SEHFrame(setup_va, handler_va, func_va)"]):::output
+    B:::primary --> E["scan() → List[SEHFinding]\n  Finding: SEH_NO_SAFESEH if not present\n  Finding: SEH_EMPTY_TABLE if SEHandlerCount == 0\n  Finding: SEH_HANDLER_NOT_IN_TABLE for handlers in seh_frames() not in safe_seh_handlers()"]:::secondary
+    E:::secondary --> F["SEHFinding:\n  category: 'safeseh_disabled' | 'no_handlers' | 'handler_not_in_table'\n  severity: 'HIGH' | 'MEDIUM' | 'LOW'\n  title: str\n  location: str\n  description: str\n  va: int\n  cwe: str"]:::tertiary
+    F:::tertiary --> G(["report(findings) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#00695c,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

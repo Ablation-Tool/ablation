@@ -18,11 +18,22 @@ Parse Windows PDB Program Database symbol files and integrate function names, ty
 
 ```mermaid
 flowchart TD
-    A["PDBSymbolIntegrator.from_path(pe_path)"] --> B["pdb_info() → Optional[PDBInfo]\n  Parse PE CodeView debug directory entry\n  Extract: pdb_guid, pdb_age, pdb_filename\n  PDBInfo: guid, age, filename"]
-    B --> C["fetch_pdb(out_dir, timeout) → Optional[str]\n  Construct symbol server URL:\n    base/filename/GUIDage/filename\n  Download PDB to out_dir\n  Return local path"]
-    C --> D["load_pdb(pdb_path) → Dict[int, str]\n  Parse PDB stream directory\n  Read DBI stream → module list\n  Read public symbols (addr→name)\n  → Dict[va, function_name]"]
-    D --> E["integrate(ctx) → int\n  For each (va, name) in load_pdb():\n    ctx.set_name(va, name, source='pdb')\n  Return count of names integrated"]
-    B --> F["scan() → List[PDBFinding]\n  guid_mismatch: PE GUID != PDB GUID\n  age_mismatch: PE age != PDB age"]
+    A(["PDBSymbolIntegrator.from_path(pe_path)"]):::input --> B["pdb_info() → Optional[PDBInfo]\n  Parse PE CodeView debug directory entry\n  Extract: pdb_guid, pdb_age, pdb_filename\n  PDBInfo: guid, age, filename"]:::primary
+    B:::primary --> C["fetch_pdb(out_dir, timeout) → Optional[str]\n  Construct symbol server URL:\n    base/filename/GUIDage/filename\n  Download PDB to out_dir\n  Return local path"]:::secondary
+    C:::secondary --> D["load_pdb(pdb_path) → Dict[int, str]\n  Parse PDB stream directory\n  Read DBI stream → module list\n  Read public symbols (addr→name)\n  → Dict[va, function_name]"]:::tertiary
+    D:::tertiary --> E(["integrate(ctx) → int\n  For each (va, name) in load_pdb():\n    ctx.set_name(va, name, source='pdb')\n  Return count of names integrated"]):::output
+    B:::primary --> F(["scan() → List[PDBFinding]\n  guid_mismatch: PE GUID != PDB GUID\n  age_mismatch: PE age != PDB age"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

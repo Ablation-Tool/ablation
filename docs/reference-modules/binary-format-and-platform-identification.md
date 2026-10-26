@@ -18,18 +18,36 @@ Identify a binary's format ELF, PE, Mach-O, architecture 32/64-bit, endianness, 
 
 ```mermaid
 flowchart TD
-    A["BinaryParser(path)"] --> B[Read first 4 bytes: magic]
-    B --> C{magic bytes}
-    C -->|"\\x7fELF"| D[ELF → _parse_elf]
-    C -->|"MZ"| E[PE → _parse_pe]
-    C -->|0xFEEDFACE or 0xCEFAEDFE| F[Mach-O 32-bit → _parse_macho]
-    C -->|0xFEEDFACF or 0xCFFAEDFE| G[Mach-O 64-bit → _parse_macho]
-    C -->|other| H[format = Unknown]
-    D --> I["bits from EI_CLASS byte 4\n1=32-bit, 2=64-bit\nendian from EI_DATA byte 5\n1=little, 2=big\nentry_point at offset 24 (ELF64)"]
-    E --> J["e_lfanew at offset 0x3C → PE header offset\nMachine: 0x014C=x86_32, 0x8664=x86_64\nentry_point = AddressOfEntryPoint from Optional Header"]
-    F --> K["bits from magic (32)\nendian from magic byte order\nLC_MAIN (0x80000028) → entry_point"]
-    G --> K
-    I & J & K --> L["return dict: format, bits, endian, entry_point"]
+    A(["BinaryParser(path)"]):::input --> B["Read first 4 bytes: magic"]:::primary
+    B:::primary --> C{"magic bytes"}:::neutral
+    C:::neutral -->|"\\x7fELF"| D["ELF → _parse_elf"]:::secondary
+    C:::neutral -->|"MZ"| E["PE → _parse_pe"]:::tertiary
+    C:::neutral -->|0xFEEDFACE or 0xCEFAEDFE| F["Mach-O 32-bit → _parse_macho"]:::tertiary
+    C:::neutral -->|0xFEEDFACF or 0xCFFAEDFE| G["Mach-O 64-bit → _parse_macho"]:::tertiary
+    C:::neutral -->|other| H(["format = Unknown"]):::output
+    D:::secondary --> I["bits from EI_CLASS byte 4\n1=32-bit, 2=64-bit\nendian from EI_DATA byte 5\n1=little, 2=big\nentry_point at offset 24 (ELF64)"]:::tertiary
+    E:::tertiary --> J(["e_lfanew at offset 0x3C → PE header offset\nMachine: 0x014C=x86_32, 0x8664=x86_64\nentry_point = AddressOfEntryPoint from Optional Header"]):::output
+    F:::tertiary --> K(["bits from magic (32)\nendian from magic byte order\nLC_MAIN (0x80000028) → entry_point"]):::output
+    G:::tertiary --> K:::output
+    I:::tertiary --> L(["return dict: format, bits, endian, entry_point"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Magic byte constants

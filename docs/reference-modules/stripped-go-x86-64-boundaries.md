@@ -20,21 +20,42 @@ Recover function entry points and accurate string contents from stripped Go 1.17
 
 ```mermaid
 flowchart TD
-    A["GoStringResolver(binary_data, elf_phdrs)"] --> B[Build PT_LOAD segment index for VA→file-offset translation]
-    B --> C["scan_instructions(capstone_insn_list)"]
-    C --> D{iterate instructions}
-    D --> E{mnemonic == lea AND dst reg == rax?}
-    E -->|yes| F["pending = (resolved_rip_relative_va, insn_index)"]
-    E -->|no| G{mnemonic == mov AND dst == ebx/rbx AND src == imm?}
-    G -->|yes, within window| H["read_at(pending_va, imm_length): exact N bytes from .rodata"]
-    G -->|no| I{age > window?}
-    I -->|yes| J[NUL fallback: read_nul_terminated(pending_va)]
-    I -->|no| D
-    H & J --> K["emit: {string_va: (text, length)}"]
-    K --> D
-    D -->|xor ebx,ebx| L[emit empty string: {string_va: ('', 0)}]
-    D -->|any write to rax| M[invalidate pending lea]
-    M --> D
+    A(["GoStringResolver(binary_data, elf_phdrs)"]):::input --> B["Build PT_LOAD segment index for VA→file-offset translation"]:::primary
+    B:::primary --> C["scan_instructions(capstone_insn_list)"]:::secondary
+    C:::secondary --> D{"iterate instructions"}:::neutral
+    D:::neutral --> E{"mnemonic == lea AND dst reg == rax?"}:::neutral
+    E:::neutral -->|yes| F(["pending = (resolved_rip_relative_va, insn_index)"]):::output
+    E:::neutral -->|no| G{"mnemonic == mov AND dst == ebx/rbx AND src == imm?"}:::neutral
+    G:::neutral -->|yes, within window| H["read_at(pending_va, imm_length): exact N bytes from .rodata"]:::tertiary
+    G:::neutral -->|no| I{"age > window?"}:::neutral
+    I:::neutral -->|yes| J(["NUL fallback: read_nul_terminated(pending_va)"]):::output
+    I:::neutral -->|no| D:::neutral
+    H:::tertiary --> K["emit: {string_va: (text, length)}"]:::tertiary
+    K:::tertiary --> D:::neutral
+    D:::neutral -->|xor ebx,ebx| L(["emit empty string: {string_va: ('', 0)}"]):::output
+    D:::neutral -->|any write to rax| M["invalidate pending lea"]:::tertiary
+    M:::tertiary --> D:::neutral
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#546e7a,stroke-width:2px
+    linkStyle 3 stroke:#546e7a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#546e7a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#546e7a,stroke-width:2px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#546e7a,stroke-width:2px
+    linkStyle 10 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 11 stroke:#546e7a,stroke-width:2px
+    linkStyle 12 stroke:#2e7d32,stroke-width:3px
+    linkStyle 13 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 14 stroke:#546e7a,stroke-width:2px
 ```
 
 **VA to file-offset translation** uses the ELF PT_LOAD segment list: for each segment, the scanner checks if the target VA falls within `[p_vaddr, p_vaddr + p_filesz)` and computes `file_offset = va - p_vaddr + p_offset`.

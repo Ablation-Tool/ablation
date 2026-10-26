@@ -30,12 +30,24 @@ The Sakoe-Chiba band constrains how far the alignment is allowed to warp at any 
 
 ```mermaid
 flowchart TD
-    A["DTWMatcher.from_paths(v1_path, v2_path)\n  OR\n  DTWMatcher.from_context(ctx_v1, ctx_v2)"] --> B["For each binary:\n  Disassemble all functions\n  Encode as opcode category sequences:\n    memory-access ops → category 1\n    arithmetic → category 2\n    compare/branch → category 3\n    call/ret → category 4\n    other → category 0"]
-    B --> C["distance(seq_a, seq_b) → float\n  Standard DTW with sakoe-chiba band (radius=10%)\n  Normalized by alignment path length"]
-    C --> D["similarity(seq_a, seq_b) → float\n  1.0 - normalized_distance\n  Range [0.0, 1.0]"]
-    D --> E["find_homologs(va_v1, ctx_v1, top_k=5) → List[HomologMatch]\n  Score v1 function against all v2 functions\n  Return top_k by similarity descending"]
-    E --> F["HomologMatch:\n  va_v1, va_v2\n  similarity: float\n  confidence: 'HIGH' | 'MEDIUM' | 'LOW'\n  delta_insn: instruction count difference"]
-    A --> G["score_functions(va_list_v1, va_list_v2) → SimilarityReport\n  Batch pairwise scoring\n  SimilarityReport.fmt() → summary table"]
+    A(["DTWMatcher.from_paths(v1_path, v2_path)\n  OR\n  DTWMatcher.from_context(ctx_v1, ctx_v2)"]):::input --> B["For each binary:\n  Disassemble all functions\n  Encode as opcode category sequences:\n    memory-access ops → category 1\n    arithmetic → category 2\n    compare/branch → category 3\n    call/ret → category 4\n    other → category 0"]:::primary
+    B:::primary --> C["distance(seq_a, seq_b) → float\n  Standard DTW with sakoe-chiba band (radius=10%)\n  Normalized by alignment path length"]:::secondary
+    C:::secondary --> D["similarity(seq_a, seq_b) → float\n  1.0 - normalized_distance\n  Range [0.0, 1.0]"]:::tertiary
+    D:::tertiary --> E["find_homologs(va_v1, ctx_v1, top_k=5) → List[HomologMatch]\n  Score v1 function against all v2 functions\n  Return top_k by similarity descending"]:::tertiary
+    E:::tertiary --> F(["HomologMatch:\n  va_v1, va_v2\n  similarity: float\n  confidence: 'HIGH' | 'MEDIUM' | 'LOW'\n  delta_insn: instruction count difference"]):::output
+    A:::input --> G(["score_functions(va_list_v1, va_list_v2) → SimilarityReport\n  Batch pairwise scoring\n  SimilarityReport.fmt() → summary table"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

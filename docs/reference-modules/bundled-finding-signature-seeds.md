@@ -18,15 +18,27 @@ Pre-bundled behavioral signature library for stripped function identification: m
 
 ```mermaid
 flowchart TD
-    A["SigLibrary()"] --> B["load_model(): load sentence-transformers model\n  Encode all bundled signature descriptions\n  (from sigs.json, bundled with ablation package)"]
-    B --> C["match_description(description: str) → Optional[SigMatch]\n  Embed description with same BERT model\n  Cosine similarity against all bundled signatures\n  If best_score > threshold: return SigMatch\n  Else: return None"]
-    C --> D["SigMatch:\n  name: str ('memcpy', 'strcpy', etc.)\n  score: float (0.0-1.0)\n  label() → 'likely:memcpy' (with prefix)"]
+    A(["SigLibrary()"]):::input --> B["load_model(): load sentence-transformers model\n  Encode all bundled signature descriptions\n  (from sigs.json, bundled with ablation package)"]:::primary
+    B:::primary --> C["match_description(description: str) → Optional[SigMatch]\n  Embed description with same BERT model\n  Cosine similarity against all bundled signatures\n  If best_score > threshold: return SigMatch\n  Else: return None"]:::secondary
+    C:::secondary --> D(["SigMatch:\n  name: str ('memcpy', 'strcpy', etc.)\n  score: float (0.0-1.0)\n  label() → 'likely:memcpy' (with prefix)"]):::output
 
-    E["match_function(func_va, binary_path) → Optional[SigMatch]"] --> F["Build function description from:\n  disassembly summary, op categories, callees, size\n  Feed description to match_description()"]
+    E(["match_function(func_va, binary_path) → Optional[SigMatch]"]):::input --> F(["Build function description from:\n  disassembly summary, op categories, callees, size\n  Feed description to match_description()"]):::output
 
-    G["auto_name(db_path, dry_run=False) → int"] --> H["Load all ANGR_INFERRED entries from corpus DB\n  match_description() for each\n  If match found: update name to 'likely:<match.name>'\n  Return count of renamed functions"]
+    G(["auto_name(db_path, dry_run=False) → int"]):::input --> H(["Load all ANGR_INFERRED entries from corpus DB\n  match_description() for each\n  If match found: update name to 'likely:<match.name>'\n  Return count of renamed functions"]):::output
 
-    I["known_signatures() → List[dict]"] --> J["Return all bundled signature descriptions\n  Useful for inspecting coverage or adding new sigs"]
+    I(["known_signatures() → List[dict]"]):::input --> J(["Return all bundled signature descriptions\n  Useful for inspecting coverage or adding new sigs"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

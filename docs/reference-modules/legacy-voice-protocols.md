@@ -18,9 +18,18 @@ Probe H.323 Q.931/RAS, SCCP/Skinny, and MGCP telephony infrastructure for unauth
 
 ```mermaid
 flowchart TD
-    A["probe_h323_service(host, port=1720) → list\n  TCP/1720: TPKT SETUP → any response → H323_CALL_SIGNALING_ACTIVE (MEDIUM)\n  UDP/1719: GRQ → GCF (0x09) → H323_GATEKEEPER_UNAUTH_CONFIRM (HIGH)\n  UDP/1719: GRQ → other response → H323_GATEKEEPER_RESPONDS (MEDIUM)\n  → [{severity, title, detail, host, port}]"] --> B["probe_sccp_skinny(host, port=2000) → list\n  TCP/2000: RegisterMessage (0x0001)\n    → RegisterAck (0x0081) → SCCP_UNAUTH_REGISTER_ACCEPTED (CRITICAL)\n    → RegisterREJ (0x009D) or other → SCCP_PORT_OPEN (LOW)\n  TCP/2443: TLS handshake → SCCP_TLS_ACTIVE (LOW)\n  → [{severity, title, detail, host, port}]"]
-    B --> C["detect_sccp_skinny_surface(host, port=2000) → list\n  Probe 1: RegisterMessage (0x0001)\n    → 0x0081 → SCCP_REGISTER_ACCEPTED (CRITICAL)\n    → 0x009D → SCCP_REGISTER_REJECTED (MEDIUM)\n  Probe 2: KeepAliveMessage (0x0000)\n    → KeepAliveAck (0x0120) → SCCP_KEEPALIVE_RESPONSIVE (HIGH)\n  Probe 3: unsolicited OpenReceiveChannelAck (0x0022)\n    → any response → SCCP_UNSOLICITED_MEDIA_CHANNEL (HIGH)\n  → [{severity, title, detail, host, port}]"]
-    C --> D["detect_mgcp_surface(host, port=2427) → list\n  AUEP *@host → 200 → MGCP_ENDPOINT_AUDIT_UNAUTH (CRITICAL)\n             → other code → MGCP_SURFACE_OPEN (INFO)\n  RQNT *@host → 200 → MGCP_NOTIFY_ACCEPTED (HIGH)\n  CRCX *@host → 200 → MGCP_CALL_CREATED_UNAUTH (CRITICAL)\n  → [{severity, title, detail, host, port}]"]
+    A(["probe_h323_service(host, port=1720) → list\n  TCP/1720: TPKT SETUP → any response → H323_CALL_SIGNALING_ACTIVE (MEDIUM)\n  UDP/1719: GRQ → GCF (0x09) → H323_GATEKEEPER_UNAUTH_CONFIRM (HIGH)\n  UDP/1719: GRQ → other response → H323_GATEKEEPER_RESPONDS (MEDIUM)\n  → [{severity, title, detail, host, port}]"]):::input --> B["probe_sccp_skinny(host, port=2000) → list\n  TCP/2000: RegisterMessage (0x0001)\n    → RegisterAck (0x0081) → SCCP_UNAUTH_REGISTER_ACCEPTED (CRITICAL)\n    → RegisterREJ (0x009D) or other → SCCP_PORT_OPEN (LOW)\n  TCP/2443: TLS handshake → SCCP_TLS_ACTIVE (LOW)\n  → [{severity, title, detail, host, port}]"]:::primary
+    B:::primary --> C["detect_sccp_skinny_surface(host, port=2000) → list\n  Probe 1: RegisterMessage (0x0001)\n    → 0x0081 → SCCP_REGISTER_ACCEPTED (CRITICAL)\n    → 0x009D → SCCP_REGISTER_REJECTED (MEDIUM)\n  Probe 2: KeepAliveMessage (0x0000)\n    → KeepAliveAck (0x0120) → SCCP_KEEPALIVE_RESPONSIVE (HIGH)\n  Probe 3: unsolicited OpenReceiveChannelAck (0x0022)\n    → any response → SCCP_UNSOLICITED_MEDIA_CHANNEL (HIGH)\n  → [{severity, title, detail, host, port}]"]:::secondary
+    C:::secondary --> D(["detect_mgcp_surface(host, port=2427) → list\n  AUEP *@host → 200 → MGCP_ENDPOINT_AUDIT_UNAUTH (CRITICAL)\n             → other code → MGCP_SURFACE_OPEN (INFO)\n  RQNT *@host → 200 → MGCP_NOTIFY_ACCEPTED (HIGH)\n  CRCX *@host → 200 → MGCP_CALL_CREATED_UNAUTH (CRITICAL)\n  → [{severity, title, detail, host, port}]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

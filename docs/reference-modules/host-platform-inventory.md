@@ -18,10 +18,20 @@ Detect OS family, kernel version, CPU architecture, libc variant, and security c
 
 ```mermaid
 flowchart TD
-    A["PlatformDetector()"] --> B["detect_os() → info['os'], info['os_release'], info['os_version']\n  /etc/os-release → info['distro'], info['distro_version']\n  detect_arch() → info['machine'], info['processor']\n    info['arch_family'] (x86/ARM/MIPS), info['arch_bits'] (32/64)\n    info['pointer_size'], info['byte_order']"]
-    B --> C["detect_kernel() → info['kernel'], info['kernel_major'], info['kernel_minor']\n  detect_libc() → info['libc'] (glibc/musl/bionic)\n    info['libc_version']\n  detect_capabilities() → info['capabilities']\n    {is_root: bool, ptrace_scope: int, available_tools: [str]}"]
-    C --> D["detect_security_features() → info['security']\n  /proc/sys/kernel/randomize_va_space:\n    info['security']['aslr'] = 'disabled'|'partial'|'full'\n  /sys/fs/selinux → info['security']['selinux'] = bool\n  /sys/kernel/security/apparmor → info['security']['apparmor'] = bool"]
-    D --> E["detect_all() → self.info dict (all keys above)\n  Top-level: os, os_release, os_version, distro, distro_version,\n             machine, arch_family, arch_bits, kernel, libc, libc_version\n  Nested: security = {aslr, selinux, apparmor}\n          capabilities = {is_root, ptrace_scope, available_tools}"]
+    A(["PlatformDetector()"]):::input --> B["detect_os() → info['os'], info['os_release'], info['os_version']\n  /etc/os-release → info['distro'], info['distro_version']\n  detect_arch() → info['machine'], info['processor']\n    info['arch_family'] (x86/ARM/MIPS), info['arch_bits'] (32/64)\n    info['pointer_size'], info['byte_order']"]:::primary
+    B:::primary --> C["detect_kernel() → info['kernel'], info['kernel_major'], info['kernel_minor']\n  detect_libc() → info['libc'] (glibc/musl/bionic)\n    info['libc_version']\n  detect_capabilities() → info['capabilities']\n    {is_root: bool, ptrace_scope: int, available_tools: [str]}"]:::secondary
+    C:::secondary --> D["detect_security_features() → info['security']\n  /proc/sys/kernel/randomize_va_space:\n    info['security']['aslr'] = 'disabled'|'partial'|'full'\n  /sys/fs/selinux → info['security']['selinux'] = bool\n  /sys/kernel/security/apparmor → info['security']['apparmor'] = bool"]:::tertiary
+    D:::tertiary --> E(["detect_all() → self.info dict (all keys above)\n  Top-level: os, os_release, os_version, distro, distro_version,\n             machine, arch_family, arch_bits, kernel, libc, libc_version\n  Nested: security = {aslr, selinux, apparmor}\n          capabilities = {is_root, ptrace_scope, available_tools}"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

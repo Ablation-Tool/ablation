@@ -20,23 +20,46 @@ The PE format layers three headers before reaching the actual sections:
 
 ```mermaid
 flowchart TD
-    A[PE binary / .exe / .dll / .sys] --> B[BinaryParser]
-    B --> C[Read bytes 0x3C–0x3F: e_lfanew pointer to PE header]
-    C --> D[Seek to e_lfanew: verify 'PE\\x00\\x00' signature]
-    D --> E[Read 20-byte COFF header]
-    E --> F{Machine field}
-    F -->|0x014C| G[x86-32 / IMAGE_FILE_MACHINE_I386]
-    F -->|0x8664| H[x86-64 / IMAGE_FILE_MACHINE_AMD64]
-    F -->|other| I[unknown arch]
-    E --> J[NumberOfSections, SizeOfOptionalHeader]
-    J --> K[Read Optional Header: Magic, AddressOfEntryPoint, ImageBase]
-    K --> L[Read DataDirectory: ImportTable, ExportTable, ResourceTable, Debug]
-    L --> M[Read SectionTable: .text .data .rdata .rsrc VAs and sizes]
-    M --> N[Parse Import Directory: resolve DLL names and thunk VAs]
-    N --> O[Parse Export Directory: exported function names and RVAs]
-    O --> P[Scan .rdata / strings for IOC candidates]
-    P --> Q[Check DllCharacteristics for hardening flags]
-    Q --> R[BinaryContext: IAT as plt, exports as func_starts, call_edges]
+    A(["PE binary / .exe / .dll / .sys"]):::input --> B["BinaryParser"]:::primary
+    B:::primary --> C["Read bytes 0x3C·0x3F: e_lfanew pointer to PE header"]:::secondary
+    C:::secondary --> D["Seek to e_lfanew: verify 'PE\\x00\\x00' signature"]:::tertiary
+    D:::tertiary --> E["Read 20-byte COFF header"]:::tertiary
+    E:::tertiary --> F{"Machine field"}:::neutral
+    F:::neutral -->|0x014C| G(["x86-32 / IMAGE_FILE_MACHINE_I386"]):::output
+    F:::neutral -->|0x8664| H(["x86-64 / IMAGE_FILE_MACHINE_AMD64"]):::output
+    F:::neutral -->|other| I(["unknown arch"]):::output
+    E:::tertiary --> J["NumberOfSections, SizeOfOptionalHeader"]:::tertiary
+    J:::tertiary --> K["Read Optional Header: Magic, AddressOfEntryPoint, ImageBase"]:::tertiary
+    K:::tertiary --> L["Read DataDirectory: ImportTable, ExportTable, ResourceTable, Debug"]:::tertiary
+    L:::tertiary --> M["Read SectionTable: .text .data .rdata .rsrc VAs and sizes"]:::tertiary
+    M:::tertiary --> N["Parse Import Directory: resolve DLL names and thunk VAs"]:::tertiary
+    N:::tertiary --> O["Parse Export Directory: exported function names and RVAs"]:::tertiary
+    O:::tertiary --> P["Scan .rdata / strings for IOC candidates"]:::tertiary
+    P:::tertiary --> Q["Check DllCharacteristics for hardening flags"]:::tertiary
+    Q:::tertiary --> R(["BinaryContext: IAT as plt, exports as func_starts, call_edges"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#546e7a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 11 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 12 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 13 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 14 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 15 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 16 stroke:#2e7d32,stroke-width:3px
 ```
 
 **DOS header and e_lfanew.** Every PE file begins with the legacy DOS MZ header (`4D 5A`). Bytes 0x3C–0x3F hold `e_lfanew`, the file offset to the PE signature. This indirection exists because PE files must also be valid DOS executables that print "This program cannot be run in DOS mode" when executed on legacy hardware.

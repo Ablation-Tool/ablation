@@ -18,11 +18,22 @@ Classify the provenance of command-string arguments at arbitrary exec-class sink
 
 ```mermaid
 flowchart TD
-    A["SinkArgClassifier.from_path(path)\n  or .from_context(ctx)"] --> B["classify_all() → List[SinkClassification]\n  Find all call sites for registered sink names\n  Default sinks: system, popen, execve, execl, execvp\n  add_sink(name, arg_pos) to extend"]
-    B --> C["For each call site:\n  Identify fmt register for sink's command argument\n  (rdi for system; first arg per calling convention)"]
-    C --> D["Backward walk from call site:\n  Case 1: LEA from .rodata?\n    → RODATA_CONST ('hardcoded literal. No injection.')\n  Case 2: stack buffer filled by preceding snprintf?\n    → recurse: classify snprintf's format arg\n    If snprintf fmt is .rodata → SNPRINTF_RODATA\n  Case 3: register from function entry?\n    → ARG_PROPAGATED ('caller controls this')\n  Case 4: provenance unresolved within look-back window?\n    → UNKNOWN"]
-    D --> E["SinkClassification:\n  sink_name, call_va, arg_pos\n  verdict: RODATA_CONST | SNPRINTF_RODATA | ARG_PROPAGATED | UNKNOWN\n  evidence: annotated instruction trace\n  as_dict() → structured finding\n  fmt() → formatted block"]
-    E --> F["report(results) → str\n  Summary by verdict count + per-site details"]
+    A(["SinkArgClassifier.from_path(path)\n  or .from_context(ctx)"]):::input --> B["classify_all() → List[SinkClassification]\n  Find all call sites for registered sink names\n  Default sinks: system, popen, execve, execl, execvp\n  add_sink(name, arg_pos) to extend"]:::primary
+    B:::primary --> C["For each call site:\n  Identify fmt register for sink's command argument\n  (rdi for system; first arg per calling convention)"]:::secondary
+    C:::secondary --> D["Backward walk from call site:\n  Case 1: LEA from .rodata?\n    → RODATA_CONST ('hardcoded literal. No injection.')\n  Case 2: stack buffer filled by preceding snprintf?\n    → recurse: classify snprintf's format arg\n    If snprintf fmt is .rodata → SNPRINTF_RODATA\n  Case 3: register from function entry?\n    → ARG_PROPAGATED ('caller controls this')\n  Case 4: provenance unresolved within look-back window?\n    → UNKNOWN"]:::tertiary
+    D:::tertiary --> E["SinkClassification:\n  sink_name, call_va, arg_pos\n  verdict: RODATA_CONST | SNPRINTF_RODATA | ARG_PROPAGATED | UNKNOWN\n  evidence: annotated instruction trace\n  as_dict() → structured finding\n  fmt() → formatted block"]:::tertiary
+    E:::tertiary --> F(["report(results) → str\n  Summary by verdict count + per-site details"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

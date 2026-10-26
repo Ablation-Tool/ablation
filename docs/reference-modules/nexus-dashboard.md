@@ -18,10 +18,20 @@ Enumerate Cisco Nexus Dashboard (ND), NDI Network Data & Infrastructure, NDFC Ne
 
 ```mermaid
 flowchart TD
-    A["nexus_dashboard_enum.py"] --> B["probe_nexus_dashboard(host) → dict\n  GET /login (version/login form)\n  GET /api/v1/version (ND API version)\n  classify_by_cert_ou(host) → ND/NDFC/NDO platform\n  → version, platform, login_url"]
-    B --> C["_nd_login(host, user, passwd) → token\n  POST /login  {domain, username, userPasswd}\n  Returns: appToken (valid for all ND services)\n  _ndfc_login() → NDFC-specific token"]
-    C --> D["Authenticated:\n  probe_nexus_dashboard_api(host) → List\n    GET /appcenter/cisco/ndfc/api/v1/... inventory\n  probe_nexus_dashboard_dcnm(host) → List\n    GET /rest/dcnm-version, /rest/control/fabrics\n  enumerate_nexus_dashboard(hosts) → consolidated"]
-    D --> E["Unauthenticated probes:\n  probe_nxos_telemetry(host, port=443)\n    Kafka anomaly export (unauthenticated by default)\n  probe_nxos_poap(host, port=80)\n    POAP config injection endpoint\n  probe_guestshell(host)\n    NX-OS guestshell container access\n  probe_jenkins_exposure(host, port=8080)\n    Jenkins on ND appliance (some deployments)"]
+    A(["nexus_dashboard_enum.py"]):::input --> B["probe_nexus_dashboard(host) → dict\n  GET /login (version/login form)\n  GET /api/v1/version (ND API version)\n  classify_by_cert_ou(host) → ND/NDFC/NDO platform\n  → version, platform, login_url"]:::primary
+    B:::primary --> C["_nd_login(host, user, passwd) → token\n  POST /login  {domain, username, userPasswd}\n  Returns: appToken (valid for all ND services)\n  _ndfc_login() → NDFC-specific token"]:::secondary
+    C:::secondary --> D["Authenticated:\n  probe_nexus_dashboard_api(host) → List\n    GET /appcenter/cisco/ndfc/api/v1/... inventory\n  probe_nexus_dashboard_dcnm(host) → List\n    GET /rest/dcnm-version, /rest/control/fabrics\n  enumerate_nexus_dashboard(hosts) → consolidated"]:::tertiary
+    D:::tertiary --> E(["Unauthenticated probes:\n  probe_nxos_telemetry(host, port=443)\n    Kafka anomaly export (unauthenticated by default)\n  probe_nxos_poap(host, port=80)\n    POAP config injection endpoint\n  probe_guestshell(host)\n    NX-OS guestshell container access\n  probe_jenkins_exposure(host, port=8080)\n    Jenkins on ND appliance (some deployments)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

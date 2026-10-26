@@ -18,10 +18,20 @@ Rank candidate analysis probes by expected value against a set of surviving vuln
 
 ```mermaid
 flowchart TD
-    A["ProbeRanker(hypotheses: List[HypothesisRecord])"] --> B["generate(hypothesis_ids) → List[ProbeRecord]\n  For each surviving hypothesis (not CONFIRMED/ELIMINATED):\n    Generate candidate probes:\n      PathSolver: high reliability, medium cost\n      Manual disasm: high reliability, high cost\n      TaintTracker: medium reliability, low cost\n      PoC attempt: highest reliability, highest cost\n    Filter: skip probes with identical outcomes across all hypotheses\n  Returns: List[ProbeRecord] with scores"]
-    B --> C["probe_value = predicted_disagreement\n              × observability\n              × analyzer_reliability\n              / max(estimated_cost, epsilon)"]
-    C --> D["top_probe(hypothesis_ids) → Optional[ProbeRecord]\n  Returns highest probe_value probe\n  Returns None when all hypotheses resolved"]
-    D --> E["plan_report(hypothesis_ids) → str\n  Full ranked list of probes with scores\n  Used for planning analyst work session"]
+    A(["ProbeRanker(hypotheses: List[HypothesisRecord])"]):::input --> B["generate(hypothesis_ids) → List[ProbeRecord]\n  For each surviving hypothesis (not CONFIRMED/ELIMINATED):\n    Generate candidate probes:\n      PathSolver: high reliability, medium cost\n      Manual disasm: high reliability, high cost\n      TaintTracker: medium reliability, low cost\n      PoC attempt: highest reliability, highest cost\n    Filter: skip probes with identical outcomes across all hypotheses\n  Returns: List[ProbeRecord] with scores"]:::primary
+    B:::primary --> C["probe_value = predicted_disagreement\n              × observability\n              × analyzer_reliability\n              / max(estimated_cost, epsilon)"]:::secondary
+    C:::secondary --> D["top_probe(hypothesis_ids) → Optional[ProbeRecord]\n  Returns highest probe_value probe\n  Returns None when all hypotheses resolved"]:::tertiary
+    D:::tertiary --> E(["plan_report(hypothesis_ids) → str\n  Full ranked list of probes with scores\n  Used for planning analyst work session"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

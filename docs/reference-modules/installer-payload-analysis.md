@@ -18,20 +18,40 @@ Detect self-extracting installer format BitRock LZMA-4.0, NSIS, Inno Setup, deco
 
 ```mermaid
 flowchart TD
-    A["InstallerBinaryAnalyzer.from_path(path)"] --> B["_load(): read file\nReject if size > 256 MB (_MAX_INSTALLER_BYTES)"]
-    B --> C["_is_upx(data)?\nPE section names contain 'UPX0' or 'UPX1'"]
-    C -->|yes| D["_upx_unpack(data)\nWrite to tmpfile → upx -d -q → read result\nOn failure: log error, continue with packed data"]
-    C -->|no| E
-    D --> E["Format detection"]
-    E --> F{"_is_bitrock(data)?\n'bitrock-lzma-4.0' in data"}
-    F -->|yes| G["_parse_bitrock_overlay(data)\n1. _pe_end(data): find max(raw_off + raw_size) over all PE sections\n2. overlay = data[pe_end : rfind('bitrock-lzma-4.0')]\n3. record_size = overlay[0:4] LE → section name\n4. comp_type = overlay[record_size]\n   0xFF = LZMA_ALONE → lzma.decompress(overlay[record_size+1:])\n   else → brute-force LZMA_ALONE header probe"]
-    G --> H["_carve_pe_files(dec)\nScan dec for MZ offsets\nFor each MZ: read e_lfanew → verify PE signature\nValidate section table → compute max_raw\nname_hint from 200-byte look-back string\nCollect CarvedBinary(offset, arch, size, data, name_hint)"]
-    H --> I["InstallerAnalysisResult(installer_type, upx_unpacked, payload_size, binaries)"]
-    F -->|no| J{"_is_nsis? _is_inno?"}
-    J -->|NSIS| K["installer_type='nsis'\nerror: 'use 7z e or innounp'"]
-    J -->|Inno| L["installer_type='inno'\nerror: 'use innoextract'"]
-    J -->|none| M["installer_type='unknown'"]
-    I --> N["extract_to_dir(result, out_dir)\nWrite each CarvedBinary to {name_hint or binary_N}.exe/.dll\nHandle name collisions with _{i} suffix\nReturn {filename: path} mapping"]
+    A(["InstallerBinaryAnalyzer.from_path(path)"]):::input --> B["_load(): read file\nReject if size > 256 MB (_MAX_INSTALLER_BYTES)"]:::primary
+    B:::primary --> C["_is_upx(data)?\nPE section names contain 'UPX0' or 'UPX1'"]:::secondary
+    C:::secondary -->|yes| D["_upx_unpack(data)\nWrite to tmpfile → upx -d -q → read result\nOn failure: log error, continue with packed data"]:::tertiary
+    C:::secondary -->|no| E["E"]:::tertiary
+    D:::tertiary --> E:::tertiary
+    E:::tertiary --> F{"_is_bitrock(data)?\n'bitrock-lzma-4.0' in data"}:::neutral
+    F:::neutral -->|yes| G["_parse_bitrock_overlay(data)\n1. _pe_end(data): find max(raw_off + raw_size) over all PE sections\n2. overlay = data[pe_end : rfind('bitrock-lzma-4.0')]\n3. record_size = overlay[0:4] LE → section name\n4. comp_type = overlay[record_size]\n   0xFF = LZMA_ALONE → lzma.decompress(overlay[record_size+1:])\n   else → brute-force LZMA_ALONE header probe"]:::tertiary
+    G:::tertiary --> H["_carve_pe_files(dec)\nScan dec for MZ offsets\nFor each MZ: read e_lfanew → verify PE signature\nValidate section table → compute max_raw\nname_hint from 200-byte look-back string\nCollect CarvedBinary(offset, arch, size, data, name_hint)"]:::tertiary
+    H:::tertiary --> I["InstallerAnalysisResult(installer_type, upx_unpacked, payload_size, binaries)"]:::tertiary
+    F:::neutral -->|no| J{"_is_nsis? _is_inno?"}:::neutral
+    J:::neutral -->|NSIS| K(["installer_type='nsis'\nerror: 'use 7z e or innounp'"]):::output
+    J:::neutral -->|Inno| L(["installer_type='inno'\nerror: 'use innoextract'"]):::output
+    J:::neutral -->|none| M(["installer_type='unknown'"]):::output
+    I:::tertiary --> N(["extract_to_dir(result, out_dir)\nWrite each CarvedBinary to {name_hint or binary_N}.exe/.dll\nHandle name collisions with _{i} suffix\nReturn {filename: path} mapping"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#546e7a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#546e7a,stroke-width:2px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
+    linkStyle 12 stroke:#2e7d32,stroke-width:3px
+    linkStyle 13 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Architecture map ARCH_MAP

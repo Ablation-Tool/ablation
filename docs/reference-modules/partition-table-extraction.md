@@ -18,17 +18,34 @@ Parse a fixed-record firmware container image: reading the 84-byte header, walki
 
 ```mermaid
 flowchart TD
-    A["FirmwareContainer.from_path(image.BIN)"] --> B["Read entire image into self._data\n_parse(): read magic, fw_version, vendor, product, language from fixed offsets"]
-    B --> C["_parse_partitions():\noff = PARTITION_TABLE_START (0x0054)\nLoop: read 296-byte entry at off"]
-    C --> D{"entry[:4] == 0x00000000 OR entry[0] not in ('V', 0x00)?"}
-    D -->|yes| E["Stop — end of partition table"]
-    D -->|no| F["Unpack entry:\nversion = entry[0x00:0x10]\nname = entry[0x10:0x20]\noffset = uint32 LE at entry[0x20]\nsize = uint32 LE at entry[0x24]\ndestpath = entry[0x28:0x68]"]
-    F --> G["_detect_payload(data, offset, size)\nCheck data[offset:offset+8] for magic:\ngzip (\\x1f\\x8b), xz (\\xfd7zXZ), zstd, lz4, lzo, cpio_newc, cpio_odc, elf (\\x7fELF), pe (MZ)\nFallback: data[offset+0x438:offset+0x43A] == \\x53\\xef → ext2/3/4"]
-    G --> H["Append FirmwarePartition(index, version, name, offset, size, destpath, payload_type)"]
-    H --> I["off += 296; idx++; continue loop"]
-    C --> J["dump_partitions(): formatted table of all partitions"]
-    C --> K["extract(name, out_path): read_partition(name) → write bytes"]
-    C --> L["extract_all(out_dir): 00_<name>.bin for each partition"]
+    A(["FirmwareContainer.from_path(image.BIN)"]):::input --> B["Read entire image into self._data\n_parse(): read magic, fw_version, vendor, product, language from fixed offsets"]:::primary
+    B:::primary --> C["_parse_partitions():\noff = PARTITION_TABLE_START (0x0054)\nLoop: read 296-byte entry at off"]:::secondary
+    C:::secondary --> D{"entry[:4] == 0x00000000 OR entry[0] not in ('V', 0x00)?"}:::neutral
+    D:::neutral -->|yes| E(["Stop · end of partition table"]):::output
+    D:::neutral -->|no| F["Unpack entry:\nversion = entry[0x00:0x10]\nname = entry[0x10:0x20]\noffset = uint32 LE at entry[0x20]\nsize = uint32 LE at entry[0x24]\ndestpath = entry[0x28:0x68]"]:::tertiary
+    F:::tertiary --> G["_detect_payload(data, offset, size)\nCheck data[offset:offset+8] for magic:\ngzip (\\x1f\\x8b), xz (\\xfd7zXZ), zstd, lz4, lzo, cpio_newc, cpio_odc, elf (\\x7fELF), pe (MZ)\nFallback: data[offset+0x438:offset+0x43A] == \\x53\\xef → ext2/3/4"]:::tertiary
+    G:::tertiary --> H["Append FirmwarePartition(index, version, name, offset, size, destpath, payload_type)"]:::tertiary
+    H:::tertiary --> I(["off += 296; idx++; continue loop"]):::output
+    C:::secondary --> J(["dump_partitions(): formatted table of all partitions"]):::output
+    C:::secondary --> K(["extract(name, out_path): read_partition(name) → write bytes"]):::output
+    C:::secondary --> L(["extract_all(out_dir): 00_<name>.bin for each partition"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#546e7a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Container memory map

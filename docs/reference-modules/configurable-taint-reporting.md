@@ -18,9 +18,18 @@ Follow tainted arguments across shared library boundaries: extending `TaintTrack
 
 ```mermaid
 flowchart TD
-    A["CrossBinaryTaintTracker.from_lib_graph(\n  lib_graph: LibGraph,\n  binary_contexts: Dict[str, BinaryContext]\n)"] --> B["run(source_binary, source_va, tainted_args) → List[TaintChain]\n  Start: TaintTracker on source_binary at source_va\n  When taint reaches PLT exit:\n    Resolve: lib_graph.defined_in(plt_name) → exporting binary\n    Continue: TaintTracker on exporting binary from export VA\n  BFS across boundaries until:\n    Dangerous sink (exec, system, write, send)\n    max_hops exceeded\n    No exporting binary found"]
-    B --> C["TaintHop:\n  binary_path: str\n  func_va: int\n  hop_verdict: str  (TAINTED/SANITIZED/UNKNOWN)\n  binary_name() → str\n  fmt() → str"]
-    C --> D["TaintChain:\n  hops: List[TaintHop]\n  sink_name: str\n  sink_va: int\n  depth() → int\n  sink_binary_name() → str\n  fmt() → str  (multi-line chain visualization)"]
+    A(["CrossBinaryTaintTracker.from_lib_graph(\n  lib_graph: LibGraph,\n  binary_contexts: Dict[str, BinaryContext]\n)"]):::input --> B["run(source_binary, source_va, tainted_args) → List[TaintChain]\n  Start: TaintTracker on source_binary at source_va\n  When taint reaches PLT exit:\n    Resolve: lib_graph.defined_in(plt_name) → exporting binary\n    Continue: TaintTracker on exporting binary from export VA\n  BFS across boundaries until:\n    Dangerous sink (exec, system, write, send)\n    max_hops exceeded\n    No exporting binary found"]:::primary
+    B:::primary --> C["TaintHop:\n  binary_path: str\n  func_va: int\n  hop_verdict: str  (TAINTED/SANITIZED/UNKNOWN)\n  binary_name() → str\n  fmt() → str"]:::secondary
+    C:::secondary --> D(["TaintChain:\n  hops: List[TaintHop]\n  sink_name: str\n  sink_va: int\n  depth() → int\n  sink_binary_name() → str\n  fmt() → str  (multi-line chain visualization)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

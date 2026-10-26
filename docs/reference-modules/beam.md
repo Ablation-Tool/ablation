@@ -63,24 +63,35 @@ A BEAM file is an IFF Interchange File Format container. IFF was designed for st
 
 ```mermaid
 flowchart TD
-    A[/"module.beam: IFF container"/] --> B["IFF header\n'FOR1' · length · 'BEAM'"]
+    A(["module.beam: IFF container"]):::input --> B["IFF header\n'FOR1' · length · 'BEAM'"]:::primary
 
-    B --> C["AtU8 / Atom chunk\nAtom table: count + (len + bytes) per atom\nAll other tables reference atoms by index\nAtU8 = UTF-8 (OTP 20+); Atom = Latin-1 fallback"]
+    B:::primary --> C["AtU8 / Atom chunk\nAtom table: count + (len + bytes) per atom\nAll other tables reference atoms by index\nAtU8 = UTF-8 (OTP 20+); Atom = Latin-1 fallback"]:::secondary
 
-    B --> D["ExpT chunk\nExports: [(atom_idx, arity, label), ...]\nMirror of ELF exported symbols"]
+    B:::primary --> D(["ExpT chunk\nExports: [(atom_idx, arity, label), ...]\nMirror of ELF exported symbols"]):::output
 
-    B --> E["ImpT chunk\nImports: [(module_idx, fn_idx, arity), ...]\nMirror of PLT entries\nResolved to 'os:cmd/1' via atom table"]
+    B:::primary --> E(["ImpT chunk\nImports: [(module_idx, fn_idx, arity), ...]\nMirror of PLT entries\nResolved to 'os:cmd/1' via atom table"]):::output
 
-    B --> F["Code chunk\nBEAM bytecode: header + opcode stream"]
+    B:::primary --> F(["Code chunk\nBEAM bytecode: header + opcode stream"]):::output
 
-    B --> G["LitT chunk\nLiterals: zlib-compressed ETF terms\nMirror of .rodata constants"]
+    B:::primary --> G(["LitT chunk\nLiterals: zlib-compressed ETF terms\nMirror of .rodata constants"]):::output
 
-    B --> H["Dbgi chunk (optional)\nDebug info: AST in ETF\nStripped by obfuscators\nIf absent: obfuscated=True"]
+    B:::primary --> H(["Dbgi chunk (optional)\nDebug info: AST in ETF\nStripped by obfuscators\nIf absent: obfuscated=True"]):::output
 
-    C --> I["BeamContext built\nctx.atoms · ctx.exports · ctx.imports\nctx.literals · ctx.ast_functions\nctx.obfuscated"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style I fill:#14532d,stroke:#166534,color:#dcfce7
+    C:::secondary --> I(["BeamContext built\nctx.atoms · ctx.exports · ctx.imports\nctx.literals · ctx.ast_functions\nctx.obfuscated"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
 ```
 
 The atom table is the foundation of all other tables. Exports, imports, and literals all reference atoms by index. `AtU8` is the UTF-8 atom table (OTP 20+). `Atom` is the Latin-1 predecessor. `BeamContext` tries `AtU8` first and falls back to `Atom`.

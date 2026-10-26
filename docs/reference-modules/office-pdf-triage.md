@@ -18,9 +18,18 @@ Detect VBA macro indicators auto-execution entry points, Shell/WScript invocatio
 
 ```mermaid
 flowchart TD
-    A["detect_office_macro_indicators(binary_data) → list\n  VBA stream scan:\n    Auto* entry points → AutoOpen, Workbook_Open\n    Shell/WScript refs: CreateObject, Shell(), WScript.Shell\n    Download cradles: IEX, Net.WebClient, DownloadString\n    Obfuscation: Chr() + long concatenations\n  → [{pattern, location, severity}]"] --> B["detect_pdf_exploit_indicators(binary_data) → list\n  /JS or /JavaScript stream present\n  JavaScript: eval(unescape(...)) heap spray\n  String.fromCharCode long array\n  /Launch with cmd.exe or powershell.exe target\n  /EmbeddedFile extraction\n  → [{type, stream_offset, js_snippet, severity}]"]
-    B --> C["analyze_pe_file(pe_data) → List[dict]\n  MZ header, PE signature, section headers\n  Section entropy: > 7.0 → packed\n  Import table: only VirtualAlloc+GetProcAddress → shellcode loader\n  TLS callbacks → pre-entry anti-debug\n  Overlay: data after last section → appended payload\n  → [{type, section, entropy, description}]"]
-    C --> D["analyze_pe_resources(pe_data) → List[dict]\n  Parse .rsrc section resource directory\n  Detect PE-in-PE: embedded MZ header in resource\n  High-entropy resource → encrypted payload\n  RT_MANIFEST / version string anomalies\n  → [{resource_id, type, entropy, embedded_pe}]"]
+    A(["detect_office_macro_indicators(binary_data) → list\n  VBA stream scan:\n    Auto* entry points → AutoOpen, Workbook_Open\n    Shell/WScript refs: CreateObject, Shell(), WScript.Shell\n    Download cradles: IEX, Net.WebClient, DownloadString\n    Obfuscation: Chr() + long concatenations\n  → [{pattern, location, severity}]"]):::input --> B["detect_pdf_exploit_indicators(binary_data) → list\n  /JS or /JavaScript stream present\n  JavaScript: eval(unescape(...)) heap spray\n  String.fromCharCode long array\n  /Launch with cmd.exe or powershell.exe target\n  /EmbeddedFile extraction\n  → [{type, stream_offset, js_snippet, severity}]"]:::primary
+    B:::primary --> C["analyze_pe_file(pe_data) → List[dict]\n  MZ header, PE signature, section headers\n  Section entropy: > 7.0 → packed\n  Import table: only VirtualAlloc+GetProcAddress → shellcode loader\n  TLS callbacks → pre-entry anti-debug\n  Overlay: data after last section → appended payload\n  → [{type, section, entropy, description}]"]:::secondary
+    C:::secondary --> D(["analyze_pe_resources(pe_data) → List[dict]\n  Parse .rsrc section resource directory\n  Detect PE-in-PE: embedded MZ header in resource\n  High-entropy resource → encrypted payload\n  RT_MANIFEST / version string anomalies\n  → [{resource_id, type, entropy, embedded_pe}]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

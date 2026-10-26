@@ -18,8 +18,16 @@ Probe Cisco DCNM Data Center Network Manager and VXLAN VTEP infrastructure: iden
 
 ```mermaid
 flowchart TD
-    A["probe_dcnm(host) → List[dict]\n  GET /rest/dcnm-version (port 443 and 9443)\n  Unauthenticated: returns version JSON\n  GET /rest/control/fabrics (fabric list if auth not required)\n  GET /rest/control/switches (switch inventory)\n  → findings: version, fabrics, switches"] --> B["probe_vxlan_vteps(local_host) → dict\n  BGP OPEN to local host router\n  Send EVPN UPDATE messages\n  Receive EVPN NLRIs:\n    Route Type 3: VTEP IP addresses\n    Route Type 2: MAC/IP bindings per VNI\n  → vtep_ips: List[str], vni_map: {vni: List[ip]}"]
-    B --> C["nxos_enum.py additional fabric probes:\n  probe_nxapi_rest(host)\n    GET /api/1 (NX-API REST, port 443)\n    show version, show vxlan vtep\n  probe_nxos_netconf(host, port=830)\n    NETCONF subtree filter: VXLAN interfaces\n  → firmware_version, vtep_neighbors, vnids"]
+    A(["probe_dcnm(host) → List[dict]\n  GET /rest/dcnm-version (port 443 and 9443)\n  Unauthenticated: returns version JSON\n  GET /rest/control/fabrics (fabric list if auth not required)\n  GET /rest/control/switches (switch inventory)\n  → findings: version, fabrics, switches"]):::input --> B["probe_vxlan_vteps(local_host) → dict\n  BGP OPEN to local host router\n  Send EVPN UPDATE messages\n  Receive EVPN NLRIs:\n    Route Type 3: VTEP IP addresses\n    Route Type 2: MAC/IP bindings per VNI\n  → vtep_ips: List[str], vni_map: {vni: List[ip]}"]:::primary
+    B:::primary --> C(["nxos_enum.py additional fabric probes:\n  probe_nxapi_rest(host)\n    GET /api/1 (NX-API REST, port 443)\n    show version, show vxlan vtep\n  probe_nxos_netconf(host, port=830)\n    NETCONF subtree filter: VXLAN interfaces\n  → firmware_version, vtep_neighbors, vnids"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

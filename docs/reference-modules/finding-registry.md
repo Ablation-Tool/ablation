@@ -18,16 +18,32 @@ Persist every confirmed vulnerability finding from every RE engagement to a loca
 
 ```mermaid
 flowchart TD
-    A["FindingRegistry()"] --> B["Connect to ~/.ablation/findings.db\nCreate tables: findings (id, vendor, product, version, binary, func_addr, cwe_class, severity, title, description, embedding, source, confirmed, created_at)"]
-    B --> C{"seed corpus loaded?\n(source='seed')"}
-    C -->|no| D["Load ablation/data/seed_corpus.json\nInsert all entries with source='seed'"]
-    C -->|yes| E[Skip: idempotent]
-    D & E --> F[FindingRegistry ready]
-    F --> G["register(): INSERT finding\nL2-normalize embedding before BLOB storage\nReturn new row id"]
-    F --> H["build_embeddings(model, force=False)\nfastembed model.embed(title + description)\nUPDATE entries with NULL embedding"]
-    F --> I["find_similar(embedding, top_k=10, min_sim=0.70)\nL2-normalize query embedding\nDot-product against all stored embeddings\nReturn list of dicts sorted by similarity"]
-    F --> J["stats()\nReturn total, confirmed, by_vendor, by_cwe counts"]
-    F --> K["export_patterns()\nReturn [{query: title+description, tag: cwe→tag}] for PatternLibrary.ingest_from_registry()"]
+    A(["FindingRegistry()"]):::input --> B["Connect to ~/.ablation/findings.db\nCreate tables: findings (id, vendor, product, version, binary, func_addr, cwe_class, severity, title, description, embedding, source, confirmed, created_at)"]:::primary
+    B:::primary --> C{"seed corpus loaded?\n(source='seed')"}:::neutral
+    C:::neutral -->|no| D["Load ablation/data/seed_corpus.json\nInsert all entries with source='seed'"]:::secondary
+    C:::neutral -->|yes| E(["Skip: idempotent"]):::output
+    D:::secondary --> F["FindingRegistry ready"]:::tertiary
+    F:::tertiary --> G(["register(): INSERT finding\nL2-normalize embedding before BLOB storage\nReturn new row id"]):::output
+    F:::tertiary --> H(["build_embeddings(model, force=False)\nfastembed model.embed(title + description)\nUPDATE entries with NULL embedding"]):::output
+    F:::tertiary --> I(["find_similar(embedding, top_k=10, min_sim=0.70)\nL2-normalize query embedding\nDot-product against all stored embeddings\nReturn list of dicts sorted by similarity"]):::output
+    F:::tertiary --> J(["stats()\nReturn total, confirmed, by_vendor, by_cwe counts"]):::output
+    F:::tertiary --> K(["export_patterns()\nReturn [{query: title+description, tag: cwe→tag}] for PatternLibrary.ingest_from_registry()"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### CWE to tag mapping

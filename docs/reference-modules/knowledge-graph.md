@@ -20,29 +20,58 @@ Query the full Ablation capability set, known analysis gaps, and prior RE sessio
 
 ```mermaid
 flowchart TD
-    A["KnowledgeGraph.open()"] --> B[SQLite: nodes + edges tables]
-    B --> C{query type}
-    C -->|get_context_for_binary| D[SUPPORTS edges → Module nodes for arch]
-    D --> E[json_extract → KnownGap nodes for arch]
-    E --> F[json_extract → Session nodes for arch, most recent 5]
-    F --> G[DETECTS edges → Module nodes for vuln_class]
-    G --> H[Structured context string for LLM prompt]
-    C -->|get_recommendations_for_task| I{embeddings table populated?}
-    I -->|yes — semantic path| I2[Embed task description → query vector]
-    I2 --> I3[Cosine sim vs 5587 Doc embeddings → top-60 Doc IDs]
-    I3 --> I4[DOCUMENTED_BY edges backward → Module IDs + scores]
-    I4 --> I5[Arch filter → semantic_ranked list]
-    I5 --> I6[Pad to top_k with stage-sorted arch fills]
-    I6 --> K[score= entries first, fill entries after]
-    I -->|no embeddings — fallback| J[Sort by _WORKFLOW_ORDER index]
-    J --> K
-    C -->|get_gap_candidates| L[All AnalysisEvent nodes]
-    L --> M[Python-side grouping by module and arch]
-    M --> N{event_count >= min_events?}
-    N -->|yes| O{avg_fp_rate >= threshold?}
-    O -->|yes| P[Gap candidate dict]
-    C -->|add_run| Q[add_analysis_event → AnalysisEvent node]
-    Q --> R[RECORDS edge to Session node]
+    A(["KnowledgeGraph.open()"]):::input --> B["SQLite: nodes + edges tables"]:::primary
+    B:::primary --> C{"query type"}:::neutral
+    C:::neutral -->|get_context_for_binary| D["SUPPORTS edges → Module nodes for arch"]:::secondary
+    D:::secondary --> E["json_extract → KnownGap nodes for arch"]:::tertiary
+    E:::tertiary --> F["json_extract → Session nodes for arch, most recent 5"]:::tertiary
+    F:::tertiary --> G["DETECTS edges → Module nodes for vuln_class"]:::tertiary
+    G:::tertiary --> H(["Structured context string for LLM prompt"]):::output
+    C:::neutral -->|get_recommendations_for_task| I{"embeddings table populated?"}:::neutral
+    I:::neutral -->|yes — semantic path| I2["Embed task description → query vector"]:::tertiary
+    I2:::tertiary --> I3["Cosine sim vs 5587 Doc embeddings → top-60 Doc IDs"]:::tertiary
+    I3:::tertiary --> I4["DOCUMENTED_BY edges backward → Module IDs + scores"]:::tertiary
+    I4:::tertiary --> I5["Arch filter → semantic_ranked list"]:::tertiary
+    I5:::tertiary --> I6["Pad to top_k with stage-sorted arch fills"]:::tertiary
+    I6:::tertiary --> K(["score= entries first, fill entries after"]):::output
+    I:::neutral -->|no embeddings — fallback| J["Sort by _WORKFLOW_ORDER index"]:::tertiary
+    J:::tertiary --> K:::output
+    C:::neutral -->|get_gap_candidates| L["All AnalysisEvent nodes"]:::tertiary
+    L:::tertiary --> M["Python-side grouping by module and arch"]:::tertiary
+    M:::tertiary --> N{"event_count >= min_events?"}:::neutral
+    N:::neutral -->|yes| O{"avg_fp_rate >= threshold?"}:::neutral
+    O:::neutral -->|yes| P(["Gap candidate dict"]):::output
+    C:::neutral -->|add_run| Q["add_analysis_event → AnalysisEvent node"]:::tertiary
+    Q:::tertiary --> R(["RECORDS edge to Session node"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#546e7a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 11 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 12 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 13 stroke:#2e7d32,stroke-width:3px
+    linkStyle 14 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 15 stroke:#2e7d32,stroke-width:3px
+    linkStyle 16 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 17 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 18 stroke:#546e7a,stroke-width:2px
+    linkStyle 19 stroke:#546e7a,stroke-width:2px
+    linkStyle 20 stroke:#2e7d32,stroke-width:3px
+    linkStyle 21 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 22 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Node schema

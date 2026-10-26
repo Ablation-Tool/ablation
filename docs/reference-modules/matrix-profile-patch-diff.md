@@ -30,10 +30,20 @@ The window size controls the granularity of detection. A window of 4 instruction
 
 ```mermaid
 flowchart TD
-    A["MatrixProfileDiff.from_paths(v1_path, v2_path)\n  OR .from_context(ctx_v1, ctx_v2)"] --> B["diff_functions(va_v1, end_va_v1, va_v2, end_va_v2) → DiffResult\n  Disassemble both function windows\n  Encode as opcode category sequences (same encoding as DTWMatcher)"]
-    B --> C["STUMPY AB-join (if available) or\n  numpy z-normalized distance profile\n  Computes: for each position k in seq_v1,\n  distance to nearest match in seq_v2"]
-    C --> D["Identify ChangeRegion(s):\n  High-distance runs → changed regions\n  Low-distance runs → unchanged regions\n  is_insertion_shift: distance caused by offset only"]
-    D --> E["DiffResult:\n  regions: List[ChangeRegion]\n  change_pct() → float  (% of sequence that changed)\n  is_likely_patched(threshold) → bool\n  patch_offset_v1() → Optional[int]  (VA of change start)\n  change_summary() → str\n  fmt() → full formatted report"]
+    A(["MatrixProfileDiff.from_paths(v1_path, v2_path)\n  OR .from_context(ctx_v1, ctx_v2)"]):::input --> B["diff_functions(va_v1, end_va_v1, va_v2, end_va_v2) → DiffResult\n  Disassemble both function windows\n  Encode as opcode category sequences (same encoding as DTWMatcher)"]:::primary
+    B:::primary --> C["STUMPY AB-join (if available) or\n  numpy z-normalized distance profile\n  Computes: for each position k in seq_v1,\n  distance to nearest match in seq_v2"]:::secondary
+    C:::secondary --> D["Identify ChangeRegion(s):\n  High-distance runs → changed regions\n  Low-distance runs → unchanged regions\n  is_insertion_shift: distance caused by offset only"]:::tertiary
+    D:::tertiary --> E(["DiffResult:\n  regions: List[ChangeRegion]\n  change_pct() → float  (% of sequence that changed)\n  is_likely_patched(threshold) → bool\n  patch_offset_v1() → Optional[int]  (VA of change start)\n  change_summary() → str\n  fmt() → full formatted report"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

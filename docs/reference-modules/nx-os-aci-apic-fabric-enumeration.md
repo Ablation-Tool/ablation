@@ -18,10 +18,20 @@ Enumerate Cisco ACI fabric via the APIC REST API: extracting tenants, contracts,
 
 ```mermaid
 flowchart TD
-    A["nxos_enum.py"] --> B["probe_apic_unauthenticated(apic_host) → dict\n  GET /api/aaaListDomains.json (no auth)\n  → version, auth_domains\n  classify_by_cert_ou(host) → platform detection"]
-    B --> C["apic_login(host, user, password) → token\n  POST /api/aaaLogin.json\n  apic_brute_creds(host, creds=None) → dict\n    Try default credentials: admin/C1sco12345 etc.\n    → found_creds, token"]
-    C --> D["Authenticated enumeration:\n  apic_enumerate(host, token):\n    apic_get_fabric_nodes() → List[{name, ip, role}]\n    apic_get_tenants() → List[{name, dn}]\n    apic_get_contracts() → contract matrix\n    apic_get_l3out_networks() → external routing\n    apic_get_vmm_domains() → VMware/Kubernetes domains\n    apic_get_audit_log() → recent admin changes\n    apic_cobra_bulk_extract() → full policy snapshot"]
-    D --> E["NX-API CLI:\n  probe_nxapi_cli(host, port=80)\n    POST /ins  {type: cli_show, cmd: show version}\n    → version, hostname, platform\n  probe_vxlan_vteps(local_host)\n    ARP/VXLAN BGP EVPN VTEP discovery\n  probe_dcnm(host)\n    GET /rest/dcnm-version (unauthenticated)"]
+    A(["nxos_enum.py"]):::input --> B["probe_apic_unauthenticated(apic_host) → dict\n  GET /api/aaaListDomains.json (no auth)\n  → version, auth_domains\n  classify_by_cert_ou(host) → platform detection"]:::primary
+    B:::primary --> C["apic_login(host, user, password) → token\n  POST /api/aaaLogin.json\n  apic_brute_creds(host, creds=None) → dict\n    Try default credentials: admin/C1sco12345 etc.\n    → found_creds, token"]:::secondary
+    C:::secondary --> D["Authenticated enumeration:\n  apic_enumerate(host, token):\n    apic_get_fabric_nodes() → List[{name, ip, role}]\n    apic_get_tenants() → List[{name, dn}]\n    apic_get_contracts() → contract matrix\n    apic_get_l3out_networks() → external routing\n    apic_get_vmm_domains() → VMware/Kubernetes domains\n    apic_get_audit_log() → recent admin changes\n    apic_cobra_bulk_extract() → full policy snapshot"]:::tertiary
+    D:::tertiary --> E(["NX-API CLI:\n  probe_nxapi_cli(host, port=80)\n    POST /ins  {type: cli_show, cmd: show version}\n    → version, hostname, platform\n  probe_vxlan_vteps(local_host)\n    ARP/VXLAN BGP EVPN VTEP discovery\n  probe_dcnm(host)\n    GET /rest/dcnm-version (unauthenticated)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

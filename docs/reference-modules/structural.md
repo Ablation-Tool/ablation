@@ -25,18 +25,27 @@ A function with zero or one external PLT call has no meaningful PLT-overlap scor
 
 ```mermaid
 flowchart TD
-    A["func_va_v1 in binary_v1"] --> B["Stage 1 · Structural pre-filter\nCriteria: basic_block_count ±2\n          edge_count ±30%\nPurpose: reduce N=thousands to N~tens\nNo instruction decode needed: CFG header only"]
+    A(["func_va_v1 in binary_v1"]):::input --> B["Stage 1 · Structural pre-filter\nCriteria: basic_block_count ±2\n          edge_count ±30%\nPurpose: reduce N=thousands to N~tens\nNo instruction decode needed: CFG header only"]:::primary
 
-    B --> C["Stage 2 · Mnemonic 4-gram Jaccard\nNormalize: strip addresses, normalize immediates to 0\nBuild set of 4-grams from mnemonic sequence\nJaccard(A,B) = |A ∩ B| / |A ∪ B|\nKeep top-10 by Jaccard score\nStable across recompilation: only structural rewrites\nshift the 4-gram set significantly"]
+    B:::primary --> C["Stage 2 · Mnemonic 4-gram Jaccard\nNormalize: strip addresses, normalize immediates to 0\nBuild set of 4-grams from mnemonic sequence\nJaccard(A,B) = |A ∩ B| / |A ∪ B|\nKeep top-10 by Jaccard score\nStable across recompilation: only structural rewrites\nshift the 4-gram set significantly"]:::secondary
 
-    C --> D{"Top-2 within\n0.05 Jaccard?"}
-    D -->|No, clear winner| E["Patch localization\ndifflib.SequenceMatcher\nAddresses and RIP-relative immediates stripped\nOutput: unified diff showing logic changes only"]
-    D -->|Yes, tie| F["Stage 3 · Semantic tiebreaker (BERT)\nSemanticSearcher encoding of both functions\nCosine similarity in 768-dim space\nBreaks ties that 4-gram cannot resolve"]
+    C:::secondary --> D{"Top-2 within\n0.05 Jaccard?"}:::neutral
+    D:::neutral -->|No, clear winner| E(["Patch localization\ndifflib.SequenceMatcher\nAddresses and RIP-relative immediates stripped\nOutput: unified diff showing logic changes only"]):::output
+    D:::neutral -->|Yes, tie| F["Stage 3 · Semantic tiebreaker (BERT)\nSemanticSearcher encoding of both functions\nCosine similarity in 768-dim space\nBreaks ties that 4-gram cannot resolve"]:::tertiary
 
-    F --> E
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style E fill:#14532d,stroke:#166534,color:#dcfce7
+    F:::tertiary --> E:::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#546e7a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Usage
@@ -146,16 +155,23 @@ Static vtable reconstruction and BLR indirect call resolution for stripped ARM64
 
 ```mermaid
 flowchart TD
-    A[/"Stripped ARM64 .so"/] --> B["Phase 1 · Vtable candidate extraction\nScan .rodata for runs of code pointers\n(addresses that fall within .text)\nCandidate vtables: N or more consecutive 8-byte ptrs\nMinimum run length filters out incidental pointer arrays"]
+    A(["Stripped ARM64 .so"]):::input --> B["Phase 1 · Vtable candidate extraction\nScan .rodata for runs of code pointers\n(addresses that fall within .text)\nCandidate vtables: N or more consecutive 8-byte ptrs\nMinimum run length filters out incidental pointer arrays"]:::primary
 
-    B --> C["Phase 2 · Constructor vptr detection\nPattern: ADRP + ADD + STR in .text\n  ADRP Xn, page        ; compute vtable page address\n  ADD  Xn, Xn, #off   ; add page offset → vtable VA\n  STR  Xn, [X0, #field]; store vptr into object field\nEach match: this constructor → vtable at VA X"]
+    B:::primary --> C["Phase 2 · Constructor vptr detection\nPattern: ADRP + ADD + STR in .text\n  ADRP Xn, page        ; compute vtable page address\n  ADD  Xn, Xn, #off   ; add page offset → vtable VA\n  STR  Xn, [X0, #field]; store vptr into object field\nEach match: this constructor → vtable at VA X"]:::secondary
 
-    C --> D["Phase 3 · BLR site detection\nPattern: LDR vptr / LDR slot_N / BLR xN\n  LDR X8, [X0]         ; load vtable pointer from object\n  LDR X9, [X8, #slot*8]; load function pointer at slot N\n  BLR X9               ; dispatch call"]
+    C:::secondary --> D["Phase 3 · BLR site detection\nPattern: LDR vptr / LDR slot_N / BLR xN\n  LDR X8, [X0]         ; load vtable pointer from object\n  LDR X9, [X8, #slot*8]; load function pointer at slot N\n  BLR X9               ; dispatch call"]:::tertiary
 
-    D --> E[/"Phase 4 · Resolution\nMap each BLR@slot-k to Phase 1 vtable from Phase 2\nConcrete target = vtable_base + k * 8\nProduces resolved call graph for all indirect calls"/]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style E fill:#14532d,stroke:#166534,color:#dcfce7
+    D:::tertiary --> E(["Phase 4 · Resolution\nMap each BLR@slot-k to Phase 1 vtable from Phase 2\nConcrete target = vtable_base + k * 8\nProduces resolved call graph for all indirect calls"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ```python

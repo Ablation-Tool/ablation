@@ -18,9 +18,18 @@ Classify exec-class sink argument provenance in x86-32 ELF and PE binaries: prod
 
 ```mermaid
 flowchart TD
-    A["SinkArgClassifierX86_32.from_context(ctx)"] --> B["classify_all() → List[SinkClassification]\n  Find all CALL sink sites in .text\n  For each call site and arg_pos:\n    Trace PUSH sequence backward from CALL:\n      PUSH [ebx + N] where N is .rodata offset → RODATA_CONST\n      PUSH immediate → RODATA_CONST\n      PUSH eax where eax = snprintf result → SNPRINTF_RODATA\n      PUSH [ebp + N] where N >= 8 → ARG_PROPAGATED\n      Otherwise → UNKNOWN\n    → SinkClassification"]
-    B --> C["SinkClassification:\n  sink_va: int\n  sink_name: str\n  arg_pos: int\n  verdict: str  (RODATA_CONST|SNPRINTF_RODATA|ARG_PROPAGATED|UNKNOWN)\n  detail: str"]
-    C --> D["report(results) → str"]
+    A(["SinkArgClassifierX86_32.from_context(ctx)"]):::input --> B["classify_all() → List[SinkClassification]\n  Find all CALL sink sites in .text\n  For each call site and arg_pos:\n    Trace PUSH sequence backward from CALL:\n      PUSH [ebx + N] where N is .rodata offset → RODATA_CONST\n      PUSH immediate → RODATA_CONST\n      PUSH eax where eax = snprintf result → SNPRINTF_RODATA\n      PUSH [ebp + N] where N >= 8 → ARG_PROPAGATED\n      Otherwise → UNKNOWN\n    → SinkClassification"]:::primary
+    B:::primary --> C["SinkClassification:\n  sink_va: int\n  sink_name: str\n  arg_pos: int\n  verdict: str  (RODATA_CONST|SNPRINTF_RODATA|ARG_PROPAGATED|UNKNOWN)\n  detail: str"]:::secondary
+    C:::secondary --> D(["report(results) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

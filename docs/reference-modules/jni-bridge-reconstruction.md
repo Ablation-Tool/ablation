@@ -18,17 +18,34 @@ Recover the Java-to-native method mapping in an Android APK by scanning the DEX 
 
 ```mermaid
 flowchart TD
-    A["JniBridgeScanner.from_path(apk_path)"] --> B["APKParser.from_path()"]
-    B --> C[JniBridgeScanner ready]
-    C --> D["scan() — two parallel sweeps"]
-    D --> E["DEX side: iterate all DEX files in APK"]
-    E --> F["dex.iter_native_methods()\nACC_NATIVE flag in class_data_item.encoded_method.access_flags\ncollect {class_name: [method_names]}\ncode_off = 0 means no DEX bytecode — requires native implementation"]
-    F --> G["dex.iter_method_refs()\nFind System.loadLibrary and System.load calls\ncount total load sites"]
-    G --> H["dex.iter_field_refs()\ntype_desc == 'J' AND field_name in _PEER_NAMES\n_PEER_NAMES: peer/mNativePtr/mNativePeer/nativeHandle/nativePtr/etc.\ncollect {class_name: [peer_field_names]}"]
-    D --> I["ELF side: iterate apk.native_libs()"]
-    I --> J["_scan_elf_jni(lib_data)\nParse ELF32/ELF64 section header table\nFind SHT_DYNSYM section\nWalk symbol entries\n'JNI_OnLoad' export → jni_on_load=True\n'Java_*' exports → java_exports list"]
-    H & J --> K["Build findings:\n1. JniBridgeFinding(HIGH) — ACC_NATIVE method count\n2. JniBridgeFinding(INFO) — loadLibrary call site count\n3. JniBridgeFinding(HIGH) — opaque peer fields\n4. JniBridgeFinding(HIGH) — dynamic registration (JNI_OnLoad)\n5. JniBridgeFinding(MEDIUM) — canonical naming (Java_* exports)"]
-    K --> L["List[JniBridgeFinding]"]
+    A(["JniBridgeScanner.from_path(apk_path)"]):::input --> B["APKParser.from_path()"]:::primary
+    B:::primary --> C["JniBridgeScanner ready"]:::secondary
+    C:::secondary --> D["scan() · two parallel sweeps"]:::tertiary
+    D:::tertiary --> E["DEX side: iterate all DEX files in APK"]:::tertiary
+    E:::tertiary --> F["dex.iter_native_methods()\nACC_NATIVE flag in class_data_item.encoded_method.access_flags\ncollect {class_name: [method_names]}\ncode_off = 0 means no DEX bytecode · requires native implementation"]:::tertiary
+    F:::tertiary --> G["dex.iter_method_refs()\nFind System.loadLibrary and System.load calls\ncount total load sites"]:::tertiary
+    G:::tertiary --> H["dex.iter_field_refs()\ntype_desc == 'J' AND field_name in _PEER_NAMES\n_PEER_NAMES: peer/mNativePtr/mNativePeer/nativeHandle/nativePtr/etc.\ncollect {class_name: [peer_field_names]}"]:::tertiary
+    D:::tertiary --> I["ELF side: iterate apk.native_libs()"]:::tertiary
+    I:::tertiary --> J(["_scan_elf_jni(lib_data)\nParse ELF32/ELF64 section header table\nFind SHT_DYNSYM section\nWalk symbol entries\n'JNI_OnLoad' export → jni_on_load=True\n'Java_*' exports → java_exports list"]):::output
+    H:::tertiary --> K["Build findings:\n1. JniBridgeFinding(HIGH) · ACC_NATIVE method count\n2. JniBridgeFinding(INFO) · loadLibrary call site count\n3. JniBridgeFinding(HIGH) · opaque peer fields\n4. JniBridgeFinding(HIGH) · dynamic registration (JNI_OnLoad)\n5. JniBridgeFinding(MEDIUM) · canonical naming (Java_* exports)"]:::tertiary
+    K:::tertiary --> L(["List[JniBridgeFinding]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Finding categories

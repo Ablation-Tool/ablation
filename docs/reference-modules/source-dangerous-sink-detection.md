@@ -18,11 +18,22 @@ Scan source code repositories for dangerous sink patterns: code evaluation, subp
 
 ```mermaid
 flowchart TD
-    A["SourceSinkScanner.from_context(SourceContext)"] --> B["Load SinkDef catalog:\n  Code eval: vm.runInContext, eval(), exec(), compile()\n  Subprocess: subprocess.run, os.system, exec.Command\n  SSRF: fetch(user_input), requests.get(url), urllib.urlopen\n  Path traversal: open(path+user), fs.readFile(user_path)\n  Unguarded endpoint: app.get('/', handler) with no auth check"]
-    B --> C["scan(files) → List[SinkHit]\n  For each source file:\n    Pattern match against SinkDef catalog\n    Record: file, line, sink_name, cwe, raw_line, context"]
-    C --> D["Guard-condition detector:\n  For each SinkHit:\n    Look N lines before sink for:\n      env var check: process.env.X, os.getenv('X')\n      conditional: if (flag === 'value')\n    If guard found: downgrade severity HIGH → MEDIUM"]
-    D --> E["SinkHit:\n  file: Path\n  line: int\n  sink_name: str\n  cwe: str\n  severity: str ('HIGH' | 'MEDIUM' | 'LOW')\n  guarded: bool\n  as_dict() → structured finding"]
-    E --> F["report(findings, severity_filter) → str"]
+    A(["SourceSinkScanner.from_context(SourceContext)"]):::input --> B["Load SinkDef catalog:\n  Code eval: vm.runInContext, eval(), exec(), compile()\n  Subprocess: subprocess.run, os.system, exec.Command\n  SSRF: fetch(user_input), requests.get(url), urllib.urlopen\n  Path traversal: open(path+user), fs.readFile(user_path)\n  Unguarded endpoint: app.get('/', handler) with no auth check"]:::primary
+    B:::primary --> C["scan(files) → List[SinkHit]\n  For each source file:\n    Pattern match against SinkDef catalog\n    Record: file, line, sink_name, cwe, raw_line, context"]:::secondary
+    C:::secondary --> D["Guard-condition detector:\n  For each SinkHit:\n    Look N lines before sink for:\n      env var check: process.env.X, os.getenv('X')\n      conditional: if (flag === 'value')\n    If guard found: downgrade severity HIGH → MEDIUM"]:::tertiary
+    D:::tertiary --> E["SinkHit:\n  file: Path\n  line: int\n  sink_name: str\n  cwe: str\n  severity: str ('HIGH' | 'MEDIUM' | 'LOW')\n  guarded: bool\n  as_dict() → structured finding"]:::tertiary
+    E:::tertiary --> F(["report(findings, severity_filter) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

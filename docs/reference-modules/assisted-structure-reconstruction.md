@@ -18,10 +18,20 @@ Convert a basic-block CFG into a tree of structured nodes: `SequenceNode`, `IfNo
 
 ```mermaid
 flowchart TD
-    A["Structurizer(cfg: BasicBlockGraph)"] --> B["Build dominator tree:\n  Lengtari-Tarjan algorithm on CFG\n  Immediate dominator for each basic block"]
-    B --> C["Detect natural loops:\n  Back edges: A → B where B dominates A\n  Loop body: blocks dominated by B reachable from A\n  → LoopInfo per loop header"]
-    C --> D["structure() → StructuredNode\n  Dominator-driven Relooper:\n    Sequence: linear basic block chain\n    If: 2-way conditional branch\n      → IfNode(cond, then_branch, else_branch)\n    While: loop header with back edge\n      → WhileNode(cond, body)\n    Break/Continue: loop exits and continues\n      → BreakNode / ContinueNode\n  Reducible CFG guaranteed for ECU targets\n  → SequenceNode at root"]
-    D --> E["StructuredNode hierarchy:\n  StructuredNode (base)\n  SequenceNode:  children: List[StructuredNode]\n  InsnNode:      insn: Instruction\n  IfNode:        cond, then_node, else_node\n  WhileNode:     cond, body\n  BreakNode:     target_loop_header\n  ContinueNode:  target_loop_header"]
+    A(["Structurizer(cfg: BasicBlockGraph)"]):::input --> B["Build dominator tree:\n  Lengtari-Tarjan algorithm on CFG\n  Immediate dominator for each basic block"]:::primary
+    B:::primary --> C["Detect natural loops:\n  Back edges: A → B where B dominates A\n  Loop body: blocks dominated by B reachable from A\n  → LoopInfo per loop header"]:::secondary
+    C:::secondary --> D["structure() → StructuredNode\n  Dominator-driven Relooper:\n    Sequence: linear basic block chain\n    If: 2-way conditional branch\n      → IfNode(cond, then_branch, else_branch)\n    While: loop header with back edge\n      → WhileNode(cond, body)\n    Break/Continue: loop exits and continues\n      → BreakNode / ContinueNode\n  Reducible CFG guaranteed for ECU targets\n  → SequenceNode at root"]:::tertiary
+    D:::tertiary --> E(["StructuredNode hierarchy:\n  StructuredNode (base)\n  SequenceNode:  children: List[StructuredNode]\n  InsnNode:      insn: Instruction\n  IfNode:        cond, then_node, else_node\n  WhileNode:     cond, body\n  BreakNode:     target_loop_header\n  ContinueNode:  target_loop_header"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

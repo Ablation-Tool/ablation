@@ -18,10 +18,20 @@ Automated recovery of static repeating XOR encryption keys from obfuscated firmw
 
 ```mermaid
 flowchart TD
-    A["XorSolver('/path/to/firmware.raw')"] --> B["solve() — priority order:\n1. kpa_attack(): try known magic bytes\n   {ELF: 0x7f454c46, SquashFS: 0x73717368,\n    ext4: 0x53ef, U-Boot: 0x27051956, gzip: 0x1f8b}\n   Derive key K = C[0:4] ^ P[0:4]\n   Check K repeat frequency throughout ciphertext\n   → XorSolverResult if key repeats cleanly"]
-    A --> C["2. ic_key_length() — Hamming distance:\n   For each L in [1..max_len]:\n     Compute normalized Hamming distance\n     between adjacent L-byte ciphertext blocks\n   Minimum distance → most likely key length L"]
-    C --> D["3. recover_by_frequency(L) — transposition:\n   Split ciphertext into L columns\n   Each column i: single-byte XOR with K[i]\n   Score each K[i] candidate (0-255) against\n   x86-64/ARM opcode frequency distribution\n   Best score for each column → K[i]"]
-    D --> E["XorSolverResult:\n  key: bytes\n  method: str ('kpa', 'hamming+freq', 'freq')\n  confidence: float (0.0-1.0)\n  decrypt(data: bytes) → bytes (apply key)\n  fmt() → 'key=<hex> (<ascii_repr>)'"]
+    A(["XorSolver('/path/to/firmware.raw')"]):::input --> B(["solve() · priority order:\n1. kpa_attack(): try known magic bytes\n   {ELF: 0x7f454c46, SquashFS: 0x73717368,\n    ext4: 0x53ef, U-Boot: 0x27051956, gzip: 0x1f8b}\n   Derive key K = C[0:4] ^ P[0:4]\n   Check K repeat frequency throughout ciphertext\n   → XorSolverResult if key repeats cleanly"]):::output
+    A:::input --> C["2. ic_key_length() · Hamming distance:\n   For each L in [1..max_len]:\n     Compute normalized Hamming distance\n     between adjacent L-byte ciphertext blocks\n   Minimum distance → most likely key length L"]:::primary
+    C:::primary --> D["3. recover_by_frequency(L) · transposition:\n   Split ciphertext into L columns\n   Each column i: single-byte XOR with K[i]\n   Score each K[i] candidate (0-255) against\n   x86-64/ARM opcode frequency distribution\n   Best score for each column → K[i]"]:::secondary
+    D:::secondary --> E(["XorSolverResult:\n  key: bytes\n  method: str ('kpa', 'hamming+freq', 'freq')\n  confidence: float (0.0-1.0)\n  decrypt(data: bytes) → bytes (apply key)\n  fmt() → 'key=<hex> (<ascii_repr>)'"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#2e7d32,stroke-width:3px
+    linkStyle 1 stroke:#bf360c,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

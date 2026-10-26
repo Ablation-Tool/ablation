@@ -18,52 +18,94 @@ Probe DTMF extraction surfaces, detect RTP and SIP covert channels, assess H.323
 
 ```mermaid
 flowchart TD
-    A["detect_dtmf_extraction_surface(host, port=5060)"] --> B["SIP INFO to ext 100: Content-Type: application/dtmf-relay, Signal=5\n200 → DTMF_INFO_ACCEPTED (HIGH)\n(in-band DTMF digit delivered via SIP signaling method)"]
-    A --> C["SUBSCRIBE Event:telephone-event to ext 100\n200 → DTMF_SUBSCRIBE_OPEN (MEDIUM)\n(DTMF event subscription accepted without auth)"]
-    A --> D["INVITE SDP with a=telephone-event/8000 (RFC 2833 PT=101)\n200 with 'telephone-event' in SDP → RFC2833_PT101_NEGOTIATED (MEDIUM)\n(RFC 2833 DTMF negotiated — digit stream in RTP flow)"]
+    A(["detect_dtmf_extraction_surface(host, port=5060)"]):::input --> B(["SIP INFO to ext 100: Content-Type: application/dtmf-relay, Signal=5\n200 → DTMF_INFO_ACCEPTED (HIGH)\n(in-band DTMF digit delivered via SIP signaling method)"]):::output
+    A:::input --> C(["SUBSCRIBE Event:telephone-event to ext 100\n200 → DTMF_SUBSCRIBE_OPEN (MEDIUM)\n(DTMF event subscription accepted without auth)"]):::output
+    A:::input --> D(["INVITE SDP with a=telephone-event/8000 (RFC 2833 PT=101)\n200 with 'telephone-event' in SDP → RFC2833_PT101_NEGOTIATED (MEDIUM)\n(RFC 2833 DTMF negotiated · digit stream in RTP flow)"]):::output
 
-    E["probe_rtp_dtmf_digit_theft(host, rtp_port=8000)"] --> F["RFC 2833 RTP packet: PT=101, marker=1, digit=5\nSent to observed media port\nUDP accepted (no ICMP unreachable) → DTMF_DIGIT_INJECT (HIGH)\n(digit injection possible without call-leg context)"]
-    E --> G["RFC 2833 burst: digits 0–9 (10 packets, 30ms interval)\nUDP accepted for all → DTMF_BURST_INJECT (HIGH)\n(full numeric keypad injectable — PIN theft primitive)"]
+    E(["probe_rtp_dtmf_digit_theft(host, rtp_port=8000)"]):::input --> F(["RFC 2833 RTP packet: PT=101, marker=1, digit=5\nSent to observed media port\nUDP accepted (no ICMP unreachable) → DTMF_DIGIT_INJECT (HIGH)\n(digit injection possible without call-leg context)"]):::output
+    E:::input --> G(["RFC 2833 burst: digits 0·9 (10 packets, 30ms interval)\nUDP accepted for all → DTMF_BURST_INJECT (HIGH)\n(full numeric keypad injectable · PIN theft primitive)"]):::output
 
-    H["detect_voip_covert_channel(host, port=5060)"] --> I["OPTIONS baseline → collect Allow header\nAllow includes PUBLISH → SIP_PUBLISH_COVERT (MEDIUM)\n(PUBLISH out-of-dialog bypasses call-leg inspection)"]
-    H --> J["NOTIFY out-of-dialog (no SUBSCRIBE state)\nAny non-481 → SIP_NOTIFY_OOD_COVERT (MEDIUM)\n(out-of-dialog NOTIFY passes SBC without call-leg check)"]
-    H --> K["MESSAGE Content-Type: application/octet-stream, binary body\n200 → SIP_BINARY_MESSAGE_COVERT (HIGH)\n(binary payload in SIP MESSAGE bypasses content inspection)"]
-    H --> L["SIP over TCP (CONNECT then REGISTER)\nTCP/5060 accepted → SIP_TCP_PERSISTENT_COVERT (MEDIUM)\n(TCP persistent connection not torn down between calls)"]
+    H(["detect_voip_covert_channel(host, port=5060)"]):::input --> I(["OPTIONS baseline → collect Allow header\nAllow includes PUBLISH → SIP_PUBLISH_COVERT (MEDIUM)\n(PUBLISH out-of-dialog bypasses call-leg inspection)"]):::output
+    H:::input --> J(["NOTIFY out-of-dialog (no SUBSCRIBE state)\nAny non-481 → SIP_NOTIFY_OOD_COVERT (MEDIUM)\n(out-of-dialog NOTIFY passes SBC without call-leg check)"]):::output
+    H:::input --> K(["MESSAGE Content-Type: application/octet-stream, binary body\n200 → SIP_BINARY_MESSAGE_COVERT (HIGH)\n(binary payload in SIP MESSAGE bypasses content inspection)"]):::output
+    H:::input --> L(["SIP over TCP (CONNECT then REGISTER)\nTCP/5060 accepted → SIP_TCP_PERSISTENT_COVERT (MEDIUM)\n(TCP persistent connection not torn down between calls)"]):::output
 
-    M["probe_rtp_covert_channel(host, rtp_port=16384)"] --> N["RTP: PT=127 (dynamic, unassigned RFC3551)\nUDP accepted → RTP_DYNAMIC_PT_COVERT (HIGH)\n(payload type 127 unrecognized by VoIP DPI — arbitrary data)"]
-    M --> O["RTP: SSRC=0x00000000 (null SSRC)\nUDP accepted → RTP_NULL_SSRC_COVERT (MEDIUM)\n(null SSRC anomaly — SSRC=0 not valid per RFC3550§8)"]
-    M --> P["RTCP APP packet: PT=204, name='HACK' (RFC3550§6.7)\nUDP accepted (RTCP port = RTP+1) → RTCP_APP_COVERT (HIGH)\n(APP sub-type not inspected by SBC — arbitrary payload)"]
-    M --> Q["RTP: 1512-byte payload (MTU-busting oversized)\nUDP accepted without ICMP frag → RTP_OVERSIZED_COVERT (MEDIUM)\n(jumbo RTP frame accepted — fragmentation-based covert channel)"]
+    M(["probe_rtp_covert_channel(host, rtp_port=16384)"]):::input --> N(["RTP: PT=127 (dynamic, unassigned RFC3551)\nUDP accepted → RTP_DYNAMIC_PT_COVERT (HIGH)\n(payload type 127 unrecognized by VoIP DPI · arbitrary data)"]):::output
+    M:::input --> O(["RTP: SSRC=0x00000000 (null SSRC)\nUDP accepted → RTP_NULL_SSRC_COVERT (MEDIUM)\n(null SSRC anomaly · SSRC=0 not valid per RFC3550§8)"]):::output
+    M:::input --> P(["RTCP APP packet: PT=204, name='HACK' (RFC3550§6.7)\nUDP accepted (RTCP port = RTP+1) → RTCP_APP_COVERT (HIGH)\n(APP sub-type not inspected by SBC · arbitrary payload)"]):::output
+    M:::input --> Q(["RTP: 1512-byte payload (MTU-busting oversized)\nUDP accepted without ICMP frag → RTP_OVERSIZED_COVERT (MEDIUM)\n(jumbo RTP frame accepted · fragmentation-based covert channel)"]):::output
 
-    R["detect_dtmf_extraction_surface / probe_rtp_dtmf_digit_theft combined"] --> S["Attack chain:\n1. Enumerate extension via SIP_EXTENSION_VALID\n2. RFC2833_PT101_NEGOTIATED confirms digit transport\n3. DTMF_DIGIT_INJECT confirms injection on media port\n4. Capture RFC 2833 PT=101 RTP stream during IVR session\n5. Reconstruct PIN from digit sequence"]
+    R(["detect_dtmf_extraction_surface / probe_rtp_dtmf_digit_theft combined"]):::input --> S(["Attack chain:\n1. Enumerate extension via SIP_EXTENSION_VALID\n2. RFC2833_PT101_NEGOTIATED confirms digit transport\n3. DTMF_DIGIT_INJECT confirms injection on media port\n4. Capture RFC 2833 PT=101 RTP stream during IVR session\n5. Reconstruct PIN from digit sequence"]):::output
 
-    T["detect_h323_inspection_surface(host, port=1720)"] --> U["Q.931 SETUP + embedded H.225 OID\nResponse → H323_SETUP_OID (HIGH)\n(H.225 OID in SETUP — full call signaling negotiation possible)"]
-    T --> V["H.245 tunneled in H.225 SETUP (tunnellingPresent=TRUE)\nResponse → H245_TUNNELED (HIGH)\n(H.245 media negotiation tunneled — bypasses H.245 ALG inspection)"]
-    T --> W["H.225 SETUP alias field: 256-byte string (overlong)\nNo crash/timeout → H323_ALIAS_OVERLONG (MEDIUM)\n(alias field length unchecked — heap overflow candidate)"]
-    T --> X["H.225 RAS GRQ to UDP/1719\nGCF or GRJ response → H323_GK_RESPONSIVE (HIGH)\n(gatekeeper confirms registration+admission control surface)"]
+    T(["detect_h323_inspection_surface(host, port=1720)"]):::input --> U(["Q.931 SETUP + embedded H.225 OID\nResponse → H323_SETUP_OID (HIGH)\n(H.225 OID in SETUP · full call signaling negotiation possible)"]):::output
+    T:::input --> V(["H.245 tunneled in H.225 SETUP (tunnellingPresent=TRUE)\nResponse → H245_TUNNELED (HIGH)\n(H.245 media negotiation tunneled · bypasses H.245 ALG inspection)"]):::output
+    T:::input --> W(["H.225 SETUP alias field: 256-byte string (overlong)\nNo crash/timeout → H323_ALIAS_OVERLONG (MEDIUM)\n(alias field length unchecked · heap overflow candidate)"]):::output
+    T:::input --> X(["H.225 RAS GRQ to UDP/1719\nGCF or GRJ response → H323_GK_RESPONSIVE (HIGH)\n(gatekeeper confirms registration+admission control surface)"]):::output
 
-    Y["detect_sccp_skinny_surface(host, port=2000)"] --> Z["SCCP RegisterMessage: SEP000000000001, device_type=30 (7961)\nRegisterAck 0x0081 → SCCP_REGISTER_ACK (CRITICAL)\n(phone registration accepted without certificate validation)"]
-    Y --> AA["SCCP KeepAlive 0x0000 → KeepAliveAck 0x0120\nExpected; no auth → SCCP_KEEPALIVE (HIGH)\n(SCCP session maintained without SCCP-TLS)"]
-    Y --> AB["SCCP OpenReceiveChannelAck 0x0022 (media channel open)\nResponse → SCCP_MEDIA_OPEN (HIGH)\n(media channel opened without SRTP negotiation)"]
+    Y(["detect_sccp_skinny_surface(host, port=2000)"]):::input --> Z(["SCCP RegisterMessage: SEP000000000001, device_type=30 (7961)\nRegisterAck 0x0081 → SCCP_REGISTER_ACK (CRITICAL)\n(phone registration accepted without certificate validation)"]):::output
+    Y:::input --> AA(["SCCP KeepAlive 0x0000 → KeepAliveAck 0x0120\nExpected; no auth → SCCP_KEEPALIVE (HIGH)\n(SCCP session maintained without SCCP-TLS)"]):::output
+    Y:::input --> AB(["SCCP OpenReceiveChannelAck 0x0022 (media channel open)\nResponse → SCCP_MEDIA_OPEN (HIGH)\n(media channel opened without SRTP negotiation)"]):::output
 
-    AC["detect_mgcp_surface(host, port=2427)"] --> AD["AUEP wildcard (*@*): audit all endpoints\n200 → MGCP_AUEP_WILDCARD (CRITICAL)\n(all endpoints enumerated without auth)"]
-    AC --> AE["RQNT wildcard: request notification on all endpoints\n200 → MGCP_RQNT_WILDCARD (CRITICAL)\n(DTMF notification hijack on all endpoints via RQNT)"]
-    AC --> AF["CRCX: create a call connection on a gateway endpoint\n200 → MGCP_CRCX_UNAUTH (CRITICAL)\n(call creation without authentication — RFC3435§5 IPsec absent)"]
+    AC(["detect_mgcp_surface(host, port=2427)"]):::input --> AD(["AUEP wildcard (*@*): audit all endpoints\n200 → MGCP_AUEP_WILDCARD (CRITICAL)\n(all endpoints enumerated without auth)"]):::output
+    AC:::input --> AE(["RQNT wildcard: request notification on all endpoints\n200 → MGCP_RQNT_WILDCARD (CRITICAL)\n(DTMF notification hijack on all endpoints via RQNT)"]):::output
+    AC:::input --> AF(["CRCX: create a call connection on a gateway endpoint\n200 → MGCP_CRCX_UNAUTH (CRITICAL)\n(call creation without authentication · RFC3435§5 IPsec absent)"]):::output
 
-    AG["probe_asa_sip_fixup_legacy(host, port=5060)"] --> AH["Bare-host Request-URI: INVITE sip:100@<host> (no port, no params)\nASA fixup may rewrite or pass through → ASA_BARE_URI_BYPASS (MEDIUM)"]
-    AG --> AI["INVITE Via: SIP/2.0/UDP 192.0.2.1:5060 (RFC5737 TEST-NET-1)\n403 from ASA vs response from PBX → ASA_VIA_SPOOF_BYPASS (HIGH)\n(different behavior = fixup does not validate Via)"]
-    AG --> AJ["INVITE Content-Length:0 with non-empty SDP body\nASA may not reassemble → ASA_CONTENT_LENGTH_BYPASS (HIGH)\n(Content-Length:0 tricks SBC into skipping SDP inspection)"]
-    AG --> AK["REGISTER Expires:-1\nASA/PBX response → ASA_NEGATIVE_EXPIRES_BYPASS (MEDIUM)\n(negative Expires bypasses registration timeout enforcement)"]
+    AG(["probe_asa_sip_fixup_legacy(host, port=5060)"]):::input --> AH(["Bare-host Request-URI: INVITE sip:100@<host> (no port, no params)\nASA fixup may rewrite or pass through → ASA_BARE_URI_BYPASS (MEDIUM)"]):::output
+    AG:::input --> AI(["INVITE Via: SIP/2.0/UDP 192.0.2.1:5060 (RFC5737 TEST-NET-1)\n403 from ASA vs response from PBX → ASA_VIA_SPOOF_BYPASS (HIGH)\n(different behavior = fixup does not validate Via)"]):::output
+    AG:::input --> AJ(["INVITE Content-Length:0 with non-empty SDP body\nASA may not reassemble → ASA_CONTENT_LENGTH_BYPASS (HIGH)\n(Content-Length:0 tricks SBC into skipping SDP inspection)"]):::output
+    AG:::input --> AK(["REGISTER Expires:-1\nASA/PBX response → ASA_NEGATIVE_EXPIRES_BYPASS (MEDIUM)\n(negative Expires bypasses registration timeout enforcement)"]):::output
 
-    AL["probe_webrtc_signaling_exposure(host, port=8443)"] --> AM["Janus Gateway GET /janus: {'janus':'welcome'}\nHTTP 200 → JANUS_WEBRTC_GATEWAY_UNAUTH (CRITICAL)\nPOST /janus create → session_id → JANUS_SESSION_CREATE_UNAUTH (CRITICAL)"]
-    AL --> AN["Jitsi Meet GET /http-bind (BOSH endpoint)\n200/400 → JITSI_BOSH_ENDPOINT (HIGH)\nGET /about/config with TURN creds → JITSI_CONFIG_DISCLOSED (HIGH)"]
-    AL --> AO["Coturn UDP/3478 STUN Binding Request 0x0001\n0x0101 response → TURN_STUN_RESPONSIVE (HIGH)\nTURN Allocate 0x0003, non-0x0113 response → TURN_ALLOCATE_UNAUTH (CRITICAL)"]
-    AL --> AP["Asterisk ARI GET /ari/api-docs/resources.json\n200 Swagger → ASTERISK_ARI_EXPOSED (CRITICAL)\nGET /ari/asterisk/info → ASTERISK_INFO_UNAUTH (HIGH)"]
+    AL(["probe_webrtc_signaling_exposure(host, port=8443)"]):::input --> AM(["Janus Gateway GET /janus: {'janus':'welcome'}\nHTTP 200 → JANUS_WEBRTC_GATEWAY_UNAUTH (CRITICAL)\nPOST /janus create → session_id → JANUS_SESSION_CREATE_UNAUTH (CRITICAL)"]):::output
+    AL:::input --> AN(["Jitsi Meet GET /http-bind (BOSH endpoint)\n200/400 → JITSI_BOSH_ENDPOINT (HIGH)\nGET /about/config with TURN creds → JITSI_CONFIG_DISCLOSED (HIGH)"]):::output
+    AL:::input --> AO(["Coturn UDP/3478 STUN Binding Request 0x0001\n0x0101 response → TURN_STUN_RESPONSIVE (HIGH)\nTURN Allocate 0x0003, non-0x0113 response → TURN_ALLOCATE_UNAUTH (CRITICAL)"]):::output
+    AL:::input --> AP(["Asterisk ARI GET /ari/api-docs/resources.json\n200 Swagger → ASTERISK_ARI_EXPOSED (CRITICAL)\nGET /ari/asterisk/info → ASTERISK_INFO_UNAUTH (HIGH)"]):::output
 
-    AQ["probe_h323_and_media_gateway(host, port=1720)"] --> AR["TCP/1720 Q.931 TPKT SETUP frame\nResponse → H323_Q931_RESPONSIVE (HIGH)\n0x08/0x7e/0x03 marker in response → H323_CALL_SETUP_RESPONSIVE (CRITICAL)"]
-    AQ --> AS["UDP/1719 H.225 RAS GRQ stub\nGCF or GRJ → H323_GATEKEEPER_RESPONSIVE (HIGH)"]
-    AQ --> AT["UDP/2427 MGCP AUEP *\n200 + capability lines → MGCP_RESPONSIVE (HIGH) + MGCP_ENDPOINT_INFO (CRITICAL)"]
-    AQ --> AU["TCP/2000 SCCP KeepAlive 0x0000\nKeepAliveAck 0x0100 → SCCP_SKINNY_RESPONSIVE (HIGH)"]
+    AQ(["probe_h323_and_media_gateway(host, port=1720)"]):::input --> AR(["TCP/1720 Q.931 TPKT SETUP frame\nResponse → H323_Q931_RESPONSIVE (HIGH)\n0x08/0x7e/0x03 marker in response → H323_CALL_SETUP_RESPONSIVE (CRITICAL)"]):::output
+    AQ:::input --> AS(["UDP/1719 H.225 RAS GRQ stub\nGCF or GRJ → H323_GATEKEEPER_RESPONSIVE (HIGH)"]):::output
+    AQ:::input --> AT(["UDP/2427 MGCP AUEP *\n200 + capability lines → MGCP_RESPONSIVE (HIGH) + MGCP_ENDPOINT_INFO (CRITICAL)"]):::output
+    AQ:::input --> AU(["TCP/2000 SCCP KeepAlive 0x0000\nKeepAliveAck 0x0100 → SCCP_SKINNY_RESPONSIVE (HIGH)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#2e7d32,stroke-width:3px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
+    linkStyle 12 stroke:#2e7d32,stroke-width:3px
+    linkStyle 13 stroke:#2e7d32,stroke-width:3px
+    linkStyle 14 stroke:#2e7d32,stroke-width:3px
+    linkStyle 15 stroke:#2e7d32,stroke-width:3px
+    linkStyle 16 stroke:#2e7d32,stroke-width:3px
+    linkStyle 17 stroke:#2e7d32,stroke-width:3px
+    linkStyle 18 stroke:#2e7d32,stroke-width:3px
+    linkStyle 19 stroke:#2e7d32,stroke-width:3px
+    linkStyle 20 stroke:#2e7d32,stroke-width:3px
+    linkStyle 21 stroke:#2e7d32,stroke-width:3px
+    linkStyle 22 stroke:#2e7d32,stroke-width:3px
+    linkStyle 23 stroke:#2e7d32,stroke-width:3px
+    linkStyle 24 stroke:#2e7d32,stroke-width:3px
+    linkStyle 25 stroke:#2e7d32,stroke-width:3px
+    linkStyle 26 stroke:#2e7d32,stroke-width:3px
+    linkStyle 27 stroke:#2e7d32,stroke-width:3px
+    linkStyle 28 stroke:#2e7d32,stroke-width:3px
+    linkStyle 29 stroke:#2e7d32,stroke-width:3px
+    linkStyle 30 stroke:#2e7d32,stroke-width:3px
+    linkStyle 31 stroke:#2e7d32,stroke-width:3px
+    linkStyle 32 stroke:#2e7d32,stroke-width:3px
+    linkStyle 33 stroke:#2e7d32,stroke-width:3px
+    linkStyle 34 stroke:#2e7d32,stroke-width:3px
+    linkStyle 35 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Finding reference: DTMF and covert channels

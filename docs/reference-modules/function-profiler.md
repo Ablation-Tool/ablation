@@ -18,13 +18,26 @@ Generate a complete behavioral profile of a single function in one call: the str
 
 ```mermaid
 flowchart TD
-    A["FuncProfiler.from_context(ctx)"] --> B[RegAnnotator.from_path or ARM32RegAnnotator]
-    B --> C["profile(va, end_va)"]
-    C --> D["_estimate_end: bisect func_starts for next function boundary"]
-    D --> E["RegAnnotator.annotate_calls(va, end_va)\nTrace entry-arg seeds backward through instruction stream\nInfer: rodata string, immediate, return value, stack ref, unknown"]
-    E --> F["Collect strings from RegAnnotator traces + BinaryContext.strings_near"]
-    F --> G["For each CallSite: lookup target_name in _sinks dict\nEmit ProfiledCall with sink_tag if dangerous"]
-    G --> H["FuncProfile: va, end_va, size, strings, calls\nformat: STRINGS block + CALLS block + *** SINK *** markers"]
+    A(["FuncProfiler.from_context(ctx)"]):::input --> B["RegAnnotator.from_path or ARM32RegAnnotator"]:::primary
+    B:::primary --> C["profile(va, end_va)"]:::secondary
+    C:::secondary --> D["_estimate_end: bisect func_starts for next function boundary"]:::tertiary
+    D:::tertiary --> E["RegAnnotator.annotate_calls(va, end_va)\nTrace entry-arg seeds backward through instruction stream\nInfer: rodata string, immediate, return value, stack ref, unknown"]:::tertiary
+    E:::tertiary --> F["Collect strings from RegAnnotator traces + BinaryContext.strings_near"]:::tertiary
+    F:::tertiary --> G["For each CallSite: lookup target_name in _sinks dict\nEmit ProfiledCall with sink_tag if dangerous"]:::tertiary
+    G:::tertiary --> H(["FuncProfile: va, end_va, size, strings, calls\nformat: STRINGS block + CALLS block + *** SINK *** markers"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Default sink categories

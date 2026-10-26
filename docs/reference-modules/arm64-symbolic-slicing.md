@@ -18,11 +18,22 @@ Path-insensitive, flow-sensitive dataflow analysis over an AArch64 CFG: propagat
 
 ```mermaid
 flowchart TD
-    A["analyze_cfg(insns: List[Insn], initial: TaintState) → CFGResult"] --> B["build_cfg(insns) → CFG\n  ARM64-specific:\n    cbz/cbnz conditional zero branches\n    tbz/tbnz bit-test branches\n    b.cond all condition codes\n    bl/blr (call — push fall-through)\n    ret (stop block)"]
-    B --> C["DFS from entry block\n  Initialize: entry_state = initial\n  propagate state through each instruction in block:\n    TaintState transfer functions:\n    MOV/LDR/STR/ADD/SUB/AND/ORR/LSL/LSR/EOR\n    ADRP+ADD constant propagation\n    BL call: set x0=Ret(sym), clear x0-x18 (caller-saved)\n    BL source (recv/read): taint x0, x1 (return + length)"]
-    C --> D["At join points (multiple predecessors):\n  TaintState.join(other) → merged state\n  Tainted in any predecessor → tainted in merged state\n  (conservative: over-taint at joins)"]
-    D --> E["At sink calls (system, exec, etc.):\n  Check argument registers (x0-x7):\n  If tainted → emit Finding(sink_va, sink_name, tainted_regs, sources)"]
-    E --> F["CFGResult:\n  findings: List[Finding]\n  final_state: TaintState  (register state at function exit)"]
+    A(["analyze_cfg(insns: List[Insn], initial: TaintState) → CFGResult"]):::input --> B["build_cfg(insns) → CFG\n  ARM64-specific:\n    cbz/cbnz conditional zero branches\n    tbz/tbnz bit-test branches\n    b.cond all condition codes\n    bl/blr (call · push fall-through)\n    ret (stop block)"]:::primary
+    B:::primary --> C["DFS from entry block\n  Initialize: entry_state = initial\n  propagate state through each instruction in block:\n    TaintState transfer functions:\n    MOV/LDR/STR/ADD/SUB/AND/ORR/LSL/LSR/EOR\n    ADRP+ADD constant propagation\n    BL call: set x0=Ret(sym), clear x0-x18 (caller-saved)\n    BL source (recv/read): taint x0, x1 (return + length)"]:::secondary
+    C:::secondary --> D["At join points (multiple predecessors):\n  TaintState.join(other) → merged state\n  Tainted in any predecessor → tainted in merged state\n  (conservative: over-taint at joins)"]:::tertiary
+    D:::tertiary --> E["At sink calls (system, exec, etc.):\n  Check argument registers (x0-x7):\n  If tainted → emit Finding(sink_va, sink_name, tainted_regs, sources)"]:::tertiary
+    E:::tertiary --> F(["CFGResult:\n  findings: List[Finding]\n  final_state: TaintState  (register state at function exit)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

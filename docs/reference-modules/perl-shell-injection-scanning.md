@@ -18,28 +18,56 @@ Statically trace user-controlled input from Perl CLI argument sources `@ARGV`, `
 
 ```mermaid
 flowchart TD
-    A["PerlTaintScanner.from_path(root_dir)"] --> B["Recursive rglob('*.pl') + rglob('*.pm')\n_FileAnalysis per file: parse sub ranges, find Getopt callers"]
-    B --> C["scan() — iterate all files"]
-    C --> D["_scan_file(analysis): regex scan for shell sinks"]
-    D --> E["_RE_BACKTICK: `...$var...`\n_RE_QX_SIMPLE: qx{...$var...} / qx/.../\n_RE_SYSTEM: system(\"...$var...\")\n_RE_OPEN_PIPE: open(FH, \"...$var...|...\")"]
-    E --> F["Extract interpolated variables via _RE_VARS\nSkip Perl special vars: $_, $ENV, $0, $1"]
-    F --> G["_classify(analysis, sink_line, var, sink_type)"]
-    G --> H["func_for_line(sink_line) → sub name\nlines_in_func(name) → backward-search window"]
-    H --> I["_check_sanitization: look for quotemeta/single-quote-wrap/s///\nbefore sink — returns sanitization desc if found"]
-    H --> J["Backward scan for var source:"]
-    J --> K{"Pattern match?"}
-    K -->|"shift(@_) / shift"| L["PARAM → resolve one hop in caller files"]
-    K -->|"$opts{key} / Getopt"| M["CLI_ARG: Getopt/getopts flag"]
-    K -->|"$ARGV[N]"| N["CLI_ARG: @ARGV index"]
-    K -->|"<STDIN>"| O["CLI_ARG: STDIN"]
-    K -->|"my $var = ... (non-user source)"| P["INTERNAL"]
-    K -->|"not found in window"| Q["UNKNOWN"]
-    L --> R{"Caller passes @ARGV / Getopt?"}
-    R -->|yes| S["INJECTABLE: CLI → param → sink, unsanitized"]
-    R -->|no| T["PARAM_UNKNOWN: param source confirmed; caller set not injecting"]
-    M & N & O --> U{sanitized?}
-    U -->|yes| V["SANITIZED"]
-    U -->|no| S
+    A(["PerlTaintScanner.from_path(root_dir)"]):::input --> B["Recursive rglob('*.pl') + rglob('*.pm')\n_FileAnalysis per file: parse sub ranges, find Getopt callers"]:::primary
+    B:::primary --> C["scan() · iterate all files"]:::secondary
+    C:::secondary --> D["_scan_file(analysis): regex scan for shell sinks"]:::tertiary
+    D:::tertiary --> E["_RE_BACKTICK: `...$var...`\n_RE_QX_SIMPLE: qx{...$var...} / qx/.../\n_RE_SYSTEM: system(\"...$var...\")\n_RE_OPEN_PIPE: open(FH, \"...$var...|...\")"]:::tertiary
+    E:::tertiary --> F["Extract interpolated variables via _RE_VARS\nSkip Perl special vars: $_, $ENV, $0, $1"]:::tertiary
+    F:::tertiary --> G["_classify(analysis, sink_line, var, sink_type)"]:::tertiary
+    G:::tertiary --> H["func_for_line(sink_line) → sub name\nlines_in_func(name) → backward-search window"]:::tertiary
+    H:::tertiary --> I(["_check_sanitization: look for quotemeta/single-quote-wrap/s///\nbefore sink · returns sanitization desc if found"]):::output
+    H:::tertiary --> J["Backward scan for var source:"]:::tertiary
+    J:::tertiary --> K{"Pattern match?"}:::neutral
+    K:::neutral -->|"shift(@_) / shift"| L["PARAM → resolve one hop in caller files"]:::tertiary
+    K:::neutral -->|"$opts{key} / Getopt"| M["CLI_ARG: Getopt/getopts flag"]:::tertiary
+    K:::neutral -->|"$ARGV[N]"| N(["CLI_ARG: @ARGV index"]):::output
+    K:::neutral -->|"<STDIN>"| O(["CLI_ARG: STDIN"]):::output
+    K:::neutral -->|"my $var = ... (non-user source)"| P(["INTERNAL"]):::output
+    K:::neutral -->|"not found in window"| Q(["UNKNOWN"]):::output
+    L:::tertiary --> R{"Caller passes @ARGV / Getopt?"}:::neutral
+    R:::neutral -->|yes| S(["INJECTABLE: CLI → param → sink, unsanitized"]):::output
+    R:::neutral -->|no| T(["PARAM_UNKNOWN: param source confirmed; caller set not injecting"]):::output
+    M:::tertiary --> U{"sanitized?"}:::neutral
+    U:::neutral -->|yes| V(["SANITIZED"]):::output
+    U:::neutral -->|no| S:::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#546e7a,stroke-width:2px
+    linkStyle 10 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 11 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 12 stroke:#2e7d32,stroke-width:3px
+    linkStyle 13 stroke:#2e7d32,stroke-width:3px
+    linkStyle 14 stroke:#2e7d32,stroke-width:3px
+    linkStyle 15 stroke:#2e7d32,stroke-width:3px
+    linkStyle 16 stroke:#546e7a,stroke-width:2px
+    linkStyle 17 stroke:#2e7d32,stroke-width:3px
+    linkStyle 18 stroke:#2e7d32,stroke-width:3px
+    linkStyle 19 stroke:#546e7a,stroke-width:2px
+    linkStyle 20 stroke:#2e7d32,stroke-width:3px
+    linkStyle 21 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Verdict taxonomy

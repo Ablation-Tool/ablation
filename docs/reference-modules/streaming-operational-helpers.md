@@ -18,9 +18,18 @@ Consume a sample of messages from a Kafka topic, submit a JAR file to a Flink cl
 
 ```mermaid
 flowchart TD
-    A["kafka_consume_sample(host, topic, port=9092, count=10) → List[dict]\n  Fetch(v1) request:\n    api_key=1, api_version=1\n    topic_name, partition=0, fetch_offset=0\n    max_bytes=1048576\n  Parse FetchResponse: message_set → records\n  Per record: key_bytes, value_bytes, offset, timestamp\n  → [{offset, key, value_raw, value_decoded_if_json}]"] --> B["flink_submit_jar_rce(host, jar_bytes, entryClass, programArgs=None) → dict\n  POST /jars/upload multipart/form-data\n    jar_bytes → /tmp/uploaded.jar on JobManager\n    response: {filename: '<uuid>_uploaded.jar'}\n  POST /jars/<uuid>_uploaded.jar/run\n    body: {entryClass, programArgs, parallelism: 1}\n  Poll /jobs/<job_id>/exceptions for execution confirmation\n  → {job_id, status: RUNNING|FAILED, exceptions: List[str]}"]
-    B --> C["schema_registry_enumerate(host, port=8081) → List[dict]\n  GET /subjects → subject name list\n  Per subject:\n    GET /subjects/<name>/versions/latest → {schema, id}\n    Parse Avro schema: fields → [{name, type}]\n  Flag fields: ssn|credit_card|password|token|key|secret\n  → [{subject, schema_type, fields, sensitive_fields}]"]
-    C --> D["check_nats_exposure(host, port=4222) → dict\n  TCP + INFO message (JSON): {version, auth_required, tls_required}\n  CONNECT {} → PONG (unauthenticated)\n  PUB test.subject 0\\r\\n\\r\\n → delivery confirmation\n  SUB > (all subjects) → subscription test\n  → {version, auth_required, pub_sub_accessible: bool}"]
+    A(["kafka_consume_sample(host, topic, port=9092, count=10) → List[dict]\n  Fetch(v1) request:\n    api_key=1, api_version=1\n    topic_name, partition=0, fetch_offset=0\n    max_bytes=1048576\n  Parse FetchResponse: message_set → records\n  Per record: key_bytes, value_bytes, offset, timestamp\n  → [{offset, key, value_raw, value_decoded_if_json}]"]):::input --> B["flink_submit_jar_rce(host, jar_bytes, entryClass, programArgs=None) → dict\n  POST /jars/upload multipart/form-data\n    jar_bytes → /tmp/uploaded.jar on JobManager\n    response: {filename: '<uuid>_uploaded.jar'}\n  POST /jars/<uuid>_uploaded.jar/run\n    body: {entryClass, programArgs, parallelism: 1}\n  Poll /jobs/<job_id>/exceptions for execution confirmation\n  → {job_id, status: RUNNING|FAILED, exceptions: List[str]}"]:::primary
+    B:::primary --> C["schema_registry_enumerate(host, port=8081) → List[dict]\n  GET /subjects → subject name list\n  Per subject:\n    GET /subjects/<name>/versions/latest → {schema, id}\n    Parse Avro schema: fields → [{name, type}]\n  Flag fields: ssn|credit_card|password|token|key|secret\n  → [{subject, schema_type, fields, sensitive_fields}]"]:::secondary
+    C:::secondary --> D(["check_nats_exposure(host, port=4222) → dict\n  TCP + INFO message (JSON): {version, auth_required, tls_required}\n  CONNECT {} → PONG (unauthenticated)\n  PUB test.subject 0\\r\\n\\r\\n → delivery confirmation\n  SUB > (all subjects) → subscription test\n  → {version, auth_required, pub_sub_accessible: bool}"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

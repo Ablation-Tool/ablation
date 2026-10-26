@@ -20,29 +20,58 @@ Pre-compute and cache the complete working context for a stripped binary: PLT sy
 
 ```mermaid
 flowchart TD
-    A["BinaryContext.load_or_build(path)"] --> B[Read binary bytes, compute SHA256]
-    B --> C{cache file exists AND sha256 matches?}
-    C -->|yes| D[_load_json: deserialize JSON → BinaryContext in <100ms]
-    C -->|no| E[_build: parse binary with LIEF]
-    E --> F{binary format?}
-    F -->|ELF| G[_build_elf: extract plt, exports, strings, func_starts, call_edges]
-    F -->|PE| H[_build_pe: extract IAT as plt, exports, strings, func_starts, call_edges]
-    G --> I[_build_string_xref_index: numpy RIP-relative displacement scan]
-    H --> I
-    I --> J[_build_indices: callers_idx, callees_idx, func_str_idx]
-    J --> K[_save_json: serialize to ~/.ablation/cache/sha256_basename.json]
-    D --> L[BinaryContext object]
-    K --> L
-    L --> M[name overlay: get_registry reads .ablation/names.db]
-    M --> N{query API}
-    N --> N1["plt[va] → symbol_name"]
-    N --> N2["exports[name] → va"]
-    N --> N3["callers_of(sym) → [(va, name), ...]"]
-    N --> N4["callees_of(func_va) → [(va, name), ...]"]
-    N --> N5["strings_near(va, radius) → [(va, content), ...]"]
-    N --> N6["string_xrefs(string_va) → [code_va, ...]"]
-    N --> N7["func_containing(va) → func_start_va (binary search)"]
-    N --> N8["name(va) → overlay > export > plt > hex"]
+    A(["BinaryContext.load_or_build(path)"]):::input --> B["Read binary bytes, compute SHA256"]:::primary
+    B:::primary --> C{"cache file exists AND sha256 matches?"}:::neutral
+    C:::neutral -->|yes| D["_load_json: deserialize JSON → BinaryContext in <100ms"]:::secondary
+    C:::neutral -->|no| E["_build: parse binary with LIEF"]:::tertiary
+    E:::tertiary --> F{"binary format?"}:::neutral
+    F:::neutral -->|ELF| G["_build_elf: extract plt, exports, strings, func_starts, call_edges"]:::tertiary
+    F:::neutral -->|PE| H["_build_pe: extract IAT as plt, exports, strings, func_starts, call_edges"]:::tertiary
+    G:::tertiary --> I["_build_string_xref_index: numpy RIP-relative displacement scan"]:::tertiary
+    H:::tertiary --> I:::tertiary
+    I:::tertiary --> J["_build_indices: callers_idx, callees_idx, func_str_idx"]:::tertiary
+    J:::tertiary --> K["_save_json: serialize to ~/.ablation/cache/sha256_basename.json"]:::tertiary
+    D:::secondary --> L["BinaryContext object"]:::tertiary
+    K:::tertiary --> L:::tertiary
+    L:::tertiary --> M["name overlay: get_registry reads .ablation/names.db"]:::tertiary
+    M:::tertiary --> N{"query API"}:::neutral
+    N:::neutral --> N1(["plt[va] → symbol_name"]):::output
+    N:::neutral --> N2(["exports[name] → va"]):::output
+    N:::neutral --> N3(["callers_of(sym) → [(va, name), ...]"]):::output
+    N:::neutral --> N4(["callees_of(func_va) → [(va, name), ...]"]):::output
+    N:::neutral --> N5(["strings_near(va, radius) → [(va, content), ...]"]):::output
+    N:::neutral --> N6(["string_xrefs(string_va) → [code_va, ...]"]):::output
+    N:::neutral --> N7(["func_containing(va) → func_start_va (binary search)"]):::output
+    N:::neutral --> N8(["name(va) → overlay > export > plt > hex"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#546e7a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 11 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 12 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 13 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 14 stroke:#546e7a,stroke-width:2px
+    linkStyle 15 stroke:#2e7d32,stroke-width:3px
+    linkStyle 16 stroke:#2e7d32,stroke-width:3px
+    linkStyle 17 stroke:#2e7d32,stroke-width:3px
+    linkStyle 18 stroke:#2e7d32,stroke-width:3px
+    linkStyle 19 stroke:#2e7d32,stroke-width:3px
+    linkStyle 20 stroke:#2e7d32,stroke-width:3px
+    linkStyle 21 stroke:#2e7d32,stroke-width:3px
+    linkStyle 22 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Context fields

@@ -18,9 +18,18 @@ Generate de Bruijn cyclic patterns for crash offset identification, detect commo
 
 ```mermaid
 flowchart TD
-    A["Crash offset workflow:\n  generate_cyclic_pattern(length=512) → bytes\n    De Bruijn sequence over printable ASCII\n  find_cyclic_offset(crash_bytes: bytes) → int\n    Search crash_bytes in pattern\n    Return byte offset from pattern start → RIP overwrite offset"] --> B["ROP gadget detection:\n  scan_rop_gadgets(binary_data, arch='x86_64') → GadgetList\n    Disassemble with Capstone\n    Match RET sequences: RETN / POP;RET / ADD RSP,N;RET\n    Match JMP sequences: JMP RAX / JMP [RSP] etc.\n    Return {gadget_type: List[GadgetEntry(va, bytes, asm)]}"]
-    B --> C["Shellcode generation:\n  shellcode_reverse_tcp_linux_x86_64(lhost, lport) → bytes\n  shellcode_reverse_tcp_linux_arm64(lhost, lport) → bytes\n  nop_sled(length, arch='x86_64') → bytes"]
-    C --> D["Bad-byte handling:\n  check_bad_bytes(shellcode, bad_bytes=[b'\\x00', b'\\x0a']) → List[int]\n    Return offsets of bad bytes in shellcode\n  xor_encode(shellcode, key=None) → bytes\n    XOR-encode with auto-selected key avoiding bad_bytes\n    Prepend XOR decoder stub"]
+    A(["Crash offset workflow:\n  generate_cyclic_pattern(length=512) → bytes\n    De Bruijn sequence over printable ASCII\n  find_cyclic_offset(crash_bytes: bytes) → int\n    Search crash_bytes in pattern\n    Return byte offset from pattern start → RIP overwrite offset"]):::input --> B["ROP gadget detection:\n  scan_rop_gadgets(binary_data, arch='x86_64') → GadgetList\n    Disassemble with Capstone\n    Match RET sequences: RETN / POP;RET / ADD RSP,N;RET\n    Match JMP sequences: JMP RAX / JMP [RSP] etc.\n    Return {gadget_type: List[GadgetEntry(va, bytes, asm)]}"]:::primary
+    B:::primary --> C["Shellcode generation:\n  shellcode_reverse_tcp_linux_x86_64(lhost, lport) → bytes\n  shellcode_reverse_tcp_linux_arm64(lhost, lport) → bytes\n  nop_sled(length, arch='x86_64') → bytes"]:::secondary
+    C:::secondary --> D(["Bad-byte handling:\n  check_bad_bytes(shellcode, bad_bytes=[b'\\x00', b'\\x0a']) → List[int]\n    Return offsets of bad bytes in shellcode\n  xor_encode(shellcode, key=None) → bytes\n    XOR-encode with auto-selected key avoiding bad_bytes\n    Prepend XOR decoder stub"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

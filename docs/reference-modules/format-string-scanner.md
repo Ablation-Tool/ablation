@@ -36,26 +36,52 @@ Sub-register aliasing is handled: a write to `esi` is recognized as a write to `
 
 ```mermaid
 flowchart TD
-    A[binary_path or BinaryContext] --> B[FormatStringScanner.from_path / from_context]
-    B --> C["_init: resolve PLT → fmt_call_vas\nmap .rodata VA ranges"]
-    C --> D[scan: iterate all func_starts]
-    D --> E{for each function VA}
-    E --> F[_scan_function: disassemble ≤4096 bytes with Capstone]
-    F --> G{CALL to fmt_call_vas target?}
-    G -->|no| E
-    G -->|yes| H[read fmt_reg for this callee from _fmt_call_vas]
-    H --> I[_trace_fmt_reg: walk back ≤20 insns for last write to fmt_reg]
-    I --> J{provenance?}
-    J -->|LEA from .rodata| K[SAFE — skip]
-    J -->|MOV from entry arg rdi/rsi/rdx| L[HIGH: arg_passthrough]
-    J -->|MOV from rbp/rsp frame| M[MEDIUM: stack_load]
-    J -->|MOV from other register| N[MEDIUM: register]
-    J -->|not found in 20 insns| O[MEDIUM: unknown]
-    L --> P[FmtStringFinding]
-    M --> P
-    N --> P
-    O --> P
-    P --> Q[report: sort by severity]
+    A(["binary_path or BinaryContext"]):::input --> B["FormatStringScanner.from_path / from_context"]:::primary
+    B:::primary --> C["_init: resolve PLT → fmt_call_vas\nmap .rodata VA ranges"]:::secondary
+    C:::secondary --> D["scan: iterate all func_starts"]:::tertiary
+    D:::tertiary --> E{"for each function VA"}:::neutral
+    E:::neutral --> F["_scan_function: disassemble ≤4096 bytes with Capstone"]:::tertiary
+    F:::tertiary --> G{"CALL to fmt_call_vas target?"}:::neutral
+    G:::neutral -->|no| E:::neutral
+    G:::neutral -->|yes| H["read fmt_reg for this callee from _fmt_call_vas"]:::tertiary
+    H:::tertiary --> I["_trace_fmt_reg: walk back ≤20 insns for last write to fmt_reg"]:::tertiary
+    I:::tertiary --> J{"provenance?"}:::neutral
+    J:::neutral -->|LEA from .rodata| K(["SAFE · skip"]):::output
+    J:::neutral -->|MOV from entry arg rdi/rsi/rdx| L["HIGH: arg_passthrough"]:::tertiary
+    J:::neutral -->|MOV from rbp/rsp frame| M["MEDIUM: stack_load"]:::tertiary
+    J:::neutral -->|MOV from other register| N["MEDIUM: register"]:::tertiary
+    J:::neutral -->|not found in 20 insns| O["MEDIUM: unknown"]:::tertiary
+    L:::tertiary --> P["FmtStringFinding"]:::tertiary
+    M:::tertiary --> P:::tertiary
+    N:::tertiary --> P:::tertiary
+    O:::tertiary --> P:::tertiary
+    P:::tertiary --> Q(["report: sort by severity"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#546e7a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#546e7a,stroke-width:2px
+    linkStyle 6 stroke:#546e7a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#546e7a,stroke-width:2px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 12 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 13 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 14 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 15 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 16 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 17 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 18 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 19 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

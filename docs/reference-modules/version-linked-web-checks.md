@@ -18,16 +18,32 @@ Identify applicable CVEs based on the detected nginx server version: extracting 
 
 ```mermaid
 flowchart TD
-    A["NginxEnumerator.fingerprint()"] --> B["HTTP GET / → Server: nginx/<version>\nor extract from 404 error page body"]
-    B --> C{"Version found?"}
-    C -->|No| D["probe stub_status paths:\n  /nginx_status, /status, /server-status\n  → extract version from response body"]
-    C -->|Yes| E["_assess_cves(version)"]
-    D --> E
-    E --> F["CVE-2013-4547: nginx < 1.5.7\n  Null byte URI bypass\n  'GET /protected.php%00.jpg'\n  Severity: HIGH"]
-    E --> G["CVE-2014-0133: nginx 1.3.15 - 1.5.11\n  SPDY heap overflow\n  Requires --with-http_spdy_module\n  Severity: HIGH"]
-    E --> H["CVE-2014-3556: nginx mail proxy\n  STARTTLS EHLO injection\n  Severity: MEDIUM"]
-    E --> I["CVE-2021-23017: nginx 0.6.18 - 1.20.0\n  DNS resolver 1-byte OOB write\n  Requires: resolver directive + MITM\n  Severity: HIGH"]
-    F --> J["NginxEnumerator.check_cves() → list[dict]\n  Each: id, severity, desc, exploit, source"]
+    A(["NginxEnumerator.fingerprint()"]):::input --> B["HTTP GET / → Server: nginx/<version>\nor extract from 404 error page body"]:::primary
+    B:::primary --> C{"Version found?"}:::neutral
+    C:::neutral -->|No| D["probe stub_status paths:\n  /nginx_status, /status, /server-status\n  → extract version from response body"]:::secondary
+    C:::neutral -->|Yes| E["_assess_cves(version)"]:::tertiary
+    D:::secondary --> E:::tertiary
+    E:::tertiary --> F["CVE-2013-4547: nginx < 1.5.7\n  Null byte URI bypass\n  'GET /protected.php%00.jpg'\n  Severity: HIGH"]:::tertiary
+    E:::tertiary --> G(["CVE-2014-0133: nginx 1.3.15 - 1.5.11\n  SPDY heap overflow\n  Requires --with-http_spdy_module\n  Severity: HIGH"]):::output
+    E:::tertiary --> H(["CVE-2014-3556: nginx mail proxy\n  STARTTLS EHLO injection\n  Severity: MEDIUM"]):::output
+    E:::tertiary --> I(["CVE-2021-23017: nginx 0.6.18 - 1.20.0\n  DNS resolver 1-byte OOB write\n  Requires: resolver directive + MITM\n  Severity: HIGH"]):::output
+    F:::tertiary --> J(["NginxEnumerator.check_cves() → list[dict]\n  Each: id, severity, desc, exploit, source"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Covered CVEs

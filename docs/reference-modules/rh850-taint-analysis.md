@@ -18,13 +18,21 @@ Tracks user-controlled data from source registers R6–R9 through GHS CC-RH / IA
 
 ```mermaid
 flowchart TD
-    A["RH850TaintTracker.from_bytes(data, base_va=0x0, double_is_32bit=True)\nor .from_path('firmware.elf', double_is_32bit=True)"] --> B["from_bytes:\nRH850TaintTracker(data, base_va, text_start=base_va,\n  text_end=base_va+len(data), symbols={}, endian='little')"]
-    B --> C["scan_function(func_va, func_end,\n  init_labels={'can_payload'}, func_name='ParseCanMsg'):\nSeed R6-R9 with init_labels at function entry\n_scan_func_binary(func_va, func_end, init_labels) → [TaintFindingV850]\nWrap each in TaintFindingRH850.from_v850(f, double_is_32bit)\nReturn: List[TaintFindingRH850]"]
-    D["RH850TaintTracker.from_path('fw.elf')\nrun() → List[TaintFindingRH850]:\nsuper().run() (V850TaintTracker)\nWrap each TaintFindingV850 → TaintFindingRH850"]
-    E["run_interprocedural(depth=4):\nBFS with deque (O(1) popleft vs V850 list.pop(0) O(N))\nqueue: (fva, depth, init_labels)\nPer call frame:\n  raw_name = _name_at(self._syms, callee_va)\n  callee_name = _ghs_c_name(raw_name)  ← GHS mangling normalised\n  _ghs_name_in(raw_name, _SOURCE_NAMES):\n    clear CALLER_SAVED, seed RET_REGS (R10) with source label\n  _ghs_name_in(raw_name, _SINK_NAMES):\n    tainted_args = [r in ARG_REGS where state[r].tainted]\n    sev = CRITICAL if callee_name in _GHS_CRITICAL_SINKS else HIGH\n    append TaintFindingRH850\n  else: if d>0 and taint flows out → queue callee\nDedup by (func_va, sink_va, sink_name)"]
-    F["_GHS_CRITICAL_SINKS = frozenset:\n'system', 'execve', 'execl', 'execvp', 'popen'"]
-    G["GHS symbol normalisation:\n_ghs_strip_underscore(name): strip leading '_' (not '__')\n_ghs_c_name(name):\n  'Foo__ctN' → 'Foo' (constructor)\n  'Foo__dtN' → 'Foo' (destructor)\n  '__vtblFoo' → 'Foo' (vtable)\n  '_foo' → 'foo' (assembler prefix)"]
-    H["TaintFindingRH850 str format:\n[SEV] 0xVA (func_name): tainted {R6,R7} -> sink @ 0xSINK_VA\n(source: source_label) [double=32b]"]
+    A(["RH850TaintTracker.from_bytes(data, base_va=0x0, double_is_32bit=True)\nor .from_path('firmware.elf', double_is_32bit=True)"]):::input --> B["from_bytes:\nRH850TaintTracker(data, base_va, text_start=base_va,\n  text_end=base_va+len(data), symbols={}, endian='little')"]:::primary
+    B:::primary --> C(["scan_function(func_va, func_end,\n  init_labels={'can_payload'}, func_name='ParseCanMsg'):\nSeed R6-R9 with init_labels at function entry\n_scan_func_binary(func_va, func_end, init_labels) → [TaintFindingV850]\nWrap each in TaintFindingRH850.from_v850(f, double_is_32bit)\nReturn: List[TaintFindingRH850]"]):::output
+    D(["RH850TaintTracker.from_path('fw.elf')\nrun() → List[TaintFindingRH850]:\nsuper().run() (V850TaintTracker)\nWrap each TaintFindingV850 → TaintFindingRH850"]):::input
+    E(["run_interprocedural(depth=4):\nBFS with deque (O(1) popleft vs V850 list.pop(0) O(N))\nqueue: (fva, depth, init_labels)\nPer call frame:\n  raw_name = _name_at(self._syms, callee_va)\n  callee_name = _ghs_c_name(raw_name)  ← GHS mangling normalised\n  _ghs_name_in(raw_name, _SOURCE_NAMES):\n    clear CALLER_SAVED, seed RET_REGS (R10) with source label\n  _ghs_name_in(raw_name, _SINK_NAMES):\n    tainted_args = [r in ARG_REGS where state[r].tainted]\n    sev = CRITICAL if callee_name in _GHS_CRITICAL_SINKS else HIGH\n    append TaintFindingRH850\n  else: if d>0 and taint flows out → queue callee\nDedup by (func_va, sink_va, sink_name)"]):::input
+    F(["_GHS_CRITICAL_SINKS = frozenset:\n'system', 'execve', 'execl', 'execvp', 'popen'"]):::input
+    G(["GHS symbol normalisation:\n_ghs_strip_underscore(name): strip leading '_' (not '__')\n_ghs_c_name(name):\n  'Foo__ctN' → 'Foo' (constructor)\n  'Foo__dtN' → 'Foo' (destructor)\n  '__vtblFoo' → 'Foo' (vtable)\n  '_foo' → 'foo' (assembler prefix)"]):::input
+    H(["TaintFindingRH850 str format:\n[SEV] 0xVA (func_name): tainted {R6,R7} -> sink @ 0xSINK_VA\n(source: source_label) [double=32b]"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### GHS CC-RH ABI

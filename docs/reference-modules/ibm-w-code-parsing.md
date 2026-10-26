@@ -18,10 +18,20 @@ Parse IBM XLC compiler W-Code internal IR binary records embedded in XLC-compile
 
 ```mermaid
 flowchart TD
-    A["WCodeBuiltinCatalog.from_binary(xlcentry_path)\n  Parse WCodeBuiltinCatalog from xlCentry binary\n  Extract: record_id → WCBEntry(name, arg_count, calling_conv)"] --> B["WCodeParser(data: bytes)"]
-    B --> C["scan() → Iterator[WCodeRecord]\n  Walk W-Code IR data in XLC .o file section\n  → WCodeRecord(record_id, va_hint, arg_refs)"]
-    C --> D["WCodeBuiltinCatalog.lookup(rec: WCodeRecord) → Optional[WCBEntry]\n  Map record.record_id → WCBEntry\n  → WCBEntry(name, arg_count, calling_conv)"]
-    D --> E["WCBEntry:\n  name: str   (e.g. '__vec_op_add_float4', 'pow')\n  arg_count: int\n  calling_conv: str\n  (use ctx.set_name(va, name) to register in BinaryContext)"]
+    A(["WCodeBuiltinCatalog.from_binary(xlcentry_path)\n  Parse WCodeBuiltinCatalog from xlCentry binary\n  Extract: record_id → WCBEntry(name, arg_count, calling_conv)"]):::input --> B["WCodeParser(data: bytes)"]:::primary
+    B:::primary --> C["scan() → Iterator[WCodeRecord]\n  Walk W-Code IR data in XLC .o file section\n  → WCodeRecord(record_id, va_hint, arg_refs)"]:::secondary
+    C:::secondary --> D["WCodeBuiltinCatalog.lookup(rec: WCodeRecord) → Optional[WCBEntry]\n  Map record.record_id → WCBEntry\n  → WCBEntry(name, arg_count, calling_conv)"]:::tertiary
+    D:::tertiary --> E(["WCBEntry:\n  name: str   (e.g. '__vec_op_add_float4', 'pow')\n  arg_count: int\n  calling_conv: str\n  (use ctx.set_name(va, name) to register in BinaryContext)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

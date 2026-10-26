@@ -18,10 +18,20 @@ Enumerate Cisco IOS and IOS-XE appliances via HTTP/RESTCONF API, SNMP CDP neighb
 
 ```mermaid
 flowchart TD
-    A["ios_enum.py"] --> B["decode_type7(enc: str) → str\n  XOR decrypt Cisco Type 7 with fixed key table\n  Returns: plaintext password or AAA secret"]
-    B --> C["SNMP enumeration:\n  _snmp_get_request(community, oid) → bytes\n  Probe community strings: public, private, cisco\n  OID 1.3.6.1.4.1.9.2.1.55.0 → full running-config\n  OID 1.3.6.1.4.1.9.9.87.1.4.1.1.2 → CDP neighbor table\n  → config_text, neighbors"]
-    C --> D["HTTP/RESTCONF API:\n  GET /restconf/data/native → running config (IOS-XE 16.3+)\n  GET /api/v1/cli/exec/show+running-config → text config\n  GET /mgmt/data/native/interface → interface inventory\n  Detect: AAA methods, TACACS+/RADIUS server IPs"]
-    D --> E["TFTP config pull:\n  tftp_pull(host, filename='running-config') → bytes\n  Attempt standard Cisco TFTP config paths\n  Parse recovered config for Type 7 passwords"]
+    A(["ios_enum.py"]):::input --> B["decode_type7(enc: str) → str\n  XOR decrypt Cisco Type 7 with fixed key table\n  Returns: plaintext password or AAA secret"]:::primary
+    B:::primary --> C["SNMP enumeration:\n  _snmp_get_request(community, oid) → bytes\n  Probe community strings: public, private, cisco\n  OID 1.3.6.1.4.1.9.2.1.55.0 → full running-config\n  OID 1.3.6.1.4.1.9.9.87.1.4.1.1.2 → CDP neighbor table\n  → config_text, neighbors"]:::secondary
+    C:::secondary --> D["HTTP/RESTCONF API:\n  GET /restconf/data/native → running config (IOS-XE 16.3+)\n  GET /api/v1/cli/exec/show+running-config → text config\n  GET /mgmt/data/native/interface → interface inventory\n  Detect: AAA methods, TACACS+/RADIUS server IPs"]:::tertiary
+    D:::tertiary --> E(["TFTP config pull:\n  tftp_pull(host, filename='running-config') → bytes\n  Attempt standard Cisco TFTP config paths\n  Parse recovered config for Type 7 passwords"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

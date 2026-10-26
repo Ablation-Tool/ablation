@@ -18,20 +18,40 @@ Chrome/Edge/Firefox extension security auditor: scanning manifest.json and JavaS
 
 ```mermaid
 flowchart TD
-    A["BrowserExtensionAuditor.from_path('/path/to/ext/')"] --> B["Load manifest.json\nparse externally_connectable.matches\nparse content_scripts + background targets"]
-    B --> C["Scan manifest-level findings:\n  EXT_CONN_BROAD: matches has wildcard pattern\n  EXT_CONN_MISSING: content_scripts present but no externally_connectable"]
-    B --> D["Enumerate all .js/.ts/.mjs files\nin extension directory"]
-    D --> E["Pre-filter: file must contain Chrome extension API signal\n(_EXT_QUICK_RE: chrome.runtime, onMessage, sendNativeMessage, etc.)"]
-    E --> F["MSG_HANDLER_PREAUTH: message handler body\nprocesses payload before sender check\n(sender.id/url/origin absent before fetch/sendMessage/DOM write)"]
-    E --> G["CONTENT_SCRIPT_DOM_HOOK: content script hooks\nwindow.fetch, window.XMLHttpRequest,\ndocument.cookie, window.location"]
-    E --> H["WEBSOCKET_BUS: background creates/connects to\nws://localhost:* WebSocket"]
-    E --> I["NATIVE_MSG_NO_ALLOWLIST: sendNativeMessage/connectNative\nwithout declared allowed_origins"]
-    E --> J["PERSISTENT_DATA_CLEAR: chrome.storage.clear()\noutside of sender-verified handler"]
-    F --> K["List[ExtFinding]: finding_class, severity, file, line, snippet, note"]
-    G --> K
-    H --> K
-    I --> K
-    J --> K
+    A(["BrowserExtensionAuditor.from_path('/path/to/ext/')"]):::input --> B["Load manifest.json\nparse externally_connectable.matches\nparse content_scripts + background targets"]:::primary
+    B:::primary --> C(["Scan manifest-level findings:\n  EXT_CONN_BROAD: matches has wildcard pattern\n  EXT_CONN_MISSING: content_scripts present but no externally_connectable"]):::output
+    B:::primary --> D["Enumerate all .js/.ts/.mjs files\nin extension directory"]:::secondary
+    D:::secondary --> E["Pre-filter: file must contain Chrome extension API signal\n(_EXT_QUICK_RE: chrome.runtime, onMessage, sendNativeMessage, etc.)"]:::tertiary
+    E:::tertiary --> F["MSG_HANDLER_PREAUTH: message handler body\nprocesses payload before sender check\n(sender.id/url/origin absent before fetch/sendMessage/DOM write)"]:::tertiary
+    E:::tertiary --> G["CONTENT_SCRIPT_DOM_HOOK: content script hooks\nwindow.fetch, window.XMLHttpRequest,\ndocument.cookie, window.location"]:::tertiary
+    E:::tertiary --> H["WEBSOCKET_BUS: background creates/connects to\nws://localhost:* WebSocket"]:::tertiary
+    E:::tertiary --> I["NATIVE_MSG_NO_ALLOWLIST: sendNativeMessage/connectNative\nwithout declared allowed_origins"]:::tertiary
+    E:::tertiary --> J["PERSISTENT_DATA_CLEAR: chrome.storage.clear()\noutside of sender-verified handler"]:::tertiary
+    F:::tertiary --> K(["List[ExtFinding]: finding_class, severity, file, line, snippet, note"]):::output
+    G:::tertiary --> K:::output
+    H:::tertiary --> K:::output
+    I:::tertiary --> K:::output
+    J:::tertiary --> K:::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
+    linkStyle 12 stroke:#2e7d32,stroke-width:3px
+    linkStyle 13 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Finding reference

@@ -18,9 +18,18 @@ Probe OpenTelemetry Collector gRPC/HTTP endpoints for unauthenticated metric and
 
 ```mermaid
 flowchart TD
-    A["probe_otel_collector(host, port=4317) → list\n  gRPC: TCP connect port 4317\n    Send HTTP/2 SETTINGS + HEADERS frame\n    OTLP ExportTraceServiceRequest (minimal protobuf)\n    Check: HTTP/2 200 response → unauthenticated ingestion\n  HTTP: GET http://host:4318/ → 404 or version page\n  → [{finding: OTLP_UNAUTHENTICATED, endpoint, severity}]"] --> B["probe_vector_aggregator(host, port=8686) → list\n  GET http://host:8686/health → {ok: true}\n  POST /graphql introspection query\n    schema.queryType.fields → pipeline component list\n    component: sources, transforms, sinks\n    sink type=elasticsearch|kafka|s3 → credential exposure risk\n  → [{finding, pipeline_components, sensitive_sinks}]"]
-    B --> C["probe_redis_exposure(host, port=6379) → list\n  TCP connect + send 'PING\\r\\n'\n  +PONG → unauthenticated access confirmed\n  'CONFIG GET requirepass' → password check\n  'CONFIG GET databases' → database count\n  'INFO replication' → replication role\n  → [{finding: REDIS_NO_AUTH, host, port, config_keys}]"]
-    C --> D["probe_kafka_schema_registry(host, port=8081) → list\n  GET http://host:8081/subjects → subject list\n  GET http://host:8081/schemas/ids/1 → schema detail\n  No authentication: returns subject list directly\n  → [{finding: SCHEMA_REGISTRY_OPEN, subjects: List[str]}]"]
+    A(["probe_otel_collector(host, port=4317) → list\n  gRPC: TCP connect port 4317\n    Send HTTP/2 SETTINGS + HEADERS frame\n    OTLP ExportTraceServiceRequest (minimal protobuf)\n    Check: HTTP/2 200 response → unauthenticated ingestion\n  HTTP: GET http://host:4318/ → 404 or version page\n  → [{finding: OTLP_UNAUTHENTICATED, endpoint, severity}]"]):::input --> B["probe_vector_aggregator(host, port=8686) → list\n  GET http://host:8686/health → {ok: true}\n  POST /graphql introspection query\n    schema.queryType.fields → pipeline component list\n    component: sources, transforms, sinks\n    sink type=elasticsearch|kafka|s3 → credential exposure risk\n  → [{finding, pipeline_components, sensitive_sinks}]"]:::primary
+    B:::primary --> C["probe_redis_exposure(host, port=6379) → list\n  TCP connect + send 'PING\\r\\n'\n  +PONG → unauthenticated access confirmed\n  'CONFIG GET requirepass' → password check\n  'CONFIG GET databases' → database count\n  'INFO replication' → replication role\n  → [{finding: REDIS_NO_AUTH, host, port, config_keys}]"]:::secondary
+    C:::secondary --> D(["probe_kafka_schema_registry(host, port=8081) → list\n  GET http://host:8081/subjects → subject list\n  GET http://host:8081/schemas/ids/1 → schema detail\n  No authentication: returns subject list directly\n  → [{finding: SCHEMA_REGISTRY_OPEN, subjects: List[str]}]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,10 +18,20 @@ Build a `SourceContext` index over a local or remote git repository: the source-
 
 ```mermaid
 flowchart TD
-    A["SourceContext.from_path(repo_path)\n  or .from_git(url, dest, depth=1)"] --> B["SourceContext:\n  files_by_lang(lang) → List[Path]\n  grep(pattern, lang) → List[(Path, line, text)]\n  grep_context(pattern, window) → List[(Path, line, context_lines)]\n  read(path) → str\n  summary() → str"]
-    B --> C["SourceTaintTracker.from_context(ctx)\n  build(): construct call graph from AST\n  trace_to_source(sink_file, sink_line) → List[TaintPath]\n    Backward slice from sink to route handler\n  trace_all(sink_hits) → List[TaintPath]"]
-    C --> D["TaintPath:\n  hops: List[TaintHop]\n  depth() → int\n  as_dict() → dict"]
-    B --> E["SourceAuditCompressor.from_context(ctx)\n  compress(files) → List[ProfileBucket]\n  FileProfile (5-bit): network, file_io, subprocess,\n    deserialization, auth_check\n  ProfileBucket.audit_action() → 'READ' | 'SKIM' | 'SKIP'"]
+    A(["SourceContext.from_path(repo_path)\n  or .from_git(url, dest, depth=1)"]):::input --> B["SourceContext:\n  files_by_lang(lang) → List[Path]\n  grep(pattern, lang) → List[(Path, line, text)]\n  grep_context(pattern, window) → List[(Path, line, context_lines)]\n  read(path) → str\n  summary() → str"]:::primary
+    B:::primary --> C["SourceTaintTracker.from_context(ctx)\n  build(): construct call graph from AST\n  trace_to_source(sink_file, sink_line) → List[TaintPath]\n    Backward slice from sink to route handler\n  trace_all(sink_hits) → List[TaintPath]"]:::secondary
+    C:::secondary --> D(["TaintPath:\n  hops: List[TaintHop]\n  depth() → int\n  as_dict() → dict"]):::output
+    B:::primary --> E(["SourceAuditCompressor.from_context(ctx)\n  compress(files) → List[ProfileBucket]\n  FileProfile (5-bit): network, file_io, subprocess,\n    deserialization, auth_check\n  ProfileBucket.audit_action() → 'READ' | 'SKIM' | 'SKIP'"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

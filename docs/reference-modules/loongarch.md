@@ -18,16 +18,28 @@ Full taint-analysis, syscall labeling, and structural lifting support for LoongA
 
 ```mermaid
 flowchart TD
-    A["LoongArch64TaintTracker.from_path(binary)"] --> B["BinaryContext.load_or_build(binary)\nELF section map + PLT symbol table\nIdentify .text segment bounds"]
-    B --> C["insn_loongarch64.from_loongarch_frame(code, va)\nDecode LoongArch64 instruction stream\nImm/Reg/Mem/Sym operands"]
-    C --> D["cfg_loongarch64.build_cfg(insns)\nbb-level BFS over beqz/bnez/blt/bge branch edges\njirl/bl call edges → separate call graph\nProduces CFG[Block[Insn]]"]
-    D --> E["LoongArch64TaintTracker.run() or run_interprocedural():\n_LA64State: lp64 ABI seed\n  $a0-$a7 = arg0-arg7 (call args)\n  $a0-$a1 = return value\nSources: recv/recvfrom/recvmsg/read/fgets/gets/fread\n  ($a0 = return value = tainted bytes)\nPropagation: ld.d/ld.w/ld.b (load), st.d/st.w (store)\n  addi.d/add.d/sub.d (arithmetic)\n  andi/ori/xori/slli/srli (bitwise — andi bounds taint range)\n  bl/jirl call → callee taint propagation (interprocedural)"]
-    E --> F["Sinks: system/execve/execl/execvp/execle/execvpe\n  popen/strcpy/strcat/sprintf/vsprintf\n  snprintf/vsnprintf/memcpy/memmove/gets\n  → TaintFinding(severity, chain, source, sink, va)"]
-    F --> G["LoongArch64TaintTracker.report(findings) → str\nor findings list for FindingRegistry.register()"]
+    A(["LoongArch64TaintTracker.from_path(binary)"]):::input --> B["BinaryContext.load_or_build(binary)\nELF section map + PLT symbol table\nIdentify .text segment bounds"]:::primary
+    B:::primary --> C["insn_loongarch64.from_loongarch_frame(code, va)\nDecode LoongArch64 instruction stream\nImm/Reg/Mem/Sym operands"]:::secondary
+    C:::secondary --> D["cfg_loongarch64.build_cfg(insns)\nbb-level BFS over beqz/bnez/blt/bge branch edges\njirl/bl call edges → separate call graph\nProduces CFG[Block[Insn]]"]:::tertiary
+    D:::tertiary --> E["LoongArch64TaintTracker.run() or run_interprocedural():\n_LA64State: lp64 ABI seed\n  $a0-$a7 = arg0-arg7 (call args)\n  $a0-$a1 = return value\nSources: recv/recvfrom/recvmsg/read/fgets/gets/fread\n  ($a0 = return value = tainted bytes)\nPropagation: ld.d/ld.w/ld.b (load), st.d/st.w (store)\n  addi.d/add.d/sub.d (arithmetic)\n  andi/ori/xori/slli/srli (bitwise · andi bounds taint range)\n  bl/jirl call → callee taint propagation (interprocedural)"]:::tertiary
+    E:::tertiary --> F["Sinks: system/execve/execl/execvp/execle/execvpe\n  popen/strcpy/strcat/sprintf/vsprintf\n  snprintf/vsnprintf/memcpy/memmove/gets\n  → TaintFinding(severity, chain, source, sink, va)"]:::tertiary
+    F:::tertiary --> G(["LoongArch64TaintTracker.report(findings) → str\nor findings list for FindingRegistry.register()"]):::output
 
-    H["syscall_loongarch64.label_syscall(nr) → str\nFull Linux LoongArch64 syscall table\n  nr=220 → execve\n  nr=56 → openat\n  nr=222 → mmap\n  nr=226 → mprotect\n  dangerous_syscalls: frozenset of annotated risky syscalls"]
+    H(["syscall_loongarch64.label_syscall(nr) → str\nFull Linux LoongArch64 syscall table\n  nr=220 → execve\n  nr=56 → openat\n  nr=222 → mmap\n  nr=226 → mprotect\n  dangerous_syscalls: frozenset of annotated risky syscalls"]):::input
 
-    I["BinaryLifter(arch='la64').lift_function(va) → pseudo-C\n_lift_loongarch64 → _LA64State + _walk_ablation_cfg\n_make_la64_emit: calls resolved by PLT name\nloongarch64_max_not_min_scanner.py:\n  Scans for andi/ori with max-not-min integer patterns\n  (CVE-class integer truncation on LoongArch64)"]
+    I(["BinaryLifter(arch='la64').lift_function(va) → pseudo-C\n_lift_loongarch64 → _LA64State + _walk_ablation_cfg\n_make_la64_emit: calls resolved by PLT name\nloongarch64_max_not_min_scanner.py:\n  Scans for andi/ori with max-not-min integer patterns\n  (CVE-class integer truncation on LoongArch64)"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Module inventory

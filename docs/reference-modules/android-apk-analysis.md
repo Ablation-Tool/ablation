@@ -18,14 +18,28 @@ Parse APK containers, decode Android binary XML manifests (AXML), iterate DEX cl
 
 ```mermaid
 flowchart TD
-    A["APKParser.from_path(apk_path)"] --> B["Open APK as ZIP\n(zipfile.ZipFile)"]
-    B --> C["parse_manifest(): read 'AndroidManifest.xml'\n_parse_axml(): chunk walk\nSTRING_POOL (0x0001) → string table UTF-8/UTF-16LE\nSTART_ELEMENT (0x0102) → attr name+value decode\nReturns XML element tree"]
-    C --> D["_build_manifest(tree) → ManifestInfo:\npackage, version_name/code, min_sdk, target_sdk\npermissions[], declared_permissions[]\ncomponents[]: activity/service/receiver/provider\ndebugable, allowBackup, usesCleartextTraffic"]
-    B --> E["iter_dex(): yield DEXFile for each classes*.dex\n_parse_dex(): header at offset 0\nendian check: 0x12345678\nParse 7 ID/def tables at fixed header offsets"]
-    E --> F["DEXFile tables:\nstring_ids (u32[N] offsets) + ULEB128 strings\ntype_ids (u32[N] string_idx)\nproto_ids (u32[3] per entry: shorty, return_type, params)\nmethod_ids (u16 class_idx, u16 proto_idx, u32 name_idx)\nfield_ids (u16 class_idx, u16 type_idx, u32 name_idx)\nclass_defs (8×u32 per entry)"]
-    F --> G["iter_native_methods():\nFor each ClassDef with class_data_off != 0:\n_parse_class_data(): ULEB128 field counts\nDirect methods: running_idx reset to 0\nVirtual methods: running_idx reset to 0\nFor each method: idx_diff + flags + code_off\nACC_NATIVE (0x0100) + code_off==0 → yield NativeMethod"]
-    B --> H["native_libs(abi='') → List[str]\nList 'lib/**/*.so' entries from ZIP\nFilter by ABI prefix: armeabi-v7a / arm64-v8a / x86 / x86_64"]
-    A2["DexAnalyzer.from_path(apk_path)"] --> I["scan():\n1. _scan_manifest(mf): debuggable, cleartext, backup,\n   exported components (android:exported=True OR has intent-filter),\n   dangerous permissions, dangerous permission combos\n2. _scan_dex_strings(dex): all strings vs _SECRET_PATTERNS + _WEAK_CRYPTO_STRINGS\n3. _scan_dex_apis(dex): all method refs vs _DANGEROUS_CLASSES + _DANGEROUS_METHODS\nSort by _SEVERITY_RANK"]
+    A(["APKParser.from_path(apk_path)"]):::input --> B["Open APK as ZIP\n(zipfile.ZipFile)"]:::primary
+    B:::primary --> C["parse_manifest(): read 'AndroidManifest.xml'\n_parse_axml(): chunk walk\nSTRING_POOL (0x0001) → string table UTF-8/UTF-16LE\nSTART_ELEMENT (0x0102) → attr name+value decode\nReturns XML element tree"]:::secondary
+    C:::secondary --> D(["_build_manifest(tree) → ManifestInfo:\npackage, version_name/code, min_sdk, target_sdk\npermissions[], declared_permissions[]\ncomponents[]: activity/service/receiver/provider\ndebugable, allowBackup, usesCleartextTraffic"]):::output
+    B:::primary --> E["iter_dex(): yield DEXFile for each classes*.dex\n_parse_dex(): header at offset 0\nendian check: 0x12345678\nParse 7 ID/def tables at fixed header offsets"]:::tertiary
+    E:::tertiary --> F["DEXFile tables:\nstring_ids (u32[N] offsets) + ULEB128 strings\ntype_ids (u32[N] string_idx)\nproto_ids (u32[3] per entry: shorty, return_type, params)\nmethod_ids (u16 class_idx, u16 proto_idx, u32 name_idx)\nfield_ids (u16 class_idx, u16 type_idx, u32 name_idx)\nclass_defs (8×u32 per entry)"]:::tertiary
+    F:::tertiary --> G(["iter_native_methods():\nFor each ClassDef with class_data_off != 0:\n_parse_class_data(): ULEB128 field counts\nDirect methods: running_idx reset to 0\nVirtual methods: running_idx reset to 0\nFor each method: idx_diff + flags + code_off\nACC_NATIVE (0x0100) + code_off==0 → yield NativeMethod"]):::output
+    B:::primary --> H(["native_libs(abi='') → List[str]\nList 'lib/**/*.so' entries from ZIP\nFilter by ABI prefix: armeabi-v7a / arm64-v8a / x86 / x86_64"]):::output
+    A2(["DexAnalyzer.from_path(apk_path)"]):::input --> I(["scan():\n1. _scan_manifest(mf): debuggable, cleartext, backup,\n   exported components (android:exported=True OR has intent-filter),\n   dangerous permissions, dangerous permission combos\n2. _scan_dex_strings(dex): all strings vs _SECRET_PATTERNS + _WEAK_CRYPTO_STRINGS\n3. _scan_dex_apis(dex): all method refs vs _DANGEROUS_CLASSES + _DANGEROUS_METHODS\nSort by _SEVERITY_RANK"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Dangerous class/method targets selected

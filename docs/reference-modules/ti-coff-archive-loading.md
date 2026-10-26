@@ -18,10 +18,20 @@ Parse Texas Instruments COFF2 object files (`.obj`) and AR archives (`.a`) produ
 
 ```mermaid
 flowchart TD
-    A["TiCoffLoader.from_path(path)"] --> B["Detect format:\n  bytes 0-1 == 0x00C2 → COFF2 object file\n  bytes 0-7 == '!<arch>\\n' → AR archive\n  Parse accordingly"]
-    B --> C["COFF2 object file:\n  File header (bytes 0-21):\n    f_magic: 0x00C2\n    f_nscns: section count\n    f_target_id: target architecture ID\n  Symbol table:\n    f_symptr + f_nsyms entries\n    18 bytes per symbol: name, value, scnum, sclass\n  → List[CoffSymbol]"]
-    B --> D["AR archive:\n  Parse AR header per member\n  Each member → COFF2 parse\n  → List[CoffSymbol] (all members)"]
-    C --> E["CoffSymbol:\n  name: str\n  value: int  (VA or size)\n  scnum: int  (section number)\n  sclass: int\n  storage_class_name() → str\n  is_weak() → bool\n  is_global() → bool\n  is_defined() → bool"]
+    A(["TiCoffLoader.from_path(path)"]):::input --> B["Detect format:\n  bytes 0-1 == 0x00C2 → COFF2 object file\n  bytes 0-7 == '!<arch>\\n' → AR archive\n  Parse accordingly"]:::primary
+    B:::primary --> C["COFF2 object file:\n  File header (bytes 0-21):\n    f_magic: 0x00C2\n    f_nscns: section count\n    f_target_id: target architecture ID\n  Symbol table:\n    f_symptr + f_nsyms entries\n    18 bytes per symbol: name, value, scnum, sclass\n  → List[CoffSymbol]"]:::secondary
+    B:::primary --> D(["AR archive:\n  Parse AR header per member\n  Each member → COFF2 parse\n  → List[CoffSymbol] (all members)"]):::output
+    C:::secondary --> E(["CoffSymbol:\n  name: str\n  value: int  (VA or size)\n  scnum: int  (section number)\n  sclass: int\n  storage_class_name() → str\n  is_weak() → bool\n  is_global() → bool\n  is_defined() → bool"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

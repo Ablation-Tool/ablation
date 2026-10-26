@@ -18,9 +18,18 @@ Probe Nginx web server instances for version disclosure, CVE-exploitable configu
 
 ```mermaid
 flowchart TD
-    A["NginxEnumerator(host, port=443, use_tls=True, timeout=10)"] --> B["fingerprint() → dict\n  GET / → Server header: nginx/<version>\n  GET /notfound → 404 body: nginx/<version>\n  → {reachable, server, version, server_tokens_on}"]
-    B --> C["run() → dict\n  Keys: fingerprint, stub_status, cves, alias_traversal,\n    host_header, smuggling, nxapi_endpoints, null_byte,\n    server_tokens, autoindex, internal_endpoint_exposure,\n    basic_auth_over_http, cve_2021_23017, ssrf,\n    findings (List[dict])"]
-    C --> D["Each finding appended via _add(severity, ftype, desc, detail, exploit, source)\n  Finding dict: {severity, type, description, detail, exploit, source}\n  report() → str ASCII table grouping findings by severity"]
+    A(["NginxEnumerator(host, port=443, use_tls=True, timeout=10)"]):::input --> B["fingerprint() → dict\n  GET / → Server header: nginx/<version>\n  GET /notfound → 404 body: nginx/<version>\n  → {reachable, server, version, server_tokens_on}"]:::primary
+    B:::primary --> C["run() → dict\n  Keys: fingerprint, stub_status, cves, alias_traversal,\n    host_header, smuggling, nxapi_endpoints, null_byte,\n    server_tokens, autoindex, internal_endpoint_exposure,\n    basic_auth_over_http, cve_2021_23017, ssrf,\n    findings (List[dict])"]:::secondary
+    C:::secondary --> D(["Each finding appended via _add(severity, ftype, desc, detail, exploit, source)\n  Finding dict: {severity, type, description, detail, exploit, source}\n  report() → str ASCII table grouping findings by severity"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

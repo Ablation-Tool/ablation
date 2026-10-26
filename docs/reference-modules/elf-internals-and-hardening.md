@@ -20,22 +20,44 @@ The ELF format is a structured binary container. Every ELF file starts with a 64
 
 ```mermaid
 flowchart TD
-    A[ELF binary file] --> B[BinaryParser / ELF Parser]
-    B --> C{Read ELF ident bytes}
-    C --> D[EI_CLASS byte 4: 32 or 64 bit]
-    C --> E[EI_DATA byte 5: little or big endian]
-    D --> F[Select struct formats for this class]
-    E --> F
-    F --> G[Parse ELF header: e_entry, e_shoff, e_shnum, e_shstrndx]
-    G --> H[Seek to e_shoff, read all section headers]
-    H --> I{For each section header}
-    I --> J[sh_type, sh_flags, sh_addr, sh_offset, sh_size]
-    J --> K[Classify: .text / .data / .rodata / .bss / .dynamic / .symtab / .dynsym / .eh_frame]
-    K --> L[Build section index]
-    L --> M[Parse .dynsym: imported and exported symbols]
-    M --> N[Parse .dynamic: needed libraries, RPATH, RUNPATH, flags]
-    N --> O[Check PT_GNU_STACK, PT_GNU_RELRO, DT_FLAGS for hardening indicators]
-    O --> P[BinaryContext: plt, exports, func_starts, strings, call_edges]
+    A(["ELF binary file"]):::input --> B["BinaryParser / ELF Parser"]:::primary
+    B:::primary --> C{"Read ELF ident bytes"}:::neutral
+    C:::neutral --> D["EI_CLASS byte 4: 32 or 64 bit"]:::secondary
+    C:::neutral --> E["EI_DATA byte 5: little or big endian"]:::tertiary
+    D:::secondary --> F["Select struct formats for this class"]:::tertiary
+    E:::tertiary --> F:::tertiary
+    F:::tertiary --> G["Parse ELF header: e_entry, e_shoff, e_shnum, e_shstrndx"]:::tertiary
+    G:::tertiary --> H["Seek to e_shoff, read all section headers"]:::tertiary
+    H:::tertiary --> I{"For each section header"}:::neutral
+    I:::neutral --> J["sh_type, sh_flags, sh_addr, sh_offset, sh_size"]:::tertiary
+    J:::tertiary --> K["Classify: .text / .data / .rodata / .bss / .dynamic / .symtab / .dynsym / .eh_frame"]:::tertiary
+    K:::tertiary --> L["Build section index"]:::tertiary
+    L:::tertiary --> M["Parse .dynsym: imported and exported symbols"]:::tertiary
+    M:::tertiary --> N["Parse .dynamic: needed libraries, RPATH, RUNPATH, flags"]:::tertiary
+    N:::tertiary --> O["Check PT_GNU_STACK, PT_GNU_RELRO, DT_FLAGS for hardening indicators"]:::tertiary
+    O:::tertiary --> P(["BinaryContext: plt, exports, func_starts, strings, call_edges"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#546e7a,stroke-width:2px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 11 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 12 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 13 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 14 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 15 stroke:#2e7d32,stroke-width:3px
 ```
 
 **Bitness and endianness detection** comes from two bytes in the ELF identification area: `EI_CLASS` at offset 4 `0x01` = ELF32, `0x02` = ELF64 and `EI_DATA` at offset 5 `0x01` = little-endian, `0x02` = big-endian. All subsequent struct reads use the correct format string.

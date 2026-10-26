@@ -56,26 +56,42 @@ When `rd` flows into a `malloc` size argument, the allocation is smaller than th
 
 ```mermaid
 flowchart TD
-    A[/"Binary (ELF or UEFI PE32+ module)"/] --> B["Step 1 · Disassemble all .text bytes\nPure Python LA64 decoder\nEach instruction: (va, mnemonic, rd, ra, rb)"]
+    A(["Binary (ELF or UEFI PE32+ module)"]):::input --> B["Step 1 · Disassemble all .text bytes\nPure Python LA64 decoder\nEach instruction: (va, mnemonic, rd, ra, rb)"]:::primary
 
-    B --> C["Step 2 · Sliding 4-instruction window\nFor each consecutive (i0, i1, i2, i3):\n  i0 = sltu t0, ?, ?\n  i1 = masknez t1, ?, t0\n  i2 = maskeqz t2, ?, t0\n  i3 = or rd, t1, t2  (or or rd, t2, t1)"]
+    B:::primary --> C["Step 2 · Sliding 4-instruction window\nFor each consecutive (i0, i1, i2, i3):\n  i0 = sltu t0, ?, ?\n  i1 = masknez t1, ?, t0\n  i2 = maskeqz t2, ?, t0\n  i3 = or rd, t1, t2  (or or rd, t2, t1)"]:::secondary
 
-    C --> D{"Pattern\nmatched?"}
-    D -->|No, advance window| C
-    D -->|Yes, pattern_va recorded| E["Step 3 · Forward track result register rd\nScan up to 20 instructions forward\nDoes rd appear as source at a call site?"]
+    C:::secondary --> D{"Pattern\nmatched?"}:::neutral
+    D:::neutral -->|No, advance window| C:::secondary
+    D:::neutral -->|Yes, pattern_va recorded| E["Step 3 · Forward track result register rd\nScan up to 20 instructions forward\nDoes rd appear as source at a call site?"]:::tertiary
 
-    E --> F{"Call site\nfound?"}
-    F -->|"callee in .plt range (ELF)"| G["Resolve import_name\nvia plt_map"]
-    F -->|"direct call (PE32+)"| H["Sink name = direct/indirect\nNo import names available"]
-    F -->|No call within 20 insns| I["Discard: likely used\nfor non-allocation purpose"]
+    E:::tertiary --> F{"Call site\nfound?"}:::neutral
+    F:::neutral -->|"callee in .plt range (ELF)"| G["Resolve import_name\nvia plt_map"]:::tertiary
+    F:::neutral -->|"direct call (PE32+)"| H["Sink name = direct/indirect\nNo import names available"]:::tertiary
+    F:::neutral -->|No call within 20 insns| I(["Discard: likely used\nfor non-allocation purpose"]):::output
 
-    G --> J{"import_name\nin sink_table?"}
-    J -->|"Yes (malloc/memcpy/...)"| K[/"Emit LA64MaxNotMinFinding\npattern_va · result_reg · sink_va · sink_name · sink_arg"/]
-    J -->|No| I
-    H --> K
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style K fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    G:::tertiary --> J{"import_name\nin sink_table?"}:::neutral
+    J:::neutral -->|"Yes (malloc/memcpy/...)"| K(["Emit LA64MaxNotMinFinding\npattern_va · result_reg · sink_va · sink_name · sink_arg"]):::output
+    J:::neutral -->|No| I:::output
+    H:::tertiary --> K:::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#546e7a,stroke-width:2px
+    linkStyle 3 stroke:#00695c,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#546e7a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#546e7a,stroke-width:2px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
+    linkStyle 12 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Why forward tracking stops at 20 instructions

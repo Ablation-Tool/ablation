@@ -18,13 +18,26 @@ Probe object-level, function-level, and property-level authorization failures: e
 
 ```mermaid
 flowchart TD
-    A["probe_bola(base, endpoints[:8])"] --> B["For each endpoint with {placeholder} in path:\nIDOR_ID_TYPES: integer [1-5, 0, -1, 9999999]\nuuid [3 random UUIDs + all-zeros]\nalphanumeric ['abc','test','admin','user','root']\nre.sub(r'\\{[^}]+\\}', test_id, path)\nGET → 200 + len > 50 bytes = BOLA finding"]
-    A --> C["Append IDs to path: /1, /2, /admin,\n/00000000-0000-0000-0000-000000000001\nGET → 200 + len > 50 bytes"]
-    D["probe_bfla(base, endpoints[:10])"] --> E["Direct admin path probe (ADMIN_PATHS: 20 paths):\n/admin, /admin/users, /management, /internal\n/superadmin, /root, /system, /debug, /api/admin...\nStatus not in (404, 401, 403) = BFLA_ADMIN_ACCESSIBLE"]
-    D --> F["Privileged operations on resource paths (PRIVILEGED_OPERATIONS):\nPOST /path/promote {role:'admin'}\nDELETE /path/delete\nGET /path/export, /path/backup, /path/dump\nPOST /path/grant {permission:'admin'}\nStatus not in (404, 405) = BFLA_PRIVILEGED_OP"]
-    G["probe_mass_assignment(base, endpoints[:5])"] --> H["Baseline: POST {test:'value'}\nAugmented: POST {admin:true, is_admin:true, role:true,\nsuperuser:true, privileges:true, group:true, balance:true, id:true, test:'value'}\nField in augmented_response AND NOT in baseline → MASS_ASSIGN"]
-    I["probe_excessive_data_exposure(base, endpoints)"] --> J["GET each endpoint\nPII_PATTERNS scan: email, ssn, credit_card, phone_us\napi_key, bearer_token, password_in_response\nprivate_key, aws_key (AKIA[0-9A-Z]{16}), ipv4_internal\nMatches → DATA_EXPOSE_{PII_TYPE}"]
-    I --> K["Response > 50,000 bytes AND list > 100 records\n→ DATA_BULK (unfiltered data dump)"]
+    A(["probe_bola(base, endpoints[:8])"]):::input --> B(["For each endpoint with {placeholder} in path:\nIDOR_ID_TYPES: integer [1-5, 0, -1, 9999999]\nuuid [3 random UUIDs + all-zeros]\nalphanumeric ['abc','test','admin','user','root']\nre.sub(r'\\{[^}]+\\}', test_id, path)\nGET → 200 + len > 50 bytes = BOLA finding"]):::output
+    A:::input --> C(["Append IDs to path: /1, /2, /admin,\n/00000000-0000-0000-0000-000000000001\nGET → 200 + len > 50 bytes"]):::output
+    D(["probe_bfla(base, endpoints[:10])"]):::input --> E(["Direct admin path probe (ADMIN_PATHS: 20 paths):\n/admin, /admin/users, /management, /internal\n/superadmin, /root, /system, /debug, /api/admin...\nStatus not in (404, 401, 403) = BFLA_ADMIN_ACCESSIBLE"]):::output
+    D:::input --> F(["Privileged operations on resource paths (PRIVILEGED_OPERATIONS):\nPOST /path/promote {role:'admin'}\nDELETE /path/delete\nGET /path/export, /path/backup, /path/dump\nPOST /path/grant {permission:'admin'}\nStatus not in (404, 405) = BFLA_PRIVILEGED_OP"]):::output
+    G(["probe_mass_assignment(base, endpoints[:5])"]):::input --> H(["Baseline: POST {test:'value'}\nAugmented: POST {admin:true, is_admin:true, role:true,\nsuperuser:true, privileges:true, group:true, balance:true, id:true, test:'value'}\nField in augmented_response AND NOT in baseline → MASS_ASSIGN"]):::output
+    I(["probe_excessive_data_exposure(base, endpoints)"]):::input --> J(["GET each endpoint\nPII_PATTERNS scan: email, ssn, credit_card, phone_us\napi_key, bearer_token, password_in_response\nprivate_key, aws_key (AKIA[0-9A-Z]{16}), ipv4_internal\nMatches → DATA_EXPOSE_{PII_TYPE}"]):::output
+    I:::input --> K(["Response > 50,000 bytes AND list > 100 records\n→ DATA_BULK (unfiltered data dump)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#2e7d32,stroke-width:3px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Mass assignment field list 21 fields, first 8 used per probe

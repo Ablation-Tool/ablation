@@ -48,32 +48,54 @@ the filtered set.
 
 ```mermaid
 flowchart TD
-    A["Repository root<br/>(local path or git URL)"] --> B
+    A(["Repository root<br/>(local path or git URL)"]):::input --> B["B"]:::primary
 
-    B["SourceContext<br/>source_ingestion.py<br/>Index all source files<br/>Identify route handlers<br/>Framework-aware (Next/Express/Flask/FastAPI/Axum)"]
+    B:::primary
 
-    B --> C["SourceAuditCompressor<br/>source_audit_compressor.py<br/>5-bit profile per file<br/>Priority reads / spot-checks / batch-CLEAN<br/>40x read reduction"]
+    B:::primary --> C["SourceAuditCompressor<br/>source_audit_compressor.py<br/>5-bit profile per file<br/>Priority reads / spot-checks / batch-CLEAN<br/>40x read reduction"]:::secondary
 
-    C --> D["priority_reads()<br/>profiles 8-31<br/>Individual reads"]
-    C --> E["spot_checks()<br/>profiles 2-7<br/>Sample reads"]
-    C --> F["batch_clean()<br/>profile 0<br/>One representative"]
+    C:::secondary --> D["priority_reads()<br/>profiles 8-31<br/>Individual reads"]:::tertiary
+    C:::secondary --> E(["spot_checks()<br/>profiles 2-7<br/>Sample reads"]):::output
+    C:::secondary --> F(["batch_clean()<br/>profile 0<br/>One representative"]):::output
 
-    B --> G["SourceEntryClassifier<br/>source_entry_classifier.py<br/>Auth level per route<br/>NONE / API_KEY / SESSION / INTERNAL / ADMIN"]
+    B:::primary --> G["SourceEntryClassifier<br/>source_entry_classifier.py<br/>Auth level per route<br/>NONE / API_KEY / SESSION / INTERNAL / ADMIN"]:::tertiary
 
-    B --> H["SourceSinkScanner<br/>source_sink_scanner.py<br/>Sink patterns: eval / exec / SSRF / path / auth<br/>Guard-condition detector: HIGH → MEDIUM"]
+    B:::primary --> H["SourceSinkScanner<br/>source_sink_scanner.py<br/>Sink patterns: eval / exec / SSRF / path / auth<br/>Guard-condition detector: HIGH → MEDIUM"]:::tertiary
 
-    B --> I["SourceIsolationChecker<br/>source_isolation_checker.py<br/>Tenant scope gap detection<br/>Prisma / Mongoose / SQLAlchemy / raw SQL"]
+    B:::primary --> I["SourceIsolationChecker<br/>source_isolation_checker.py<br/>Tenant scope gap detection<br/>Prisma / Mongoose / SQLAlchemy / raw SQL"]:::tertiary
 
-    B --> J["SourceArchRiskScanner<br/>source_arch_risk.py<br/>Architectural risk: unsafe render + type dispatch<br/>Co-location scoring"]
+    B:::primary --> J["SourceArchRiskScanner<br/>source_arch_risk.py<br/>Architectural risk: unsafe render + type dispatch<br/>Co-location scoring"]:::tertiary
 
-    H --> K["SourceTaintTracker<br/>source_taint_tracker.py<br/>Call-graph taint tracing<br/>Route param → sink hop chain"]
+    H:::tertiary --> K["SourceTaintTracker<br/>source_taint_tracker.py<br/>Call-graph taint tracing<br/>Route param → sink hop chain"]:::tertiary
 
-    D --> L["Audit findings"]
-    G --> L
-    H --> L
-    I --> L
-    J --> L
-    K --> L
+    D:::tertiary --> L(["Audit findings"]):::output
+    G:::tertiary --> L:::output
+    H:::tertiary --> L:::output
+    I:::tertiary --> L:::output
+    J:::tertiary --> L:::output
+    K:::tertiary --> L:::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
+    linkStyle 12 stroke:#2e7d32,stroke-width:3px
+    linkStyle 13 stroke:#2e7d32,stroke-width:3px
+    linkStyle 14 stroke:#2e7d32,stroke-width:3px
+    linkStyle 15 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

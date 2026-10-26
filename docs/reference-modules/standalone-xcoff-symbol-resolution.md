@@ -18,10 +18,20 @@ Parse IBM AIX XCOFF32 and XCOFF64 executables: extracting import and export symb
 
 ```mermaid
 flowchart TD
-    A["parse(path) → XcoffBinary\n  Read magic (bytes 0-1):\n    0x01DF → XCOFF32\n    0x01F7 → XCOFF64\n    0x01EF → XCOFF64 (AIX 3.x prototype)\n  Parse file header + optional header\n  Parse section table → List[XcoffSection]"] --> B["Locate .loader section:\n  scn.name == '.loader'\n  Dispatch to _parse_loader32() or _parse_loader64()"]
-    B --> C["_parse_loader32/64(ldr, sections):\n  Parse loader header:\n    l_nsyms: export symbol count\n    l_nreloc: relocation count\n    l_nimpid: import ID count\n    l_stoff: string table offset\n  → symbols: List[XcoffSymbol] (name, va, type)\n  → imports: List[str] (library names)"]
-    C --> D["_resolve_descriptors(binary):\n  For PPC64: each symbol VA → check .data for descriptor\n  Resolve to actual code entry point\n  Update symbol.va to code VA"]
-    D --> E["XcoffBinary:\n  magic: int\n  arch: str ('ppc32' or 'ppc64')\n  sections: List[XcoffSection]\n  symbols: List[XcoffSymbol]  (exports, with code VAs)\n  imports: List[str]"]
+    A(["parse(path) → XcoffBinary\n  Read magic (bytes 0-1):\n    0x01DF → XCOFF32\n    0x01F7 → XCOFF64\n    0x01EF → XCOFF64 (AIX 3.x prototype)\n  Parse file header + optional header\n  Parse section table → List[XcoffSection]"]):::input --> B["Locate .loader section:\n  scn.name == '.loader'\n  Dispatch to _parse_loader32() or _parse_loader64()"]:::primary
+    B:::primary --> C["_parse_loader32/64(ldr, sections):\n  Parse loader header:\n    l_nsyms: export symbol count\n    l_nreloc: relocation count\n    l_nimpid: import ID count\n    l_stoff: string table offset\n  → symbols: List[XcoffSymbol] (name, va, type)\n  → imports: List[str] (library names)"]:::secondary
+    C:::secondary --> D["_resolve_descriptors(binary):\n  For PPC64: each symbol VA → check .data for descriptor\n  Resolve to actual code entry point\n  Update symbol.va to code VA"]:::tertiary
+    D:::tertiary --> E(["XcoffBinary:\n  magic: int\n  arch: str ('ppc32' or 'ppc64')\n  sections: List[XcoffSection]\n  symbols: List[XcoffSymbol]  (exports, with code VAs)\n  imports: List[str]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

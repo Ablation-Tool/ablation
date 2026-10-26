@@ -18,9 +18,18 @@ Scan source code for ORM queries Prisma, Mongoose, SQLAlchemy, raw SQL that fetc
 
 ```mermaid
 flowchart TD
-    A["SourceEntryClassifier(route_files) → classifications\n  Per route file:\n    Scan for auth wrappers: requireAuth(), withSession(),\n      verifyToken(), isAuthenticated(), @auth_required\n    → RouteClassification{file, auth_level: NONE|API_KEY|SESSION|INTERNAL|ADMIN}\n  SESSION/API_KEY routes → pass to SourceIsolationChecker"] --> B["SourceIsolationChecker(source_files) → checker\n  .check() → List[IsolationFinding]\n  Per source file:\n    Regex: findUnique|findFirst|findMany|update|delete|upsert\n    _extract_where_block(call_text) → where clause text\n    _has_scope_field(where_text):\n      Match: orgId|projectId|tenantId|userId|account_id|workspace_id\n    Missing scope → IsolationFinding"]
-    B --> C["IsolationFinding:\n  file: str\n  line: int\n  orm: str (prisma|mongoose|sqlalchemy|raw_sql)\n  query_type: str (findUnique|update|delete)\n  where_clause: str (extracted)\n  scope_field: None (missing)\n  severity: HIGH\n  description: 'Missing tenant scope in <query_type> — IDOR risk'\n\nReport:\n  Group by file\n  Rank by severity\n  → markdown table with file:line links"]
-    C --> D["SourceEntryClassifier.report() → str\n  Table: route file | auth_level | risk\n  NONE auth: unprotected routes (critical)\n  SESSION: user data — needs isolation check\n  INTERNAL/ADMIN: lower isolation risk (lower priority)"]
+    A(["SourceEntryClassifier(route_files) → classifications\n  Per route file:\n    Scan for auth wrappers: requireAuth(), withSession(),\n      verifyToken(), isAuthenticated(), @auth_required\n    → RouteClassification{file, auth_level: NONE|API_KEY|SESSION|INTERNAL|ADMIN}\n  SESSION/API_KEY routes → pass to SourceIsolationChecker"]):::input --> B["SourceIsolationChecker(source_files) → checker\n  .check() → List[IsolationFinding]\n  Per source file:\n    Regex: findUnique|findFirst|findMany|update|delete|upsert\n    _extract_where_block(call_text) → where clause text\n    _has_scope_field(where_text):\n      Match: orgId|projectId|tenantId|userId|account_id|workspace_id\n    Missing scope → IsolationFinding"]:::primary
+    B:::primary --> C["IsolationFinding:\n  file: str\n  line: int\n  orm: str (prisma|mongoose|sqlalchemy|raw_sql)\n  query_type: str (findUnique|update|delete)\n  where_clause: str (extracted)\n  scope_field: None (missing)\n  severity: HIGH\n  description: 'Missing tenant scope in <query_type> · IDOR risk'\n\nReport:\n  Group by file\n  Rank by severity\n  → markdown table with file:line links"]:::secondary
+    C:::secondary --> D(["SourceEntryClassifier.report() → str\n  Table: route file | auth_level | risk\n  NONE auth: unprotected routes (critical)\n  SESSION: user data · needs isolation check\n  INTERNAL/ADMIN: lower isolation risk (lower priority)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

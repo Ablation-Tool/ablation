@@ -18,9 +18,18 @@ Discover live hosts via ICMP echo requests, grab TCP service banners, enumerate 
 
 ```mermaid
 flowchart TD
-    A["icmp_host_discovery(target_cidr, timeout=1.0) → List[str]\n  Parse CIDR → host IPs\n  For each IP: send raw ICMP echo (type=8, code=0)\n  Collect echo replies within timeout\n  → sorted live host list"] --> B["scan_tcp_banner(host, port, timeout=3.0) → dict\n  socket.connect((host, port))\n  Receive first 512 bytes\n  → {host, port, banner, encoding}"]
-    B --> C["fingerprint_os_from_ttl(host, port=80) → dict\n  _http_get(host, port, '/') → raw IP response\n  Extract TTL from IP header\n  64 → Linux/macOS/BSD\n  128 → Windows\n  255 → network device (router/switch)\n  → {host, ttl, os_guess}"]
-    C --> D["MDNSDiscovery.query(service_type) → List[dict]\n  Send DNS PTR query to 224.0.0.251:5353\n  Parse PTR + SRV + A responses\n  → [{instance_name, host, ip, port}]\n\nSSDPDiscovery.discover(timeout) → List[dict]\n  Send M-SEARCH to 239.255.255.250:1900\n  Parse LOCATION, SERVER, USN headers\n  → [{device_type, friendly_name, ip, location_url}]"]
+    A(["icmp_host_discovery(target_cidr, timeout=1.0) → List[str]\n  Parse CIDR → host IPs\n  For each IP: send raw ICMP echo (type=8, code=0)\n  Collect echo replies within timeout\n  → sorted live host list"]):::input --> B["scan_tcp_banner(host, port, timeout=3.0) → dict\n  socket.connect((host, port))\n  Receive first 512 bytes\n  → {host, port, banner, encoding}"]:::primary
+    B:::primary --> C["fingerprint_os_from_ttl(host, port=80) → dict\n  _http_get(host, port, '/') → raw IP response\n  Extract TTL from IP header\n  64 → Linux/macOS/BSD\n  128 → Windows\n  255 → network device (router/switch)\n  → {host, ttl, os_guess}"]:::secondary
+    C:::secondary --> D(["MDNSDiscovery.query(service_type) → List[dict]\n  Send DNS PTR query to 224.0.0.251:5353\n  Parse PTR + SRV + A responses\n  → [{instance_name, host, ip, port}]\n\nSSDPDiscovery.discover(timeout) → List[dict]\n  Send M-SEARCH to 239.255.255.250:1900\n  Parse LOCATION, SERVER, USN headers\n  → [{device_type, friendly_name, ip, location_url}]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

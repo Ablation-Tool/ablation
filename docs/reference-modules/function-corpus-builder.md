@@ -18,14 +18,25 @@ Populate `func_id.db` with `ANGR_INFERRED` function records for binaries with no
 
 ```mermaid
 flowchart TD
-    A["CorpusBuilder(db_path='~/.ablation/func_id.db')"] --> B["build(binary_path, product, version) → int\n  ELF parsing: discover functions via eh_frame FDE entries\n  (strips without symbols still have unwind tables if compiled with -fexceptions)"]
-    B --> C["For each function:\n  1. name: 'fn_0x<va>' (stripped; no symbols)\n  2. call_targets: PLT names for resolved calls,\n     '0x<va>' hex strings for unresolved\n  3. string_xrefs: string CONTENTS from RIP-relative LEA\n  4. role: heuristic from callee PLT names\n     (recv/send → network, open/read → file_io, etc.)\n  5. notes: short role description for vuln_notes field"]
-    C --> D["Insert row into func_id.db:\n  confidence = ANGR_INFERRED\n  product, version, binary, func_va, name, role,\n  call_targets, string_xrefs, notes"]
-    D --> E["Returns: count of rows inserted\n  Skips: functions already present at same (binary, func_va)"]
-    E --> F["SemanticSearcher.build_corpus() picks up ANGR_INFERRED rows\n  all-mpnet-base-v2 encodes role + call_targets + string_xrefs\n  → corpus now queryable for this binary"]
+    A(["CorpusBuilder(db_path='~/.ablation/func_id.db')"]):::input --> B["build(binary_path, product, version) → int\n  ELF parsing: discover functions via eh_frame FDE entries\n  (strips without symbols still have unwind tables if compiled with -fexceptions)"]:::primary
+    B:::primary --> C["For each function:\n  1. name: 'fn_0x<va>' (stripped; no symbols)\n  2. call_targets: PLT names for resolved calls,\n     '0x<va>' hex strings for unresolved\n  3. string_xrefs: string CONTENTS from RIP-relative LEA\n  4. role: heuristic from callee PLT names\n     (recv/send → network, open/read → file_io, etc.)\n  5. notes: short role description for vuln_notes field"]:::secondary
+    C:::secondary --> D["Insert row into func_id.db:\n  confidence = ANGR_INFERRED\n  product, version, binary, func_va, name, role,\n  call_targets, string_xrefs, notes"]:::tertiary
+    D:::tertiary --> E["Returns: count of rows inserted\n  Skips: functions already present at same (binary, func_va)"]:::tertiary
+    E:::tertiary --> F(["SemanticSearcher.build_corpus() picks up ANGR_INFERRED rows\n  all-mpnet-base-v2 encodes role + call_targets + string_xrefs\n  → corpus now queryable for this binary"]):::output
 
-    G["build_multi(binary_paths, product, version) → Dict[str,int]\n  Builds corpus for N binaries in sequence\n  Returns per-path insertion counts"]
-    H["status() → Dict[str, int]\n  Counts by confidence level in func_id.db\n  {'CONFIRMED': N, 'ANGR_INFERRED': M}"]
+    G(["build_multi(binary_paths, product, version) → Dict[str,int]\n  Builds corpus for N binaries in sequence\n  Returns per-path insertion counts"]):::input
+    H(["status() → Dict[str, int]\n  Counts by confidence level in func_id.db\n  {'CONFIRMED': N, 'ANGR_INFERRED': M}"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

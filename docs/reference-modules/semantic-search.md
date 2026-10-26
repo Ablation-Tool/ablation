@@ -26,25 +26,35 @@ The pipeline has five stages: description extraction, assembly normalization, BE
 
 ```mermaid
 flowchart TD
-    A[/"binary.so (stripped, no symbols)"/] --> B["Stage 1 · CorpusBuilder.build()\nPLT imports → call targets\n.rodata xrefs → string references\ncall graph → neighbor functions\n→ func_id.db (SQLite, one row per function)"]
+    A(["binary.so (stripped, no symbols)"]):::input --> B["Stage 1 · CorpusBuilder.build()\nPLT imports → call targets\n.rodata xrefs → string references\ncall graph → neighbor functions\n→ func_id.db (SQLite, one row per function)"]:::primary
 
-    B --> C["Stage 2 · Assembly normalization\nStrip build-specific artifacts:\n  addrs → ADDR\n  immediates → IMM\n  registers → REG\nMap opcodes to BinFuse 11-category taxonomy\nCompute Markov transition counts (top-5 adjacent pairs)"]
+    B:::primary --> C["Stage 2 · Assembly normalization\nStrip build-specific artifacts:\n  addrs → ADDR\n  immediates → IMM\n  registers → REG\nMap opcodes to BinFuse 11-category taxonomy\nCompute Markov transition counts (top-5 adjacent pairs)"]:::secondary
 
-    C --> D["Stage 3 · Description construction\n'{name} role={role} | calls: {plt_calls} |\nstrings: {xrefs} | asm: {category_sequence} |\ntrans: {transition_counts}'"]
+    C:::secondary --> D["Stage 3 · Description construction\n'{name} role={role} | calls: {plt_calls} |\nstrings: {xrefs} | asm: {category_sequence} |\ntrans: {transition_counts}'"]:::tertiary
 
-    D --> E["Stage 4 · BERT encoding\nall-mpnet-base-v2 (768-dim)\nTokenize → 12-layer MPNet → mean pool → L2 normalize\n→ raw (768,) vector: anisotropic\nUnrelated pairs score 0.6-0.9"]
+    D:::tertiary --> E["Stage 4 · BERT encoding\nall-mpnet-base-v2 (768-dim)\nTokenize → 12-layer MPNet → mean pool → L2 normalize\n→ raw (768,) vector: anisotropic\nUnrelated pairs score 0.6-0.9"]:::tertiary
 
-    E --> F["Stage 4b · PCA whitening\nSu et al. 2021\ncentered = embedding - corpus_mean\nwhitened = centered @ W\nW = eigenvectors / sqrt(eigenvalues)\nRe-normalize to unit sphere\n→ whitened (768,) vector: isotropic\nUnrelated pairs drop to 0.4-0.6"]
+    E:::tertiary --> F["Stage 4b · PCA whitening\nSu et al. 2021\ncentered = embedding - corpus_mean\nwhitened = centered @ W\nW = eigenvectors / sqrt(eigenvalues)\nRe-normalize to unit sphere\n→ whitened (768,) vector: isotropic\nUnrelated pairs drop to 0.4-0.6"]:::tertiary
 
-    F --> G[("N × 768 corpus matrix\ncached at\n~/.ablation/func_semantic_cache_{sha}.pkl")]
+    F:::tertiary --> G["N × 768 corpus matrix\ncached at\n~/.ablation/func_semantic_cache_{sha}.pkl"]:::tertiary
 
-    G --> H["Stage 5 · Query\nEncode query → whiten → dot product vs corpus\nscores = corpus_matrix @ q_whitened\nargpartition top-k (O(N), no full sort)"]
+    G:::tertiary --> H["Stage 5 · Query\nEncode query → whiten → dot product vs corpus\nscores = corpus_matrix @ q_whitened\nargpartition top-k (O(N), no full sort)"]:::tertiary
 
-    H --> I[/"Ranked results\n0x1a4f00 score=0.83 parse_radius_packet\n0x1b2c40 score=0.71 unnamed\n0x0d8800 score=0.68 handle_auth_request"/]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style G fill:#1e3a5f,stroke:#1d4ed8,color:#bfdbfe
-    style I fill:#14532d,stroke:#166534,color:#dcfce7
+    H:::tertiary --> I(["Ranked results\n0x1a4f00 score=0.83 parse_radius_packet\n0x1b2c40 score=0.71 unnamed\n0x0d8800 score=0.68 handle_auth_request"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---
@@ -115,18 +125,26 @@ What "fine-tuned for semantic similarity" means in practice: the model has learn
 
 ```mermaid
 flowchart TD
-    A["Function description string"] --> B["WordPiece tokenizer\n'strcpy' → ['str', '##cp', '##y']\nSpecial tokens: [CLS] tokens... [SEP]\nOutput: token IDs + attention mask (max 512 tokens)"]
+    A(["Function description string"]):::input --> B["WordPiece tokenizer\n'strcpy' → ['str', '##cp', '##y']\nSpecial tokens: [CLS] tokens... [SEP]\nOutput: token IDs + attention mask (max 512 tokens)"]:::primary
 
-    B --> C["MPNet transformer\n12 layers · 768 hidden dim · 12 attention heads\nEach token attends to every other (bidirectional)\n12 × multi-head self-attention + feed-forward\nOutput: 512 × 768 matrix (one 768-dim vector per token)"]
+    B:::primary --> C["MPNet transformer\n12 layers · 768 hidden dim · 12 attention heads\nEach token attends to every other (bidirectional)\n12 × multi-head self-attention + feed-forward\nOutput: 512 × 768 matrix (one 768-dim vector per token)"]:::secondary
 
-    C --> D["Mean pooling\nAverage all non-padding token vectors\n(512 × 768) → (768,)\nAttention mask weights average so padding excluded"]
+    C:::secondary --> D["Mean pooling\nAverage all non-padding token vectors\n(512 × 768) → (768,)\nAttention mask weights average so padding excluded"]:::tertiary
 
-    D --> E["L2 normalization\nDivide by vector magnitude\n→ unit sphere\nDot product between normalized = cosine similarity"]
+    D:::tertiary --> E["L2 normalization\nDivide by vector magnitude\n→ unit sphere\nDot product between normalized = cosine similarity"]:::tertiary
 
-    E --> F[/"Raw (768,) embedding vector\nAnisotropic: unrelated pairs score 0.6-0.9"/]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style F fill:#1e3a5f,stroke:#1d4ed8,color:#bfdbfe
+    E:::tertiary --> F(["Raw (768,) embedding vector\nAnisotropic: unrelated pairs score 0.6-0.9"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 The `encode()` call runs all four steps. Batch size 64 means 64 function descriptions run through the transformer in one forward pass, which is more efficient than encoding one at a time.

@@ -18,49 +18,89 @@ Detect telephony denial-of-service surfaces, eavesdropping vectors, call-interce
 
 ```mermaid
 flowchart TD
-    A["detect_sip_flood_surface(host, port=5060)"] --> B["3 half-open INVITEs to ext 100 (no ACK sent)\nAny non-timeout response → INVITE_FLOOD_SURFACE (HIGH)\n(each call leg consumes server state without cleanup)"]
-    A --> C["Malformed INVITE: no Via header\nAny non-5xx → SIP_FLOOD_MALFORMED (HIGH)\n(parser should return 400 but may crash or accept)"]
-    A --> D["REGISTER Contact: <sip:x@probe.invalid:5060;tag=...> × 8KB URI\nAny non-413 → SIP_LARGE_CONTACT_ACCEPT (MEDIUM)"]
+    A(["detect_sip_flood_surface(host, port=5060)"]):::input --> B(["3 half-open INVITEs to ext 100 (no ACK sent)\nAny non-timeout response → INVITE_FLOOD_SURFACE (HIGH)\n(each call leg consumes server state without cleanup)"]):::output
+    A:::input --> C(["Malformed INVITE: no Via header\nAny non-5xx → SIP_FLOOD_MALFORMED (HIGH)\n(parser should return 400 but may crash or accept)"]):::output
+    A:::input --> D(["REGISTER Contact: <sip:x@probe.invalid:5060;tag=...> × 8KB URI\nAny non-413 → SIP_LARGE_CONTACT_ACCEPT (MEDIUM)"]):::output
 
-    E["detect_tdos_indicators(host, port=5060)"] --> F["INVITE From: sip:FBI@<host>\n100/180/200 → TDOS_CALLER_ID_SPOOF (HIGH)\n(Caller-ID spoofing accepted without PAI validation)"]
-    E --> G["10 rapid OPTIONS in 1s → measure response count\nAll 10 answered → TDOS_RATE_UNLIMITED (MEDIUM)\n(no rate limiting on keepalive traffic)"]
-    E --> H["100 REGISTER with unique Contact URIs for one AoR\n200 each → REGISTER_EXHAUSTION (HIGH)\n(no per-AoR Contact binding limit)"]
+    E(["detect_tdos_indicators(host, port=5060)"]):::input --> F(["INVITE From: sip:FBI@<host>\n100/180/200 → TDOS_CALLER_ID_SPOOF (HIGH)\n(Caller-ID spoofing accepted without PAI validation)"]):::output
+    E:::input --> G(["10 rapid OPTIONS in 1s → measure response count\nAll 10 answered → TDOS_RATE_UNLIMITED (MEDIUM)\n(no rate limiting on keepalive traffic)"]):::output
+    E:::input --> H(["100 REGISTER with unique Contact URIs for one AoR\n200 each → REGISTER_EXHAUSTION (HIGH)\n(no per-AoR Contact binding limit)"]):::output
 
-    I["detect_sip_eavesdropping_surface(host, port=5060)"] --> J["SUBSCRIBE Event:presence to ext 100\n200 → PRESENCE_SUBSCRIBE_OPEN (MEDIUM)\n(real-time call state without auth)"]
-    I --> K["Unsolicited NOTIFY to extension 100\nAny non-481/489 → UNSOLICITED_NOTIFY_ACCEPTED (MEDIUM)\n(out-of-dialog NOTIFY accepted without subscription state)"]
-    I --> L["INVITE SDP with PCMU + G729 + iLBC\nParse 200 SDP answer for codec selection\nSDP_CODEC_DISCLOSED (LOW) — codec fingerprint exposed"]
+    I(["detect_sip_eavesdropping_surface(host, port=5060)"]):::input --> J(["SUBSCRIBE Event:presence to ext 100\n200 → PRESENCE_SUBSCRIBE_OPEN (MEDIUM)\n(real-time call state without auth)"]):::output
+    I:::input --> K(["Unsolicited NOTIFY to extension 100\nAny non-481/489 → UNSOLICITED_NOTIFY_ACCEPTED (MEDIUM)\n(out-of-dialog NOTIFY accepted without subscription state)"]):::output
+    I:::input --> L(["INVITE SDP with PCMU + G729 + iLBC\nParse 200 SDP answer for codec selection\nSDP_CODEC_DISCLOSED (LOW) · codec fingerprint exposed"]):::output
 
-    M["detect_voip_eavesdrop_surface(host, port=5060)"] --> N["INVITE RTP/AVP → check SDP answer for SRTP/SAVP\n200 without SAVP → SRTP_NOT_ENFORCED (MEDIUM)\n(confirms unencrypted media path)"]
-    M --> O["UDP/5005 RTCP probe (RTP port+1)\nBinding response → RTCP_EXPOSED (MEDIUM)\n(call quality metrics + SSRC values exposed)"]
-    M --> P["STUN/TURN ChannelBind 0x0009 to UDP/3478\nNon-error response → TURN_CHANNEL_BIND_OPEN (HIGH)\n(relay channel allocatable without credential)"]
+    M(["detect_voip_eavesdrop_surface(host, port=5060)"]):::input --> N(["INVITE RTP/AVP → check SDP answer for SRTP/SAVP\n200 without SAVP → SRTP_NOT_ENFORCED (MEDIUM)\n(confirms unencrypted media path)"]):::output
+    M:::input --> O(["UDP/5005 RTCP probe (RTP port+1)\nBinding response → RTCP_EXPOSED (MEDIUM)\n(call quality metrics + SSRC values exposed)"]):::output
+    M:::input --> P(["STUN/TURN ChannelBind 0x0009 to UDP/3478\nNon-error response → TURN_CHANNEL_BIND_OPEN (HIGH)\n(relay channel allocatable without credential)"]):::output
 
-    Q["detect_sip_interception_indicators(host, port=5060)"] --> R["REFER sip:200@host Refer-To: sip:attacker@external\n202 Accepted → REFER_UNAUTH (CRITICAL)\n(blind call transfer to external number without auth)"]
-    Q --> S["UPDATE with fabricated To-tag (mid-dialog)\nAny non-481 → UPDATE_TAG_SPOOF (HIGH)\n(session parameter update accepted without dialog state)"]
-    Q --> T["PRACK for non-existent 1xx provisional\nAny non-481 → PRACK_TOPOLOGY_LEAK (MEDIUM)\n(PRACK reveals RFC3262 support — topology info)"]
-    Q --> U["re-INVITE with c=IN IP4 <attacker-ip>\n200 → REINVITE_MEDIA_REDIRECT (CRITICAL)\n(media redirected to attacker-controlled endpoint)"]
+    Q(["detect_sip_interception_indicators(host, port=5060)"]):::input --> R(["REFER sip:200@host Refer-To: sip:attacker@external\n202 Accepted → REFER_UNAUTH (CRITICAL)\n(blind call transfer to external number without auth)"]):::output
+    Q:::input --> S(["UPDATE with fabricated To-tag (mid-dialog)\nAny non-481 → UPDATE_TAG_SPOOF (HIGH)\n(session parameter update accepted without dialog state)"]):::output
+    Q:::input --> T(["PRACK for non-existent 1xx provisional\nAny non-481 → PRACK_TOPOLOGY_LEAK (MEDIUM)\n(PRACK reveals RFC3262 support · topology info)"]):::output
+    Q:::input --> U(["re-INVITE with c=IN IP4 <attacker-ip>\n200 → REINVITE_MEDIA_REDIRECT (CRITICAL)\n(media redirected to attacker-controlled endpoint)"]):::output
 
-    V["detect_sip_signaling_manipulation(host, port=5060)"] --> W["SIP MESSAGE with injected X-header\n200 → MESSAGE_INJECTION_ACCEPT (HIGH)\n(arbitrary SIP message body and headers accepted)"]
-    V --> X["CANCEL for non-existent call-ID\nAny non-481 → CANCEL_BROADCAST_SURFACE (MEDIUM)\n(CANCEL without matching dialog not properly rejected)"]
-    V --> Y["NOTIFY with MWI Event:message-summary\nAny non-489 → MWI_NOTIFY_ACCEPTED (MEDIUM)\n(unsolicited MWI NOTIFY accepted by endpoint)"]
-    V --> Z["OPTIONS Max-Forwards: 0 (must return 483 Too Many Hops)\n200 instead of 483 → MAX_FORWARDS_BYPASS (MEDIUM)\n(loop-detection mechanism not enforced)"]
+    V(["detect_sip_signaling_manipulation(host, port=5060)"]):::input --> W(["SIP MESSAGE with injected X-header\n200 → MESSAGE_INJECTION_ACCEPT (HIGH)\n(arbitrary SIP message body and headers accepted)"]):::output
+    V:::input --> X(["CANCEL for non-existent call-ID\nAny non-481 → CANCEL_BROADCAST_SURFACE (MEDIUM)\n(CANCEL without matching dialog not properly rejected)"]):::output
+    V:::input --> Y(["NOTIFY with MWI Event:message-summary\nAny non-489 → MWI_NOTIFY_ACCEPTED (MEDIUM)\n(unsolicited MWI NOTIFY accepted by endpoint)"]):::output
+    V:::input --> Z(["OPTIONS Max-Forwards: 0 (must return 483 Too Many Hops)\n200 instead of 483 → MAX_FORWARDS_BYPASS (MEDIUM)\n(loop-detection mechanism not enforced)"]):::output
 
-    AA["probe_sip_authentication_weaknesses(host, port=5060)"] --> AB["REGISTER with fabricated uuid4 nonce in Authorization\n200 → NONCE_REPLAY_ACCEPTED (CRITICAL)\n(server not maintaining nonce state — replay possible)"]
-    AA --> AC["REGISTER with empty Digest response=''\n200 → EMPTY_DIGEST_ACCEPTED (CRITICAL)\n(Digest validation entirely absent)"]
-    AA --> AD["REGISTER with Expires:0 (de-register)\n200 without prior 401 → UNAUTH_DEREGISTER (CRITICAL)"]
+    AA(["probe_sip_authentication_weaknesses(host, port=5060)"]):::input --> AB(["REGISTER with fabricated uuid4 nonce in Authorization\n200 → NONCE_REPLAY_ACCEPTED (CRITICAL)\n(server not maintaining nonce state · replay possible)"]):::output
+    AA:::input --> AC(["REGISTER with empty Digest response=''\n200 → EMPTY_DIGEST_ACCEPTED (CRITICAL)\n(Digest validation entirely absent)"]):::output
+    AA:::input --> AD(["REGISTER with Expires:0 (de-register)\n200 without prior 401 → UNAUTH_DEREGISTER (CRITICAL)"]):::output
 
-    AE["probe_sip_authentication_bypass(host, port=5060)"] --> AF["REGISTER with empty Authorization: Digest username=... header (all fields present, all empty)\n200 → SIP_AUTH_BYPASS (CRITICAL)\n(syntactically present but empty auth accepted)"]
-    AE --> AG["INVITE From: <sip:anonymous@anonymous.invalid>\n100/183/200 → SIP_UNAUTH_INVITE (HIGH)\n(anonymous INVITE accepted — no From validation)"]
-    AE --> AH["REGISTER Authorization: Digest response='00000000000000000000000000000000'\n200 → SIP_DIGEST_BYPASS (CRITICAL)\n(zeroed MD5 hash accepted — digest not recomputed)"]
-    AE --> AI["REGISTER → probe challenge type\n407 Proxy-Auth only (no WWW-Auth) → SIP_PROXY_AUTH_ONLY (MEDIUM)\n(endpoint relies on proxy; direct connections bypass auth)"]
+    AE(["probe_sip_authentication_bypass(host, port=5060)"]):::input --> AF(["REGISTER with empty Authorization: Digest username=... header (all fields present, all empty)\n200 → SIP_AUTH_BYPASS (CRITICAL)\n(syntactically present but empty auth accepted)"]):::output
+    AE:::input --> AG(["INVITE From: <sip:anonymous@anonymous.invalid>\n100/183/200 → SIP_UNAUTH_INVITE (HIGH)\n(anonymous INVITE accepted · no From validation)"]):::output
+    AE:::input --> AH(["REGISTER Authorization: Digest response='00000000000000000000000000000000'\n200 → SIP_DIGEST_BYPASS (CRITICAL)\n(zeroed MD5 hash accepted · digest not recomputed)"]):::output
+    AE:::input --> AI(["REGISTER → probe challenge type\n407 Proxy-Auth only (no WWW-Auth) → SIP_PROXY_AUTH_ONLY (MEDIUM)\n(endpoint relies on proxy; direct connections bypass auth)"]):::output
 
-    AJ["detect_sip_header_injection(host, port=5060)"] --> AK["INVITE From: 'X-Injected: ablation-header-test\\r\\nVia: ...' (CRLF in display name)\nRequest accepted → HEADER_INJECTION_CRLF (HIGH)\n(CRLF injection into SIP headers via display name)"]
-    AJ --> AL["REGISTER Contact: sip:x@host%00.example.com (null byte in URI)\nRequest accepted → CONTACT_NULL_BYTE (MEDIUM)\n(null byte in SIP URI not sanitized)"]
-    AJ --> AM["INVITE Via: SIP/2.0/UDP 203.0.113.1:5060 (RFC5737 TEST-NET)\nRequest processed → VIA_STACK_SPOOF (HIGH)\n(attacker can inject Via hop into response path)"]
-    AJ --> AN["INVITE P-Asserted-Identity: <sip:ceo@<host>>\nRequest accepted → PAI_SPOOFED (HIGH)\n(PAI not validated — caller ID manipulation for social engineering)"]
+    AJ(["detect_sip_header_injection(host, port=5060)"]):::input --> AK(["INVITE From: 'X-Injected: ablation-header-test\\r\\nVia: ...' (CRLF in display name)\nRequest accepted → HEADER_INJECTION_CRLF (HIGH)\n(CRLF injection into SIP headers via display name)"]):::output
+    AJ:::input --> AL(["REGISTER Contact: sip:x@host%00.example.com (null byte in URI)\nRequest accepted → CONTACT_NULL_BYTE (MEDIUM)\n(null byte in SIP URI not sanitized)"]):::output
+    AJ:::input --> AM(["INVITE Via: SIP/2.0/UDP 203.0.113.1:5060 (RFC5737 TEST-NET)\nRequest processed → VIA_STACK_SPOOF (HIGH)\n(attacker can inject Via hop into response path)"]):::output
+    AJ:::input --> AN(["INVITE P-Asserted-Identity: <sip:ceo@<host>>\nRequest accepted → PAI_SPOOFED (HIGH)\n(PAI not validated · caller ID manipulation for social engineering)"]):::output
 
-    AO["probe_rtp_injection_surface(host, rtp_port=8000)"] --> AP["RTP packet SSRC=0xDEADBEEF, PT=0 PCMU\nUDP open → RTP_INJECTION_SURFACE (HIGH)\n(unsolicited RTP accepted on media port)"]
-    AO --> AQ["SRTP downgrade probe: RTP to UDP/5004\nResponse or stream start → SRTP_DOWNGRADE (HIGH)\n(fallback to unencrypted RTP accepted)"]
-    AO --> AR["RTP seq=65535 (boundary wrap)\nNo error → RTP_SEQ_BOUNDARY (LOW)\n(sequence number rollover handled — no crash)"]
+    AO(["probe_rtp_injection_surface(host, rtp_port=8000)"]):::input --> AP(["RTP packet SSRC=0xDEADBEEF, PT=0 PCMU\nUDP open → RTP_INJECTION_SURFACE (HIGH)\n(unsolicited RTP accepted on media port)"]):::output
+    AO:::input --> AQ(["SRTP downgrade probe: RTP to UDP/5004\nResponse or stream start → SRTP_DOWNGRADE (HIGH)\n(fallback to unencrypted RTP accepted)"]):::output
+    AO:::input --> AR(["RTP seq=65535 (boundary wrap)\nNo error → RTP_SEQ_BOUNDARY (LOW)\n(sequence number rollover handled · no crash)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#2e7d32,stroke-width:3px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
+    linkStyle 12 stroke:#2e7d32,stroke-width:3px
+    linkStyle 13 stroke:#2e7d32,stroke-width:3px
+    linkStyle 14 stroke:#2e7d32,stroke-width:3px
+    linkStyle 15 stroke:#2e7d32,stroke-width:3px
+    linkStyle 16 stroke:#2e7d32,stroke-width:3px
+    linkStyle 17 stroke:#2e7d32,stroke-width:3px
+    linkStyle 18 stroke:#2e7d32,stroke-width:3px
+    linkStyle 19 stroke:#2e7d32,stroke-width:3px
+    linkStyle 20 stroke:#2e7d32,stroke-width:3px
+    linkStyle 21 stroke:#2e7d32,stroke-width:3px
+    linkStyle 22 stroke:#2e7d32,stroke-width:3px
+    linkStyle 23 stroke:#2e7d32,stroke-width:3px
+    linkStyle 24 stroke:#2e7d32,stroke-width:3px
+    linkStyle 25 stroke:#2e7d32,stroke-width:3px
+    linkStyle 26 stroke:#2e7d32,stroke-width:3px
+    linkStyle 27 stroke:#2e7d32,stroke-width:3px
+    linkStyle 28 stroke:#2e7d32,stroke-width:3px
+    linkStyle 29 stroke:#2e7d32,stroke-width:3px
+    linkStyle 30 stroke:#2e7d32,stroke-width:3px
+    linkStyle 31 stroke:#2e7d32,stroke-width:3px
+    linkStyle 32 stroke:#2e7d32,stroke-width:3px
+    linkStyle 33 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Finding reference

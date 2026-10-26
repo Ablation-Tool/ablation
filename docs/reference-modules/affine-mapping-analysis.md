@@ -18,20 +18,40 @@ Recover XOR encryption keys from firmware blobs using three attack modes: Known 
 
 ```mermaid
 flowchart TD
-    A["XorSolver(path)"] --> B["solve(max_bytes=1MB)"]
-    B --> C["1. ic_key_length(data[:16384], max_len=128)\nFor shift 1..128: count byte matches at lag=shift\nIC = matches / (n-shift)\nIf IC/baseline ≥ 10.0 (baseline=1/256): spike found → key_length"]
-    C --> D{"IC spike?"}
-    D -->|yes| E["recover_by_frequency(key_length)\nSplit into key_length columns\nFor each column: most_common_byte XOR plaintext_assumption = key_byte\nplaintext_assumption=0x00 (RAM) or 0xFF (NAND)\nConfidence = entropy drop %"]
-    E --> F{confidence ≥ 0.70?}
-    F -->|yes| G["Return XorSolverResult(method='ic+freq', key, confidence)"]
-    F -->|no| H
-    D -->|no| H["2. kpa_attack(max_probe=64)\n_MAGIC_DICT: 14 entries (ELF, SquashFS, gzip, xz, U-Boot, ext4, Fortinet, etc.)\nC[offset:offset+N] XOR P → derived_key\nDecrypt max_key_repeat_check bytes\nEntropy check: 3.0 ≤ H ≤ 7.5 → accept\nconfidence=0.85 if H<6.5 else 0.65"]
-    H --> I{KPA key found?}
-    I -->|yes| G2["Return XorSolverResult(method='kpa', magic_matched=label)"]
-    I -->|no| J["3. freq_attack()\nHamming distance key length: for each L, normalize HD(block1, block2)/bits\nMinimum avg Hamming distance → best_len\nScore each column byte against _X86_64_FREQS opcode distribution\nConfidence = 1 - |entropy_after - 5.0| / 3.0"]
-    J --> K["Return best by confidence"]
-    L["AffineMapAnalyzer(encrypt_fn, block_size=16)"] --> M["reconstruct():\nK_bits = E(0^n)\nFor each column col: E(e_col) XOR K_bits → A_col\nBuilds n×n matrix A over GF(2)"]
-    M --> N["analyze():\nidentity_diffs = entries where A[r][c] != I[r][c]\nzero_cols: plaintext bits with no output effect\nzero_rows: ciphertext bits independent of plaintext\nVerdict: pure XOR / implementation bug / non-trivial mixing"]
+    A(["XorSolver(path)"]):::input --> B["solve(max_bytes=1MB)"]:::primary
+    B:::primary --> C["1. ic_key_length(data[:16384], max_len=128)\nFor shift 1..128: count byte matches at lag=shift\nIC = matches / (n-shift)\nIf IC/baseline ≥ 10.0 (baseline=1/256): spike found → key_length"]:::tertiary
+    C:::tertiary --> D{"IC spike?"}:::neutral
+    D:::neutral -->|yes| E["recover_by_frequency(key_length)\nSplit into key_length columns\nFor each column: most_common_byte XOR plaintext_assumption = key_byte\nplaintext_assumption=0x00 (RAM) or 0xFF (NAND)\nConfidence = entropy drop %"]:::tertiary
+    E:::tertiary --> F{"confidence ≥ 0.70?"}:::neutral
+    F:::neutral -->|yes| G(["Return XorSolverResult(method='ic+freq', key, confidence)"]):::output
+    F:::neutral -->|no| H["H"]:::tertiary
+    D:::neutral -->|no| H:::tertiary
+    H:::tertiary --> I{"KPA key found?"}:::neutral
+    I:::neutral -->|yes| G2(["Return XorSolverResult(method='kpa', magic_matched=label)"]):::output
+    I:::neutral -->|no| J["3. freq_attack()\nHamming distance key length: for each L, normalize HD(block1, block2)/bits\nMinimum avg Hamming distance → best_len\nScore each column byte against _X86_64_FREQS opcode distribution\nConfidence = 1 - |entropy_after - 5.0| / 3.0"]:::tertiary
+    J:::tertiary --> K(["Return best by confidence"]):::output
+    L(["AffineMapAnalyzer(encrypt_fn, block_size=16)"]):::input --> M["reconstruct():\nK_bits = E(0^n)\nFor each column col: E(e_col) XOR K_bits → A_col\nBuilds n×n matrix A over GF(2)"]:::secondary
+    M:::secondary --> N(["analyze():\nidentity_diffs = entries where A[r][c] != I[r][c]\nzero_cols: plaintext bits with no output effect\nzero_rows: ciphertext bits independent of plaintext\nVerdict: pure XOR / implementation bug / non-trivial mixing"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 2 stroke:#546e7a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#546e7a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#546e7a,stroke-width:2px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
+    linkStyle 12 stroke:#00695c,stroke-width:2px
+    linkStyle 13 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### KPA magic dictionary 14 entries

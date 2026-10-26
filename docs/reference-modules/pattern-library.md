@@ -18,19 +18,38 @@ Accumulate and replay semantic search queries that have produced confirmed RE fi
 
 ```mermaid
 flowchart TD
-    A["PatternLibrary()"] --> B["Load ~/.ablation/patterns.json"]
-    B --> C{file exists?}
-    C -->|no| D["_seed_defaults: load 30 default patterns (cmd-exec, buffer-overflow, format-string, etc.)"]
-    C -->|yes| E["Parse JSON → List[Pattern]"]
-    E --> F{stored schema_version < _SCHEMA_VERSION?}
-    F -->|yes| G["_merge_new_defaults: add new patterns, preserve all existing hits"]
-    F -->|no| H[No merge needed]
-    D & G & H --> I[PatternLibrary ready]
-    I --> J["sweep(searcher, top_k=5, min_score=0.3, tags=None)\nFor each pattern: searcher.query(pattern.query, top_k)\nFilter hits by score >= min_score\nReturn {query: SweepResult(pattern, tag, hits)}"]
-    I --> K["record_hit(query, binary, va, score, confirmed=False)\nDedup by binary+va\nIf confirmed=True and existing hit is not: upgrade it"]
-    I --> L["ingest_from_registry(reg)\nreg.export_patterns() → [{query, tag}]\nAdd each as pattern if not present\nReturn count added"]
-    I --> M["list(tag=None) → formatted table sorted by confirmed_hit_count"]
-    J --> N["For hits above threshold: record_hit(confirmed=False) then manually confirm → record_hit(confirmed=True)"]
+    A(["PatternLibrary()"]):::input --> B["Load ~/.ablation/patterns.json"]:::primary
+    B:::primary --> C{"file exists?"}:::neutral
+    C:::neutral -->|no| D["_seed_defaults: load 30 default patterns (cmd-exec, buffer-overflow, format-string, etc.)"]:::secondary
+    C:::neutral -->|yes| E["Parse JSON → List[Pattern]"]:::tertiary
+    E:::tertiary --> F{"stored schema_version < _SCHEMA_VERSION?"}:::neutral
+    F:::neutral -->|yes| G(["_merge_new_defaults: add new patterns, preserve all existing hits"]):::output
+    F:::neutral -->|no| H(["No merge needed"]):::output
+    D:::secondary --> I["PatternLibrary ready"]:::tertiary
+    I:::tertiary --> J["sweep(searcher, top_k=5, min_score=0.3, tags=None)\nFor each pattern: searcher.query(pattern.query, top_k)\nFilter hits by score >= min_score\nReturn {query: SweepResult(pattern, tag, hits)}"]:::tertiary
+    I:::tertiary --> K(["record_hit(query, binary, va, score, confirmed=False)\nDedup by binary+va\nIf confirmed=True and existing hit is not: upgrade it"]):::output
+    I:::tertiary --> L(["ingest_from_registry(reg)\nreg.export_patterns() → [{query, tag}]\nAdd each as pattern if not present\nReturn count added"]):::output
+    I:::tertiary --> M(["list(tag=None) → formatted table sorted by confirmed_hit_count"]):::output
+    J:::tertiary --> N(["For hits above threshold: record_hit(confirmed=False) then manually confirm → record_hit(confirmed=True)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#546e7a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
+    linkStyle 12 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Default pattern categories

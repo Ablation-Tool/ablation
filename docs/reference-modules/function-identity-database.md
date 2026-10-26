@@ -18,9 +18,18 @@ Persistent SQLite store of confirmed and inferred function records, prior RE fin
 
 ```mermaid
 flowchart TD
-    A["~/.ablation/findings.db\n  SQLite: user-local, never committed to git\nablation/data/seed_corpus.json\n  Shipped seed patterns from published CVEs"] --> B["FindingRegistry:\n  register(cve_id, description, func_va, binary, vendor, ...)\n  build_embeddings(model) → encode descriptions\n  find_similar(query, model, top_k, min_sim) → ranked findings\n  search(query, model, top_k) → full-text + vector search\n  prior_queries(top_n) → most common query strings\n  export_patterns(confirmed_only) → list of query strings\n  stats() → {'confirmed': N, 'inferred': M, 'seed': K}\n  list_findings(vendor, limit) → paginated finding list\n  unsynced_findings() → findings not yet in seed_corpus"]
-    B --> C["PatternLibrary (~/.ablation/patterns.json):\n  add(query, tag) → Pattern\n  record_hit(query, binary, va, confirmed) → PatternHit\n  sweep(searcher, top_k) → Dict[query, List[PatternHit]]\n  list() → all patterns with hit rates\n  save() → persist to patterns.json\n  confirmed_hit_count() → patterns with confirmed=True hits"]
-    B --> D["SigLibrary.known_signatures()\n  Reads func_id.db for CONFIRMED records\n  Returns as vector corpus for BERT matching"]
+    A(["~/.ablation/findings.db\n  SQLite: user-local, never committed to git\nablation/data/seed_corpus.json\n  Shipped seed patterns from published CVEs"]):::input --> B["FindingRegistry:\n  register(cve_id, description, func_va, binary, vendor, ...)\n  build_embeddings(model) → encode descriptions\n  find_similar(query, model, top_k, min_sim) → ranked findings\n  search(query, model, top_k) → full-text + vector search\n  prior_queries(top_n) → most common query strings\n  export_patterns(confirmed_only) → list of query strings\n  stats() → {'confirmed': N, 'inferred': M, 'seed': K}\n  list_findings(vendor, limit) → paginated finding list\n  unsynced_findings() → findings not yet in seed_corpus"]:::primary
+    B:::primary --> C(["PatternLibrary (~/.ablation/patterns.json):\n  add(query, tag) → Pattern\n  record_hit(query, binary, va, confirmed) → PatternHit\n  sweep(searcher, top_k) → Dict[query, List[PatternHit]]\n  list() → all patterns with hit rates\n  save() → persist to patterns.json\n  confirmed_hit_count() → patterns with confirmed=True hits"]):::output
+    B:::primary --> D(["SigLibrary.known_signatures()\n  Reads func_id.db for CONFIRMED records\n  Returns as vector corpus for BERT matching"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

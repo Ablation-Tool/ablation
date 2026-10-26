@@ -18,11 +18,22 @@ Detect format string vulnerabilities in x86-64 ELF binaries by identifying call 
 
 ```mermaid
 flowchart TD
-    A["FormatStringScanner.from_path(path)\n  or .from_context(ctx)"] --> B["scan() → List[FmtStringFinding]\n  Find all call sites for printf-family functions in PLT\n  printf/fprintf/snprintf/vprintf/vsprintf/syslog/err/warn\n  User-defined: register_fmt_func(name, fmt_arg_pos)"]
-    B --> C["For each call site:\n  Determine fmt register from callee:\n    printf     → rdi\n    fprintf    → rsi  (fd=rdi, fmt=rsi)\n    snprintf   → rdx  (buf=rdi, n=rsi, fmt=rdx)\n    __snprintf_chk → r8 (non-standard)\n    syslog     → rsi  (priority=rdi, fmt=rsi)"]
-    C --> D["Backward walk to find last fmt register definition:\n  LEA from .rodata? → SAFE (no finding)\n  MOV from entry register (rdi/rsi/rdx/rcx)? → HIGH finding\n  Stack load (MOV rdi, [rbp-N])? → MEDIUM finding\n  Cross-call result? → MEDIUM finding"]
-    D --> E["FmtStringFinding:\n  call_va, callee_name, fmt_reg\n  severity: 'HIGH' | 'MEDIUM'\n  provenance_insn: the instruction that defines fmt\n  verdict() → str\n  as_dict() → structured\n  fmt() → formatted block"]
-    E --> F["report(findings) → str\n  Summary by callee + severity"]
+    A(["FormatStringScanner.from_path(path)\n  or .from_context(ctx)"]):::input --> B["scan() → List[FmtStringFinding]\n  Find all call sites for printf-family functions in PLT\n  printf/fprintf/snprintf/vprintf/vsprintf/syslog/err/warn\n  User-defined: register_fmt_func(name, fmt_arg_pos)"]:::primary
+    B:::primary --> C["For each call site:\n  Determine fmt register from callee:\n    printf     → rdi\n    fprintf    → rsi  (fd=rdi, fmt=rsi)\n    snprintf   → rdx  (buf=rdi, n=rsi, fmt=rdx)\n    __snprintf_chk → r8 (non-standard)\n    syslog     → rsi  (priority=rdi, fmt=rsi)"]:::secondary
+    C:::secondary --> D["Backward walk to find last fmt register definition:\n  LEA from .rodata? → SAFE (no finding)\n  MOV from entry register (rdi/rsi/rdx/rcx)? → HIGH finding\n  Stack load (MOV rdi, [rbp-N])? → MEDIUM finding\n  Cross-call result? → MEDIUM finding"]:::tertiary
+    D:::tertiary --> E["FmtStringFinding:\n  call_va, callee_name, fmt_reg\n  severity: 'HIGH' | 'MEDIUM'\n  provenance_insn: the instruction that defines fmt\n  verdict() → str\n  as_dict() → structured\n  fmt() → formatted block"]:::tertiary
+    E:::tertiary --> F(["report(findings) → str\n  Summary by callee + severity"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

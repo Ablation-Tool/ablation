@@ -18,12 +18,24 @@ Retrieve relevant prior RE findings from `func_id.db` to inject into the LLM ana
 
 ```mermaid
 flowchart TD
-    A["RAGRetriever(db_path='~/.ablation/func_id.db')"] --> B["retrieve(func_addr, ctx) → List[dict]\n  Budget: _MAX_RESULTS = 8 records, token-trimmed\n  Strategy execution order:"]
-    B --> C["1. Exact VA + binary match:\n   SELECT * FROM func_id WHERE func_va=? AND binary=?\n   Confidence: CONFIRMED or ANGR_INFERRED\n   → returns up to 1 result"]
-    C --> D["2. Callee-set overlap:\n   Get ctx.callees_of(func_addr) → PLT names\n   SELECT * FROM func_id WHERE call_targets LIKE '%name%'\n   Score by overlap_score() = |A ∩ B| / |A ∪ B|\n   → up to _MAX_IMPORT_OVERLAP_RESULTS = 4 results"]
-    D --> E["3. Role-based match:\n   Infer role from ctx.callees_of() heuristic\n   SELECT * FROM func_id WHERE role LIKE '%role%'\n   → fills remaining budget"]
-    E --> F["4. Name fuzzy match:\n   SELECT * FROM func_id WHERE name LIKE '%token%'\n   WHERE token derived from VA hex or nearest string xref\n   → fills remaining budget"]
-    F --> G["Results: ranked, deduped, token-trimmed to budget\n  Each result: name, role, call_targets, string_xrefs,\n  notes, confidence, vendor, product"]
+    A(["RAGRetriever(db_path='~/.ablation/func_id.db')"]):::input --> B["retrieve(func_addr, ctx) → List[dict]\n  Budget: _MAX_RESULTS = 8 records, token-trimmed\n  Strategy execution order:"]:::primary
+    B:::primary --> C["1. Exact VA + binary match:\n   SELECT * FROM func_id WHERE func_va=? AND binary=?\n   Confidence: CONFIRMED or ANGR_INFERRED\n   → returns up to 1 result"]:::secondary
+    C:::secondary --> D["2. Callee-set overlap:\n   Get ctx.callees_of(func_addr) → PLT names\n   SELECT * FROM func_id WHERE call_targets LIKE '%name%'\n   Score by overlap_score() = |A ∩ B| / |A ∪ B|\n   → up to _MAX_IMPORT_OVERLAP_RESULTS = 4 results"]:::tertiary
+    D:::tertiary --> E["3. Role-based match:\n   Infer role from ctx.callees_of() heuristic\n   SELECT * FROM func_id WHERE role LIKE '%role%'\n   → fills remaining budget"]:::tertiary
+    E:::tertiary --> F["4. Name fuzzy match:\n   SELECT * FROM func_id WHERE name LIKE '%token%'\n   WHERE token derived from VA hex or nearest string xref\n   → fills remaining budget"]:::tertiary
+    F:::tertiary --> G(["Results: ranked, deduped, token-trimmed to budget\n  Each result: name, role, call_targets, string_xrefs,\n  notes, confidence, vendor, product"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

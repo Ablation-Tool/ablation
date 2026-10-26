@@ -18,10 +18,20 @@ Build a lightweight `SourceContext` index over a local or remote git repository:
 
 ```mermaid
 flowchart TD
-    A["SourceContext.from_path(root) → SourceContext\n  or SourceContext.from_git(url, dest) → SourceContext\n    git clone --depth 1 <url> <dest>\n    then from_path(dest)"] --> B["_walk_source_files(root) → List[Path]\n  Recursively walk; skip: node_modules, .git, build/, dist/\n  Collect: *.py *.ts *.tsx *.js *.jsx *.rb *.go *.java *.php *.cs"]
-    B --> C["_detect_package_roots(root) → List[Path]\n  Locate package.json, setup.py, pom.xml, go.mod\n  → framework hints per package root"]
-    C --> D["Per-file classification:\n  _is_route_file(path) → bool\n    Grep for route-registration patterns:\n      router.get/post/put/delete  (Express)\n      @app.route/@bp.route         (Flask)\n      @GetMapping/@PostMapping     (Spring)\n      urlpatterns                  (Django)\n  → route_files: List[Path]\n  → all_files: List[Path]  (full index)"]
-    D --> E["SourceContext attributes:\n  root: Path\n  all_files: List[Path]\n  route_files: List[Path]\n  package_roots: List[Path]\n  summary() → str"]
+    A(["SourceContext.from_path(root) → SourceContext\n  or SourceContext.from_git(url, dest) → SourceContext\n    git clone --depth 1 <url> <dest>\n    then from_path(dest)"]):::input --> B["_walk_source_files(root) → List[Path]\n  Recursively walk; skip: node_modules, .git, build/, dist/\n  Collect: *.py *.ts *.tsx *.js *.jsx *.rb *.go *.java *.php *.cs"]:::primary
+    B:::primary --> C["_detect_package_roots(root) → List[Path]\n  Locate package.json, setup.py, pom.xml, go.mod\n  → framework hints per package root"]:::secondary
+    C:::secondary --> D["Per-file classification:\n  _is_route_file(path) → bool\n    Grep for route-registration patterns:\n      router.get/post/put/delete  (Express)\n      @app.route/@bp.route         (Flask)\n      @GetMapping/@PostMapping     (Spring)\n      urlpatterns                  (Django)\n  → route_files: List[Path]\n  → all_files: List[Path]  (full index)"]:::tertiary
+    D:::tertiary --> E(["SourceContext attributes:\n  root: Path\n  all_files: List[Path]\n  route_files: List[Path]\n  package_roots: List[Path]\n  summary() → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

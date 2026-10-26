@@ -18,9 +18,18 @@ Probe Cisco SD-WAN vManage controller for unauthenticated REST API access and po
 
 ```mermaid
 flowchart TD
-    A["probe_cisco_sdwan_vmanage_exposure(host, port=8443) → list\n  HTTPS GET / → fingerprint: 'cisco vmanage'/'sd-wan' in body\n    → VMANAGE_PORTAL_FINGERPRINT\n  GET /dataservice/device → check 200 vs 401\n    200: unauthenticated device inventory read\n    → VMANAGE_UNAUTH_API\n  GET /dataservice/template/device → template list\n  GET /dataservice/certificate/vedge/list → PKI trust\n  → [{finding, url, status_code, detail}]"] --> B["probe_cisco_meraki_api_exposure(host, port=443) → list\n  HTTPS GET /api/v1/status/wan → local status check\n  HTTP GET :80/ → local status page\n    Fingerprint: SSID, VLAN, uplink info in body\n    → MERAKI_STATUS_PAGE_EXPOSED\n  Scan environment + config files for:\n    X-Cisco-Meraki-API-Key header pattern\n    MERAKI_API_KEY env var\n    → MERAKI_API_KEY_EXPOSED"]
-    B --> C["vManage findings by severity:\n  VMANAGE_PORTAL_FINGERPRINT: MEDIUM\n    (controller identified, auth status unknown)\n  VMANAGE_UNAUTH_API: CRITICAL\n    (device inventory and templates accessible)\n  VMANAGE_CERT_EXPOSURE: HIGH\n    (PKI trust chain for edge devices readable)"]
-    C --> D["Meraki findings by severity:\n  MERAKI_STATUS_PAGE_EXPOSED: MEDIUM\n    (SSID/VLAN/IP disclosure without credentials)\n  MERAKI_DEFAULT_CREDS: HIGH\n    (admin:admin accepted on MX management UI)\n  MERAKI_API_KEY_EXPOSED: CRITICAL\n    (dashboard API key in env or config)"]
+    A(["probe_cisco_sdwan_vmanage_exposure(host, port=8443) → list\n  HTTPS GET / → fingerprint: 'cisco vmanage'/'sd-wan' in body\n    → VMANAGE_PORTAL_FINGERPRINT\n  GET /dataservice/device → check 200 vs 401\n    200: unauthenticated device inventory read\n    → VMANAGE_UNAUTH_API\n  GET /dataservice/template/device → template list\n  GET /dataservice/certificate/vedge/list → PKI trust\n  → [{finding, url, status_code, detail}]"]):::input --> B["probe_cisco_meraki_api_exposure(host, port=443) → list\n  HTTPS GET /api/v1/status/wan → local status check\n  HTTP GET :80/ → local status page\n    Fingerprint: SSID, VLAN, uplink info in body\n    → MERAKI_STATUS_PAGE_EXPOSED\n  Scan environment + config files for:\n    X-Cisco-Meraki-API-Key header pattern\n    MERAKI_API_KEY env var\n    → MERAKI_API_KEY_EXPOSED"]:::primary
+    B:::primary --> C["vManage findings by severity:\n  VMANAGE_PORTAL_FINGERPRINT: MEDIUM\n    (controller identified, auth status unknown)\n  VMANAGE_UNAUTH_API: CRITICAL\n    (device inventory and templates accessible)\n  VMANAGE_CERT_EXPOSURE: HIGH\n    (PKI trust chain for edge devices readable)"]:::secondary
+    C:::secondary --> D(["Meraki findings by severity:\n  MERAKI_STATUS_PAGE_EXPOSED: MEDIUM\n    (SSID/VLAN/IP disclosure without credentials)\n  MERAKI_DEFAULT_CREDS: HIGH\n    (admin:admin accepted on MX management UI)\n  MERAKI_API_KEY_EXPOSED: CRITICAL\n    (dashboard API key in env or config)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

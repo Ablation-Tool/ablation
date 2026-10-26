@@ -18,11 +18,22 @@ Locate functions that walk a `[start, end)` range from adjacent pointer-sized BS
 
 ```mermaid
 flowchart TD
-    A["BssTaintTracker.analyze(fn: Function) → Optional[dict]"] --> B["Phase 1: BSS symbol collection\n  Scan function for: mov reg, [abs_addr]\n  where abs_addr is in a BSS-like region\n  (address above .text, below stack, no .rodata overlap)\n  Collect: BSSSymbol(addr, reg, basic_block_id)"]
-    B --> C["Phase 2: Adjacent pair detection\n  Find two BSSSymbol entries in the same basic block:\n    addr_b == addr_a + sizeof(pointer)  (8 bytes on x86_64)\n  → (start_sym, end_sym) pair candidate"]
-    C --> D["Phase 3: Forward taint propagation (register-level)\n  Seed: start_reg and end_reg tainted\n  Propagate through CFG:\n    Register moves propagate taint\n    Arithmetic preserves taint\n    Unknown calls clear caller-saved regs"]
-    D --> E["Phase 4: Loop back-edge detection\n  Find back-edges (successor dominates predecessor)\n  At back-edge: is a tainted reg used as:\n    Memory base: [tainted_reg]\n    Comparison bound: cmp tainted_reg, end_reg?\n  If yes → DECRYPT_LOOP candidate"]
-    E --> F["Returns:\n  {'decrypt_va': va, 'start_sym': addr, 'end_sym': addr}\n  None if no loop found"]
+    A(["BssTaintTracker.analyze(fn: Function) → Optional[dict]"]):::input --> B["Phase 1: BSS symbol collection\n  Scan function for: mov reg, [abs_addr]\n  where abs_addr is in a BSS-like region\n  (address above .text, below stack, no .rodata overlap)\n  Collect: BSSSymbol(addr, reg, basic_block_id)"]:::primary
+    B:::primary --> C["Phase 2: Adjacent pair detection\n  Find two BSSSymbol entries in the same basic block:\n    addr_b == addr_a + sizeof(pointer)  (8 bytes on x86_64)\n  → (start_sym, end_sym) pair candidate"]:::secondary
+    C:::secondary --> D["Phase 3: Forward taint propagation (register-level)\n  Seed: start_reg and end_reg tainted\n  Propagate through CFG:\n    Register moves propagate taint\n    Arithmetic preserves taint\n    Unknown calls clear caller-saved regs"]:::tertiary
+    D:::tertiary --> E["Phase 4: Loop back-edge detection\n  Find back-edges (successor dominates predecessor)\n  At back-edge: is a tainted reg used as:\n    Memory base: [tainted_reg]\n    Comparison bound: cmp tainted_reg, end_reg?\n  If yes → DECRYPT_LOOP candidate"]:::tertiary
+    E:::tertiary --> F(["Returns:\n  {'decrypt_va': va, 'start_sym': addr, 'end_sym': addr}\n  None if no loop found"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

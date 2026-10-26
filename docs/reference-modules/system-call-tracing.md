@@ -18,18 +18,36 @@ Attach to a running process via `strace` (Linux) or `dtruss` (macOS) and summari
 
 ```mermaid
 flowchart TD
-    A["SyscallTracer(pid=N)"] --> B["trace_process(duration=5)"]
-    B --> C{platform}
-    C -->|Linux| D["strace -p PID -c -f -e trace=all -T\nCaptures all syscalls, child processes (-f), per-call timing (-T)"]
-    C -->|macOS| E["dtruss -p PID\nRequires root + SIP disabled"]
-    D --> F["Subprocess.run(timeout=duration)\nOn TimeoutExpired: parse partial strace -c output from stderr"]
-    F --> G["_parse_strace_summary(stderr)\nParse strace summary table:\n% time | seconds | usecs/call | calls | errors | syscall\nSort by call count descending"]
-    G --> H["{'total_calls': N, 'total_errors': N, 'syscalls': [...]}\n\neach syscall: {name, calls, errors, time_percent, total_time}"]
-    H --> I["report(stats) → formatted table"]
-    A --> J["trace_detailed(duration, syscall_filter='open,read,write,...')"]
-    J --> K["strace -p PID -f -s 256 -v -tt -e trace=<filter>\n-s 256: include up to 256 bytes of string arguments\n-v: verbose (show full structs)"]
-    K --> L["_parse_strace_detailed(stderr)\nRegex: timestamp syscall(args) = retval\nList[{timestamp, syscall, args, return, error}]"]
-    L --> M["Focused analysis methods:\nanalyze_file_access(): open/openat/read/write/close/stat\nanalyze_network(): socket/connect/bind/listen/accept/send/recv\nanalyze_process_ops(): fork/clone/execve/exit/kill/wait4"]
+    A(["SyscallTracer(pid=N)"]):::input --> B["trace_process(duration=5)"]:::primary
+    B:::primary --> C{"platform"}:::neutral
+    C:::neutral -->|Linux| D["strace -p PID -c -f -e trace=all -T\nCaptures all syscalls, child processes (-f), per-call timing (-T)"]:::tertiary
+    C:::neutral -->|macOS| E(["dtruss -p PID\nRequires root + SIP disabled"]):::output
+    D:::tertiary --> F["Subprocess.run(timeout=duration)\nOn TimeoutExpired: parse partial strace -c output from stderr"]:::tertiary
+    F:::tertiary --> G["_parse_strace_summary(stderr)\nParse strace summary table:\n% time | seconds | usecs/call | calls | errors | syscall\nSort by call count descending"]:::tertiary
+    G:::tertiary --> H["{'total_calls': N, 'total_errors': N, 'syscalls': [...]}\n\neach syscall: {name, calls, errors, time_percent, total_time}"]:::tertiary
+    H:::tertiary --> I(["report(stats) → formatted table"]):::output
+    A:::input --> J["trace_detailed(duration, syscall_filter='open,read,write,...')"]:::secondary
+    J:::secondary --> K["strace -p PID -f -s 256 -v -tt -e trace=<filter>\n-s 256: include up to 256 bytes of string arguments\n-v: verbose (show full structs)"]:::tertiary
+    K:::tertiary --> L["_parse_strace_detailed(stderr)\nRegex: timestamp syscall(args) = retval\nList[{timestamp, syscall, args, return, error}]"]:::tertiary
+    L:::tertiary --> M(["Focused analysis methods:\nanalyze_file_access(): open/openat/read/write/close/stat\nanalyze_network(): socket/connect/bind/listen/accept/send/recv\nanalyze_process_ops(): fork/clone/execve/exit/kill/wait4"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#00695c,stroke-width:2px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

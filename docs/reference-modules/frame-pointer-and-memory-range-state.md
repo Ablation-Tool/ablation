@@ -18,15 +18,30 @@ Enumerate the COM attack surface of a Windows PE binary: detecting self-register
 
 ```mermaid
 flowchart TD
-    A["COMAttackSurfaceMapper.from_path(path)"] --> B["is_com_server() → bool\n  Check PE exports for DllRegisterServer\n  Check PE exports for DllGetClassObject"]
-    B --> C["com_server_exports() → List[str]\n  All COM-related PE exports:\n  DllRegisterServer, DllUnregisterServer,\n  DllGetClassObject, DllCanUnloadNow"]
-    A --> D["referenced_clsids() → List[str]\n  Scan .rdata, .data, strings table\n  Match GUID regex pattern\n  Return deduplicated CLSID list"]
-    A --> E["cocreate_sites() → List[Tuple[int, Optional[str]]]\n  Find CoCreateInstance / CoCreateInstanceEx call VAs\n  Extract CLSID argument (if compile-time constant in .rdata)\n  → (call_va, clsid_str_or_None)"]
-    B --> F["scan() → List[COMFinding]"]
-    C --> F
-    D --> F
-    E --> F
-    F --> G["COMFinding:\n  severity: str\n  clsid: Optional[str]\n  finding_class: str\n  detail: str\n  fmt() → str"]
+    A(["COMAttackSurfaceMapper.from_path(path)"]):::input --> B["is_com_server() → bool\n  Check PE exports for DllRegisterServer\n  Check PE exports for DllGetClassObject"]:::primary
+    B:::primary --> C["com_server_exports() → List[str]\n  All COM-related PE exports:\n  DllRegisterServer, DllUnregisterServer,\n  DllGetClassObject, DllCanUnloadNow"]:::tertiary
+    A:::input --> D["referenced_clsids() → List[str]\n  Scan .rdata, .data, strings table\n  Match GUID regex pattern\n  Return deduplicated CLSID list"]:::secondary
+    A:::input --> E["cocreate_sites() → List[Tuple[int, Optional[str]]]\n  Find CoCreateInstance / CoCreateInstanceEx call VAs\n  Extract CLSID argument (if compile-time constant in .rdata)\n  → (call_va, clsid_str_or_None)"]:::tertiary
+    B:::primary --> F["scan() → List[COMFinding]"]:::tertiary
+    C:::tertiary --> F:::tertiary
+    D:::secondary --> F:::tertiary
+    E:::tertiary --> F:::tertiary
+    F:::tertiary --> G(["COMFinding:\n  severity: str\n  clsid: Optional[str]\n  finding_class: str\n  detail: str\n  fmt() → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

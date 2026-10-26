@@ -18,9 +18,18 @@ Track data flow through LoongArch64 binaries using a labeled taint model: propag
 
 ```mermaid
 flowchart TD
-    A["LoongArch64TaintTracker.from_path(path)"] --> B["run_interprocedural() → List[TaintFindingLA64]\n  For each function in text section:\n    Initialize: $a0–$a7 untainted at entry\n    Source identification:\n      BL recv/recvfrom/fgets/read/gets/fread\n      Return value $a0 → Taint(labels={source_name}, bound=None)\n    Propagation rules:\n      mov: copy taint\n      andi Rd, Rs, N: Rd.bound = N (bit mask bound)\n      addi.d Rs, $sp, N: frame-offset rebase\n      Arithmetic: join labels, preserve bound if unchanged\n      BL callee: caller-saved $a0–$t8 clobbered\n    Sink detection:\n      BL sink: check tainted arg registers\n      → TaintFindingLA64"]
-    B --> C["Internal Taint state:\n  labels: frozenset  (source identifiers)\n  bound: Optional[int]  (upper bit-mask bound)"]
-    C --> D["TaintFindingLA64:\n  func_va, func_name, sink_va, sink_name\n  tainted_args: List[str]  ($a0/$a1/...)\n  source_name: str\n  severity: str"]
+    A(["LoongArch64TaintTracker.from_path(path)"]):::input --> B["run_interprocedural() → List[TaintFindingLA64]\n  For each function in text section:\n    Initialize: $a0·$a7 untainted at entry\n    Source identification:\n      BL recv/recvfrom/fgets/read/gets/fread\n      Return value $a0 → Taint(labels={source_name}, bound=None)\n    Propagation rules:\n      mov: copy taint\n      andi Rd, Rs, N: Rd.bound = N (bit mask bound)\n      addi.d Rs, $sp, N: frame-offset rebase\n      Arithmetic: join labels, preserve bound if unchanged\n      BL callee: caller-saved $a0·$t8 clobbered\n    Sink detection:\n      BL sink: check tainted arg registers\n      → TaintFindingLA64"]:::primary
+    B:::primary --> C["Internal Taint state:\n  labels: frozenset  (source identifiers)\n  bound: Optional[int]  (upper bit-mask bound)"]:::secondary
+    C:::secondary --> D(["TaintFindingLA64:\n  func_va, func_name, sink_va, sink_name\n  tainted_args: List[str]  ($a0/$a1/...)\n  source_name: str\n  severity: str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

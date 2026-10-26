@@ -18,10 +18,20 @@ Decode Motorola M68K/CPU32 ECU firmware via Capstone with GM P-series PCM P01, P
 
 ```mermaid
 flowchart TD
-    A["EcuM68kDecoder.from_path(path, base_va)\n  or .from_bytes(data, base_va)"] --> B["decode_one(offset) → Optional[M68kInsn]\n  Capstone CS_ARCH_M68K / CS_MODE_M68K_020\n  M68kInsn: address, mnemonic, op_str, size (2/4/6/8 bytes)"]
-    B --> C["disassemble(start_va, end_va) → Iterator[M68kInsn]\n  Sequential decode from start_va to end_va"]
-    C --> D["function_starts() → List[int]\n  Scan full ROM for:\n    LINK.W A6, #-N  (GM standard frame allocation)\n    MOVEM.L regs, -(SP)  (callee-save without frame pointer)\n  Return sorted list of start addresses"]
-    D --> E["insn_length(byte_off) → int\n  M68K variable instruction length: 2, 4, 6, or 8 bytes\n  Determined from opcode word at byte_off"]
+    A(["EcuM68kDecoder.from_path(path, base_va)\n  or .from_bytes(data, base_va)"]):::input --> B["decode_one(offset) → Optional[M68kInsn]\n  Capstone CS_ARCH_M68K / CS_MODE_M68K_020\n  M68kInsn: address, mnemonic, op_str, size (2/4/6/8 bytes)"]:::primary
+    B:::primary --> C["disassemble(start_va, end_va) → Iterator[M68kInsn]\n  Sequential decode from start_va to end_va"]:::secondary
+    C:::secondary --> D["function_starts() → List[int]\n  Scan full ROM for:\n    LINK.W A6, #-N  (GM standard frame allocation)\n    MOVEM.L regs, -(SP)  (callee-save without frame pointer)\n  Return sorted list of start addresses"]:::tertiary
+    D:::tertiary --> E(["insn_length(byte_off) → int\n  M68K variable instruction length: 2, 4, 6, or 8 bytes\n  Determined from opcode word at byte_off"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

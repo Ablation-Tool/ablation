@@ -18,10 +18,20 @@ Parse ARP tables and routing tables, discover adjacent subnets, harvest credenti
 
 ```mermaid
 flowchart TD
-    A["modules/lateral_movement.py"] --> B["NetworkDiscovery:\n  parse_arp_table() → [(ip, mac)]\n  parse_route_table() → populates nd.routes [{iface,dest,gw,mask,flags}]\n  scan_subnets([cidr_list], ports=[22,80,443,3306,5432]) → populates nd.live_hosts\n    nd.live_hosts: {ip: {port: banner}}\n    Threaded TCP connect scan"]
-    B --> C["CredentialHarvester:\n  harvest_netrc() → List[dict]  /home/*/.netrc\n  harvest_git_credentials() → List[dict]  .git/config, .gitconfig\n  harvest_ssh_keys() → via SSHKeyEnumerator\n  harvest_env_tokens() → APITokenDetector (env vars)"]
-    C --> D["CloudMetadataProber:\n  probe_all() → self.results dict\n    aws_imdsv1: {status, keys}\n    aws_imdsv2: {status, token}\n    aws_iam_creds: {role, credentials_json}\n    gcp_metadata: {status, project_id, service_accounts, ...}\n    azure_imds: {status, subscription_id, ...}\n    oci_imds: {status, ...}\n  Note: probe_aws/gcp/azure/oci are private — call probe_all() only"]
-    D --> E["APITokenDetector:\n  scan_env_variables() → List[dict]\n    os.environ: match API_KEY, TOKEN, SECRET, AWS_*, GITHUB_TOKEN\n  scan_config_files(paths) → List[dict]\n    Regex for token-like strings in /etc/, /opt/, ~/.config/"]
+    A(["modules/lateral_movement.py"]):::input --> B["NetworkDiscovery:\n  parse_arp_table() → [(ip, mac)]\n  parse_route_table() → populates nd.routes [{iface,dest,gw,mask,flags}]\n  scan_subnets([cidr_list], ports=[22,80,443,3306,5432]) → populates nd.live_hosts\n    nd.live_hosts: {ip: {port: banner}}\n    Threaded TCP connect scan"]:::primary
+    B:::primary --> C["CredentialHarvester:\n  harvest_netrc() → List[dict]  /home/*/.netrc\n  harvest_git_credentials() → List[dict]  .git/config, .gitconfig\n  harvest_ssh_keys() → via SSHKeyEnumerator\n  harvest_env_tokens() → APITokenDetector (env vars)"]:::secondary
+    C:::secondary --> D["CloudMetadataProber:\n  probe_all() → self.results dict\n    aws_imdsv1: {status, keys}\n    aws_imdsv2: {status, token}\n    aws_iam_creds: {role, credentials_json}\n    gcp_metadata: {status, project_id, service_accounts, ...}\n    azure_imds: {status, subscription_id, ...}\n    oci_imds: {status, ...}\n  Note: probe_aws/gcp/azure/oci are private · call probe_all() only"]:::tertiary
+    D:::tertiary --> E(["APITokenDetector:\n  scan_env_variables() → List[dict]\n    os.environ: match API_KEY, TOKEN, SECRET, AWS_*, GITHUB_TOKEN\n  scan_config_files(paths) → List[dict]\n    Regex for token-like strings in /etc/, /opt/, ~/.config/"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

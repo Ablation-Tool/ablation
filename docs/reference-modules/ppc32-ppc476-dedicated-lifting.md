@@ -18,12 +18,22 @@ Python-native PPC32 BE function pseudo-code lifter (`Ppc32Lifter`) and IBM PPC47
 
 ```mermaid
 flowchart TD
-    A["Ppc32Lifter.from_context(ctx)"] --> B["lift(func_va, n_insn=150) → str\n  Linear disassembly of n_insn PPC32 instructions\n  from func_va\n  Outputs VA-tagged pseudo-C lines:\n    named stack locals (local_0xNN)\n    typed loads (uint32_t, uint16_t, uint8_t, float)\n    decoded conditions (if (rN > imm) goto loc_X)\n    PLT calls with arg register values at call time"]
+    A(["Ppc32Lifter.from_context(ctx)"]):::input --> B(["lift(func_va, n_insn=150) → str\n  Linear disassembly of n_insn PPC32 instructions\n  from func_va\n  Outputs VA-tagged pseudo-C lines:\n    named stack locals (local_0xNN)\n    typed loads (uint32_t, uint16_t, uint8_t, float)\n    decoded conditions (if (rN > imm) goto loc_X)\n    PLT calls with arg register values at call time"]):::output
 
-    C["Ppc476Decompiler(ctx)"] --> D["decompile(func_va) → str\n  Ppc32Lifter output + CFG construction\n  Back-edge annotation (loop detection)\n  GOT/TOC load annotation (r2-based)\n  Named: TOC entry → symbol_name via GOT map"]
+    C(["Ppc476Decompiler(ctx)"]):::input --> D(["decompile(func_va) → str\n  Ppc32Lifter output + CFG construction\n  Back-edge annotation (loop detection)\n  GOT/TOC load annotation (r2-based)\n  Named: TOC entry → symbol_name via GOT map"]):::output
 
-    E["Ppc64ElfV1Resolver.from_path(path) or\nPpc64ElfV1Resolver.from_context(ctx)"] --> F["resolve() → Ppc64ElfV1Info:\n  opd_map: Dict[opd_va, code_va]\n    (code_ptr field of each OPD descriptor)\n  plt_map: Dict[code_va, symbol_name]\n    (glink stubs → PLT symbol names)\n  bl_target(src_va, data): resolve BL offset to VA"]
-    F --> G["patch_context(ctx) → None\n  Inject plt_map into ctx.plt\n  Update ctx.func_starts with code VAs\n  (OPD VAs replaced by actual code entry VAs)"]
+    E(["Ppc64ElfV1Resolver.from_path(path) or\nPpc64ElfV1Resolver.from_context(ctx)"]):::input --> F["resolve() → Ppc64ElfV1Info:\n  opd_map: Dict[opd_va, code_va]\n    (code_ptr field of each OPD descriptor)\n  plt_map: Dict[code_va, symbol_name]\n    (glink stubs → PLT symbol names)\n  bl_target(src_va, data): resolve BL offset to VA"]:::primary
+    F:::primary --> G(["patch_context(ctx) → None\n  Inject plt_map into ctx.plt\n  Update ctx.func_starts with code VAs\n  (OPD VAs replaced by actual code entry VAs)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#2e7d32,stroke-width:3px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#bf360c,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

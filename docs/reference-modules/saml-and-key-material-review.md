@@ -18,9 +18,18 @@ Detect SAML assertion wrapping vulnerability surfaces, extract PEM-encoded RSA/E
 
 ```mermaid
 flowchart TD
-    A["CryptoAudit.check_saml_wrapping_risk(saml_xml) → dict\n  Parse XML (xml.etree)\n  Check: ds:Signature references Response vs Assertion\n  Check: AssertionConsumerServiceURL validation present\n  Check: multiple Assertion elements (XSW indicator)\n  → {xsw_risk: bool, reasoning: str, signature_scope: str}"] --> B["KeyCryptoAnalyzer(data: bytes) → analyzer\n  Scan for PEM markers in binary data\n    -----BEGIN RSA PRIVATE KEY-----\n    -----BEGIN EC PRIVATE KEY-----\n    -----BEGIN CERTIFICATE-----\n  Scan for DER RSA sequence magic (0x30 0x82)\n  → List[KeyMaterial]"]
-    B --> C["KeyMaterial:\n  key_type: RSA_PRIVATE / EC_PRIVATE / CERTIFICATE\n  offset: int (byte offset in binary)\n  pem_block: str\n  _estimate_rsa_bits() → key size in bits\n  → {type, offset, size_bits, pem_block}"]
-    C --> D["check_key_management_weakness(config_text) → list\n  Scan for:\n    jwt_secret < 32 chars\n    hardcoded AES/DES key patterns\n    SSL_VERIFY=false / verify=False\n    PRIVATE_KEY= inline\n  → [{weakness_type, value_snippet, severity}]"]
+    A(["CryptoAudit.check_saml_wrapping_risk(saml_xml) → dict\n  Parse XML (xml.etree)\n  Check: ds:Signature references Response vs Assertion\n  Check: AssertionConsumerServiceURL validation present\n  Check: multiple Assertion elements (XSW indicator)\n  → {xsw_risk: bool, reasoning: str, signature_scope: str}"]):::input --> B["KeyCryptoAnalyzer(data: bytes) → analyzer\n  Scan for PEM markers in binary data\n    -----BEGIN RSA PRIVATE KEY-----\n    -----BEGIN EC PRIVATE KEY-----\n    -----BEGIN CERTIFICATE-----\n  Scan for DER RSA sequence magic (0x30 0x82)\n  → List[KeyMaterial]"]:::primary
+    B:::primary --> C["KeyMaterial:\n  key_type: RSA_PRIVATE / EC_PRIVATE / CERTIFICATE\n  offset: int (byte offset in binary)\n  pem_block: str\n  _estimate_rsa_bits() → key size in bits\n  → {type, offset, size_bits, pem_block}"]:::secondary
+    C:::secondary --> D(["check_key_management_weakness(config_text) → list\n  Scan for:\n    jwt_secret < 32 chars\n    hardcoded AES/DES key patterns\n    SSL_VERIFY=false / verify=False\n    PRIVATE_KEY= inline\n  → [{weakness_type, value_snippet, severity}]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

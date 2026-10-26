@@ -18,9 +18,18 @@ Detect the GCC 12.3.1.7 LoongArch64 `min`-to-`max` code generation bug: identify
 
 ```mermaid
 flowchart TD
-    A["LA64MaxNotMinScanner.from_path(path)\n  or .from_pe32plus(data, image_base)"] --> B["scan() → List[LA64MaxNotMinFinding]\n  Pattern 1: register-compare variant\n    sltu  Rcond, Ra, Rb\n    masknez Rtmp1, Rb, Rcond   ← wrong order → max\n    maskeqz Rtmp2, Ra, Rcond\n    or Rout, Rtmp2, Rtmp1\n    (correct min would swap masknez/maskeqz)\n  Pattern 2: immediate-compare variant\n    sltui/slti Rcond, Ra, N\n    masknez Rtmp1, Rconst, Rcond\n    maskeqz Rtmp2, Ra, Rcond\n    or Rout, Rtmp2, Rtmp1\n  For each match: check if Rout flows to memory sink\n    → LA64MaxNotMinFinding"]
-    B --> C["LA64MaxNotMinFinding:\n  func_va: int\n  pattern_va: int  (VA of slt/sltu)\n  result_name: str  (ABI reg name)\n  sink_va: int\n  sink_name: str  (PLT symbol)\n  sink_arg: str\n  fp_class: str  ('' | 'vec_growth' | 'copy_limit')\n  compare_op: str  ('sltu' | 'slt')"]
-    C --> D["report(findings) → str"]
+    A(["LA64MaxNotMinScanner.from_path(path)\n  or .from_pe32plus(data, image_base)"]):::input --> B["scan() → List[LA64MaxNotMinFinding]\n  Pattern 1: register-compare variant\n    sltu  Rcond, Ra, Rb\n    masknez Rtmp1, Rb, Rcond   ← wrong order → max\n    maskeqz Rtmp2, Ra, Rcond\n    or Rout, Rtmp2, Rtmp1\n    (correct min would swap masknez/maskeqz)\n  Pattern 2: immediate-compare variant\n    sltui/slti Rcond, Ra, N\n    masknez Rtmp1, Rconst, Rcond\n    maskeqz Rtmp2, Ra, Rcond\n    or Rout, Rtmp2, Rtmp1\n  For each match: check if Rout flows to memory sink\n    → LA64MaxNotMinFinding"]:::primary
+    B:::primary --> C["LA64MaxNotMinFinding:\n  func_va: int\n  pattern_va: int  (VA of slt/sltu)\n  result_name: str  (ABI reg name)\n  sink_va: int\n  sink_name: str  (PLT symbol)\n  sink_arg: str\n  fp_class: str  ('' | 'vec_growth' | 'copy_limit')\n  compare_op: str  ('sltu' | 'slt')"]:::secondary
+    C:::secondary --> D(["report(findings) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

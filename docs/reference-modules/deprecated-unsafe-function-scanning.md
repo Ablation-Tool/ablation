@@ -18,12 +18,24 @@ Detect CWE-242/CWE-377 in stripped binaries without taint analysis: identifying 
 
 ```mermaid
 flowchart TD
-    A["DeprecatedFuncScanner.from_context(ctx) or\nDeprecatedFuncScanner.from_path(path)"] --> B["Check PLT for deprecated symbols:\n  gets, _gets, fgets_unlocked\n  → CWE-242 (stack overflow, no safe use)\n  mktemp, tmpnam, tmpnam_r, tempnam\n  → CWE-377 (insecure temp file)\n  getwd\n  → CWE-242 (fixed buffer, no size limit)"]
-    B --> C["For each deprecated PLT entry:\n  Find all call sites (XRef from PLT VA)\n  → List of call VAs"]
-    C --> D["For each gets() call site:\n  Backtrack to preceding LEA/SUB instruction\n  Look for: lea rdi, [rbp-N] or sub rsp, N\n  → buffer_offset = N = bytes to saved RIP"]
-    D --> E["Walk call graph one level up:\n  ctx.call_edges: caller → callee set\n  Find all functions that call this function\n  → reachability_chain: List[str]"]
-    E --> F["DeprecatedHit:\n  func_sym: str (e.g. 'gets')\n  cwe: str ('CWE-242' or 'CWE-377')\n  call_va: int\n  buffer_offset: Optional[int]\n  reachability: List[str] (caller function names)"]
-    F --> G["scan() → List[DeprecatedHit]\nreport(hits) → str"]
+    A(["DeprecatedFuncScanner.from_context(ctx) or\nDeprecatedFuncScanner.from_path(path)"]):::input --> B["Check PLT for deprecated symbols:\n  gets, _gets, fgets_unlocked\n  → CWE-242 (stack overflow, no safe use)\n  mktemp, tmpnam, tmpnam_r, tempnam\n  → CWE-377 (insecure temp file)\n  getwd\n  → CWE-242 (fixed buffer, no size limit)"]:::primary
+    B:::primary --> C["For each deprecated PLT entry:\n  Find all call sites (XRef from PLT VA)\n  → List of call VAs"]:::secondary
+    C:::secondary --> D["For each gets() call site:\n  Backtrack to preceding LEA/SUB instruction\n  Look for: lea rdi, [rbp-N] or sub rsp, N\n  → buffer_offset = N = bytes to saved RIP"]:::tertiary
+    D:::tertiary --> E["Walk call graph one level up:\n  ctx.call_edges: caller → callee set\n  Find all functions that call this function\n  → reachability_chain: List[str]"]:::tertiary
+    E:::tertiary --> F["DeprecatedHit:\n  func_sym: str (e.g. 'gets')\n  cwe: str ('CWE-242' or 'CWE-377')\n  call_va: int\n  buffer_offset: Optional[int]\n  reachability: List[str] (caller function names)"]:::tertiary
+    F:::tertiary --> G(["scan() → List[DeprecatedHit]\nreport(hits) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

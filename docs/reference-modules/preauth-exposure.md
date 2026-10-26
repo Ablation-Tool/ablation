@@ -21,37 +21,58 @@ The auditor targets flatui-style web frameworks FortiManager, FortiAnalyzer web 
 
 ```mermaid
 flowchart TD
-    A[/"firmware binary (e.g., libservice.so)"/] --> B["Step 1 · Route init function scan\nCapstone disassembly from route_init_va to route_init_end_va\nFor each call instruction in range:\n  Extract registration args:\n    arg[0] = HTTP path string\n    arg[1] = HTTP method (GET/POST/PUT/DELETE)\n    arg[2] = handler class name\n    arg[3] = middleware list"]
+    A(["firmware binary (e.g., libservice.so)"]):::input --> B["Step 1 · Route init function scan\nCapstone disassembly from route_init_va to route_init_end_va\nFor each call instruction in range:\n  Extract registration args:\n    arg[0] = HTTP path string\n    arg[1] = HTTP method (GET/POST/PUT/DELETE)\n    arg[2] = handler class name\n    arg[3] = middleware list"]:::primary
 
-    B --> C{"arg[3] includes\nWorkflowLockWithoutSessionPermit?"}
-    C -->|Yes| D["Route is authenticated\nSkip: not attack surface"]
-    C -->|No| E["Route is pre-auth candidate"]
+    B:::primary --> C{"arg[3] includes\nWorkflowLockWithoutSessionPermit?"}:::neutral
+    C:::neutral -->|Yes| D(["Route is authenticated\nSkip: not attack surface"]):::output
+    C:::neutral -->|No| E["Route is pre-auth candidate"]:::secondary
 
-    E --> F["Step 2 · Handler factory resolution\nfactory_va points to vtable dispatch table\nGET_REGISTER and POST_REGISTER calls\nassign handler VAs per HTTP method\nExtract GET handler VA and POST handler VA"]
+    E:::secondary --> F["Step 2 · Handler factory resolution\nfactory_va points to vtable dispatch table\nGET_REGISTER and POST_REGISTER calls\nassign handler VAs per HTTP method\nExtract GET handler VA and POST handler VA"]:::tertiary
 
-    F --> G["Step 3 · FuncProfiler on each handler\nCapstone disassembly of handler body\nCollect all PLT call targets reachable\nCheck each against sink table:\n  exec sinks: system / popen / execve\n  memory sinks: strcpy / sprintf / memcpy\n  I/O sinks: write / send / sendto"]
+    F:::tertiary --> G["Step 3 · FuncProfiler on each handler\nCapstone disassembly of handler body\nCollect all PLT call targets reachable\nCheck each against sink table:\n  exec sinks: system / popen / execve\n  memory sinks: strcpy / sprintf / memcpy\n  I/O sinks: write / send / sendto"]:::tertiary
 
-    G --> H[/"PreAuthResult\nroute_path · method · handler_va\nsink_calls · pre_auth=True"/]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style H fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    G:::tertiary --> H(["PreAuthResult\nroute_path · method · handler_va\nsink_calls · pre_auth=True"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#00695c,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### What "pre-auth" means in this framework
 
 ```mermaid
 flowchart TD
-    A["HTTP request arrives at port 443"] --> B["TLS termination (nginx / stunnel)"]
-    B --> C["Route match: path = 'api/v2/monitor/system/status'"]
-    C --> D{"Middleware list\nevaluation"}
+    A(["HTTP request arrives at port 443"]):::input --> B["TLS termination (nginx / stunnel)"]:::primary
+    B:::primary --> C["Route match: path = 'api/v2/monitor/system/status'"]:::secondary
+    C:::secondary --> D{"Middleware list\nevaluation"}:::neutral
 
-    D -->|"WorkflowLockWithoutSessionPermit\nNOT in list"| E[/"Request handler runs directly\nPre-auth route: attack surface"/]
-    D -->|"Session validation middleware\nin list"| F{"Session cookie\nvalid?"}
+    D:::neutral -->|"WorkflowLockWithoutSessionPermit\nNOT in list"| E(["Request handler runs directly\nPre-auth route: attack surface"]):::output
+    D:::neutral -->|"Session validation middleware\nin list"| F{"Session cookie\nvalid?"}:::neutral
 
-    F -->|Yes| G["Handler runs"]
-    F -->|No| H["401 response"]
-
-    style E fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    F:::neutral -->|Yes| G(["Handler runs"]):::output
+    F:::neutral -->|No| H(["401 response"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#546e7a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#546e7a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
 ```
 
 Flatui-style frameworks encode the middleware list as a bitfield or a set of string constants passed to the registration call. The auditor reads that argument at the call site and checks whether the session validation constant is present. A missing constant means the handler is reachable without authentication.

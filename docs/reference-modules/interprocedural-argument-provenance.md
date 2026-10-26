@@ -20,39 +20,78 @@ Trace argument values forward through function boundaries: annotating every call
 
 ```mermaid
 flowchart TD
-    A["RegAnnotator.from_path(path)"] --> B[Detect arch from ELF e_machine: x86_64 or ppc64le]
-    B --> C["annotate_calls(func_va, func_end_va)"]
-    C --> D["Seed entry state: rdi=arg(0), rsi=arg(1), rdx=arg(2), rcx=arg(3), r8=arg(4), r9=arg(5)"]
-    D --> E[Disassemble window: func_va → func_end_va]
-    E --> F{iterate instructions}
-    F --> G{mnemonic}
-    G -->|"mov dst, reg"| H[regs[dst] = RegVal.copy(reg, regs.get(reg))]
-    G -->|"lea dst, [rip+disp]"| I["Resolve RIP-relative VA\nIf VA in .rodata: regs[dst] = RegVal.string(content)\nElse: regs[dst] = RegVal.mem('rip+...')"]
-    G -->|"mov dst, immediate"| J[regs[dst] = RegVal.const(immediate)]
-    G -->|"xor dst, dst"| K[regs[dst] = RegVal.zero()]
-    G -->|"CALL target"| L["Snapshot current arg regs → CallSite.args\nKill caller-saved: rax,rcx,rdx,rsi,rdi,r8-r11 → unknown\nPreserve callee-saved: rbx,r12-r15,rbp"]
-    L --> F
-    F --> M[AnnotationResult: calls, reg_trace]
+    A(["RegAnnotator.from_path(path)"]):::input --> B["Detect arch from ELF e_machine: x86_64 or ppc64le"]:::primary
+    B:::primary --> C["annotate_calls(func_va, func_end_va)"]:::secondary
+    C:::secondary --> D["Seed entry state: rdi=arg(0), rsi=arg(1), rdx=arg(2), rcx=arg(3), r8=arg(4), r9=arg(5)"]:::tertiary
+    D:::tertiary --> E["Disassemble window: func_va → func_end_va"]:::tertiary
+    E:::tertiary --> F{"iterate instructions"}:::neutral
+    F:::neutral --> G{"mnemonic"}:::neutral
+    G:::neutral -->|"mov dst, reg"| H(["regs[dst"]):::output
+    G:::neutral -->|"lea dst, [rip+disp]"| I(["Resolve RIP-relative VA\nIf VA in .rodata: regs[dst] = RegVal.string(content)\nElse: regs[dst] = RegVal.mem('rip+...')"]):::output
+    G:::neutral -->|"mov dst, immediate"| J(["regs[dst"]):::output
+    G:::neutral -->|"xor dst, dst"| K(["regs[dst"]):::output
+    G:::neutral -->|"CALL target"| L["Snapshot current arg regs → CallSite.args\nKill caller-saved: rax,rcx,rdx,rsi,rdi,r8-r11 → unknown\nPreserve callee-saved: rbx,r12-r15,rbp"]:::tertiary
+    L:::tertiary --> F:::neutral
+    F:::neutral --> M(["AnnotationResult: calls, reg_trace"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#546e7a,stroke-width:2px
+    linkStyle 5 stroke:#546e7a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 11 stroke:#546e7a,stroke-width:2px
+    linkStyle 12 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### IPRegAnnotator: N-hop interprocedural pass
 
 ```mermaid
 flowchart TD
-    A["IPRegAnnotator.from_context(ctx)"] --> B["annotate_chain(entry_va, max_hops=2)"]
-    B --> C["_annotate_one(va, hop=0, entry_regs=None)"]
-    C --> D["RegAnnotator.annotate_calls(va): intra-function pass"]
-    D --> E{for each CallSite}
-    E --> F{hop < max_hops AND target_va resolvable AND not visited?}
-    F -->|yes| G["Snapshot caller's register state at call site"]
-    G --> H["_annotate_one(target_va, hop+1, entry_regs=caller_state)"]
-    H --> I["Seed callee entry with caller's values:\nrdi ← caller's rdi.display(), etc."]
-    I --> J["Recursive: annotate callee's body with seeded state"]
-    J --> K["ChainCallSite.callee_chain = recursive result"]
-    F -->|no — PLT external| L["ChainCallSite.is_plt_leaf = True"]
-    K & L --> E
-    E --> M["ChainResult: func_va, binary, hop, calls"]
-    M --> N["IPChain: root + all_sinks() + sink_report()"]
+    A(["IPRegAnnotator.from_context(ctx)"]):::input --> B["annotate_chain(entry_va, max_hops=2)"]:::primary
+    B:::primary --> C["_annotate_one(va, hop=0, entry_regs=None)"]:::secondary
+    C:::secondary --> D["RegAnnotator.annotate_calls(va): intra-function pass"]:::tertiary
+    D:::tertiary --> E{"for each CallSite"}:::neutral
+    E:::neutral --> F{"hop < max_hops AND target_va resolvable AND not visited?"}:::neutral
+    F:::neutral -->|yes| G["Snapshot caller's register state at call site"]:::tertiary
+    G:::tertiary --> H["_annotate_one(target_va, hop+1, entry_regs=caller_state)"]:::tertiary
+    H:::tertiary --> I["Seed callee entry with caller's values:\nrdi ← caller's rdi.display(), etc."]:::tertiary
+    I:::tertiary --> J["Recursive: annotate callee's body with seeded state"]:::tertiary
+    J:::tertiary --> K["ChainCallSite.callee_chain = recursive result"]:::tertiary
+    F:::neutral -->|no — PLT external| L(["ChainCallSite.is_plt_leaf = True"]):::output
+    K:::tertiary --> E:::neutral
+    E:::neutral --> M["ChainResult: func_va, binary, hop, calls"]:::tertiary
+    M:::tertiary --> N(["IPChain: root + all_sinks() + sink_report()"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#546e7a,stroke-width:2px
+    linkStyle 4 stroke:#546e7a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#546e7a,stroke-width:2px
+    linkStyle 12 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 13 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### RegVal kinds

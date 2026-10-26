@@ -18,9 +18,18 @@ Lift native binary functions to annotated C pseudocode across 18 ISA variants: p
 
 ```mermaid
 flowchart TD
-    A["BinaryLifter.from_context(ctx, arch)\n  or .from_path(binary_path, arch)"] --> B["lift_function(va, max_insns=512) → str\n  Disassemble function from va\n  Build CFG (basic blocks + edges)\n  For arm64/x86_64:\n    Track register state machine:\n      MOV/LDR/LDR → register assignments\n      BL/CALL → call with argument list\n      RET → return with value\n    Emit C pseudocode with types\n  For other ISAs:\n    Structural: CALL name(args) / BRANCH to label\n    Arithmetic as: // r0 = r1 + r2\n  Return: formatted C pseudocode string"]
-    B --> C["with_taint(findings) → BinaryLifter\n  Store findings for inline annotation\n  lift_function() inserts taint comments\n  at confirmed sink call sites:\n    /* TAINT: r0 = ARG_PROPAGATED from recv() */"]
-    B --> D["Architectures supported:\n  arm64, x86_64   — full register tracking\n  x86_32, arm32   — structural\n  thumb, thumb2   — structural\n  mips32, mips64  — structural\n  ppc32, ppc64    — structural\n  loongarch64     — structural\n  riscv32, riscv64 — structural\n  sh2a, v850, arc — structural"]
+    A(["BinaryLifter.from_context(ctx, arch)\n  or .from_path(binary_path, arch)"]):::input --> B["lift_function(va, max_insns=512) → str\n  Disassemble function from va\n  Build CFG (basic blocks + edges)\n  For arm64/x86_64:\n    Track register state machine:\n      MOV/LDR/LDR → register assignments\n      BL/CALL → call with argument list\n      RET → return with value\n    Emit C pseudocode with types\n  For other ISAs:\n    Structural: CALL name(args) / BRANCH to label\n    Arithmetic as: // r0 = r1 + r2\n  Return: formatted C pseudocode string"]:::primary
+    B:::primary --> C(["with_taint(findings) → BinaryLifter\n  Store findings for inline annotation\n  lift_function() inserts taint comments\n  at confirmed sink call sites:\n    /* TAINT: r0 = ARG_PROPAGATED from recv() */"]):::output
+    B:::primary --> D(["Architectures supported:\n  arm64, x86_64   · full register tracking\n  x86_32, arm32   · structural\n  thumb, thumb2   · structural\n  mips32, mips64  · structural\n  ppc32, ppc64    · structural\n  loongarch64     · structural\n  riscv32, riscv64 · structural\n  sh2a, v850, arc · structural"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

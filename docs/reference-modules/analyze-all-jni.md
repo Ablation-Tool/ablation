@@ -18,12 +18,24 @@ Run ARM32 symbolic execution across all 10 JNI functions in `libhijoyptt.so`: th
 
 ```mermaid
 flowchart TD
-    A["main(): sys.argv[1] = libhijoyptt.so path"] --> B["os.path.getsize() guard:\nmax _MAX_LIB_BYTES = 256 MB\nOpen and read raw bytes"]
-    B --> C["ARMSymbolicAnalyzer(data, base_addr=0)\nFor each name, addr in JNI_FUNCTIONS (sorted by VA):\nanalyzer.analyze_function(addr, max_insns=150)\n→ FuncSummary"]
-    C --> D["FuncSummary fields used:\n.arg_field_writes: List[(arg_idx, struct_offset)]\n.inputbuf_reads: List[int]\n.calls: List[(target_va, symbolic_args)]\n.vcalls: List[vtable_call_info]"]
-    D --> E["classify_function(name, summary):\nName prefix heuristic:\n'Create'→INIT, 'Delete'→CLEANUP\n'Start'/'Stop'→CONTROL, 'Set'→CONFIG, 'Send'→IO\nComplexity: len(calls)>5→COMPLEX, >0→MODERATE, else→SIMPLE"]
-    E --> F["generate_report(results, output_path):\nJNI Function Surface table:\n| name | addr | type | complexity | calls | arg_writes |\nPer-function symbolic effects section\nCall graph sample (up to 20 edges)\nProtocol Surface Summary by type\nAttack Surface section: COMPLEX funcs + inputbuf_reads funcs"]
-    F --> G["Output: JNI-SURFACE-ANALYSIS.md\nat lib_path.parent.parent.parent / 'JNI-SURFACE-ANALYSIS.md'"]
+    A(["main(): sys.argv[1] = libhijoyptt.so path"]):::input --> B["os.path.getsize() guard:\nmax _MAX_LIB_BYTES = 256 MB\nOpen and read raw bytes"]:::primary
+    B:::primary --> C["ARMSymbolicAnalyzer(data, base_addr=0)\nFor each name, addr in JNI_FUNCTIONS (sorted by VA):\nanalyzer.analyze_function(addr, max_insns=150)\n→ FuncSummary"]:::secondary
+    C:::secondary --> D["FuncSummary fields used:\n.arg_field_writes: List[(arg_idx, struct_offset)]\n.inputbuf_reads: List[int]\n.calls: List[(target_va, symbolic_args)]\n.vcalls: List[vtable_call_info]"]:::tertiary
+    D:::tertiary --> E["classify_function(name, summary):\nName prefix heuristic:\n'Create'→INIT, 'Delete'→CLEANUP\n'Start'/'Stop'→CONTROL, 'Set'→CONFIG, 'Send'→IO\nComplexity: len(calls)>5→COMPLEX, >0→MODERATE, else→SIMPLE"]:::tertiary
+    E:::tertiary --> F["generate_report(results, output_path):\nJNI Function Surface table:\n| name | addr | type | complexity | calls | arg_writes |\nPer-function symbolic effects section\nCall graph sample (up to 20 edges)\nProtocol Surface Summary by type\nAttack Surface section: COMPLEX funcs + inputbuf_reads funcs"]:::tertiary
+    F:::tertiary --> G(["Output: JNI-SURFACE-ANALYSIS.md\nat lib_path.parent.parent.parent / 'JNI-SURFACE-ANALYSIS.md'"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### JNI function table (`JNI_FUNCTIONS`)

@@ -18,9 +18,18 @@ Detect bad bytes in shellcode, apply XOR rolling or ADD byte encoding to produce
 
 ```mermaid
 flowchart TD
-    A["detect_bad_bytes(shellcode, bad_bytes=b'\\x00\\x0a\\x0d') → list\n  Scan each byte in shellcode\n  If byte in bad_bytes set:\n    → [{offset, byte_value, hex_repr}]\n  Return empty list if no bad bytes found"] --> B["encode_xor_rolling(shellcode, key=None) → (encoded, decoder_stub)\n  key: random single byte if not specified\n  encoded[i] = shellcode[i] ^ key ^ shellcode[i-1]  (rolling)\n  Prepend x86-64 decoder stub:\n    XOR loop: LODSB + XOR [RSI-1], AL + CMP RSI, end + JNZ\n  → (encoded_bytes, decoder_stub_bytes)\n\nencode_add(shellcode, key=0x35) → (encoded, decoder_stub)\n  encoded[i] = (shellcode[i] - key) & 0xFF\n  SUB decoder stub: SUBB [ptr], imm8 loop\n  → (encoded_bytes, decoder_stub_bytes)"]
-    B --> C["nop_sled(size, platform) → bytes\n  x86_64: b'\\x90' * size\n  arm64:  b'\\x1f\\x20\\x03\\xd5' * (size//4)  (NOP=HINT#0)\n  mips32: b'\\x00\\x00\\x00\\x00' * (size//4)  (SLL $zero,$zero,0)\n  → bytes of length 'size'"]
-    C --> D["build_exploit_buffer(shellcode, offset, ret_addr, arch, nop_size=64) → bytes\n  padding = b'A' * (offset - nop_size - len(shellcode))\n  sled = nop_sled(nop_size, arch)\n  buffer = padding + sled + shellcode + struct.pack('<Q', ret_addr) * 8\n  → bytes of length offset + 8+\n\nshellcode_length(shellcode) → dict\n  → {total, sections: {nop_sled, shellcode, padding, ret_addr}}"]
+    A(["detect_bad_bytes(shellcode, bad_bytes=b'\\x00\\x0a\\x0d') → list\n  Scan each byte in shellcode\n  If byte in bad_bytes set:\n    → [{offset, byte_value, hex_repr}]\n  Return empty list if no bad bytes found"]):::input --> B["encode_xor_rolling(shellcode, key=None) → (encoded, decoder_stub)\n  key: random single byte if not specified\n  encoded[i] = shellcode[i] ^ key ^ shellcode[i-1]  (rolling)\n  Prepend x86-64 decoder stub:\n    XOR loop: LODSB + XOR [RSI-1], AL + CMP RSI, end + JNZ\n  → (encoded_bytes, decoder_stub_bytes)\n\nencode_add(shellcode, key=0x35) → (encoded, decoder_stub)\n  encoded[i] = (shellcode[i] - key) & 0xFF\n  SUB decoder stub: SUBB [ptr], imm8 loop\n  → (encoded_bytes, decoder_stub_bytes)"]:::primary
+    B:::primary --> C["nop_sled(size, platform) → bytes\n  x86_64: b'\\x90' * size\n  arm64:  b'\\x1f\\x20\\x03\\xd5' * (size//4)  (NOP=HINT#0)\n  mips32: b'\\x00\\x00\\x00\\x00' * (size//4)  (SLL $zero,$zero,0)\n  → bytes of length 'size'"]:::secondary
+    C:::secondary --> D(["build_exploit_buffer(shellcode, offset, ret_addr, arch, nop_size=64) → bytes\n  padding = b'A' * (offset - nop_size - len(shellcode))\n  sled = nop_sled(nop_size, arch)\n  buffer = padding + sled + shellcode + struct.pack('<Q', ret_addr) * 8\n  → bytes of length offset + 8+\n\nshellcode_length(shellcode) → dict\n  → {total, sections: {nop_sled, shellcode, padding, ret_addr}}"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -27,9 +27,17 @@ Detect Windows rootkit indicators SEH chain access, SSDT hooks, DPC/timer abuse,
 
 ```mermaid
 flowchart TD
-    A["Binary analysis functions (binary_data: bytes) → List[dict]\n  detect_seh_chain_corruption(binary_data)\n    FS:[0]/GS:[0] load → SEH_CHAIN_ACCESSED (HIGH)\n    POPAD+JMP (0x61 + 0xEB/0xE9) → POPAD_JMP_EGGSCAN (HIGH)\n    RtlAddVectoredExceptionHandler import → VECTORED_EXCEPTION_HANDLER_INSTALLED (MEDIUM)\n  detect_ssdt_hook_indicators(binary_data)\n    Kernel pointer manipulation sequences → SSDT_HOOK (CRITICAL)\n  detect_dpc_timer_abuse(binary_data)\n    KeInsertQueueDpc + KeInitializeTimer in call window\n    → DPC_QUEUED (HIGH), HIGH_FREQUENCY_TIMER (HIGH)"]
-    A --> B["Windows artifact detection:\n  detect_windows_forensic_artifacts(scan_path='/') → List[dict]\n    os.walk() capped at _MAX_WALK_DEPTH=8\n    $MFT accessible → NTFS_MFT_ACCESSIBLE (HIGH)\n    .lnk files → LNK_FILE_FOUND (MEDIUM)\n    Prefetch files → PREFETCH_FILE_FOUND (INFO)\n    .evtx log files → WINDOWS_EVENT_LOG_FOUND (INFO)\n  analyze_pe_file(pe_data: bytes) → List[dict]\n    PE timestamp, section count, import/export anomalies"]
-    B --> C["Linux live-host analysis:\n  detect_linux_memory_artifacts() → List[dict]\n    /proc/pid/maps per process (read(_MAX_PROC_BYTES))\n    Anonymous RWX mapping → ANONYMOUS_RWX_MAPPING (CRITICAL)\n    /dev/shm executable → DEV_SHM_EXECUTION (CRITICAL)\n    Unexpected interpreter → INTERPRETER_INJECTION (HIGH)\n  All findings: {severity, title, detail, host: str, port: int}"]
+    A(["Binary analysis functions (binary_data: bytes) → List[dict]\n  detect_seh_chain_corruption(binary_data)\n    FS:[0]/GS:[0] load → SEH_CHAIN_ACCESSED (HIGH)\n    POPAD+JMP (0x61 + 0xEB/0xE9) → POPAD_JMP_EGGSCAN (HIGH)\n    RtlAddVectoredExceptionHandler import → VECTORED_EXCEPTION_HANDLER_INSTALLED (MEDIUM)\n  detect_ssdt_hook_indicators(binary_data)\n    Kernel pointer manipulation sequences → SSDT_HOOK (CRITICAL)\n  detect_dpc_timer_abuse(binary_data)\n    KeInsertQueueDpc + KeInitializeTimer in call window\n    → DPC_QUEUED (HIGH), HIGH_FREQUENCY_TIMER (HIGH)"]):::input
+    A:::input --> B["Windows artifact detection:\n  detect_windows_forensic_artifacts(scan_path='/') → List[dict]\n    os.walk() capped at _MAX_WALK_DEPTH=8\n    $MFT accessible → NTFS_MFT_ACCESSIBLE (HIGH)\n    .lnk files → LNK_FILE_FOUND (MEDIUM)\n    Prefetch files → PREFETCH_FILE_FOUND (INFO)\n    .evtx log files → WINDOWS_EVENT_LOG_FOUND (INFO)\n  analyze_pe_file(pe_data: bytes) → List[dict]\n    PE timestamp, section count, import/export anomalies"]:::primary
+    B:::primary --> C(["Linux live-host analysis:\n  detect_linux_memory_artifacts() → List[dict]\n    /proc/pid/maps per process (read(_MAX_PROC_BYTES))\n    Anonymous RWX mapping → ANONYMOUS_RWX_MAPPING (CRITICAL)\n    /dev/shm executable → DEV_SHM_EXECUTION (CRITICAL)\n    Unexpected interpreter → INTERPRETER_INJECTION (HIGH)\n  All findings: {severity, title, detail, host: str, port: int}"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

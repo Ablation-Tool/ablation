@@ -18,9 +18,18 @@ Enumerate Kafka topics and consumer groups without credentials, probe Flink REST
 
 ```mermaid
 flowchart TD
-    A["kafka_list_topics(host, port=9092) → dict\n  TCP connect\n  _kafka_request(api_key=3, api_version=0, body=pack('>i', 0))\n    → Metadata response: brokers array + topics array\n  Parse: topic name strings only (partition/replication not decoded)\n  → {host, port, reachable: bool, topics: List[str], error: str|None}"] --> B["flink_enumerate(host, port=8081) → dict\n  GET /jobs/overview → running/finished jobs\n  GET /taskmanagers → TM count + memory\n  GET /jars → uploaded JAR list\n  → {jobs, taskmanagers, jars, config}\n\nflink_submit_jar_rce(host, jar_bytes, entryClass) → dict\n  POST /jars/upload (multipart jar)\n  POST /jars/<id>/run {entryClass, programArgs}\n  → {job_id, status: RUNNING|FAILED}"]
-    B --> C["nifi_enumerate(host, timeout=8) → dict\n  GET /nifi-api/controller/config → instance config\n  GET /nifi-api/process-groups/root/processors\n    → [{name, type, properties: {credentials, endpoints}}]\n  GET /nifi-api/system-diagnostics → JVM memory\n  → {version, processors: List, properties_with_creds}"]
-    C --> D["RabbitMQ management API:\n  probe_rabbitmq_management(host, port=15672) → list\n    GET /api/vhosts → vhost list (guest:guest default)\n    GET /api/queues → all queues + message count\n    → [{finding: RABBITMQ_DEFAULT_CREDS, vhosts, queues}]\n\ncheck_nats_exposure(host, port=4222) → list\n  TCP connect: NATS INFO banner parsed\n  HTTP /varz, /connz monitoring endpoints\n  → [{severity, title, detail, host, port}]\n  Titles: 'NATS server client port exposed' (MEDIUM)\n          'NATS unauth access (monitoring)' (HIGH)\n          'NATS credentials in varz' (CRITICAL)"]
+    A(["kafka_list_topics(host, port=9092) → dict\n  TCP connect\n  _kafka_request(api_key=3, api_version=0, body=pack('>i', 0))\n    → Metadata response: brokers array + topics array\n  Parse: topic name strings only (partition/replication not decoded)\n  → {host, port, reachable: bool, topics: List[str], error: str|None}"]):::input --> B["flink_enumerate(host, port=8081) → dict\n  GET /jobs/overview → running/finished jobs\n  GET /taskmanagers → TM count + memory\n  GET /jars → uploaded JAR list\n  → {jobs, taskmanagers, jars, config}\n\nflink_submit_jar_rce(host, jar_bytes, entryClass) → dict\n  POST /jars/upload (multipart jar)\n  POST /jars/<id>/run {entryClass, programArgs}\n  → {job_id, status: RUNNING|FAILED}"]:::primary
+    B:::primary --> C["nifi_enumerate(host, timeout=8) → dict\n  GET /nifi-api/controller/config → instance config\n  GET /nifi-api/process-groups/root/processors\n    → [{name, type, properties: {credentials, endpoints}}]\n  GET /nifi-api/system-diagnostics → JVM memory\n  → {version, processors: List, properties_with_creds}"]:::secondary
+    C:::secondary --> D(["RabbitMQ management API:\n  probe_rabbitmq_management(host, port=15672) → list\n    GET /api/vhosts → vhost list (guest:guest default)\n    GET /api/queues → all queues + message count\n    → [{finding: RABBITMQ_DEFAULT_CREDS, vhosts, queues}]\n\ncheck_nats_exposure(host, port=4222) → list\n  TCP connect: NATS INFO banner parsed\n  HTTP /varz, /connz monitoring endpoints\n  → [{severity, title, detail, host, port}]\n  Titles: 'NATS server client port exposed' (MEDIUM)\n          'NATS unauth access (monitoring)' (HIGH)\n          'NATS credentials in varz' (CRITICAL)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,27 +18,54 @@ Parse Apple Mach-O binaries: including universal fat binaries, dylibs, and macOS
 
 ```mermaid
 flowchart TD
-    A[Mach-O binary file] --> B[BinaryParser]
-    B --> C{Read 4-byte magic at offset 0}
-    C -->|0xFEEDFACE| D[32-bit little-endian Mach-O]
-    C -->|0xCEFAEDFE| E[32-bit big-endian Mach-O]
-    C -->|0xFEEDFACF| F[64-bit little-endian Mach-O]
-    C -->|0xCFFAEDFE| G[64-bit big-endian Mach-O]
-    D --> H[Set bits=32, endian=little, header_size=28]
-    E --> I[Set bits=32, endian=big, header_size=28]
-    F --> J[Set bits=64, endian=little, header_size=32]
-    G --> K[Set bits=64, endian=big, header_size=32]
-    H & I & J & K --> L[Read Mach-O header: magic, cputype, cpusubtype, filetype, ncmds, sizeofcmds, flags]
-    L --> M{64-bit? Read reserved field}
-    M -->|yes| N[offset = 32]
-    M -->|no| O[offset = 28]
-    N & O --> P[Iterate load commands: ncmds iterations]
-    P --> Q{load command type}
-    Q -->|LC_MAIN 0x80000028| R[Read entryoff: entry point VA]
-    Q -->|other| S[Skip: advance by cmdsize bytes]
-    R --> T[entry_point = entryoff]
-    T --> U[Return: format, bits, endian, entry_point]
-    S --> P
+    A(["Mach-O binary file"]):::input --> B["BinaryParser"]:::primary
+    B:::primary --> C{"Read 4-byte magic at offset 0"}:::neutral
+    C:::neutral -->|0xFEEDFACE| D["32-bit little-endian Mach-O"]:::secondary
+    C:::neutral -->|0xCEFAEDFE| E["32-bit big-endian Mach-O"]:::tertiary
+    C:::neutral -->|0xFEEDFACF| F["64-bit little-endian Mach-O"]:::tertiary
+    C:::neutral -->|0xCFFAEDFE| G["64-bit big-endian Mach-O"]:::tertiary
+    D:::secondary --> H["Set bits=32, endian=little, header_size=28"]:::tertiary
+    E:::tertiary --> I(["Set bits=32, endian=big, header_size=28"]):::output
+    F:::tertiary --> J(["Set bits=64, endian=little, header_size=32"]):::output
+    G:::tertiary --> K(["Set bits=64, endian=big, header_size=32"]):::output
+    H:::tertiary --> L["Read Mach-O header: magic, cputype, cpusubtype, filetype, ncmds, sizeofcmds, flags"]:::tertiary
+    L:::tertiary --> M{"64-bit? Read reserved field"}:::neutral
+    M:::neutral -->|yes| N["offset = 32"]:::tertiary
+    M:::neutral -->|no| O(["offset = 28"]):::output
+    N:::tertiary --> P["Iterate load commands: ncmds iterations"]:::tertiary
+    P:::tertiary --> Q{"load command type"}:::neutral
+    Q:::neutral -->|LC_MAIN 0x80000028| R["Read entryoff: entry point VA"]:::tertiary
+    Q:::neutral -->|other| S["Skip: advance by cmdsize bytes"]:::tertiary
+    R:::tertiary --> T["entry_point = entryoff"]:::tertiary
+    T:::tertiary --> U(["Return: format, bits, endian, entry_point"]):::output
+    S:::tertiary --> P:::tertiary
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 11 stroke:#546e7a,stroke-width:2px
+    linkStyle 12 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 13 stroke:#2e7d32,stroke-width:3px
+    linkStyle 14 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 15 stroke:#546e7a,stroke-width:2px
+    linkStyle 16 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 17 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 18 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 19 stroke:#2e7d32,stroke-width:3px
+    linkStyle 20 stroke:#6a1b9a,stroke-width:2px
 ```
 
 **Magic-based format detection.** The 4-byte magic at the start of a Mach-O file encodes both bitness and endianness:

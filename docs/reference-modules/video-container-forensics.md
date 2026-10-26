@@ -18,9 +18,18 @@ Detect appended payloads, embedded binary content in metadata atoms, malformed b
 
 ```mermaid
 flowchart TD
-    A["VideoForensicsAnalyzer.from_path(path)\n  Detect format:\n    b'ftyp' or b'moov' at offset 4 → MP4/MOV (ISOBMFF)\n    b'\\x1aEBML' at offset 0 → MKV/WebM\n    b'RIFF' at offset 0 → AVI"] --> B["MP4/MOV: walk ISOBMFF box tree\n  _MP4Atom: type, size, data\n  Security-relevant atoms:\n    uuid: vendor-private (check entropy)\n    udta/free/skip: often used for payload hiding\n    pssh/encv/enca: DRM-encrypted track → report\n  After last moov/mdat: check for appended bytes"]
-    B --> C["MKV/WebM: walk EBML element tree\n  _EBMLElement: id, size, data\n  Check: unrecognized Element IDs\n  Check: Segment beyond declared EBML DocTypeVersion\n  Check: high-entropy Tags/Attachments elements"]
-    C --> D["AVI: walk RIFF chunk tree\n  Check: movi chunk with unknown FCC codes\n  Check: idx1/indx: chunk sizes inconsistent with movi\n  _high_entropy_fraction(data): fraction of blocks > 7.2 bits/byte\n  → VideoFinding(type, atom_type, detail, offset, severity)"]
+    A(["VideoForensicsAnalyzer.from_path(path)\n  Detect format:\n    b'ftyp' or b'moov' at offset 4 → MP4/MOV (ISOBMFF)\n    b'\\x1aEBML' at offset 0 → MKV/WebM\n    b'RIFF' at offset 0 → AVI"]):::input --> B["MP4/MOV: walk ISOBMFF box tree\n  _MP4Atom: type, size, data\n  Security-relevant atoms:\n    uuid: vendor-private (check entropy)\n    udta/free/skip: often used for payload hiding\n    pssh/encv/enca: DRM-encrypted track → report\n  After last moov/mdat: check for appended bytes"]:::primary
+    B:::primary --> C["MKV/WebM: walk EBML element tree\n  _EBMLElement: id, size, data\n  Check: unrecognized Element IDs\n  Check: Segment beyond declared EBML DocTypeVersion\n  Check: high-entropy Tags/Attachments elements"]:::secondary
+    C:::secondary --> D(["AVI: walk RIFF chunk tree\n  Check: movi chunk with unknown FCC codes\n  Check: idx1/indx: chunk sizes inconsistent with movi\n  _high_entropy_fraction(data): fraction of blocks > 7.2 bits/byte\n  → VideoFinding(type, atom_type, detail, offset, severity)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

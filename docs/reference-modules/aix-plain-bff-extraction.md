@@ -18,15 +18,29 @@ Parse AIX backup-by-name (BFF) archives produced by AIX 4.x and 5.x backup(8): i
 
 ```mermaid
 flowchart TD
-    A["data = Path('archive.bff').read_bytes()"] --> B["iter_entries(data):\nVerify magic data[:2] == b'\\x09\\x00'\nVerify len(data) >= _VOL_HDR_SZ(72) + _EXT_STAT_SZ(56) + 8"]
-    B --> C["off = 72 (skip volume header)\nLoop while off + 56 + 8 <= len(data):"]
-    C --> D["Extended stat block (56 bytes):\nmtime = LE uint32 at off+28\noff += 56"]
-    D --> E["file_size = LE uint32 at off\noff += 8 (size field + zero field)"]
-    E --> F["Null-terminated name:\nnull_pos = data.index(b'\\x00', off)\nraw_name = data[off:null_pos]\nEmpty name → end sentinel → stop\noff += _pad8(len(raw_name)+1) → pad to 8-byte boundary"]
-    F --> G["Stat summary (40 bytes):\nuid = LE uint32 at off+0\ngid = LE uint32 at off+4\nmode = LE uint32 at off+12\noff += 40"]
-    G --> H["File data: data[off:off+file_size]\noff += _pad8(file_size) → pad to 8\nyield BffEntry(name, data, mode, uid, gid, mtime)"]
-    H --> C
-    I["extract_to(data, dest: Path):\nFor each entry:\n  is_dir → target.mkdir(parents=True, exist_ok=True)\n  is_reg → target.write_bytes(entry.data)\nReturns List[BffEntry]"]
+    A(["data = Path('archive.bff').read_bytes()"]):::input --> B["iter_entries(data):\nVerify magic data[:2] == b'\\x09\\x00'\nVerify len(data) >= _VOL_HDR_SZ(72) + _EXT_STAT_SZ(56) + 8"]:::primary
+    B:::primary --> C["off = 72 (skip volume header)\nLoop while off + 56 + 8 <= len(data):"]:::secondary
+    C:::secondary --> D["Extended stat block (56 bytes):\nmtime = LE uint32 at off+28\noff += 56"]:::tertiary
+    D:::tertiary --> E["file_size = LE uint32 at off\noff += 8 (size field + zero field)"]:::tertiary
+    E:::tertiary --> F["Null-terminated name:\nnull_pos = data.index(b'\\x00', off)\nraw_name = data[off:null_pos]\nEmpty name → end sentinel → stop\noff += _pad8(len(raw_name)+1) → pad to 8-byte boundary"]:::tertiary
+    F:::tertiary --> G["Stat summary (40 bytes):\nuid = LE uint32 at off+0\ngid = LE uint32 at off+4\nmode = LE uint32 at off+12\noff += 40"]:::tertiary
+    G:::tertiary --> H["File data: data[off:off+file_size]\noff += _pad8(file_size) → pad to 8\nyield BffEntry(name, data, mode, uid, gid, mtime)"]:::tertiary
+    H:::tertiary --> C:::secondary
+    I(["extract_to(data, dest: Path):\nFor each entry:\n  is_dir → target.mkdir(parents=True, exist_ok=True)\n  is_reg → target.write_bytes(entry.data)\nReturns List[BffEntry]"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#00695c,stroke-width:2px
 ```
 
 ### BFF entry layout

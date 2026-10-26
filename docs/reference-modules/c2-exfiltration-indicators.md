@@ -18,37 +18,76 @@ Probe a live host for active command-and-control channel signatures: Cobalt Stri
 
 ```mermaid
 flowchart TD
-    A["detect_c2_beaconing_indicators(host, port=443)"] --> B["_http_get(host, port, '/')\nRaw TCP socket + minimal HTTP/1.1 GET\nCapture up to 64KB response"]
-    B --> C{HTTP 200?}
-    C -->|"200, no Server header, Content-Length 0 or empty body"| D["Finding: POTENTIAL_CS_BEACON (MEDIUM)\nCobalt Strike default Malleable C2 pattern"]
-    C -->|else| E
-    E --> F["_http_get(host, port, '/XXXX') — 4-char random URI"]
-    F --> G{200 with non-empty body?}
-    G -->|yes| H["Finding: POTENTIAL_METERPRETER_STAGER (MEDIUM)\nMeterpreter stager responds 200 to any URI path"]
-    G -->|no| I
-    I --> J["_http_get(host, 80, '/api/v1/health')"]
-    J --> K{"200, JSON body or Content-Type=application/json?"}
-    K -->|yes| L["Finding: UNENCRYPTED_API_C2_SURFACE (MEDIUM)\nJSON API on plaintext HTTP — unencrypted C2 channel indicator"]
-    K -->|no| M
-    M --> N["_tcp_open(host, 50050) — CS teamserver"]
-    N --> O{open?}
-    O -->|yes| P["Finding: KNOWN_C2_PORT_OPEN (HIGH) — Cobalt_Strike_teamserver"]
-    N --> Q["_tcp_open(host, 8443) — Empire"]
-    Q --> R{open?}
-    R -->|yes| S["Finding: KNOWN_C2_PORT_OPEN (HIGH) — Empire_C2_default"]
-    N --> T["_tcp_open(host, 55553) — Metasploit"]
-    T --> U{open?}
-    U -->|yes| V["Finding: KNOWN_C2_PORT_OPEN (HIGH) — Metasploit_default_listener"]
-    P & S & V --> W["List[{severity, title, detail, host, port}]"]
+    A(["detect_c2_beaconing_indicators(host, port=443)"]):::input --> B["_http_get(host, port, '/')\nRaw TCP socket + minimal HTTP/1.1 GET\nCapture up to 64KB response"]:::primary
+    B:::primary --> C{"HTTP 200?"}:::neutral
+    C:::neutral -->|"200, no Server header, Content-Length 0 or empty body"| D(["Finding: POTENTIAL_CS_BEACON (MEDIUM)\nCobalt Strike default Malleable C2 pattern"]):::output
+    C:::neutral -->|else| E["E"]:::secondary
+    E:::secondary --> F["_http_get(host, port, '/XXXX') · 4-char random URI"]:::tertiary
+    F:::tertiary --> G{"200 with non-empty body?"}:::neutral
+    G:::neutral -->|yes| H(["Finding: POTENTIAL_METERPRETER_STAGER (MEDIUM)\nMeterpreter stager responds 200 to any URI path"]):::output
+    G:::neutral -->|no| I["I"]:::tertiary
+    I:::tertiary --> J["_http_get(host, 80, '/api/v1/health')"]:::tertiary
+    J:::tertiary --> K{"200, JSON body or Content-Type=application/json?"}:::neutral
+    K:::neutral -->|yes| L(["Finding: UNENCRYPTED_API_C2_SURFACE (MEDIUM)\nJSON API on plaintext HTTP · unencrypted C2 channel indicator"]):::output
+    K:::neutral -->|no| M["M"]:::tertiary
+    M:::tertiary --> N["_tcp_open(host, 50050) · CS teamserver"]:::tertiary
+    N:::tertiary --> O{"open?"}:::neutral
+    O:::neutral -->|yes| P["Finding: KNOWN_C2_PORT_OPEN (HIGH) · Cobalt_Strike_teamserver"]:::tertiary
+    N:::tertiary --> Q["_tcp_open(host, 8443) · Empire"]:::tertiary
+    Q:::tertiary --> R{"open?"}:::neutral
+    R:::neutral -->|yes| S(["Finding: KNOWN_C2_PORT_OPEN (HIGH) · Empire_C2_default"]):::output
+    N:::tertiary --> T["_tcp_open(host, 55553) · Metasploit"]:::tertiary
+    T:::tertiary --> U{"open?"}:::neutral
+    U:::neutral -->|yes| V(["Finding: KNOWN_C2_PORT_OPEN (HIGH) · Metasploit_default_listener"]):::output
+    P:::tertiary --> W(["List[{severity, title, detail, host, port}]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#00695c,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#546e7a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#546e7a,stroke-width:2px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 12 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 13 stroke:#546e7a,stroke-width:2px
+    linkStyle 14 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 15 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 16 stroke:#546e7a,stroke-width:2px
+    linkStyle 17 stroke:#2e7d32,stroke-width:3px
+    linkStyle 18 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 19 stroke:#546e7a,stroke-width:2px
+    linkStyle 20 stroke:#2e7d32,stroke-width:3px
+    linkStyle 21 stroke:#2e7d32,stroke-width:3px
 ```
 
 ```mermaid
 flowchart TD
-    A["check_ras_initial_access_patterns(host, port=443)"] --> B["TCP connect port 3389 — RDP"]
-    B --> C["TCP connect port 80/443 + GET /owa/ — OWA"]
-    C --> D["GET /remote/login — Fortinet VPN login page"]
-    D --> E["GET /dana-na/auth/url_default/welcome.cgi — Pulse VPN"]
-    E --> F["List[{severity, title, detail, host, port}] for each responsive service"]
+    A(["check_ras_initial_access_patterns(host, port=443)"]):::input --> B["TCP connect port 3389 · RDP"]:::primary
+    B:::primary --> C["TCP connect port 80/443 + GET /owa/ · OWA"]:::secondary
+    C:::secondary --> D["GET /remote/login · Fortinet VPN login page"]:::tertiary
+    D:::tertiary --> E["GET /dana-na/auth/url_default/welcome.cgi · Pulse VPN"]:::tertiary
+    E:::tertiary --> F(["List[{severity, title, detail, host, port}] for each responsive service"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

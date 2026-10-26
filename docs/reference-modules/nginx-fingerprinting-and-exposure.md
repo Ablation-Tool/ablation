@@ -18,16 +18,25 @@ Fingerprint nginx version from the `Server` response header and error-page body;
 
 ```mermaid
 flowchart TD
-    A["NginxEnumerator(host, port=443, use_tls=True)\nor NginxEnumerator.run()"] --> B["fingerprint():\n_http_get(host, port, '/')\n_extract_version(headers, body):\n  Server: nginx/1.7.10 → regex group 1\n  Fallback: error-page body → same regex\n  nginx present but no version → 'unknown (server_tokens off)'\nRECORDS: VERSION_DISCLOSURE INFO if server_tokens on"]
-    B --> C["probe_stub_status():\n6 paths: /nginx_status, /status, /server-status,\n  /nginx-status, /_nginx_status, /basic_status\nFor each: _http_get → code==200 and body:\n  _parse_stub_status():\n    Active connections: N\n    accepts handled requests: A H R\n    Reading: X Writing: Y Waiting: Z\nFirst match → STUB_STATUS_EXPOSED MEDIUM + parsed dict"]
-    C --> D["check_cves() / check_server_tokens():\n_extract_version → version string\nParse major.minor.patch\ncheck_server_tokens:\n  ≥0.6.18 and ≤1.20.0 → HIGH CVE-2021-23017\n  1.9.5–1.17.6 → MEDIUM CVE-2019-20372\n  else → LOW VERSION_DISCLOSURE\ncheck_cves (1.7.10 exact):\n  CVE-2013-4547 HIGH — null byte URI bypass\n  CVE-2014-0133 HIGH — SPDY heap overflow\n  CVE-2014-3556 MEDIUM — STARTTLS mail proxy injection"]
-    E["probe_null_byte() [CVE-2013-4547]:\n_raw_http() sends literal %00 payloads:\n  /nginx_status%00.jpg, /api%00.jpg, /.git%00.txt\nExpect 400/403/404; unexpected status → hit"]
-    F["probe_alias_traversal():\n6 base_paths × 5 ALIAS_TRAVERSAL_PATHS\nGET /static../{path}\ncode==200 AND body matches signature:\n  root:x: / daemon: → /etc/passwd confirmed\n  worker_processes → nginx.conf confirmed\n  HTTP_HOST → /proc/self/environ confirmed\n→ ALIAS_TRAVERSAL CRITICAL"]
-    G["probe_ssrf():\n_probe_proxy_ssrf(): /api/, /proxy/, /forward/, /backend/\nFor each: check Via/X-Powered-By/200/502/503\nInject Host: 127.0.0.1 / 169.254.169.254 / 10.0.0.1\ncode not in (0,400,403) → PROXY_SSRF HIGH"]
-    H["probe_smuggling() [TE.CL desync]:\nPOST / with Transfer-Encoding: chunked + Content-Length: 6\n0\\r\\n body (valid chunked empty body)\n400 → correctly rejected (NOT susceptible)\n200/301/302/405 → HTTP_SMUGGLING HIGH"]
-    I["check_autoindex():\n10 paths: /, /images/, /static/, /assets/, /uploads/,\n  /files/, /backup/, /backups/, /tmp/, /logs/\ncode==200 AND '<title>Index of' OR '<h1>Index of' in body\n→ AUTOINDEX CRITICAL + href entries sample"]
-    J["enum_nxapi() [Cisco NX-API]:\n6 NXAPI_ENDPOINTS: /ins, /api/v1, /api/node/mo,\n  /api/aaaLogin.json, /admin, /doc\ncode in (200,401,405) → accessible=True\ncode==200 AND body has ins_api/NX-API/Cisco keywords\n→ NXAPI_UNAUTH HIGH"]
-    K["check_cve_2021_23017():\nVersion fallback chain: Server header → stub_status body\nIn range 0.6.18–1.20.0 → HIGH CVE finding\nRequires resolver directive active in nginx.conf\nOff-by-one in DNS resolver UDP path via crafted CNAME"]
+    A(["NginxEnumerator(host, port=443, use_tls=True)\nor NginxEnumerator.run()"]):::input --> B["fingerprint():\n_http_get(host, port, '/')\n_extract_version(headers, body):\n  Server: nginx/1.7.10 → regex group 1\n  Fallback: error-page body → same regex\n  nginx present but no version → 'unknown (server_tokens off)'\nRECORDS: VERSION_DISCLOSURE INFO if server_tokens on"]:::primary
+    B:::primary --> C["probe_stub_status():\n6 paths: /nginx_status, /status, /server-status,\n  /nginx-status, /_nginx_status, /basic_status\nFor each: _http_get → code==200 and body:\n  _parse_stub_status():\n    Active connections: N\n    accepts handled requests: A H R\n    Reading: X Writing: Y Waiting: Z\nFirst match → STUB_STATUS_EXPOSED MEDIUM + parsed dict"]:::secondary
+    C:::secondary --> D(["check_cves() / check_server_tokens():\n_extract_version → version string\nParse major.minor.patch\ncheck_server_tokens:\n  ≥0.6.18 and ≤1.20.0 → HIGH CVE-2021-23017\n  1.9.5·1.17.6 → MEDIUM CVE-2019-20372\n  else → LOW VERSION_DISCLOSURE\ncheck_cves (1.7.10 exact):\n  CVE-2013-4547 HIGH · null byte URI bypass\n  CVE-2014-0133 HIGH · SPDY heap overflow\n  CVE-2014-3556 MEDIUM · STARTTLS mail proxy injection"]):::output
+    E(["probe_null_byte() [CVE-2013-4547]:\n_raw_http() sends literal %00 payloads:\n  /nginx_status%00.jpg, /api%00.jpg, /.git%00.txt\nExpect 400/403/404; unexpected status → hit"]):::input
+    F(["probe_alias_traversal():\n6 base_paths × 5 ALIAS_TRAVERSAL_PATHS\nGET /static../{path}\ncode==200 AND body matches signature:\n  root:x: / daemon: → /etc/passwd confirmed\n  worker_processes → nginx.conf confirmed\n  HTTP_HOST → /proc/self/environ confirmed\n→ ALIAS_TRAVERSAL CRITICAL"]):::input
+    G(["probe_ssrf():\n_probe_proxy_ssrf(): /api/, /proxy/, /forward/, /backend/\nFor each: check Via/X-Powered-By/200/502/503\nInject Host: 127.0.0.1 / 169.254.169.254 / 10.0.0.1\ncode not in (0,400,403) → PROXY_SSRF HIGH"]):::input
+    H(["probe_smuggling() [TE.CL desync]:\nPOST / with Transfer-Encoding: chunked + Content-Length: 6\n0\\r\\n body (valid chunked empty body)\n400 → correctly rejected (NOT susceptible)\n200/301/302/405 → HTTP_SMUGGLING HIGH"]):::input
+    I(["check_autoindex():\n10 paths: /, /images/, /static/, /assets/, /uploads/,\n  /files/, /backup/, /backups/, /tmp/, /logs/\ncode==200 AND '<title>Index of' OR '<h1>Index of' in body\n→ AUTOINDEX CRITICAL + href entries sample"]):::input
+    J(["enum_nxapi() [Cisco NX-API]:\n6 NXAPI_ENDPOINTS: /ins, /api/v1, /api/node/mo,\n  /api/aaaLogin.json, /admin, /doc\ncode in (200,401,405) → accessible=True\ncode==200 AND body has ins_api/NX-API/Cisco keywords\n→ NXAPI_UNAUTH HIGH"]):::input
+    K(["check_cve_2021_23017():\nVersion fallback chain: Server header → stub_status body\nIn range 0.6.18·1.20.0 → HIGH CVE finding\nRequires resolver directive active in nginx.conf\nOff-by-one in DNS resolver UDP path via crafted CNAME"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Finding severity mapping

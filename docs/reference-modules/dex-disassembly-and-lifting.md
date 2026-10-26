@@ -18,13 +18,25 @@ Decode Android DEX bytecode to annotated smali output (`DEXDisasm`) and lift DEX
 
 ```mermaid
 flowchart TD
-    A["DEXDisasm.from_path(apk_path)"] --> B["APKParser: unzip APK → iterate .dex files\n  DEX header: magic, checksum, string/type/proto/field/method/class offsets\n  Build flat tables: string_ids, type_ids, method_ids, field_ids"]
-    B --> C["disasm_method(class_name, method_name) → str\n  Locate method's code_item in class_data_item\n  Decode all instructions using 17-format dispatch:\n  Render smali with resolved references:\n  'invoke-virtual {v0, v1}, Ljava/net/URL;->openConnection()'\n  'const-string v2, \"https://api.example.com/\"'"]
-    C --> D["disasm_class(class_name) → str\n  Disassemble all non-native methods in class\n  Annotate: class, method signatures, access flags"]
-    B --> E["list_methods(class_name) → List[str]\n  All method names in class (including native)"]
+    A(["DEXDisasm.from_path(apk_path)"]):::input --> B["APKParser: unzip APK → iterate .dex files\n  DEX header: magic, checksum, string/type/proto/field/method/class offsets\n  Build flat tables: string_ids, type_ids, method_ids, field_ids"]:::primary
+    B:::primary --> C["disasm_method(class_name, method_name) → str\n  Locate method's code_item in class_data_item\n  Decode all instructions using 17-format dispatch:\n  Render smali with resolved references:\n  'invoke-virtual {v0, v1}, Ljava/net/URL;->openConnection()'\n  'const-string v2, \"https://api.example.com/\"'"]:::secondary
+    C:::secondary --> D(["disasm_class(class_name) → str\n  Disassemble all non-native methods in class\n  Annotate: class, method signatures, access flags"]):::output
+    B:::primary --> E(["list_methods(class_name) → List[str]\n  All method names in class (including native)"]):::output
 
-    F["DEXLifter.from_apk(apk_path)"] --> G["lift_method(class_name, method_name) → str\n  DEXDisasm decodes instructions\n  Type propagation: move-result, iget, sget, check-cast\n  Single-use const folding\n  invoke-* → method call expression\n  new-instance + <init> → constructor call\n  if-* → labeled conditional\n  backward goto → 'loop:' marker\n  Complex: switch/try-catch → annotated pseudo-smali"]
-    F --> H["list_methods(class_name) → List[str]\n  Same as DEXDisasm"]
+    F(["DEXLifter.from_apk(apk_path)"]):::input --> G(["lift_method(class_name, method_name) → str\n  DEXDisasm decodes instructions\n  Type propagation: move-result, iget, sget, check-cast\n  Single-use const folding\n  invoke-* → method call expression\n  new-instance + <init> → constructor call\n  if-* → labeled conditional\n  backward goto → 'loop:' marker\n  Complex: switch/try-catch → annotated pseudo-smali"]):::output
+    F:::input --> H(["list_methods(class_name) → List[str]\n  Same as DEXDisasm"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

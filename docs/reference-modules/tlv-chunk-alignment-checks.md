@@ -18,9 +18,18 @@ Detect TLV/chunk parser implementations that advance the chunk pointer by the ra
 
 ```mermaid
 flowchart TD
-    A["ChunkWalkerValidator.from_context(ctx)"] --> B["scan() → List[ChunkWalkFinding]\n  For each candidate function:\n    Disassemble with Capstone\n    _tokens(ops) → operand token list\n    Find POINTER_ADVANCE pattern:\n      add/lea instruction\n      operand = register + register (ptr += length)\n    Check NO_ALIGNMENT within next 5 instructions:\n      Missing: AND with ~3 mask\n      Missing: ADD reg, 3 + AND pattern\n    Verify NEXT_FIELD_READ:\n      MOV/MOVZX from [ptr] within 3 instructions\n    → ChunkWalkFinding(va, detail, severity='HIGH')"]
-    B --> C["_hex_immediates(ops) → Set[int]\n  Extract immediate values from operand string\n  Used to confirm mask absence (~3 = 0xFFFFFFFC)"]
-    C --> D["ChunkWalkFinding:\n  va: int\n  ptr_advance_insn: str\n  next_read_insn: str\n  detail: str\n  severity: str"]
+    A(["ChunkWalkerValidator.from_context(ctx)"]):::input --> B["scan() → List[ChunkWalkFinding]\n  For each candidate function:\n    Disassemble with Capstone\n    _tokens(ops) → operand token list\n    Find POINTER_ADVANCE pattern:\n      add/lea instruction\n      operand = register + register (ptr += length)\n    Check NO_ALIGNMENT within next 5 instructions:\n      Missing: AND with ~3 mask\n      Missing: ADD reg, 3 + AND pattern\n    Verify NEXT_FIELD_READ:\n      MOV/MOVZX from [ptr] within 3 instructions\n    → ChunkWalkFinding(va, detail, severity='HIGH')"]:::primary
+    B:::primary --> C["_hex_immediates(ops) → Set[int]\n  Extract immediate values from operand string\n  Used to confirm mask absence (~3 = 0xFFFFFFFC)"]:::secondary
+    C:::secondary --> D(["ChunkWalkFinding:\n  va: int\n  ptr_advance_insn: str\n  next_read_insn: str\n  detail: str\n  severity: str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

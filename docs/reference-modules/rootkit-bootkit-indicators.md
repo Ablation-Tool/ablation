@@ -18,9 +18,18 @@ Detect kernel hook installation patterns SSDT, KiFastCallEntry, notify callbacks
 
 ```mermaid
 flowchart TD
-    A["detect_ssdt_hook_indicators(binary_data) → List[dict]\n  Scan for byte-string refs:\n    KeServiceDescriptorTable\n    KiFastCallEntry\n    PsSetLoadImageNotifyRoutine\n    ObRegisterCallbacks / CmRegisterCallback\n  Pattern: hook installation sequence\n    (write to SSDT slot address + ret)\n  → [{va, type, description, severity}]"] --> B["detect_dpc_timer_abuse(binary_data) → List[dict]\n  KeInitializeDpc reference → DPC setup\n  KeSetTimerEx with period < 100ms\n  IoQueueWorkItem in non-driver context\n  Callback VA outside known driver range\n  → [{va, api_ref, period_ms, suspicion}]"]
-    B --> C["detect_bootkit_indicators(binary_data) → List[dict]\n  LBA 0 write pattern (INT 0x13 AH=3 CX=1)\n  INT 0x13 hook chain installation\n  EFI_BOOT_SERVICES table pointer write\n  EFI module Install pattern\n  Real-mode to protected-mode transition\n  → [{va, bootkit_type, mbr/uefi, severity}]"]
-    C --> D["detect_memory_only_malware_indicators(binary_data) → List[dict]\n  VirtualAlloc(MEM_COMMIT) + WriteProcessMemory + CreateThread\n  Process hollowing: NtUnmapViewOfSection + NtWriteVirtualMemory\n  Reflective DLL: GetProcAddress(GetProcAddress) bootstrap\n  → [{va, technique, evidence_bytes, severity}]"]
+    A(["detect_ssdt_hook_indicators(binary_data) → List[dict]\n  Scan for byte-string refs:\n    KeServiceDescriptorTable\n    KiFastCallEntry\n    PsSetLoadImageNotifyRoutine\n    ObRegisterCallbacks / CmRegisterCallback\n  Pattern: hook installation sequence\n    (write to SSDT slot address + ret)\n  → [{va, type, description, severity}]"]):::input --> B["detect_dpc_timer_abuse(binary_data) → List[dict]\n  KeInitializeDpc reference → DPC setup\n  KeSetTimerEx with period < 100ms\n  IoQueueWorkItem in non-driver context\n  Callback VA outside known driver range\n  → [{va, api_ref, period_ms, suspicion}]"]:::primary
+    B:::primary --> C["detect_bootkit_indicators(binary_data) → List[dict]\n  LBA 0 write pattern (INT 0x13 AH=3 CX=1)\n  INT 0x13 hook chain installation\n  EFI_BOOT_SERVICES table pointer write\n  EFI module Install pattern\n  Real-mode to protected-mode transition\n  → [{va, bootkit_type, mbr/uefi, severity}]"]:::secondary
+    C:::secondary --> D(["detect_memory_only_malware_indicators(binary_data) → List[dict]\n  VirtualAlloc(MEM_COMMIT) + WriteProcessMemory + CreateThread\n  Process hollowing: NtUnmapViewOfSection + NtWriteVirtualMemory\n  Reflective DLL: GetProcAddress(GetProcAddress) bootstrap\n  → [{va, technique, evidence_bytes, severity}]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

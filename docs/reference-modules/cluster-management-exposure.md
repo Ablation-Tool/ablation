@@ -18,9 +18,18 @@ Enumerate the combined Docker and Kubernetes cluster management API surface: ide
 
 ```mermaid
 flowchart TD
-    A["Combined cluster management probe:\n  docker_enum + k8s_enum"] --> B["Docker management surface:\n  TCP port 2375: Docker daemon (unauthenticated)\n  /var/run/docker.sock: socket mounted\n  DockerEnumerator.check_container_isolation()\n  DockerEnumerator.check_dependency_confusion_indicators()"]
-    B --> C["Kubernetes management surface:\n  TCP port 6443: API server (via K8sEnumerator)\n  TCP port 2379: etcd (direct, no auth on misconfigured clusters)\n  TCP port 8001: kubectl proxy (unauthenticated on localhost)\n  check_k8s_network_policy_gaps(host, port=8001)\n  check_resource_quota_bypass(host, port=6443)"]
-    C --> D["Combined severity triage:\n  CRITICAL: Docker 2375 TCP open OR etcd 2379 open\n  HIGH: Docker socket mounted + privileged container\n  HIGH: K8s API accessible + cluster-admin SA\n  MEDIUM: flat namespace (no NetworkPolicy)\n  LOW: no resource quotas"]
+    A(["Combined cluster management probe:\n  docker_enum + k8s_enum"]):::input --> B["Docker management surface:\n  TCP port 2375: Docker daemon (unauthenticated)\n  /var/run/docker.sock: socket mounted\n  DockerEnumerator.check_container_isolation()\n  DockerEnumerator.check_dependency_confusion_indicators()"]:::primary
+    B:::primary --> C["Kubernetes management surface:\n  TCP port 6443: API server (via K8sEnumerator)\n  TCP port 2379: etcd (direct, no auth on misconfigured clusters)\n  TCP port 8001: kubectl proxy (unauthenticated on localhost)\n  check_k8s_network_policy_gaps(host, port=8001)\n  check_resource_quota_bypass(host, port=6443)"]:::secondary
+    C:::secondary --> D(["Combined severity triage:\n  CRITICAL: Docker 2375 TCP open OR etcd 2379 open\n  HIGH: Docker socket mounted + privileged container\n  HIGH: K8s API accessible + cluster-admin SA\n  MEDIUM: flat namespace (no NetworkPolicy)\n  LOW: no resource quotas"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

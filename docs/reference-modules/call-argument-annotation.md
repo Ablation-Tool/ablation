@@ -18,10 +18,20 @@ Lightweight forward symbolic register pass for call-site annotation: single forw
 
 ```mermaid
 flowchart TD
-    A["RegAnnotator.from_path(path) or\nRegAnnotator.from_context(ctx)"] --> B["annotate_calls(func_va, func_end_va) → AnnotationResult\n  Capstone disassemble func_va..func_end_va\n  Initialize register state: rdi=Arg(0), rsi=Arg(1), ..."]
-    B --> C["Single forward pass:\n  MOV dst, src → state[dst] = state[src]\n  MOV dst, imm → state[dst] = Const(imm)\n  LEA dst, [base+disp] → state[dst] = Mem(base+disp)\n  CALL known_sym → state[rax] = Ret(sym_name)\n  CALL unknown → clear caller-saved regs\n  Indirect load → state[dst] = Unknown"]
-    C --> D["At each CALL instruction:\n  Record CallSite: site_va, target_name, args=dict\n  args: {reg: RegVal} for each argument register\n  (rdi, rsi, rdx, rcx, r8, r9 on x86-64 SysV)"]
-    D --> E["AnnotationResult:\n  calls: List[CallSite]\n  fmt() → formatted multi-line string\n  Each call: VA, target, all arg registers"]
+    A(["RegAnnotator.from_path(path) or\nRegAnnotator.from_context(ctx)"]):::input --> B["annotate_calls(func_va, func_end_va) → AnnotationResult\n  Capstone disassemble func_va..func_end_va\n  Initialize register state: rdi=Arg(0), rsi=Arg(1), ..."]:::primary
+    B:::primary --> C["Single forward pass:\n  MOV dst, src → state[dst] = state[src]\n  MOV dst, imm → state[dst] = Const(imm)\n  LEA dst, [base+disp] → state[dst] = Mem(base+disp)\n  CALL known_sym → state[rax] = Ret(sym_name)\n  CALL unknown → clear caller-saved regs\n  Indirect load → state[dst] = Unknown"]:::secondary
+    C:::secondary --> D["At each CALL instruction:\n  Record CallSite: site_va, target_name, args=dict\n  args: {reg: RegVal} for each argument register\n  (rdi, rsi, rdx, rcx, r8, r9 on x86-64 SysV)"]:::tertiary
+    D:::tertiary --> E(["AnnotationResult:\n  calls: List[CallSite]\n  fmt() → formatted multi-line string\n  Each call: VA, target, all arg registers"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

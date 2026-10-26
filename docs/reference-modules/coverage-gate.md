@@ -18,15 +18,28 @@ TCL3-qualified coverage measurement for Ablation's labeled-taint engine modules:
 
 ```mermaid
 flowchart TD
-    A["pytest tests/ --cov --cov-report=term-missing"] --> B["[tool.coverage.run] scope:\ninclude = [\n  '*/taint_tracker_arc_labeled.py',\n  '*/taint_tracker_arm32_labeled.py',\n  '*/taint_tracker_mips_labeled.py',\n  '*/taint_tracker_ppc_labeled.py',\n  '*/taint_tracker_riscv.py',\n  '*/taint_tracker_x86_labeled.py',\n]"]
-    B --> C["Statement coverage measured only for these 6 files\nAll other modules excluded from measurement\n(not from test execution — imports still run)"]
-    C --> D["[tool.coverage.report]:\nfail_under = 85\nshow_missing = True\nexclude_lines:\n  'pragma: no cover'\n  'if TYPE_CHECKING'\n  'raise NotImplementedError'\n  '@abstractmethod'"]
-    D --> E{"coverage >= 85%?"}
-    E -->|Yes| F["pytest exits 0 — CI passes"]
-    E -->|No| G["pytest exits 2 — CI fails\n'FAIL Required test coverage of 85%\nnot reached. Total coverage: N%'\nMissing lines listed by module"]
+    A["pytest tests/ --cov --cov-report=term-missing"]:::primary --> B["[tool.coverage.run] scope:\ninclude = [\n  '*/taint_tracker_arc_labeled.py',\n  '*/taint_tracker_arm32_labeled.py',\n  '*/taint_tracker_mips_labeled.py',\n  '*/taint_tracker_ppc_labeled.py',\n  '*/taint_tracker_riscv.py',\n  '*/taint_tracker_x86_labeled.py',\n]"]:::secondary
+    B:::secondary --> C["Statement coverage measured only for these 6 files\nAll other modules excluded from measurement\n(not from test execution · imports still run)"]:::tertiary
+    C:::tertiary --> D["[tool.coverage.report]:\nfail_under = 85\nshow_missing = True\nexclude_lines:\n  'pragma: no cover'\n  'if TYPE_CHECKING'\n  'raise NotImplementedError'\n  '@abstractmethod'"]:::tertiary
+    D:::tertiary --> E{"coverage >= 85%?"}:::neutral
+    E:::neutral -->|Yes| F(["pytest exits 0 · CI passes"]):::output
+    E:::neutral -->|No| G(["pytest exits 2 · CI fails\n'FAIL Required test coverage of 85%\nnot reached. Total coverage: N%'\nMissing lines listed by module"]):::output
 
-    H["tests/test_taint_labeled_coverage.py\nTargeted supplementary tests:\n  MIPS: Taint.__str__, join() asymmetric, join() widening,\n    memory merge, invalidate_base, taint_memory(length=0),\n    taint_pointee raise, run(record_trace=True), FP/HILO\n  ARM32: TaintState join() with memory overlap\n  PPC: HILO register handler, MQ register\n  ARC: bbit0/bbit1 branch handlers, delay-slot edge cases\n  x86: sub/sbb carry flag, cmov conditional taint\n  RISC-V: TaintState.join() with bound widening,\n    analyze_cfg() fixpoint on loop body"]
-    H --> A
+    H(["tests/test_taint_labeled_coverage.py\nTargeted supplementary tests:\n  MIPS: Taint.__str__, join() asymmetric, join() widening,\n    memory merge, invalidate_base, taint_memory(length=0),\n    taint_pointee raise, run(record_trace=True), FP/HILO\n  ARM32: TaintState join() with memory overlap\n  PPC: HILO register handler, MQ register\n  ARC: bbit0/bbit1 branch handlers, delay-slot edge cases\n  x86: sub/sbb carry flag, cmov conditional taint\n  RISC-V: TaintState.join() with bound widening,\n    analyze_cfg() fixpoint on loop body"]):::input
+    H:::input --> A:::primary
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#00695c,stroke-width:2px
+    linkStyle 1 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#546e7a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#bf360c,stroke-width:2px
 ```
 
 ### Coverage scope

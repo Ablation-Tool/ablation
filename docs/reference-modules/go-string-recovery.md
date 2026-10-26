@@ -18,12 +18,23 @@ Resolve Go 1.17+ AMD64 non-NUL-terminated strings in stripped binaries: detectin
 
 ```mermaid
 flowchart TD
-    A["GoStringResolver(binary_path, base_va)"] --> B["scan_instructions(instructions) → dict\n  For each instruction pair in sliding window (≤3 apart):\n    Pattern: lea rax, [rip+disp] → rax_va = rip + disp\n    Then: mov ebx, N (or mov rbx, N)\n    → record {call_insn_idx: (string_va, length)}"]
-    B --> C["read_at(va, length) → (str, bytes)\n  vaddr_to_file_offset(va) → file offset\n  Read exactly 'length' bytes from binary\n  Decode as UTF-8 (errors='replace')"]
-    C --> D["scan_function(func_va, func_file_offset) → dict\n  Disassemble function with capstone x86-64\n  Apply scan_instructions to result\n  Return {call_site_va: resolved_string}"]
+    A(["GoStringResolver(binary_path, base_va)"]):::input --> B["scan_instructions(instructions) → dict\n  For each instruction pair in sliding window (≤3 apart):\n    Pattern: lea rax, [rip+disp] → rax_va = rip + disp\n    Then: mov ebx, N (or mov rbx, N)\n    → record {call_insn_idx: (string_va, length)}"]:::primary
+    B:::primary --> C["read_at(va, length) → (str, bytes)\n  vaddr_to_file_offset(va) → file offset\n  Read exactly 'length' bytes from binary\n  Decode as UTF-8 (errors='replace')"]:::tertiary
+    C:::tertiary --> D(["scan_function(func_va, func_file_offset) → dict\n  Disassemble function with capstone x86-64\n  Apply scan_instructions to result\n  Return {call_site_va: resolved_string}"]):::output
 
-    E["GoSubprocessScanner(binary_path, pclntab)"] --> F["scan() → List[SubprocessSite]\n  Find all calls to os/exec.Command,\n  exec.CommandContext, exec.Cmd.Start/Run\n  via pclntab function table + PLT resolution"]
-    F --> G["For each call site:\n  GoStringResolver.scan_function() → command string\n  Classify:\n    'relative': starts with './' or '../'\n    'path': bare name (no slash)\n    'absolute': starts with '/'\n    'dynamic': not statically resolvable\n  → SubprocessSite: func_va, call_va, cmd_str, path_type, severity"]
+    E(["GoSubprocessScanner(binary_path, pclntab)"]):::input --> F["scan() → List[SubprocessSite]\n  Find all calls to os/exec.Command,\n  exec.CommandContext, exec.Cmd.Start/Run\n  via pclntab function table + PLT resolution"]:::secondary
+    F:::secondary --> G(["For each call site:\n  GoStringResolver.scan_function() → command string\n  Classify:\n    'relative': starts with './' or '../'\n    'path': bare name (no slash)\n    'absolute': starts with '/'\n    'dynamic': not statically resolvable\n  → SubprocessSite: func_va, call_va, cmd_str, path_type, severity"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#00695c,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Path type severity

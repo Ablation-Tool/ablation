@@ -18,15 +18,30 @@ Probe parameter-level injection and input-handling failures: running SQL injecti
 
 ```mermaid
 flowchart TD
-    A["probe_param(base_url, path, param, method='GET')"] --> B["INJECTION_PROBES: 8 categories\nsql_injection: 4 payloads (OR 1=1, SLEEP(3), DROP TABLE)\nssti: 4 payloads ({{7*7}}, ${7*7})\nssrf: 6 payloads (127.0.0.1, localhost, file:///etc/passwd, 169.254.169.254)\npath_traversal: ../../etc/passwd, ..%2f..%2fetc%2fpasswd\nxxe: XML DOCTYPE with SYSTEM file:///etc/passwd entity\nprototype_pollution: {__proto__:{admin:true}}\nformat_string: %s%s%s, {0.__class__.__mro__}\npickle_rce: pickle payload stubs"]
-    B --> C["Per-response signal detection:\nPATH_ACCESS: 'errno'/'no such file' in body\nSQL_REFLECT: 'syntax error'/'mysql'/'ora-'/'pg::'/'sqlite'\nSSTI_EVAL: '49' in body AND '{{' in payload\nFILE_READ: 'root:'/'daemon:'//bin/bash' in body\nSSRF_ACTIVE: 'connection refused'/'no route to host'\nSSRF_CLOUD_METADATA: '169.254'/'ami-id'/'instance-id' (not PATH error)\nPROTO_POLLUTION_REFLECT: 'admin' in body + 'proto' in payload\nFORMAT_EVAL: payload echoed back non-verbatim"]
-    C --> D["CONFIRMING_SIGNALS[category] check:\nOnly report if signal ∈ confirming set for that category\nPATH_ACCESS alone does NOT confirm sql/ssti/ssrf/xxe"]
-    E["probe_verb_tampering(base, endpoints[:10])"] --> F["HTTP_METHODS: GET POST PUT PATCH DELETE OPTIONS HEAD TRACE CONNECT PROPFIND LOCK UNLOCK\nFor undeclared methods: status not in (405,501,404) AND status != baseline_GET\n→ VERB finding\nMETHOD_OVERRIDE_HEADERS: X-HTTP-Method-Override, X-HTTP-Method, X-Method-Override, _method\nPOST with header: DELETE/PUT/PATCH → status not in (405,404,501)\n→ VERB_OVERRIDE finding"]
-    G["probe_content_type_switch(base, endpoints[:5])"] --> H["CONTENT_TYPES: application/json → application/xml → application/x-www-form-urlencoded\nPOST same data in each content type\nStatus not 415 AND ('xml'/'error' in response)\n→ CT_SWITCH (XML reflection = XXE surface)"]
-    I["probe_param_pollution(base, endpoints[:8])"] --> J["For each param: GET ?param=safe&param=' OR 1=1--\n'error'/'sql' in response → PARAM_POLL"]
-    K["probe_nosql_injection(base, endpoints)"] --> L["NOSQL_PAYLOADS: {'\$ne':''},{'\$gt':''},{'\$regex':'.*'},{'\$where':'1==1'}\nPOST {param: payload} → 200 + len>100 → NOSQL_JSON\nQuery string: ?param[\$ne]=x → NOSQL_QS\nLogin endpoints: {'username':{'\$ne':''},'password':{'\$ne':''}}\n→ token/session/user in response → NOSQL_AUTH_BYPASS CRITICAL"]
-    M["probe_webhook_ssrf(base, endpoints)"] --> N["WEBHOOK_PATHS: /webhook, /webhooks, /callback, /notify, /hook...\nWEBHOOK_PARAM_NAMES: url, webhook_url, callback_url, endpoint, target...\nBaseline: GET ?param=sentinel.example.com\nProbe: GET ?param=http://169.254.169.254/latest/meta-data/\nResponse differs from sentinel AND metadata content → WEBHOOK_SSRF_HIT\nResponse differs (param consumed, no metadata) → WEBHOOK_SSRF_DIFF"]
-    N --> O["probe_host_header_injection(base):\nHost: evil.com, X-Forwarded-Host: evil.com...\nevil.com in response → HOST_INJECT_REFLECT\nPOST /password-reset with Host:evil.com → HOST_RESET_POISON"]
+    A(["probe_param(base_url, path, param, method='GET')"]):::input --> B["INJECTION_PROBES: 8 categories\nsql_injection: 4 payloads (OR 1=1, SLEEP(3), DROP TABLE)\nssti: 4 payloads ({{7*7}}, ${7*7})\nssrf: 6 payloads (127.0.0.1, localhost, file:///etc/passwd, 169.254.169.254)\npath_traversal: ../../etc/passwd, ..%2f..%2fetc%2fpasswd\nxxe: XML DOCTYPE with SYSTEM file:///etc/passwd entity\nprototype_pollution: {__proto__:{admin:true}}\nformat_string: %s%s%s, {0.__class__.__mro__}\npickle_rce: pickle payload stubs"]:::primary
+    B:::primary --> C["Per-response signal detection:\nPATH_ACCESS: 'errno'/'no such file' in body\nSQL_REFLECT: 'syntax error'/'mysql'/'ora-'/'pg::'/'sqlite'\nSSTI_EVAL: '49' in body AND '{{' in payload\nFILE_READ: 'root:'/'daemon:'//bin/bash' in body\nSSRF_ACTIVE: 'connection refused'/'no route to host'\nSSRF_CLOUD_METADATA: '169.254'/'ami-id'/'instance-id' (not PATH error)\nPROTO_POLLUTION_REFLECT: 'admin' in body + 'proto' in payload\nFORMAT_EVAL: payload echoed back non-verbatim"]:::tertiary
+    C:::tertiary --> D(["CONFIRMING_SIGNALS[category] check:\nOnly report if signal ∈ confirming set for that category\nPATH_ACCESS alone does NOT confirm sql/ssti/ssrf/xxe"]):::output
+    E(["probe_verb_tampering(base, endpoints[:10])"]):::input --> F(["HTTP_METHODS: GET POST PUT PATCH DELETE OPTIONS HEAD TRACE CONNECT PROPFIND LOCK UNLOCK\nFor undeclared methods: status not in (405,501,404) AND status != baseline_GET\n→ VERB finding\nMETHOD_OVERRIDE_HEADERS: X-HTTP-Method-Override, X-HTTP-Method, X-Method-Override, _method\nPOST with header: DELETE/PUT/PATCH → status not in (405,404,501)\n→ VERB_OVERRIDE finding"]):::output
+    G(["probe_content_type_switch(base, endpoints[:5])"]):::input --> H(["CONTENT_TYPES: application/json → application/xml → application/x-www-form-urlencoded\nPOST same data in each content type\nStatus not 415 AND ('xml'/'error' in response)\n→ CT_SWITCH (XML reflection = XXE surface)"]):::output
+    I(["probe_param_pollution(base, endpoints[:8])"]):::input --> J(["For each param: GET ?param=safe&param=' OR 1=1--\n'error'/'sql' in response → PARAM_POLL"]):::output
+    K(["probe_nosql_injection(base, endpoints)"]):::input --> L(["NOSQL_PAYLOADS: {'\$ne':''},{'\$gt':''},{'\$regex':'.*'},{'\$where':'1==1'}\nPOST {param: payload} → 200 + len>100 → NOSQL_JSON\nQuery string: ?param[\$ne]=x → NOSQL_QS\nLogin endpoints: {'username':{'\$ne':''},'password':{'\$ne':''}}\n→ token/session/user in response → NOSQL_AUTH_BYPASS CRITICAL"]):::output
+    M(["probe_webhook_ssrf(base, endpoints)"]):::input --> N["WEBHOOK_PATHS: /webhook, /webhooks, /callback, /notify, /hook...\nWEBHOOK_PARAM_NAMES: url, webhook_url, callback_url, endpoint, target...\nBaseline: GET ?param=sentinel.example.com\nProbe: GET ?param=http://169.254.169.254/latest/meta-data/\nResponse differs from sentinel AND metadata content → WEBHOOK_SSRF_HIT\nResponse differs (param consumed, no metadata) → WEBHOOK_SSRF_DIFF"]:::secondary
+    N:::secondary --> O(["probe_host_header_injection(base):\nHost: evil.com, X-Forwarded-Host: evil.com...\nevil.com in response → HOST_INJECT_REFLECT\nPOST /password-reset with Host:evil.com → HOST_RESET_POISON"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#00695c,stroke-width:2px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

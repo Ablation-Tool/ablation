@@ -18,29 +18,58 @@ Enumerate SIP server exposure across five attack surfaces: version fingerprint v
 
 ```mermaid
 flowchart TD
-    A["SIPEnumerator(host, port=5060, timeout=5.0)"] --> B["enumerate_all()"]
-    B --> C["1. probe_sip_server()\nSend OPTIONS to sip:100@host via UDP\nParse status code, Server/User-Agent header, Allow header"]
-    C --> D{"Any response?"}
-    D -->|code != 0| E["MEDIUM: SIP server active\nLOW: version disclosure (Server/User-Agent)\nLOW: method exposure (SUBSCRIBE/NOTIFY/PUBLISH in Allow)"]
-    D -->|no response| F["Skip — not SIP or filtered"]
-    B --> G["2. check_unauthenticated_register()\nSend REGISTER for ext 100 with no credentials"]
-    G --> H{"code == 200?"}
-    H -->|yes| I["CRITICAL: registration bypass — extension hijack possible"]
-    H -->|no| J
-    B --> K["3. enumerate_extensions(start=100, end=110)\nBaseline probe: REGISTER 'fakesipuser99999' → invalid_code\nSweep each extension, compare to invalid_code"]
-    K --> L{"response vs invalid_code"}
-    L -->|code 200| M["CRITICAL: unauthenticated extensions (list)"]
-    L -->|code 401, invalid != 401| N["HIGH: confirmed extension exists (auth required)"]
-    L -->|code 401, invalid == 401| O["Skip: Kamailio — cannot discriminate"]
-    B --> P["4. check_ami_interface()\nTCP connect port 5038\nCheck banner: 'Asterisk Call Manager'"]
-    P --> Q{"default creds loop: admin:admin / admin:amp111 / admin:password / admin:''"}
-    Q -->|Response: Success| R["CRITICAL: AMI default credentials accepted"]
-    Q -->|banner only| S["MEDIUM: AMI exposed (no default creds)"]
-    B --> T["5. check_srtp_required()\nSend INVITE with SDP: m=audio N RTP/AVP 0 (unencrypted)"]
-    T --> U{"Response code?"}
-    U -->|200 + RTP/AVP in SDP answer| V["MEDIUM: SRTP not enforced\nExtract media_ip, media_port from SDP answer\nparse_sdp_media(): c=IN IP4, m=audio, a=rtpmap"]
-    U -->|488 or 606| W["LOW: SRTP required — encrypted media enforced"]
-    U -->|401| X["LOW: INVITE requires auth"]
+    A(["SIPEnumerator(host, port=5060, timeout=5.0)"]):::input --> B["enumerate_all()"]:::primary
+    B:::primary --> C["1. probe_sip_server()\nSend OPTIONS to sip:100@host via UDP\nParse status code, Server/User-Agent header, Allow header"]:::secondary
+    C:::secondary --> D{"Any response?"}:::neutral
+    D:::neutral -->|code != 0| E(["MEDIUM: SIP server active\nLOW: version disclosure (Server/User-Agent)\nLOW: method exposure (SUBSCRIBE/NOTIFY/PUBLISH in Allow)"]):::output
+    D:::neutral -->|no response| F(["Skip · not SIP or filtered"]):::output
+    B:::primary --> G["2. check_unauthenticated_register()\nSend REGISTER for ext 100 with no credentials"]:::tertiary
+    G:::tertiary --> H{"code == 200?"}:::neutral
+    H:::neutral -->|yes| I(["CRITICAL: registration bypass · extension hijack possible"]):::output
+    H:::neutral -->|no| J(["J"]):::output
+    B:::primary --> K["3. enumerate_extensions(start=100, end=110)\nBaseline probe: REGISTER 'fakesipuser99999' → invalid_code\nSweep each extension, compare to invalid_code"]:::tertiary
+    K:::tertiary --> L{"response vs invalid_code"}:::neutral
+    L:::neutral -->|code 200| M(["CRITICAL: unauthenticated extensions (list)"]):::output
+    L:::neutral -->|code 401, invalid != 401| N(["HIGH: confirmed extension exists (auth required)"]):::output
+    L:::neutral -->|code 401, invalid == 401| O(["Skip: Kamailio · cannot discriminate"]):::output
+    B:::primary --> P["4. check_ami_interface()\nTCP connect port 5038\nCheck banner: 'Asterisk Call Manager'"]:::tertiary
+    P:::tertiary --> Q{"default creds loop: admin:admin / admin:amp111 / admin:password / admin:''"}:::neutral
+    Q:::neutral -->|Response: Success| R(["CRITICAL: AMI default credentials accepted"]):::output
+    Q:::neutral -->|banner only| S(["MEDIUM: AMI exposed (no default creds)"]):::output
+    B:::primary --> T["5. check_srtp_required()\nSend INVITE with SDP: m=audio N RTP/AVP 0 (unencrypted)"]:::tertiary
+    T:::tertiary --> U{"Response code?"}:::neutral
+    U:::neutral -->|200 + RTP/AVP in SDP answer| V(["MEDIUM: SRTP not enforced\nExtract media_ip, media_port from SDP answer\nparse_sdp_media(): c=IN IP4, m=audio, a=rtpmap"]):::output
+    U:::neutral -->|488 or 606| W(["LOW: SRTP required · encrypted media enforced"]):::output
+    U:::neutral -->|401| X(["LOW: INVITE requires auth"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#546e7a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#546e7a,stroke-width:2px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#546e7a,stroke-width:2px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
+    linkStyle 12 stroke:#2e7d32,stroke-width:3px
+    linkStyle 13 stroke:#2e7d32,stroke-width:3px
+    linkStyle 14 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 15 stroke:#546e7a,stroke-width:2px
+    linkStyle 16 stroke:#2e7d32,stroke-width:3px
+    linkStyle 17 stroke:#2e7d32,stroke-width:3px
+    linkStyle 18 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 19 stroke:#546e7a,stroke-width:2px
+    linkStyle 20 stroke:#2e7d32,stroke-width:3px
+    linkStyle 21 stroke:#2e7d32,stroke-width:3px
+    linkStyle 22 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Response code semantics extension enumeration

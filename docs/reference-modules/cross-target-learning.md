@@ -22,24 +22,32 @@ After confirming a heap overflow in Fortinet firmware, the next engagement on a 
 
 ```mermaid
 flowchart TD
-    A["Engagement N\nTaintTracker confirms heap overflow\nin auth_radius_parse (Fortinet, x86-64)"] --> B["FindingRegistry.register()\nvendor='fortinet' · product='fortigate'\ncwe_class='CWE-122' · severity='CRITICAL'\nembedding = model.encode(description)\n← BERT vector, 768 dims"]
+    A(["Engagement N\nTaintTracker confirms heap overflow\nin auth_radius_parse (Fortinet, x86-64)"]):::input --> B["FindingRegistry.register()\nvendor='fortinet' · product='fortigate'\ncwe_class='CWE-122' · severity='CRITICAL'\nembedding = model.encode(description)\n← BERT vector, 768 dims"]:::primary
 
-    B --> C[("~/.ablation/findings.db\nSQLite: persists forever\nfields: vendor · product · title\ndescription · cwe_class · severity\nfunc_addr · binary · embedding BLOB")]
+    B:::primary --> C["~/.ablation/findings.db\nSQLite: persists forever\nfields: vendor · product · title\ndescription · cwe_class · severity\nfunc_addr · binary · embedding BLOB"]:::secondary
 
-    C --> D["Engagement N+1\nNew vendor, different architecture\n(e.g., Huawei VRP, MIPS32)"]
+    C:::secondary --> D["Engagement N+1\nNew vendor, different architecture\n(e.g., Huawei VRP, MIPS32)"]:::tertiary
 
-    D --> E["PatternLibrary.ingest_from_registry(reg)\nreg.export_patterns():\n  for each row → yield query + tag\nCWE-to-tag: CWE-122 → heap_overflow\nIdempotent: hashes (query, tag) pairs\nSkips patterns already present"]
+    D:::tertiary --> E["PatternLibrary.ingest_from_registry(reg)\nreg.export_patterns():\n  for each row → yield query + tag\nCWE-to-tag: CWE-122 → heap_overflow\nIdempotent: hashes (query, tag) pairs\nSkips patterns already present"]:::tertiary
 
-    E --> F[("~/.ablation/patterns.json\nGrows with every engagement\n[{query, tag}, ...]")]
+    E:::tertiary --> F["~/.ablation/patterns.json\nGrows with every engagement\n[{query, tag}, ...]"]:::tertiary
 
-    F --> G["PatternLibrary.sweep(searcher, top_k=8, min_score=0.30)\nFor each pattern: q_vec = model.encode(query)\nscores = corpus_matrix @ q_vec  (cosine similarity)\ntop_k = argpartition(scores, -top_k)"]
+    F:::tertiary --> G["PatternLibrary.sweep(searcher, top_k=8, min_score=0.30)\nFor each pattern: q_vec = model.encode(query)\nscores = corpus_matrix @ q_vec  (cosine similarity)\ntop_k = argpartition(scores, -top_k)"]:::tertiary
 
-    G --> H[/"Output: {tag: [(score, func_id, name), ...]}\nCVSS ≥ 7.0 highlighted for immediate triage"/]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style C fill:#1e3a5f,stroke:#1d4ed8,color:#bfdbfe
-    style F fill:#1e3a5f,stroke:#1d4ed8,color:#bfdbfe
-    style H fill:#14532d,stroke:#166534,color:#dcfce7
+    G:::tertiary --> H(["Output: {tag: [(score, func_id, name), ...]}\nCVSS ≥ 7.0 highlighted for immediate triage"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### How embeddings enable cross-vendor matching

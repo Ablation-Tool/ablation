@@ -18,9 +18,18 @@ Detect argument register clobber in PPC32 PEF/CFM binaries: finding call sites w
 
 ```mermaid
 flowchart TD
-    A["PEFABIClobberScanner.from_bytes(code, base_va)"] --> B["scan() → List[ABIClobberFinding]\n  Classify each instruction via InsnClass:\n    WRITE_ARG: instruction writes r3–r10\n      addi/addis: dest = RT = bits[25:21]\n      ori/andi/oris: dest = RA = bits[20:16]\n      lwz/lbz/lhz: dest = RT\n      mr/li: dest = RT\n    INTERMEDIATE_CALL: bl to a non-sink symbol\n    OUTER_CALL: bl to a sink symbol\n  Sliding window per function:\n    WRITE_ARG → [INTERMEDIATE_CALL ...] → OUTER_CALL\n    If same register was WRITE_ARG but not reloaded after INTERMEDIATE_CALL\n    → ABIClobberFinding"]
-    B --> C["ABIClobberFinding:\n  func_va: int\n  write_va: int\n  clobber_va: int\n  outer_call_va: int\n  register: str  (r3/r4/r5/...)\n  outer_call_name: str\n  severity: HIGH | MEDIUM\n  fmt() → str"]
-    C --> D["report(findings) → str"]
+    A(["PEFABIClobberScanner.from_bytes(code, base_va)"]):::input --> B["scan() → List[ABIClobberFinding]\n  Classify each instruction via InsnClass:\n    WRITE_ARG: instruction writes r3·r10\n      addi/addis: dest = RT = bits[25:21]\n      ori/andi/oris: dest = RA = bits[20:16]\n      lwz/lbz/lhz: dest = RT\n      mr/li: dest = RT\n    INTERMEDIATE_CALL: bl to a non-sink symbol\n    OUTER_CALL: bl to a sink symbol\n  Sliding window per function:\n    WRITE_ARG → [INTERMEDIATE_CALL ...] → OUTER_CALL\n    If same register was WRITE_ARG but not reloaded after INTERMEDIATE_CALL\n    → ABIClobberFinding"]:::primary
+    B:::primary --> C["ABIClobberFinding:\n  func_va: int\n  write_va: int\n  clobber_va: int\n  outer_call_va: int\n  register: str  (r3/r4/r5/...)\n  outer_call_name: str\n  severity: HIGH | MEDIUM\n  fmt() → str"]:::secondary
+    C:::secondary --> D(["report(findings) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

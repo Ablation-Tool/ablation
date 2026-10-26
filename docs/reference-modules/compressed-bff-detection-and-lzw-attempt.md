@@ -18,10 +18,20 @@ Map Shannon entropy across a binary file using a sliding window: classifying byt
 
 ```mermaid
 flowchart TD
-    A["EntropyMapper.from_path(path, window=4096, step=1024)\n  or .from_bytes(data)"] --> B["map() → EntropyMapResult\n  Slide window across data:\n    H = -sum(p_i * log2(p_i)) for i in 0..255\n    where p_i = count(byte_value_i) / window_size\n  → List[EntropyWindow(offset, entropy)]"]
-    B --> C["EntropyMapResult:\n  windows: List[EntropyWindow]\n  regions: List[EntropyRegion]  (merged consecutive windows by class)\n  summary() → str\n  encrypted_ranges() → List[(start_offset, end_offset)]\n    (H >= 7.5)\n  find_transitions(threshold=0.5) → List[EntropyTransition]"]
-    C --> D["EntropyRegion:\n  start: int\n  end: int\n  mean_entropy: float\n  classification: str  encrypted | code | low_entropy\n  size() → int\n  fmt() → str"]
-    D --> E["EntropyTransition:\n  from_region, to_region: EntropyRegion\n  delta() → float  (entropy change magnitude)\n  fmt() → str"]
+    A(["EntropyMapper.from_path(path, window=4096, step=1024)\n  or .from_bytes(data)"]):::input --> B["map() → EntropyMapResult\n  Slide window across data:\n    H = -sum(p_i * log2(p_i)) for i in 0..255\n    where p_i = count(byte_value_i) / window_size\n  → List[EntropyWindow(offset, entropy)]"]:::primary
+    B:::primary --> C["EntropyMapResult:\n  windows: List[EntropyWindow]\n  regions: List[EntropyRegion]  (merged consecutive windows by class)\n  summary() → str\n  encrypted_ranges() → List[(start_offset, end_offset)]\n    (H >= 7.5)\n  find_transitions(threshold=0.5) → List[EntropyTransition]"]:::secondary
+    C:::secondary --> D["EntropyRegion:\n  start: int\n  end: int\n  mean_entropy: float\n  classification: str  encrypted | code | low_entropy\n  size() → int\n  fmt() → str"]:::tertiary
+    D:::tertiary --> E(["EntropyTransition:\n  from_region, to_region: EntropyRegion\n  delta() → float  (entropy change magnitude)\n  fmt() → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

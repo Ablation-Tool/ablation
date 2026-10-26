@@ -18,11 +18,22 @@ Enumerate Event Tracing for Windows (ETW) provider registrations and event write
 
 ```mermaid
 flowchart TD
-    A["ETWProviderExtractor.from_path(pe_path)"] --> B["providers() → List[ETWProvider]\n  Find: EventRegister call sites\n  Arg 0: pointer to GUID struct (16 bytes)\n  Read: ProviderGuid → format as UUID string\n  Match: against known security provider GUID table\n  → ETWProvider(guid, known_name_if_any, va)"]
-    B --> C["write_site_count() → int\n  Count: all EventWrite / EventWriteEx call sites in binary\n  Returns: total ETW write coverage count"]
-    C --> D["scan() → List[ETWFinding]\n  For each security-relevant function:\n    File write: CreateFile, WriteFile\n    Process creation: CreateProcess, ShellExecute\n    Network: WSAConnect, send/recv\n    Registry: RegSetValueEx\n  Is there an EventWrite within N instructions before/after?\n  No → ETWFinding(func_va, operation, severity='MEDIUM')"]
-    D --> E["ETWFinding:\n  func_va: int\n  operation: str  (process_creation, file_write, etc.)\n  severity: str   HIGH | MEDIUM | LOW\n  description: str"]
-    E --> F["report(findings) → str"]
+    A(["ETWProviderExtractor.from_path(pe_path)"]):::input --> B["providers() → List[ETWProvider]\n  Find: EventRegister call sites\n  Arg 0: pointer to GUID struct (16 bytes)\n  Read: ProviderGuid → format as UUID string\n  Match: against known security provider GUID table\n  → ETWProvider(guid, known_name_if_any, va)"]:::primary
+    B:::primary --> C["write_site_count() → int\n  Count: all EventWrite / EventWriteEx call sites in binary\n  Returns: total ETW write coverage count"]:::secondary
+    C:::secondary --> D["scan() → List[ETWFinding]\n  For each security-relevant function:\n    File write: CreateFile, WriteFile\n    Process creation: CreateProcess, ShellExecute\n    Network: WSAConnect, send/recv\n    Registry: RegSetValueEx\n  Is there an EventWrite within N instructions before/after?\n  No → ETWFinding(func_va, operation, severity='MEDIUM')"]:::tertiary
+    D:::tertiary --> E["ETWFinding:\n  func_va: int\n  operation: str  (process_creation, file_write, etc.)\n  severity: str   HIGH | MEDIUM | LOW\n  description: str"]:::tertiary
+    E:::tertiary --> F(["report(findings) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

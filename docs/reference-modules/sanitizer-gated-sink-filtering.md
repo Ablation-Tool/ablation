@@ -18,13 +18,26 @@ Post-process `ARG_PROPAGATED` `SinkArgClassifier` results to detect sanitizer-va
 
 ```mermaid
 flowchart TD
-    A["SinkSanitizerFilter.from_context(ctx)"] --> B["apply(classifications: List[SinkClassification]) → int\n  Input: ARG_PROPAGATED SinkArgClassifier results\n  Returns: count of sites reclassified as SANITIZER_VALIDATED"]
-    B --> C["For each ARG_PROPAGATED site:\n  Disassemble containing function\n  Walk _SANITIZER_SCAN_WINDOW instructions backward from sink\n  Check condition 1: SHELL_SAFE sanitizer called on same arg?\n    SanitizerDetector.lookup(callee_va) → SanitizerProfile\n    If profile.coverage_report.shell_safe() → candidate"]
-    C --> D["Check condition 2: return value in conditional branch?\n  test eax, eax / jne/je/jz pattern\n  Conditional immediately after sanitizer call"]
-    D --> E["Check condition 3: branch guards exec sink?\n  False edge → error path (exit/return)\n  True edge → continues to exec sink"]
-    E --> F{"All 3 conditions met?"}
-    F -- Yes --> G["Reclassify to SANITIZER_VALIDATED\n  classification.verdict = 'SANITIZER_VALIDATED'\n  Remove from TaintTracker queue"]
-    F -- No --> H["Keep as ARG_PROPAGATED\n  (genuinely needs TaintTracker)"]
+    A(["SinkSanitizerFilter.from_context(ctx)"]):::input --> B["apply(classifications: List[SinkClassification]) → int\n  Input: ARG_PROPAGATED SinkArgClassifier results\n  Returns: count of sites reclassified as SANITIZER_VALIDATED"]:::primary
+    B:::primary --> C["For each ARG_PROPAGATED site:\n  Disassemble containing function\n  Walk _SANITIZER_SCAN_WINDOW instructions backward from sink\n  Check condition 1: SHELL_SAFE sanitizer called on same arg?\n    SanitizerDetector.lookup(callee_va) → SanitizerProfile\n    If profile.coverage_report.shell_safe() → candidate"]:::secondary
+    C:::secondary --> D["Check condition 2: return value in conditional branch?\n  test eax, eax / jne/je/jz pattern\n  Conditional immediately after sanitizer call"]:::tertiary
+    D:::tertiary --> E["Check condition 3: branch guards exec sink?\n  False edge → error path (exit/return)\n  True edge → continues to exec sink"]:::tertiary
+    E:::tertiary --> F{"All 3 conditions met?"}:::neutral
+    F:::neutral --> G(["Reclassify to SANITIZER_VALIDATED\n  classification.verdict = 'SANITIZER_VALIDATED'\n  Remove from TaintTracker queue"]):::output
+    F:::neutral --> H(["Keep as ARG_PROPAGATED\n  (genuinely needs TaintTracker)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#546e7a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

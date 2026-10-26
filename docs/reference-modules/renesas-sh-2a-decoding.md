@@ -18,10 +18,20 @@ Decode Renesas SH-2A firmware for SH7058/SH7059 MCUs: distinguishing 16-bit fixe
 
 ```mermaid
 flowchart TD
-    A["EcuSH2aDecoder.from_path(path, base_va)\n  or .from_bytes(data, base_va)"] --> B["insn_length(offset) → int\n  Read first halfword (big-endian)\n  32-bit SH-2A patterns:\n    0x6F_F0–0x6F_FF: MOV.X @(disp32, PC), Rn\n    0x3_F00–0x3_FFF: MOV.X @(disp32, Rn), Rm\n    (additional 32-bit patterns per HW manual)\n  All others → 2 bytes  (base SH-2 instruction)"]
-    B --> C["decode_one(offset) → Optional[SH2aInsn]\n  Security-relevant subset:\n    JSR: call subroutine\n    RTS: return from subroutine\n    BSR/BRA: branch\n    MOV: data movement (load/store)\n  SH2aInsn: address, mnemonic, op_str, size"]
-    C --> D["disassemble(start_va, end_va) → Iterator[SH2aInsn]"]
-    C --> E["function_starts() → List[int]\n  Scan for SH-2A function prologue:\n    STS.L PR, @-SP  (save link register)\n    MOV.L R14, @-SP  (save frame pointer)\n  Return sorted start addresses"]
+    A(["EcuSH2aDecoder.from_path(path, base_va)\n  or .from_bytes(data, base_va)"]):::input --> B["insn_length(offset) → int\n  Read first halfword (big-endian)\n  32-bit SH-2A patterns:\n    0x6F_F0·0x6F_FF: MOV.X @(disp32, PC), Rn\n    0x3_F00·0x3_FFF: MOV.X @(disp32, Rn), Rm\n    (additional 32-bit patterns per HW manual)\n  All others → 2 bytes  (base SH-2 instruction)"]:::primary
+    B:::primary --> C["decode_one(offset) → Optional[SH2aInsn]\n  Security-relevant subset:\n    JSR: call subroutine\n    RTS: return from subroutine\n    BSR/BRA: branch\n    MOV: data movement (load/store)\n  SH2aInsn: address, mnemonic, op_str, size"]:::secondary
+    C:::secondary --> D(["disassemble(start_va, end_va) → Iterator[SH2aInsn]"]):::output
+    C:::secondary --> E(["function_starts() → List[int]\n  Scan for SH-2A function prologue:\n    STS.L PR, @-SP  (save link register)\n    MOV.L R14, @-SP  (save frame pointer)\n  Return sorted start addresses"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,9 +18,18 @@ Detect packed section entropy, PEB/debugger detection patterns, opaque predicate
 
 ```mermaid
 flowchart TD
-    A["detect_binary_obfuscation_patterns(binary_data) → list\n  Packed section entropy:\n    Per-section entropy > 7.0 AND\n    IAT: only VirtualAlloc + GetProcAddress\n    → PACKED_STUB\n  PEB debugger detection:\n    IsDebuggerPresent / CheckRemoteDebuggerPresent\n    NtQueryInformationProcess(0x7) ProcessDebugPort\n    → DEBUGGER_DETECT_API"] --> B["Timing-based sandbox:\n  GetTickCount + CMP/SUB → time delta check\n  QueryPerformanceCounter delta < threshold\n  → TIMING_SANDBOX_DETECT\n\nCPUID/RDTSC VM detection:\n  0F A2 (CPUID) EAX=1 + test ECX bit 31 (hypervisor bit)\n  0F 31 (RDTSC) + TSC delta comparison\n  → CPUID_VM_DETECT"]
-    B --> C["detect_pe_peb_manipulation(binary_data) → list\n  PEB module list unlink:\n    LDR_DATA_TABLE_ENTRY FLINK/BLINK pattern\n    → PEB_MODULE_UNLINK\n  Header erase: mov [ImageBase], 0 / stosb 0 loop\n    → PE_HEADER_ERASE\n  NtSetInformationProcess crash-on-inspect:\n    ProcessBreakOnTermination (class=29)\n    → CRASH_ON_INSPECT"]
-    C --> D["detect_dll_sideloading_artifacts(binary_data) → list\n  LoadLibrary with bare DLL name (no absolute path)\n  SetDllDirectory absent → search-order hijack\n  → DLL_RELATIVE_PATH_LOAD\n\ndetect_obfuscation patterns:\n  string decrypt: XOR loop + call to decrypted buffer\n  import hashing: API name hash → GetProcAddress\n  → STRING_DECRYPT / IMPORT_HASH"]
+    A(["detect_binary_obfuscation_patterns(binary_data) → list\n  Packed section entropy:\n    Per-section entropy > 7.0 AND\n    IAT: only VirtualAlloc + GetProcAddress\n    → PACKED_STUB\n  PEB debugger detection:\n    IsDebuggerPresent / CheckRemoteDebuggerPresent\n    NtQueryInformationProcess(0x7) ProcessDebugPort\n    → DEBUGGER_DETECT_API"]):::input --> B["Timing-based sandbox:\n  GetTickCount + CMP/SUB → time delta check\n  QueryPerformanceCounter delta < threshold\n  → TIMING_SANDBOX_DETECT\n\nCPUID/RDTSC VM detection:\n  0F A2 (CPUID) EAX=1 + test ECX bit 31 (hypervisor bit)\n  0F 31 (RDTSC) + TSC delta comparison\n  → CPUID_VM_DETECT"]:::primary
+    B:::primary --> C["detect_pe_peb_manipulation(binary_data) → list\n  PEB module list unlink:\n    LDR_DATA_TABLE_ENTRY FLINK/BLINK pattern\n    → PEB_MODULE_UNLINK\n  Header erase: mov [ImageBase], 0 / stosb 0 loop\n    → PE_HEADER_ERASE\n  NtSetInformationProcess crash-on-inspect:\n    ProcessBreakOnTermination (class=29)\n    → CRASH_ON_INSPECT"]:::secondary
+    C:::secondary --> D(["detect_dll_sideloading_artifacts(binary_data) → list\n  LoadLibrary with bare DLL name (no absolute path)\n  SetDllDirectory absent → search-order hijack\n  → DLL_RELATIVE_PATH_LOAD\n\ndetect_obfuscation patterns:\n  string decrypt: XOR loop + call to decrypted buffer\n  import hashing: API name hash → GetProcAddress\n  → STRING_DECRYPT / IMPORT_HASH"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

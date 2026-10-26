@@ -18,10 +18,20 @@ Run Ablation's vulnerability detector suite on a freshly compiled binary before 
 
 ```mermaid
 flowchart TD
-    A["CompilerSecurityGate.from_path(binary_path)\n  or .from_context(ctx)"] --> B["scan() → List[GateFinding]\n  Run detector suite per architecture:\n    All: TaintTracker (sources/sinks from profiles)\n    x86-64: FormatStringScanner\n    x86-32: SEHChainAnalyzer\n    ARM64: ARM64FgetsFdDiscriminator\n    All: SinkArgClassifier.classify_all()\n      → suppress RODATA_CONST findings\n    All: LengthUnderflow scanner\n  → GateFinding per confirmed finding"]
-    B --> C["GateFinding:\n  func_va: int\n  site_va: int\n  category: TAINT_FLOW | FORMAT_STRING | HEAP | LENGTH_UNDERFLOW\n  severity: CRITICAL | HIGH | MEDIUM | LOW\n  description: str\n  detector: str"]
-    C --> D["report(findings) → str"]
-    D --> E["check(strict=False) → int\n  strict=False: return 1 if any CRITICAL/HIGH\n  strict=True:  return 1 if any finding\n  return 0 if gate passes"]
+    A(["CompilerSecurityGate.from_path(binary_path)\n  or .from_context(ctx)"]):::input --> B["scan() → List[GateFinding]\n  Run detector suite per architecture:\n    All: TaintTracker (sources/sinks from profiles)\n    x86-64: FormatStringScanner\n    x86-32: SEHChainAnalyzer\n    ARM64: ARM64FgetsFdDiscriminator\n    All: SinkArgClassifier.classify_all()\n      → suppress RODATA_CONST findings\n    All: LengthUnderflow scanner\n  → GateFinding per confirmed finding"]:::primary
+    B:::primary --> C["GateFinding:\n  func_va: int\n  site_va: int\n  category: TAINT_FLOW | FORMAT_STRING | HEAP | LENGTH_UNDERFLOW\n  severity: CRITICAL | HIGH | MEDIUM | LOW\n  description: str\n  detector: str"]:::secondary
+    C:::secondary --> D["report(findings) → str"]:::tertiary
+    D:::tertiary --> E(["check(strict=False) → int\n  strict=False: return 1 if any CRITICAL/HIGH\n  strict=True:  return 1 if any finding\n  return 0 if gate passes"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

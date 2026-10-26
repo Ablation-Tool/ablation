@@ -18,9 +18,18 @@ Classify `sscanf`/`scanf`/`fscanf`/`vsscanf` call sites for destination buffer o
 
 ```mermaid
 flowchart TD
-    A["SscanfSinkClassifier.from_path(path)\n  or .from_context(ctx)"] --> B["classify_all() → List[SscanfClassification]\n  Find all scanf/sscanf/fscanf/vsscanf call sites\n  Identify format register per calling convention:\n    scanf:    rdi (format)\n    sscanf:   rsi (src=rdi, format=rsi)\n    fscanf:   rsi (fp=rdi, format=rsi)"]
-    B --> C["Backward walk from call site → format definition:\n  LEA from .rodata?:\n    '%46s %lu %d' → RODATA_SAFE  (has width)\n    '%s %lu %d'  → RODATA_UNSAFE (unbounded %s)\n  Stack buf from snprintf?:\n    Check snprintf format → DYNAMIC_FMT\n  Entry register?:\n    → ARG_PROPAGATED\n  Unknown?:\n    → UNKNOWN"]
-    C --> D["SscanfClassification:\n  call_va, callee_name, fmt_reg\n  verdict: RODATA_SAFE | RODATA_UNSAFE | DYNAMIC_FMT | ARG_PROPAGATED | UNKNOWN\n  needs_investigation() → bool  (not RODATA_SAFE)\n  as_dict() → structured finding\n  fmt() → formatted block"]
+    A(["SscanfSinkClassifier.from_path(path)\n  or .from_context(ctx)"]):::input --> B["classify_all() → List[SscanfClassification]\n  Find all scanf/sscanf/fscanf/vsscanf call sites\n  Identify format register per calling convention:\n    scanf:    rdi (format)\n    sscanf:   rsi (src=rdi, format=rsi)\n    fscanf:   rsi (fp=rdi, format=rsi)"]:::primary
+    B:::primary --> C["Backward walk from call site → format definition:\n  LEA from .rodata?:\n    '%46s %lu %d' → RODATA_SAFE  (has width)\n    '%s %lu %d'  → RODATA_UNSAFE (unbounded %s)\n  Stack buf from snprintf?:\n    Check snprintf format → DYNAMIC_FMT\n  Entry register?:\n    → ARG_PROPAGATED\n  Unknown?:\n    → UNKNOWN"]:::secondary
+    C:::secondary --> D(["SscanfClassification:\n  call_va, callee_name, fmt_reg\n  verdict: RODATA_SAFE | RODATA_UNSAFE | DYNAMIC_FMT | ARG_PROPAGATED | UNKNOWN\n  needs_investigation() → bool  (not RODATA_SAFE)\n  as_dict() → structured finding\n  fmt() → formatted block"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,10 +18,20 @@ Decode Swift 5+ (`$s` prefix) and legacy Swift 3/4 (`_T` prefix) mangled symbol 
 
 ```mermaid
 flowchart TD
-    A["demangle(name: str) → str\n  Check LRU cache first"] --> B["is_swift_symbol(name) →\n  name.startswith('$s') → Swift 5\n  name.startswith('_T') → Swift 3/4\n  else: return name unchanged"]
-    B --> C["_has_swift_demangle() → bool\n  subprocess.run(['swift-demangle', '--version']) succeeds\n  True → _swift_demangle_binary(name)\n     swift-demangle --compact <name>"]
-    C --> D["Fallback: pure Python\n  _demangle_swift5(name)\n    Read module/type/function path from $s encoding\n    SE-0235: length-prefixed identifier segments\n    _read_lp_name() + _read_identifier()\n  _demangle_legacy(name)\n    Parse _T prefix legacy mangling"]
-    D --> E["LRU cache stores result\n  Return: human-readable name, or original if decode fails"]
+    A(["demangle(name: str) → str\n  Check LRU cache first"]):::input --> B["is_swift_symbol(name) →\n  name.startswith('$s') → Swift 5\n  name.startswith('_T') → Swift 3/4\n  else: return name unchanged"]:::primary
+    B:::primary --> C["_has_swift_demangle() → bool\n  subprocess.run(['swift-demangle', '--version']) succeeds\n  True → _swift_demangle_binary(name)\n     swift-demangle --compact <name>"]:::secondary
+    C:::secondary --> D["Fallback: pure Python\n  _demangle_swift5(name)\n    Read module/type/function path from $s encoding\n    SE-0235: length-prefixed identifier segments\n    _read_lp_name() + _read_identifier()\n  _demangle_legacy(name)\n    Parse _T prefix legacy mangling"]:::tertiary
+    D:::tertiary --> E(["LRU cache stores result\n  Return: human-readable name, or original if decode fails"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

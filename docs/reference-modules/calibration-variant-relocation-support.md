@@ -18,10 +18,20 @@ Locate open_damos.json calibration tables in any firmware variant of a Bosch ECU
 
 ```mermaid
 flowchart TD
-    A["EcuOpenDamosParser.from_file('open_damos.json')"] --> B["calibration_tables() → List[CalibrationTable]\n  Parse open_damos.json:\n    RecordLayout: axis definitions, bit counts, type\n    CalibrationTable: name, x_axis fingerprint, y_axis fingerprint,\n      RecordLayout reference, physical range"]
-    B --> C["locate_in_rom(rom: bytes) → Dict[str, int]\n  For each CalibrationTable:\n    Compute expected byte sequence from axis fingerprint\n      (physical breakpoints → ADC/hex via RecordLayout.convert)\n    Search rom for matching byte sequence within ±tolerance\n    → {table_name: file_offset}"]
-    C --> D["label_map(rom: bytes | None) → Dict[int, str]\n  If rom given: call locate_in_rom first\n  Return {file_offset: label} for all located tables\n  Suitable for ctx.set_name(offset, label, source='open_damos')"]
-    D --> E["summary() → str\n  Print: N tables parsed, M located, K failed to locate"]
+    A(["EcuOpenDamosParser.from_file('open_damos.json')"]):::input --> B["calibration_tables() → List[CalibrationTable]\n  Parse open_damos.json:\n    RecordLayout: axis definitions, bit counts, type\n    CalibrationTable: name, x_axis fingerprint, y_axis fingerprint,\n      RecordLayout reference, physical range"]:::primary
+    B:::primary --> C["locate_in_rom(rom: bytes) → Dict[str, int]\n  For each CalibrationTable:\n    Compute expected byte sequence from axis fingerprint\n      (physical breakpoints → ADC/hex via RecordLayout.convert)\n    Search rom for matching byte sequence within ±tolerance\n    → {table_name: file_offset}"]:::secondary
+    C:::secondary --> D["label_map(rom: bytes | None) → Dict[int, str]\n  If rom given: call locate_in_rom first\n  Return {file_offset: label} for all located tables\n  Suitable for ctx.set_name(offset, label, source='open_damos')"]:::tertiary
+    D:::tertiary --> E(["summary() → str\n  Print: N tables parsed, M located, K failed to locate"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

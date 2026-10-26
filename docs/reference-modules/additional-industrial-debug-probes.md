@@ -18,16 +18,32 @@ Probe BACnet building automation controllers, EtherNet/IP industrial PLCs, and e
 
 ```mermaid
 flowchart TD
-    A["probe_bacnet_exposure(host, port=47808)"] --> B["UDP socket sendto who_is:\nb'\\x81\\x0b\\x00\\x08\\x01\\x20\\xff\\xff\\x00\\xff\\x10\\x08'\nBVLC encapsulated NPDU + APDU Who-Is broadcast"]
-    B --> C{"I-Am response: data[0]==0x81\ndata[1] in (0x0b, 0x10)?"}
-    C -->|yes| D["BACNET_UNAUTH CRITICAL\nScan APDU for PDU-type 0x10 + service 0x00 (I-Am)\nObject-Identifier tag 0x0C → device_id = raw_oid & 0x3FFFFF\nVendor tag 0x21/0x22 → vendor_id → BACNET_DEVICE_DISCLOSED\nSend ReadProperty (service 0x0c) for objectName (property 77)\nComplex-ACK 0x30 in response → BACNET_OBJECT_READ_UNAUTH"]
-    C -->|timeout| E["No findings — BACnet not reachable or filtered"]
-    F["probe_ethernet_ip_exposure(host, port=44818)"] --> G["TCP connect (44818)\nAccepted → ETHERNET_IP_PORT_OPEN HIGH\nSend ListIdentity: struct.pack('<HHI', 0x0063, 0, 0) + 16×\\x00\nRecv ≥24 bytes: cmd==0x0065 or cmd==0x0063 with length>0\n→ ETHERNET_IP_LIST_IDENTITY CRITICAL"]
-    H["probe_exposed_debug_interface(host)"] --> I["Python debugpy/pdb: TCP 5678/8888\nGET /json HTTP/1.0 → 'debugpy'/'pydevd'/'<xml' in response\n→ PYTHON_DEBUGGER_EXPOSED CRITICAL"]
-    H --> J["Node.js CDP: TCP 9229\nGET /json/list HTTP/1.0 → 'websocketdebuggerurl' in response\n→ NODE_INSPECTOR_EXPOSED CRITICAL"]
-    H --> K["Delve (Go): TCP 40000\nJSON-RPC RPCServer.GetVersion → 'DelveVersion' in result\n→ DELVE_DEBUGGER_EXPOSED CRITICAL"]
-    H --> L["GDB RSP: TCP 1234, 2345\nSend '+$?#3f' (stop-reason query, RSP checksum 0x3f)\nResponse starts with '+$S'/'+$T'/'$S'/'$T'\n→ GDB_REMOTE_STUB_EXPOSED CRITICAL"]
-    H --> M["JDWP: TCP 5005\nSend b'JDWP-Handshake' (14 bytes)\nResponse echoes 'JDWP-Handshake'\n→ JDWP_DEBUGGER_EXPOSED CRITICAL"]
+    A(["probe_bacnet_exposure(host, port=47808)"]):::input --> B["UDP socket sendto who_is:\nb'\\x81\\x0b\\x00\\x08\\x01\\x20\\xff\\xff\\x00\\xff\\x10\\x08'\nBVLC encapsulated NPDU + APDU Who-Is broadcast"]:::primary
+    B:::primary --> C{"I-Am response: data[0]==0x81\ndata[1] in (0x0b, 0x10)?"}:::neutral
+    C:::neutral -->|yes| D(["BACNET_UNAUTH CRITICAL\nScan APDU for PDU-type 0x10 + service 0x00 (I-Am)\nObject-Identifier tag 0x0C → device_id = raw_oid & 0x3FFFFF\nVendor tag 0x21/0x22 → vendor_id → BACNET_DEVICE_DISCLOSED\nSend ReadProperty (service 0x0c) for objectName (property 77)\nComplex-ACK 0x30 in response → BACNET_OBJECT_READ_UNAUTH"]):::output
+    C:::neutral -->|timeout| E(["No findings · BACnet not reachable or filtered"]):::output
+    F(["probe_ethernet_ip_exposure(host, port=44818)"]):::input --> G(["TCP connect (44818)\nAccepted → ETHERNET_IP_PORT_OPEN HIGH\nSend ListIdentity: struct.pack('<HHI', 0x0063, 0, 0) + 16×\\x00\nRecv ≥24 bytes: cmd==0x0065 or cmd==0x0063 with length>0\n→ ETHERNET_IP_LIST_IDENTITY CRITICAL"]):::output
+    H(["probe_exposed_debug_interface(host)"]):::input --> I(["Python debugpy/pdb: TCP 5678/8888\nGET /json HTTP/1.0 → 'debugpy'/'pydevd'/'<xml' in response\n→ PYTHON_DEBUGGER_EXPOSED CRITICAL"]):::output
+    H:::input --> J(["Node.js CDP: TCP 9229\nGET /json/list HTTP/1.0 → 'websocketdebuggerurl' in response\n→ NODE_INSPECTOR_EXPOSED CRITICAL"]):::output
+    H:::input --> K(["Delve (Go): TCP 40000\nJSON-RPC RPCServer.GetVersion → 'DelveVersion' in result\n→ DELVE_DEBUGGER_EXPOSED CRITICAL"]):::output
+    H:::input --> L(["GDB RSP: TCP 1234, 2345\nSend '+$?#3f' (stop-reason query, RSP checksum 0x3f)\nResponse starts with '+$S'/'+$T'/'$S'/'$T'\n→ GDB_REMOTE_STUB_EXPOSED CRITICAL"]):::output
+    H:::input --> M(["JDWP: TCP 5005\nSend b'JDWP-Handshake' (14 bytes)\nResponse echoes 'JDWP-Handshake'\n→ JDWP_DEBUGGER_EXPOSED CRITICAL"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Protocol/port reference

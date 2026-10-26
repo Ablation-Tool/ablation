@@ -18,10 +18,21 @@ Identify cryptographic algorithm implementations in compiled ARM32/Thumb2 firmwa
 
 ```mermaid
 flowchart TD
-    A["HashAlgoDiscriminator(ctx)"] --> B["scan_function(va, size) → HashAlgoMatch\n  extract_constants(va, size):\n    Scan ARM32/Thumb2 MOV/MOVT/LDR immediate loads\n    Collect all 32-bit constant values in function\n  identify(constants) → HashAlgoMatch\n    Match constant set against known K-tables:\n    MD5: 0xd76aa478, 0xe8c7b756, ...\n    SHA-1: 0x5a827999, 0x6ed9eba1, ...\n    SHA-256: 0x428a2f98, 0x71374491, ...\n    SHA-512: 64-bit constants split across MOVT/MOV pairs\n    CRC32: 0xedb88320 (reflected polynomial)"]
-    B --> C["HashAlgoMatch:\n  algo: str  (MD5/SHA1/SHA256/SHA512/CRC32/UNKNOWN)\n  matched_constants: List[ConstMatch]\n  confidence: float\n  fmt() → str"]
-    A --> D["CustomCBCDetector(ctx)"] --> E["scan_function(va, size) → Optional[CBCPattern]\n  Phase 1: BSS pointer pair (block ptr + IV ptr)\n  Phase 2: XOR-with-prev-CT back-edge loop\n  Phase 3: IV load from .rodata at entry"]
-    E --> F["CBCPattern:\n  block_ptr_va: int   (BSS block buffer address)\n  iv_va: int          (IV location in .rodata)\n  xor_loop_va: int    (chaining XOR back-edge)\n  fmt() → str"]
+    A(["HashAlgoDiscriminator(ctx)"]):::input --> B["scan_function(va, size) → HashAlgoMatch\n  extract_constants(va, size):\n    Scan ARM32/Thumb2 MOV/MOVT/LDR immediate loads\n    Collect all 32-bit constant values in function\n  identify(constants) → HashAlgoMatch\n    Match constant set against known K-tables:\n    MD5: 0xd76aa478, 0xe8c7b756, ...\n    SHA-1: 0x5a827999, 0x6ed9eba1, ...\n    SHA-256: 0x428a2f98, 0x71374491, ...\n    SHA-512: 64-bit constants split across MOVT/MOV pairs\n    CRC32: 0xedb88320 (reflected polynomial)"]:::primary
+    B:::primary --> C(["HashAlgoMatch:\n  algo: str  (MD5/SHA1/SHA256/SHA512/CRC32/UNKNOWN)\n  matched_constants: List[ConstMatch]\n  confidence: float\n  fmt() → str"]):::output
+    A:::input --> D["CustomCBCDetector(ctx)"]:::secondary --> E["scan_function(va, size) → Optional[CBCPattern]\n  Phase 1: BSS pointer pair (block ptr + IV ptr)\n  Phase 2: XOR-with-prev-CT back-edge loop\n  Phase 3: IV load from .rodata at entry"]:::tertiary
+    E:::tertiary --> F(["CBCPattern:\n  block_ptr_va: int   (BSS block buffer address)\n  iv_va: int          (IV location in .rodata)\n  xor_loop_va: int    (chaining XOR back-edge)\n  fmt() → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -18,29 +18,58 @@ ReAct Reason + Act agent loop that drives Claude through a tool-calling conversa
 
 ```mermaid
 flowchart TD
-    A["AgentLoop(registry, product, version, max_tool_calls=10)"] --> B["ContextBuilder: system prompt with product/version/binary_hint\nRAGRetriever: load prior results for func_va from FuncDB"]
-    B --> C["AgentLoop.run(func_addr, task='name_function', callees, callers, strings, cfg_summary)"]
-    C --> D["Turn 1: user message with function context\n(addr, callees, callers, strings, size_hint, prior)"]
-    D --> E["Claude responds with tool_use blocks\n↓ dispatch via ToolRegistry"]
-    E --> F{"Tool called"}
-    F --> G["get_disassembly(va) → capstone disasm text"]
-    F --> H["get_cfg(va) → basic-block structure summary"]
-    F --> I["get_xrefs(va) → callers + callees"]
-    F --> J["get_strings(va) → string refs in function body"]
-    F --> K["get_imports(va) → PLT imports used in function"]
-    F --> L["query_func_db(name) → prior analysis results for similar functions"]
-    F --> M["done(name, role, confidence, cve_hypothesis) → terminates loop"]
-    G --> N["Inject tool_result as user message\nReturn to Claude"]
-    H --> N
-    I --> N
-    J --> N
-    K --> N
-    L --> N
-    M --> O["AnalysisResult: func_addr, name, role, confidence, cve_hypothesis, tool_call_count"]
-    N --> E
-    E --> P{"max_tool_calls reached?"}
-    P -->|Yes| Q["Return best AnalysisResult from last state"]
-    P -->|No| E
+    A(["AgentLoop(registry, product, version, max_tool_calls=10)"]):::input --> B["ContextBuilder: system prompt with product/version/binary_hint\nRAGRetriever: load prior results for func_va from FuncDB"]:::primary
+    B:::primary --> C["AgentLoop.run(func_addr, task='name_function', callees, callers, strings, cfg_summary)"]:::secondary
+    C:::secondary --> D["Turn 1: user message with function context\n(addr, callees, callers, strings, size_hint, prior)"]:::tertiary
+    D:::tertiary --> E["Claude responds with tool_use blocks\n↓ dispatch via ToolRegistry"]:::tertiary
+    E:::tertiary --> F{"Tool called"}:::neutral
+    F:::neutral --> G["get_disassembly(va) → capstone disasm text"]:::tertiary
+    F:::neutral --> H["get_cfg(va) → basic-block structure summary"]:::tertiary
+    F:::neutral --> I["get_xrefs(va) → callers + callees"]:::tertiary
+    F:::neutral --> J["get_strings(va) → string refs in function body"]:::tertiary
+    F:::neutral --> K["get_imports(va) → PLT imports used in function"]:::tertiary
+    F:::neutral --> L["query_func_db(name) → prior analysis results for similar functions"]:::tertiary
+    F:::neutral --> M["done(name, role, confidence, cve_hypothesis) → terminates loop"]:::tertiary
+    G:::tertiary --> N["Inject tool_result as user message\nReturn to Claude"]:::tertiary
+    H:::tertiary --> N:::tertiary
+    I:::tertiary --> N:::tertiary
+    J:::tertiary --> N:::tertiary
+    K:::tertiary --> N:::tertiary
+    L:::tertiary --> N:::tertiary
+    M:::tertiary --> O(["AnalysisResult: func_addr, name, role, confidence, cve_hypothesis, tool_call_count"]):::output
+    N:::tertiary --> E:::tertiary
+    E:::tertiary --> P{"max_tool_calls reached?"}:::neutral
+    P:::neutral -->|Yes| Q(["Return best AnalysisResult from last state"]):::output
+    P:::neutral -->|No| E:::tertiary
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#546e7a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 11 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 12 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 13 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 14 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 15 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 16 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 17 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 18 stroke:#2e7d32,stroke-width:3px
+    linkStyle 19 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 20 stroke:#546e7a,stroke-width:2px
+    linkStyle 21 stroke:#2e7d32,stroke-width:3px
+    linkStyle 22 stroke:#6a1b9a,stroke-width:2px
 ```
 
 ### AnalysisResult fields

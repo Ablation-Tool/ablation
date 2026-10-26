@@ -18,9 +18,18 @@ Detect integer overflow vulnerabilities in ARM32 ELF binaries: finding `MUL`/`UM
 
 ```mermaid
 flowchart TD
-    A["ARM32IntOverflowScanner.from_context(ctx)\n  or .from_path(path)"] --> B["scan() → List[IntOverflowFinding32]\n  1. Scan .text for MUL/UMULL/SMULL/UMLAL/SMLAL\n  2. For each candidate (mul_va, Rd, Rn, Rm):\n     ReachingDefsAnalysis on Rn and Rm:\n       Trace definition sites backward\n       Wire source: def site in recv/read-calling function → tainted\n     3. Track Rd forward to malloc/calloc/realloc call site\n     4. Check for CMP Rd, MAX / CMP MAX, Rd between mul and alloc\n        If no upper-bound check found → IntOverflowFinding32\n  → sorted by severity"]
-    B --> C["IntOverflowFinding32:\n  mul_va: int\n  alloc_va: int\n  alloc_name: str\n  lhs_reg: str\n  rhs_reg: str\n  wire_source: str   (recv | read | recvfrom)\n  bounds_checked: bool  (always False for findings)\n  severity: CRITICAL | HIGH\n  fmt() → str"]
-    C --> D["report(findings) → str"]
+    A(["ARM32IntOverflowScanner.from_context(ctx)\n  or .from_path(path)"]):::input --> B["scan() → List[IntOverflowFinding32]\n  1. Scan .text for MUL/UMULL/SMULL/UMLAL/SMLAL\n  2. For each candidate (mul_va, Rd, Rn, Rm):\n     ReachingDefsAnalysis on Rn and Rm:\n       Trace definition sites backward\n       Wire source: def site in recv/read-calling function → tainted\n     3. Track Rd forward to malloc/calloc/realloc call site\n     4. Check for CMP Rd, MAX / CMP MAX, Rd between mul and alloc\n        If no upper-bound check found → IntOverflowFinding32\n  → sorted by severity"]:::primary
+    B:::primary --> C["IntOverflowFinding32:\n  mul_va: int\n  alloc_va: int\n  alloc_name: str\n  lhs_reg: str\n  rhs_reg: str\n  wire_source: str   (recv | read | recvfrom)\n  bounds_checked: bool  (always False for findings)\n  severity: CRITICAL | HIGH\n  fmt() → str"]:::secondary
+    C:::secondary --> D(["report(findings) → str"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

@@ -20,18 +20,36 @@ Parse IBM AIX PowerPC executables in XCOFF32 magic `0x01DF`, PPC32 or XCOFF64 ma
 
 ```mermaid
 flowchart TD
-    A["parse(path)"] --> B["Read magic at offset 0\n0x01DF → XCOFF32, ppc32, 20-byte file header\n0x01F7/0x01EF → XCOFF64, ppc64, 24-byte file header"]
-    B --> C["Parse optional header (if opthdr_sz >= 28):\nentry, text_start, data_start, toc_va"]
-    C --> D["Parse section headers:\nXCOFF32: 40-byte _SCNHDR32\nXCOFF64: 72-byte _SCNHDR64\nBuild XcoffSection list + name→section map"]
-    D --> E{"STYP_LOADER (0x1000) section present?"}
-    E -->|yes, XCOFF32| F["_parse_loader32():\n32-byte LDHDR32 → nsyms, impoff, stoff\nFor each ldsym (24B): inline name or strtab offset\nXTY_ER (ifile > 0) → imports\nXTY_SD/LD (ifile == 0) → exports"]
-    E -->|yes, XCOFF64| G["_parse_loader64():\n56-byte LDHDR64 (I×6 + Q×4)\nStrtab at l_stoff → suffix-compressed\nForward-position map: every strtab byte → string start\nSymbols at l_symoff (still 24B each)"]
-    F --> H["_parse_import_table(): per import-ID triple\npath\\0 archive_member\\0 object_name\\0\nReturns lib name for each symbol's l_ifile index"]
-    G --> H
-    H --> I["_resolve_descriptors():\nFor each export with va in .data:\nPPC32: read '>I' at va−dsec.vaddr → code_va\nPPC64: read '>Q' at va−dsec.vaddr → code_va\nVerify code_va is in .text section"]
-    E -->|no loader section| J["_parse_symtab32/64() fallback:\nC_EXT + C_HIDEXT symbols in .text\nDotted-name convention: '.frexp' → 'frexp'\nXCOFF64: skip sentinel VA 0x1D4C\nmerge into exports"]
-    I --> K["XcoffBinary(arch, entry, text_start, data_start, toc_va, sections, exports, imports)"]
-    J --> K
+    A(["parse(path)"]):::input --> B["Read magic at offset 0\n0x01DF → XCOFF32, ppc32, 20-byte file header\n0x01F7/0x01EF → XCOFF64, ppc64, 24-byte file header"]:::primary
+    B:::primary --> C["Parse optional header (if opthdr_sz >= 28):\nentry, text_start, data_start, toc_va"]:::secondary
+    C:::secondary --> D["Parse section headers:\nXCOFF32: 40-byte _SCNHDR32\nXCOFF64: 72-byte _SCNHDR64\nBuild XcoffSection list + name→section map"]:::tertiary
+    D:::tertiary --> E{"STYP_LOADER (0x1000) section present?"}:::neutral
+    E:::neutral -->|yes, XCOFF32| F["_parse_loader32():\n32-byte LDHDR32 → nsyms, impoff, stoff\nFor each ldsym (24B): inline name or strtab offset\nXTY_ER (ifile > 0) → imports\nXTY_SD/LD (ifile == 0) → exports"]:::tertiary
+    E:::neutral -->|yes, XCOFF64| G["_parse_loader64():\n56-byte LDHDR64 (I×6 + Q×4)\nStrtab at l_stoff → suffix-compressed\nForward-position map: every strtab byte → string start\nSymbols at l_symoff (still 24B each)"]:::tertiary
+    F:::tertiary --> H["_parse_import_table(): per import-ID triple\npath\\0 archive_member\\0 object_name\\0\nReturns lib name for each symbol's l_ifile index"]:::tertiary
+    G:::tertiary --> H:::tertiary
+    H:::tertiary --> I["_resolve_descriptors():\nFor each export with va in .data:\nPPC32: read '>I' at va−dsec.vaddr → code_va\nPPC64: read '>Q' at va−dsec.vaddr → code_va\nVerify code_va is in .text section"]:::tertiary
+    E:::neutral -->|no loader section| J["_parse_symtab32/64() fallback:\nC_EXT + C_HIDEXT symbols in .text\nDotted-name convention: '.frexp' → 'frexp'\nXCOFF64: skip sentinel VA 0x1D4C\nmerge into exports"]:::tertiary
+    I:::tertiary --> K(["XcoffBinary(arch, entry, text_start, data_start, toc_va, sections, exports, imports)"]):::output
+    J:::tertiary --> K:::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#546e7a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### XCOFF magic values

@@ -18,9 +18,18 @@ Detect Windows timestomping Modified timestamp predating Created timestamp in $M
 
 ```mermaid
 flowchart TD
-    A["detect_windows_forensic_artifacts(scan_path='/') → List[Dict]\n  $MFT scan (if present):\n    Parse MFT records: 4-byte magic 'FILE'\n    Extract timestamps: CRTIME, MTIME, ATIME, CTIME\n    Flag: MTIME < CRTIME → timestomping\n    → [{type: MFT_TIMESTOMP, path, mtime, crtime}]"] --> B["EVTX scan (*.evtx files):\n  File size < 69,632 bytes → EVTX_TOO_SMALL\n  Parse binary EVTX header:\n    magic: ElfFile\\x00 (0x45,0x6c,0x66,0x4c,0x67,0x00)\n    first_chunk_number, last_chunk_number\n    chunk_count: expected vs actual\n  EventID 1102 / 104 → LOG_CLEAR_EVENT\n  Time gap > 2h without shutdown → LOG_GAP\n  → [{type: EVTX_TOO_SMALL|LOG_CLEAR_EVENT|LOG_GAP, file, detail}]"]
-    B --> C["Prefetch scan (C:\\Windows\\Prefetch\\*.pf):\n  Count: < 8 → PREFETCH_CLEARED\n  Age: all .pf files newer than system install → PREFETCH_WIPED\n  → [{type: PREFETCH_CLEARED, count}]\n\nLinux logs:\n  /var/log/auth.log: 0 bytes → AUTH_LOG_CLEARED\n  /var/log/syslog: 0 bytes → SYSLOG_CLEARED\n  .bash_history: 'history -c' → HISTORY_CLEARED\n  .bash_history absent → HISTORY_UNSET\n  → [{type, path, description}]"]
-    C --> D["Report:\n  All findings ranked by severity\n  Timestomping: HIGH (active attacker anti-forensics)\n  Log clear events: HIGH\n  Log gaps: MEDIUM (may indicate prior clearing)\n  → List[Dict] sorted by severity"]
+    A(["detect_windows_forensic_artifacts(scan_path='/') → List[Dict]\n  $MFT scan (if present):\n    Parse MFT records: 4-byte magic 'FILE'\n    Extract timestamps: CRTIME, MTIME, ATIME, CTIME\n    Flag: MTIME < CRTIME → timestomping\n    → [{type: MFT_TIMESTOMP, path, mtime, crtime}]"]):::input --> B["EVTX scan (*.evtx files):\n  File size < 69,632 bytes → EVTX_TOO_SMALL\n  Parse binary EVTX header:\n    magic: ElfFile\\x00 (0x45,0x6c,0x66,0x4c,0x67,0x00)\n    first_chunk_number, last_chunk_number\n    chunk_count: expected vs actual\n  EventID 1102 / 104 → LOG_CLEAR_EVENT\n  Time gap > 2h without shutdown → LOG_GAP\n  → [{type: EVTX_TOO_SMALL|LOG_CLEAR_EVENT|LOG_GAP, file, detail}]"]:::primary
+    B:::primary --> C["Prefetch scan (C:\\Windows\\Prefetch\\*.pf):\n  Count: < 8 → PREFETCH_CLEARED\n  Age: all .pf files newer than system install → PREFETCH_WIPED\n  → [{type: PREFETCH_CLEARED, count}]\n\nLinux logs:\n  /var/log/auth.log: 0 bytes → AUTH_LOG_CLEARED\n  /var/log/syslog: 0 bytes → SYSLOG_CLEARED\n  .bash_history: 'history -c' → HISTORY_CLEARED\n  .bash_history absent → HISTORY_UNSET\n  → [{type, path, description}]"]:::secondary
+    C:::secondary --> D(["Report:\n  All findings ranked by severity\n  Timestomping: HIGH (active attacker anti-forensics)\n  Log clear events: HIGH\n  Log gaps: MEDIUM (may indicate prior clearing)\n  → List[Dict] sorted by severity"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

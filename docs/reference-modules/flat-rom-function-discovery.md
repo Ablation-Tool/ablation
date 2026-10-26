@@ -18,9 +18,18 @@ Fingerprint the instruction set architecture of a flat ECU ROM image from raw by
 
 ```mermaid
 flowchart TD
-    A["EcuArchDetector.from_path(path, sample_size=4096)\n  or .from_bytes(data)"] --> B["detect() → ArchDetectResult\n  Signal 1: Reset vector validity\n    ARM Cortex-M: offset 4 = stack pointer, offset 8 = reset handler (odd=Thumb)\n    PPC32: offset 0x100 = instruction with opcode 18 (branch)\n    TriCore: offset 0x10 = MOVH.A instruction pattern\n  Signal 2: Instruction density\n    ARM Cortex-M: high 16-bit Thumb2 instruction density\n    M68K: LINK.W A6 / MOVEM.L patterns\n    SH-2A: MOV.L @(disp,PC) patterns\n  Signal 3: Byte statistics\n    LE vs BE byte order entropy\n    Null byte density (sparse code = flat binary)"]
-    B --> C["ArchDetectResult:\n  candidates: List[ArchCandidate]\n    (name, confidence: float, evidence: str)\n  is_confident() → bool  (top candidate margin ≥ threshold)\n  candidates[0].name → arch string"]
-    C --> D["ArchCandidate.name options:\n  'arm_cm'    → use capstone Thumb2 decoder\n  'tricore'   → use TriCore AURIX decoder\n  'm68k'      → use EcuM68kDecoder\n  'ppc32'     → use PPC32 decoder\n  'ppc_vle'   → use PowerPC VLE decoder\n  'sh2a'      → use EcuSh2aDecoder"]
+    A(["EcuArchDetector.from_path(path, sample_size=4096)\n  or .from_bytes(data)"]):::input --> B["detect() → ArchDetectResult\n  Signal 1: Reset vector validity\n    ARM Cortex-M: offset 4 = stack pointer, offset 8 = reset handler (odd=Thumb)\n    PPC32: offset 0x100 = instruction with opcode 18 (branch)\n    TriCore: offset 0x10 = MOVH.A instruction pattern\n  Signal 2: Instruction density\n    ARM Cortex-M: high 16-bit Thumb2 instruction density\n    M68K: LINK.W A6 / MOVEM.L patterns\n    SH-2A: MOV.L @(disp,PC) patterns\n  Signal 3: Byte statistics\n    LE vs BE byte order entropy\n    Null byte density (sparse code = flat binary)"]:::primary
+    B:::primary --> C["ArchDetectResult:\n  candidates: List[ArchCandidate]\n    (name, confidence: float, evidence: str)\n  is_confident() → bool  (top candidate margin ≥ threshold)\n  candidates[0].name → arch string"]:::secondary
+    C:::secondary --> D(["ArchCandidate.name options:\n  'arm_cm'    → use capstone Thumb2 decoder\n  'tricore'   → use TriCore AURIX decoder\n  'm68k'      → use EcuM68kDecoder\n  'ppc32'     → use PPC32 decoder\n  'ppc_vle'   → use PowerPC VLE decoder\n  'sh2a'      → use EcuSh2aDecoder"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

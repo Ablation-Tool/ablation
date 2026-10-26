@@ -18,15 +18,29 @@ Recover function boundaries, names, and type information from `.eh_frame` CFI re
 
 ```mermaid
 flowchart TD
-    P["elf_path (str)"] --> B["extract_eh_frame_starts(path) → Set[int]\n  Parse .eh_frame with pyelftools CIE/FDE decoder\n  Extract pc_begin from each FDE\n  Best-effort: returns empty set if section absent"]
-    P --> C["extract_debug_funcs(path) → Dict[int, Tuple[str, int]]\n  Parse .debug_info DW_TAG_subprogram\n  Returns {low_pc: (name, high_pc)}\n  Requires -g build; returns {} if .debug_info absent"]
-    P --> D["extract_btf_funcs(path) → Dict[int, str]\n  Parse .BTF type section (BTF_KIND_FUNC)\n  Parse .BTF.ext for func_info VA→name mapping\n  Pure struct parsing, no libbpf\n  Returns {} if .BTF absent"]
-    B --> E["ctx.func_starts.update(starts)\n  Add recovered starts to BinaryContext"]
-    C --> F["ctx.set_name(va, name, source='dwarf') for each entry"]
-    D --> F2["ctx.set_name(va, name, source='btf') for each entry"]
+    P(["elf_path (str)"]):::input --> B["extract_eh_frame_starts(path) → Set[int]\n  Parse .eh_frame with pyelftools CIE/FDE decoder\n  Extract pc_begin from each FDE\n  Best-effort: returns empty set if section absent"]:::primary
+    P:::input --> C["extract_debug_funcs(path) → Dict[int, Tuple[str, int]]\n  Parse .debug_info DW_TAG_subprogram\n  Returns {low_pc: (name, high_pc)}\n  Requires -g build; returns {} if .debug_info absent"]:::secondary
+    P:::input --> D["extract_btf_funcs(path) → Dict[int, str]\n  Parse .BTF type section (BTF_KIND_FUNC)\n  Parse .BTF.ext for func_info VA→name mapping\n  Pure struct parsing, no libbpf\n  Returns {} if .BTF absent"]:::tertiary
+    B:::primary --> E(["ctx.func_starts.update(starts)\n  Add recovered starts to BinaryContext"]):::output
+    C:::secondary --> F(["ctx.set_name(va, name, source='dwarf') for each entry"]):::output
+    D:::tertiary --> F2(["ctx.set_name(va, name, source='btf') for each entry"]):::output
 
-    G["I386AbsoluteXrefScanner\n  (i386 ELF32 string reference recovery)"] --> H["scan_full() → XrefResult\n  Scan .text for 4-byte LE values matching known string VAs\n  Attribute hits to enclosing function\n  ELF32 only — PE32 not supported"]
-    H --> I["inject(ctx) → int\n  Add discovered xrefs to BinaryContext\n  Returns: count of new xrefs added"]
+    G(["I386AbsoluteXrefScanner\n  (i386 ELF32 string reference recovery)"]):::input --> H["scan_full() → XrefResult\n  Scan .text for 4-byte LE values matching known string VAs\n  Attribute hits to enclosing function\n  ELF32 only · PE32 not supported"]:::tertiary
+    H:::tertiary --> I(["inject(ctx) → int\n  Add discovered xrefs to BinaryContext\n  Returns: count of new xrefs added"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

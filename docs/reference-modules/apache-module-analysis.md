@@ -18,13 +18,25 @@ Analyze Apache 2.x C module binaries (`.so`) for authentication bypass surfaces:
 
 ```mermaid
 flowchart TD
-    A["ApacheModuleAnalyzer.from_path('/path/mod.so')\nor .from_context(ctx)"] --> B["analyzer.analyze():\n_load(): lief.parse(path)\n_build_plt(): .rela.plt → {stub_va: symbol_name}\n  plt_base = .plt VA + 16 (skip resolver)\n  each rela entry = idx*16 stride\n_build_rodata_index(): .rodata strings → {va: str}\n_build_disassembler(): Capstone x86-64 or ARM64"]
-    B --> C["_find_register_hooks():\nScan .text for call/jmp to ap_hook_* PLT stubs\nx86-64: 0xE8 rel32 target in hook_plt_vas\nARM64: BL (word>>26)==0x25 imm26 → target in hook_plt_vas\n_find_func_start(call_va):\n  scan back ≤512 bytes for endbr64 (f3 0f 1e fa) or push rbp (0x55)"]
-    C --> D["_extract_handler_registrations(register_hooks_va):\nDisasm 256 bytes at register_hooks_va\nTrack: lea rdi,[rip+N] → handler_candidate VA\nOn call/jmp to ap_hook_* PLT:\n  handler_candidate ∈ .text → append\n  emit ApacheFinding(HANDLER_REGISTRATION, INFO)"]
-    D --> E["_analyze_handler(handler_va):\nDisasm ≤4096 bytes at handler_va\nWindow: lea rsi,[rip+N] → last_rsi_str (from .rodata)\nOn call to apr_table_get: key=last_rsi_str, is_auth=(key ∈ _AUTH_HEADERS)\n  AUTH_TABLE_ACCESS HIGH/LOW\nOn call to apr_table_set/setn/add: APR_TABLE_WRITE MEDIUM\nOn call to session_skip_patterns: SESSION_SKIP_FLAG HIGH\nOn call to decrypt_auth_re: AUTH_TABLE_ACCESS MEDIUM"]
-    E --> F["Post-handler composite check:\nfound_auth_header AND found_decrypt AND found_skip_flag\n→ AUTH_BYPASS_SURFACE CRITICAL CWE-287\n'Cookie → decrypt_session → skip_flag in one handler'"]
-    B --> G["Fallback: if no handlers found\n_scan_text_for_auth_patterns():\nscan .text for 0xE8 rel32 to session_skip PLT stubs\nSESSION_SKIP_FLAG HIGH with '(fallback scan)' note"]
-    H["ApacheModuleAnalyzer.report(findings):\nSort: CRITICAL→HIGH→MEDIUM→LOW→INFO, then by VA\nHeader: N finding(s) CRITICAL=n HIGH=n ...\nPer finding: fmt() = [SEV] class(sym)[header] binary:0xVA / CWE / title / detail"]
+    A(["ApacheModuleAnalyzer.from_path('/path/mod.so')\nor .from_context(ctx)"]):::input --> B["analyzer.analyze():\n_load(): lief.parse(path)\n_build_plt(): .rela.plt → {stub_va: symbol_name}\n  plt_base = .plt VA + 16 (skip resolver)\n  each rela entry = idx*16 stride\n_build_rodata_index(): .rodata strings → {va: str}\n_build_disassembler(): Capstone x86-64 or ARM64"]:::primary
+    B:::primary --> C["_find_register_hooks():\nScan .text for call/jmp to ap_hook_* PLT stubs\nx86-64: 0xE8 rel32 target in hook_plt_vas\nARM64: BL (word>>26)==0x25 imm26 → target in hook_plt_vas\n_find_func_start(call_va):\n  scan back ≤512 bytes for endbr64 (f3 0f 1e fa) or push rbp (0x55)"]:::secondary
+    C:::secondary --> D["_extract_handler_registrations(register_hooks_va):\nDisasm 256 bytes at register_hooks_va\nTrack: lea rdi,[rip+N] → handler_candidate VA\nOn call/jmp to ap_hook_* PLT:\n  handler_candidate ∈ .text → append\n  emit ApacheFinding(HANDLER_REGISTRATION, INFO)"]:::tertiary
+    D:::tertiary --> E["_analyze_handler(handler_va):\nDisasm ≤4096 bytes at handler_va\nWindow: lea rsi,[rip+N] → last_rsi_str (from .rodata)\nOn call to apr_table_get: key=last_rsi_str, is_auth=(key ∈ _AUTH_HEADERS)\n  AUTH_TABLE_ACCESS HIGH/LOW\nOn call to apr_table_set/setn/add: APR_TABLE_WRITE MEDIUM\nOn call to session_skip_patterns: SESSION_SKIP_FLAG HIGH\nOn call to decrypt_auth_re: AUTH_TABLE_ACCESS MEDIUM"]:::tertiary
+    E:::tertiary --> F(["Post-handler composite check:\nfound_auth_header AND found_decrypt AND found_skip_flag\n→ AUTH_BYPASS_SURFACE CRITICAL CWE-287\n'Cookie → decrypt_session → skip_flag in one handler'"]):::output
+    B:::primary --> G(["Fallback: if no handlers found\n_scan_text_for_auth_patterns():\nscan .text for 0xE8 rel32 to session_skip PLT stubs\nSESSION_SKIP_FLAG HIGH with '(fallback scan)' note"]):::output
+    H(["ApacheModuleAnalyzer.report(findings):\nSort: CRITICAL→HIGH→MEDIUM→LOW→INFO, then by VA\nHeader: N finding(s) CRITICAL=n HIGH=n ...\nPer finding: fmt() = [SEV] class(sym)[header] binary:0xVA / CWE / title / detail"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Symbol sets

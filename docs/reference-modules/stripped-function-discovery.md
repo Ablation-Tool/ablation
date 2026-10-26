@@ -20,17 +20,34 @@ The scanner determines the instruction set mode from the binary's entry point: i
 
 ```mermaid
 flowchart TD
-    A["ARM32FunctionScanner.from_path(path)"] --> B[Parse ELF: locate .text section or first executable LOAD segment]
-    B --> C{entry_point bit 0?}
-    C -->|0 = ARM32 mode| D["_scan_arm32 + _scan_thumb2"]
-    C -->|1 = Thumb mode| E["_scan_thumb2 + _scan_thumb1"]
-    D --> F["ARM32: find b'\\x2d\\xe9' at 4-byte-aligned offsets\nCheck byte[1] & 0x40 == LR bit set\nRecord VA = text_va + insn_start"]
-    D --> G["Thumb-2: find b'\\x2d\\xe9' at 2-byte-aligned offsets\nCheck byte[3] & 0x40 == LR bit set\nRecord VA = text_va + pos"]
-    E --> H["Thumb-2: same as above"]
-    E --> I["Thumb-1: find b'\\xb5' at byte-position 1 of any 2-byte-aligned halfword\nRecord VA = text_va + insn_start"]
-    F & G --> J[Merge: deduplicated set of candidate VAs]
-    H & I --> J
-    J --> K[sorted: return List of function start VAs]
+    A(["ARM32FunctionScanner.from_path(path)"]):::input --> B["Parse ELF: locate .text section or first executable LOAD segment"]:::primary
+    B:::primary --> C{"entry_point bit 0?"}:::neutral
+    C:::neutral -->|0 = ARM32 mode| D["_scan_arm32 + _scan_thumb2"]:::secondary
+    C:::neutral -->|1 = Thumb mode| E["_scan_thumb2 + _scan_thumb1"]:::tertiary
+    D:::secondary --> F["ARM32: find b'\\x2d\\xe9' at 4-byte-aligned offsets\nCheck byte[1] & 0x40 == LR bit set\nRecord VA = text_va + insn_start"]:::tertiary
+    D:::secondary --> G(["Thumb-2: find b'\\x2d\\xe9' at 2-byte-aligned offsets\nCheck byte[3] & 0x40 == LR bit set\nRecord VA = text_va + pos"]):::output
+    E:::tertiary --> H["Thumb-2: same as above"]:::tertiary
+    E:::tertiary --> I(["Thumb-1: find b'\\xb5' at byte-position 1 of any 2-byte-aligned halfword\nRecord VA = text_va + insn_start"]):::output
+    F:::tertiary --> J["Merge: deduplicated set of candidate VAs"]:::tertiary
+    H:::tertiary --> J:::tertiary
+    J:::tertiary --> K(["sorted: return List of function start VAs"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#00695c,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### ARM32 prologue pattern

@@ -18,14 +18,25 @@ Generic Monotone Framework worklist algorithm (`DataflowEngine`) plus pre-built 
 
 ```mermaid
 flowchart TD
-    A["MFP worklist (Nielson/Nielson/Hankin §2.4.1 Table 2.8):\n  Lattice L: abstract value domain\n  flow: edges from CFG\n  E: entry nodes\n  ι: initial value\n  f_.: transfer functions\n  ACC: termination condition (ascending chain condition)"] --> B["Worklist loop:\n  Pop edge (u, v) from worklist\n  Compute f_u(current[u]) → new_v\n  If new_v ⊔ current[v] ≠ current[v]:\n    current[v] = new_v ⊔ current[v]\n    Add all (v, w) edges to worklist"]
-    B --> C["Termination: ACC guarantees finite lattice height → terminates"]
+    A(["MFP worklist (Nielson/Nielson/Hankin §2.4.1 Table 2.8):\n  Lattice L: abstract value domain\n  flow: edges from CFG\n  E: entry nodes\n  ι: initial value\n  f_.: transfer functions\n  ACC: termination condition (ascending chain condition)"]):::input --> B["Worklist loop:\n  Pop edge (u, v) from worklist\n  Compute f_u(current[u]) → new_v\n  If new_v ⊔ current[v] ≠ current[v]:\n    current[v] = new_v ⊔ current[v]\n    Add all (v, w) edges to worklist"]:::primary
+    B:::primary --> C(["Termination: ACC guarantees finite lattice height → terminates"]):::output
 
-    D["ConstPropAnalysis(data, base_addr, arch='arm32')"] --> E["solve(func_addr) → (mfp_out, mfp_in)\n  dict[block_va, abstract_register_state]\n  abstract_register_state: reg → Const(v) | Top | Bottom\n  Resolves pool loads, movw/movt, GOT loads"]
+    D(["ConstPropAnalysis(data, base_addr, arch='arm32')"]):::input --> E(["solve(func_addr) → (mfp_out, mfp_in)\n  dict[block_va, abstract_register_state]\n  abstract_register_state: reg → Const(v) | Top | Bottom\n  Resolves pool loads, movw/movt, GOT loads"]):::output
 
-    F["ReachingDefsAnalysis(data, base_addr, arch='arm32')"] --> G["solve(func_addr) → reaching defs\n  dict[block_va, dict[reg, set[insn_va]]]\n  ud-chain: (reg, use_va) → set of def_vas"]
+    F(["ReachingDefsAnalysis(data, base_addr, arch='arm32')"]):::input --> G(["solve(func_addr) → reaching defs\n  dict[block_va, dict[reg, set[insn_va]]]\n  ud-chain: (reg, use_va) → set of def_vas"]):::output
 
-    H["SCCPAnalysis(data, base_addr)"] --> I["solve(func_addr) → (vals, exec_edges)\n  vals: dict[va, LatticeVal]\n  exec_edges: set[(src_va, dst_va)] — only executable edges\n  Fixes tbh/tbb switch table fragmentation"]
+    H(["SCCPAnalysis(data, base_addr)"]):::input --> I(["solve(func_addr) → (vals, exec_edges)\n  vals: dict[va, LatticeVal]\n  exec_edges: set[(src_va, dst_va)] · only executable edges\n  Fixes tbh/tbb switch table fragmentation"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

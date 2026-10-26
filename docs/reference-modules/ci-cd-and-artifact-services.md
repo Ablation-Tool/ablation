@@ -18,10 +18,20 @@ Run Ablation's vulnerability detector suite on a freshly compiled binary before 
 
 ```mermaid
 flowchart TD
-    A["CompilerSecurityGate.from_path(path)\n  or .from_context(ctx)"] --> B["scan() → List[GateFinding]\n  Detect architecture from ELF e_machine\n  Select taint tracker per ISA:\n    x86_64: TaintTracker + FormatStringScanner + LengthUnderflowScanner\n    arm64:  TaintTracker (arm64 variant)\n    arm32:  TaintTracker + ARM32FunctionScanner\n    mips32/64: TaintTracker (mips variant)\n    ppc32/64: TaintTracker (ppc variant)\n    riscv32/64: TaintTracker (riscv variant)\n    loongarch64: TaintTracker (loongarch variant)"]
-    B --> C["Run SinkArgClassifier.classify_all()\n  Collect ARG_PROPAGATED + UNKNOWN sinks\n  Run TaintTracker on each\n  Collect TaintFinding results → GateFinding(severity, ...)"]
-    C --> D["GateFinding:\n  analyzer: str  ('taint', 'fmt_string', 'length_underflow')\n  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'\n  func_va, sink_va, sink_name\n  description: str\n  fmt() → single-line build log line"]
-    D --> E["report(findings) → str  (full report)\n  check(strict) → int  (exit code 0/1)"]
+    A(["CompilerSecurityGate.from_path(path)\n  or .from_context(ctx)"]):::input --> B["scan() → List[GateFinding]\n  Detect architecture from ELF e_machine\n  Select taint tracker per ISA:\n    x86_64: TaintTracker + FormatStringScanner + LengthUnderflowScanner\n    arm64:  TaintTracker (arm64 variant)\n    arm32:  TaintTracker + ARM32FunctionScanner\n    mips32/64: TaintTracker (mips variant)\n    ppc32/64: TaintTracker (ppc variant)\n    riscv32/64: TaintTracker (riscv variant)\n    loongarch64: TaintTracker (loongarch variant)"]:::primary
+    B:::primary --> C["Run SinkArgClassifier.classify_all()\n  Collect ARG_PROPAGATED + UNKNOWN sinks\n  Run TaintTracker on each\n  Collect TaintFinding results → GateFinding(severity, ...)"]:::secondary
+    C:::secondary --> D["GateFinding:\n  analyzer: str  ('taint', 'fmt_string', 'length_underflow')\n  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'\n  func_va, sink_va, sink_name\n  description: str\n  fmt() → single-line build log line"]:::tertiary
+    D:::tertiary --> E(["report(findings) → str  (full report)\n  check(strict) → int  (exit code 0/1)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

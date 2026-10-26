@@ -18,19 +18,28 @@ Three GitHub Actions workflows that enforce import smoke tests, run the pytest s
 
 ```mermaid
 flowchart TD
-    A["Push to main branch\nor Pull Request to main"] --> B["ci.yml: test job\nubuntu-latest, Python 3.11\npip install -e '.[full]'"]
-    B --> C["Import smoke tests:\n  BinaryContext, XRefGraph, CFGBuilder\n  CorpusBuilder, SemanticSearcher, PatternLibrary\n  ablation.cli.main\n  → 'All imports OK' or ImportError"]
-    C --> D["CLI: ablation --help\n(confirms console_scripts entry point)"]
-    D --> E["Integration test on /usr/bin/ls:\n  BinaryContext.load_or_build('/usr/bin/ls')\n  XRefGraph.from_path('/usr/bin/ls')\n  CFGBuilder('/usr/bin/ls').build_function(fva)\n  Asserts: func_starts > 0, stats['functions'] > 0, blocks > 0"]
-    E --> F["pytest tests/ -x -q\n(|| true — non-blocking if no tests present)\nCoverage measured on TCL3 scope (see coverage-gate.md)"]
+    A(["Push to main branch\nor Pull Request to main"]):::input --> B["ci.yml: test job\nubuntu-latest, Python 3.11\npip install -e '.[full]'"]:::primary
+    B:::primary --> C["Import smoke tests:\n  BinaryContext, XRefGraph, CFGBuilder\n  CorpusBuilder, SemanticSearcher, PatternLibrary\n  ablation.cli.main\n  → 'All imports OK' or ImportError"]:::secondary
+    C:::secondary --> D["CLI: ablation --help\n(confirms console_scripts entry point)"]:::tertiary
+    D:::tertiary --> E["Integration test on /usr/bin/ls:\n  BinaryContext.load_or_build('/usr/bin/ls')\n  XRefGraph.from_path('/usr/bin/ls')\n  CFGBuilder('/usr/bin/ls').build_function(fva)\n  Asserts: func_starts > 0, stats['functions'] > 0, blocks > 0"]:::tertiary
+    E:::tertiary --> F(["pytest tests/ -x -q\n(|| true · non-blocking if no tests present)\nCoverage measured on TCL3 scope (see coverage-gate.md)"]):::output
 
-    G["GitHub Release published"] --> H["publish.yml: publish job\nubuntu-latest, Python 3.12\npip install build; python -m build\npypa/gh-action-pypi-publish@release/v1\nOIDC trusted publishing — no API token required\nEnvironment: 'pypi' (required for OIDC)"]
+    G(["GitHub Release published"]):::input --> H(["publish.yml: publish job\nubuntu-latest, Python 3.12\npip install build; python -m build\npypa/gh-action-pypi-publish@release/v1\nOIDC trusted publishing · no API token required\nEnvironment: 'pypi' (required for OIDC)"]):::output
 
-    I["git push tag v<major>.<minor>.<patch>"] --> J["update-checksums.yml:\ncheckout main (full history)\nTAG=GITHUB_REF_NAME (e.g. v2.81.0)\nVERSION=TAG#v\ngit archive ${TAG} --prefix=ablation-${VERSION}/\n→ sha256sum → SHA256 value\nCommit checksum update to main\nwrite: true permission for contents"]
-
-    style C fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style H fill:#1e3a5f,stroke:#1d4ed8,color:#bfdbfe
-    style J fill:#14532d,stroke:#166534,color:#dcfce7
+    I(["git push tag v<major>.<minor>.<patch>"]):::input --> J(["update-checksums.yml:\ncheckout main (full history)\nTAG=GITHUB_REF_NAME (e.g. v2.81.0)\nVERSION=TAG#v\ngit archive ${TAG} --prefix=ablation-${VERSION}/\n→ sha256sum → SHA256 value\nCommit checksum update to main\nwrite: true permission for contents"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Workflow reference

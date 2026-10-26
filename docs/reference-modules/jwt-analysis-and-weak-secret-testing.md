@@ -18,9 +18,18 @@ Decode and verify JSON Web Tokens, detect `alg: none` acceptance, brute-force we
 
 ```mermaid
 flowchart TD
-    A["forge_jwt(payload, secret='', alg='HS256') → str\n  Build header: {alg, typ: JWT}\n  Build payload: dict → JSON\n  b64url_encode(header).b64url_encode(payload) → signing_input\n  If alg=none: signature=''\n  If alg=HS256: hmac.new(secret, signing_input, sha256)\n  → header.payload.signature (dot-joined)"] --> B["CryptoAudit.analyze_jwt(token) → dict\n  Decode header (alg, kid)\n  Decode payload (exp, iat, sub, role, claims)\n  Test alg:none bypass: forge + resubmit\n  Test weak secrets: wordlist HS256 verify\n  → {alg, payload, none_bypass: bool, weak_secret: str|None}"]
-    B --> C["CryptoAudit.scan_process_secrets() → List[dict]\n  Walk /proc/[pid]/environ for all readable PIDs\n  Pattern match: JWT_SECRET=, TOKEN_KEY=, eyJ prefix\n  → [{pid, cmdline, key_name, value}]"]
-    C --> D["check_rng_weakness(binary_data) → list\n  Scan for srand(time(NULL)) pattern (weak seeding)\n  Scan for rand() with no srand call\n  → [{va, description, severity}]\n\ncheck_key_management_weakness(config_text) → list\n  Hardcoded signing keys in config text\n  → [{key_type, value, severity}]"]
+    A(["forge_jwt(payload, secret='', alg='HS256') → str\n  Build header: {alg, typ: JWT}\n  Build payload: dict → JSON\n  b64url_encode(header).b64url_encode(payload) → signing_input\n  If alg=none: signature=''\n  If alg=HS256: hmac.new(secret, signing_input, sha256)\n  → header.payload.signature (dot-joined)"]):::input --> B["CryptoAudit.analyze_jwt(token) → dict\n  Decode header (alg, kid)\n  Decode payload (exp, iat, sub, role, claims)\n  Test alg:none bypass: forge + resubmit\n  Test weak secrets: wordlist HS256 verify\n  → {alg, payload, none_bypass: bool, weak_secret: str|None}"]:::primary
+    B:::primary --> C["CryptoAudit.scan_process_secrets() → List[dict]\n  Walk /proc/[pid]/environ for all readable PIDs\n  Pattern match: JWT_SECRET=, TOKEN_KEY=, eyJ prefix\n  → [{pid, cmdline, key_name, value}]"]:::secondary
+    C:::secondary --> D(["check_rng_weakness(binary_data) → list\n  Scan for srand(time(NULL)) pattern (weak seeding)\n  Scan for rand() with no srand call\n  → [{va, description, severity}]\n\ncheck_key_management_weakness(config_text) → list\n  Hardcoded signing keys in config text\n  → [{key_type, value, severity}]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

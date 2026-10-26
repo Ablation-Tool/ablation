@@ -18,9 +18,18 @@ Decode Synopsys DesignWare ARC 700 / ARC HS variable-length firmware: discrimina
 
 ```mermaid
 flowchart TD
-    A["ARCDecoder.from_path(path)\n  or ARCDecoder(data, base_addr)"] --> B["has_full_decode() → bool\n  Check: capstone CS_ARCH_ARC available\n  True → full operand decode\n  False → frame-width + control-flow hints only"]
-    B --> C["decode_frames(data, base_addr) → List[ARCFrame]\n  For each instruction position:\n    hw0 = read 2 bytes (BE)\n    op5 = (hw0 >> 11) & 0x1f\n    op5 >= 24 → 16-bit ARCFrame\n    else → 32-bit ARCFrame\n  ARCFrame: va, width, is_branch, is_call, is_ret, target, mnemonic(if full)"]
-    C --> D["ARCDisasm:\n  function_starts() → List[int]\n    Scan for 'push_s blink' prologue (16-bit compact)\n    Or ELF symbol table entries (if present)"]
+    A(["ARCDecoder.from_path(path)\n  or ARCDecoder(data, base_addr)"]):::input --> B["has_full_decode() → bool\n  Check: capstone CS_ARCH_ARC available\n  True → full operand decode\n  False → frame-width + control-flow hints only"]:::primary
+    B:::primary --> C["decode_frames(data, base_addr) → List[ARCFrame]\n  For each instruction position:\n    hw0 = read 2 bytes (BE)\n    op5 = (hw0 >> 11) & 0x1f\n    op5 >= 24 → 16-bit ARCFrame\n    else → 32-bit ARCFrame\n  ARCFrame: va, width, is_branch, is_call, is_ret, target, mnemonic(if full)"]:::secondary
+    C:::secondary --> D(["ARCDisasm:\n  function_starts() → List[int]\n    Scan for 'push_s blink' prologue (16-bit compact)\n    Or ELF symbol table entries (if present)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

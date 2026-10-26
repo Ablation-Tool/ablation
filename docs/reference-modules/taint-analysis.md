@@ -20,39 +20,78 @@ The tracker executes a single forward pass through the disassembled function bod
 
 ```mermaid
 flowchart TD
-    A["TaintTracker(binary_path)"] --> B[Load binary bytes, init Capstone CS_ARCH_X86/CS_MODE_64]
-    B --> C["_populate_known_funcs: resolve BinaryContext PLT\n→ ALLOC_FUNCS, COPY_FUNCS"]
-    C --> D["trace_function(func_va, tainted_args, max_insns=800)"]
-    D --> E["Initialize taint set from tainted_args\n(canonicalize: rdi, rsi, rdx → canonical names)"]
-    E --> F["Disassemble ≤max_func_size bytes from func_va"]
-    F --> G{iterate instructions up to max_insns}
-    G --> H{mnemonic?}
-    H -->|call| I{any ARG_REG in taint?}
-    I -->|yes| J[emit TaintSink: alloc_size / copy_len / call_arg]
-    I -->|no| K[kill caller-saved regs from taint]
-    H -->|mov/movzx/movsxd| L{src or src_mem tainted?}
-    L -->|yes| M[add dst_canon to taint]
-    L -->|no| N[discard dst_canon from taint]
-    H -->|lea| O{any tainted reg in src address expr?}
-    O -->|yes| M
-    O -->|no| N
-    H -->|add/sub/imul/shl/and/or/xor/cmov...| P{dst tainted OR src tainted?}
-    P -->|yes| M
-    P -->|no, but dst already tainted| M
-    H -->|xor dst, dst| Q[clear taint: idiom for zeroing]
-    H -->|cmp/test| R{either operand tainted?}
-    R -->|yes| S[emit TaintSink: branch_cond]
-    H -->|rep movs/stos| T{rcx or rdi or rsi tainted?}
-    T -->|yes| U[emit TaintSink: copy_len or mem_write]
-    H -->|mov mem dst + tainted src| V[emit TaintSink: mem_write]
-    J --> G
-    K --> G
-    M --> G
-    N --> G
-    S --> G
-    U --> G
-    V --> G
-    G -->|max_insns reached| W[return TaintSink list]
+    A(["TaintTracker(binary_path)"]):::input --> B["Load binary bytes, init Capstone CS_ARCH_X86/CS_MODE_64"]:::primary
+    B:::primary --> C["_populate_known_funcs: resolve BinaryContext PLT\n→ ALLOC_FUNCS, COPY_FUNCS"]:::secondary
+    C:::secondary --> D["trace_function(func_va, tainted_args, max_insns=800)"]:::tertiary
+    D:::tertiary --> E["Initialize taint set from tainted_args\n(canonicalize: rdi, rsi, rdx → canonical names)"]:::tertiary
+    E:::tertiary --> F["Disassemble ≤max_func_size bytes from func_va"]:::tertiary
+    F:::tertiary --> G{"iterate instructions up to max_insns"}:::neutral
+    G:::neutral --> H{"mnemonic?"}:::neutral
+    H:::neutral -->|call| I{"any ARG_REG in taint?"}:::neutral
+    I:::neutral -->|yes| J["emit TaintSink: alloc_size / copy_len / call_arg"]:::tertiary
+    I:::neutral -->|no| K["kill caller-saved regs from taint"]:::tertiary
+    H:::neutral -->|mov/movzx/movsxd| L{"src or src_mem tainted?"}:::neutral
+    L:::neutral -->|yes| M["add dst_canon to taint"]:::tertiary
+    L:::neutral -->|no| N["discard dst_canon from taint"]:::tertiary
+    H:::neutral -->|lea| O{"any tainted reg in src address expr?"}:::neutral
+    O:::neutral -->|yes| M:::tertiary
+    O:::neutral -->|no| N:::tertiary
+    H:::neutral -->|add/sub/imul/shl/and/or/xor/cmov...| P{"dst tainted OR src tainted?"}:::neutral
+    P:::neutral -->|yes| M:::tertiary
+    P:::neutral -->|no, but dst already tainted| M:::tertiary
+    H:::neutral -->|xor dst, dst| Q(["clear taint: idiom for zeroing"]):::output
+    H:::neutral -->|cmp/test| R{"either operand tainted?"}:::neutral
+    R:::neutral -->|yes| S["emit TaintSink: branch_cond"]:::tertiary
+    H:::neutral -->|rep movs/stos| T{"rcx or rdi or rsi tainted?"}:::neutral
+    T:::neutral -->|yes| U["emit TaintSink: copy_len or mem_write"]:::tertiary
+    H:::neutral -->|mov mem dst + tainted src| V["emit TaintSink: mem_write"]:::tertiary
+    J:::tertiary --> G:::neutral
+    K:::tertiary --> G:::neutral
+    M:::tertiary --> G:::neutral
+    N:::tertiary --> G:::neutral
+    S:::tertiary --> G:::neutral
+    U:::tertiary --> G:::neutral
+    V:::tertiary --> G:::neutral
+    G:::neutral -->|max_insns reached| W(["return TaintSink list"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#546e7a,stroke-width:2px
+    linkStyle 6 stroke:#546e7a,stroke-width:2px
+    linkStyle 7 stroke:#546e7a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#546e7a,stroke-width:2px
+    linkStyle 11 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 12 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 13 stroke:#546e7a,stroke-width:2px
+    linkStyle 14 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 15 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 16 stroke:#546e7a,stroke-width:2px
+    linkStyle 17 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 18 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 19 stroke:#2e7d32,stroke-width:3px
+    linkStyle 20 stroke:#546e7a,stroke-width:2px
+    linkStyle 21 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 22 stroke:#546e7a,stroke-width:2px
+    linkStyle 23 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 24 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 25 stroke:#546e7a,stroke-width:2px
+    linkStyle 26 stroke:#546e7a,stroke-width:2px
+    linkStyle 27 stroke:#546e7a,stroke-width:2px
+    linkStyle 28 stroke:#546e7a,stroke-width:2px
+    linkStyle 29 stroke:#546e7a,stroke-width:2px
+    linkStyle 30 stroke:#546e7a,stroke-width:2px
+    linkStyle 31 stroke:#546e7a,stroke-width:2px
+    linkStyle 32 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Register canonicalization

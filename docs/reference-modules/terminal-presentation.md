@@ -18,9 +18,18 @@ Render colored terminal output, section headers, and structured boxes for Ablati
 
 ```mermaid
 flowchart TD
-    A["Import: ablation.core.render"] --> B["_detect_mode() at import time:\n  Check COLORTERM → 'truecolor' or 'ansi256'\n  Check TERM for 'xterm-256color' → 'ansi256'\n  Check NO_COLOR env var → 'plain'\n  Check sys.stdout.isatty() → 'ansi16' or 'plain'\n  Assign COLOR constants accordingly"]
-    B --> C["Color constants (empty string in plain mode):\n  CYAN, RED, GREEN, YELLOW, BOLD, DIM, RESET, etc.\n  _tc(r,g,b) → truecolor ANSI escape\n  _256(n) → ANSI-256 color escape"]
-    C --> D["Layout functions:\n  box(lines, color, width) → bordered box\n  sbox(lines, color, width) → simple box\n  section(title, color, width) → section header\n  strip(s) → remove all ANSI escapes"]
+    A(["Import: ablation.core.render"]):::input --> B["_detect_mode() at import time:\n  Check COLORTERM → 'truecolor' or 'ansi256'\n  Check TERM for 'xterm-256color' → 'ansi256'\n  Check NO_COLOR env var → 'plain'\n  Check sys.stdout.isatty() → 'ansi16' or 'plain'\n  Assign COLOR constants accordingly"]:::primary
+    B:::primary --> C["Color constants (empty string in plain mode):\n  CYAN, RED, GREEN, YELLOW, BOLD, DIM, RESET, etc.\n  _tc(r,g,b) → truecolor ANSI escape\n  _256(n) → ANSI-256 color escape"]:::secondary
+    C:::secondary --> D(["Layout functions:\n  box(lines, color, width) → bordered box\n  sbox(lines, color, width) → simple box\n  section(title, color, width) → section header\n  strip(s) → remove all ANSI escapes"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

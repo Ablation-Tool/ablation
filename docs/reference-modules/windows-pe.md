@@ -20,26 +20,43 @@ Identifying that a driver has physical memory read/write, token stealing, or cal
 
 ```mermaid
 flowchart TD
-    A[/"Windows PE binary (.exe / .dll / .sys)"/] --> B["KernelDriverAnalyzer (.sys files only)\nPE machine type: 0x014c (x86) or 0x8664 (x64)\nDriver framework: WDM / KMDF / minifilter\nDriverEntry VA and MajorFunction dispatch table\nIOCTL codes from IRP_MJ_DEVICE_CONTROL handler\nKernel API surface: 40+ patterns across 8 risk classes\nDangerous byte patterns: WRMSR, CR0/CR4 write\nPDB path from RSDS debug directory"]
+    A(["Windows PE binary (.exe / .dll / .sys)"]):::input --> B["KernelDriverAnalyzer (.sys files only)\nPE machine type: 0x014c (x86) or 0x8664 (x64)\nDriver framework: WDM / KMDF / minifilter\nDriverEntry VA and MajorFunction dispatch table\nIOCTL codes from IRP_MJ_DEVICE_CONTROL handler\nKernel API surface: 40+ patterns across 8 risk classes\nDangerous byte patterns: WRMSR, CR0/CR4 write\nPDB path from RSDS debug directory"]:::primary
 
-    B --> C["CFGBypassDetector\nGuardFlags bits 8/9/28-31\nCFG function table\nexport xref check"]
-    B --> D["ByovdDetector\n8 capability classifiers\nimport table + disassembly\n(phys mem / token steal / callback removal)"]
-    B --> E["WindowsPoolTaintTracker\nExAllocatePool size\n→ RtlCopyMemory size\nCWE-122 detection"]
+    B:::primary --> C["CFGBypassDetector\nGuardFlags bits 8/9/28-31\nCFG function table\nexport xref check"]:::secondary
+    B:::primary --> D["ByovdDetector\n8 capability classifiers\nimport table + disassembly\n(phys mem / token steal / callback removal)"]:::tertiary
+    B:::primary --> E["WindowsPoolTaintTracker\nExAllocatePool size\n→ RtlCopyMemory size\nCWE-122 detection"]:::tertiary
 
-    C --> F["SEHChainAnalyzer\nx86-32 only\npush-handler / push-FS:[0]\nSafeseh registration check"]
-    C --> G["ETWProviderExtractor\nEventRegister → provider GUID\nEventWrite call count\nDetection gap finding"]
-    C --> H["RPCServerAnalyzer\nRpcServerRegisterIf*\nauth level check\nRPC_C_AUTHN_LEVEL_NONE → HIGH"]
-    C --> I["COMAttackSurfaceMapper\nDllGetClassObject presence\nCLSID enumeration\nIStream marshal check"]
+    C:::secondary --> F["SEHChainAnalyzer\nx86-32 only\npush-handler / push-FS:[0]\nSafeseh registration check"]:::tertiary
+    C:::secondary --> G["ETWProviderExtractor\nEventRegister → provider GUID\nEventWrite call count\nDetection gap finding"]:::tertiary
+    C:::secondary --> H["RPCServerAnalyzer\nRpcServerRegisterIf*\nauth level check\nRPC_C_AUTHN_LEVEL_NONE → HIGH"]:::tertiary
+    C:::secondary --> I["COMAttackSurfaceMapper\nDllGetClassObject presence\nCLSID enumeration\nIStream marshal check"]:::tertiary
 
-    F --> J[/"results.fmt()"/]
-    G --> J
-    H --> J
-    I --> J
-    D --> J
-    E --> J
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style J fill:#14532d,stroke:#166534,color:#dcfce7
+    F:::tertiary --> J(["results.fmt()"]):::output
+    G:::tertiary --> J:::output
+    H:::tertiary --> J:::output
+    I:::tertiary --> J:::output
+    D:::tertiary --> J:::output
+    E:::tertiary --> J:::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
+    linkStyle 12 stroke:#2e7d32,stroke-width:3px
+    linkStyle 13 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---
@@ -102,17 +119,27 @@ Event Tracing for Windows (ETW) is the kernel telemetry channel that security pr
 
 ```mermaid
 flowchart TD
-    A["Find all EventRegister call sites"] --> B["Extract provider GUID from first argument\nx64: RCX points to 16-byte GUID\nx86: first pushed arg points to GUID"]
+    A(["Find all EventRegister call sites"]):::input --> B["Extract provider GUID from first argument\nx64: RCX points to 16-byte GUID\nx86: first pushed arg points to GUID"]:::primary
 
-    B --> C["Compare against table of\n15 known security provider GUIDs\n(Windows Defender, AMSI, ETW kernel security, ...)"]
+    B:::primary --> C["Compare against table of\n15 known security provider GUIDs\n(Windows Defender, AMSI, ETW kernel security, ...)"]:::secondary
 
-    C --> D["Count EventWrite call sites\nin the same binary"]
+    C:::secondary --> D["Count EventWrite call sites\nin the same binary"]:::tertiary
 
-    D --> E{"Zero EventWrite calls\n+ registered security provider GUID?"}
-    E -->|Yes| F[/"MEDIUM: detection_gap\nProvider registered but never writes\nSuggests ETW hooking or\nchannel silencing"/]
-    E -->|No| G["Normal telemetry path"]
-
-    style F fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    D:::tertiary --> E{"Zero EventWrite calls\n+ registered security provider GUID?"}:::neutral
+    E:::neutral -->|Yes| F(["MEDIUM: detection_gap\nProvider registered but never writes\nSuggests ETW hooking or\nchannel silencing"]):::output
+    E:::neutral -->|No| G(["Normal telemetry path"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#546e7a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---
@@ -170,15 +197,25 @@ Finds unvalidated `ExAllocatePool` size arguments flowing into `RtlCopyMemory` (
 
 ```mermaid
 flowchart TD
-    A["Find all ExAllocatePool* call sites\n(ExAllocatePool / ExAllocatePoolWithTag / ExAllocatePool2)"] --> B["For each call site:\nTrack size_register forward"]
+    A(["Find all ExAllocatePool* call sites\n(ExAllocatePool / ExAllocatePoolWithTag / ExAllocatePool2)"]):::input --> B["For each call site:\nTrack size_register forward"]:::primary
 
-    B --> C{"size_register used as\nsize arg to RtlCopyMemory?"}
-    C -->|No| D["No finding"]
-    C -->|Yes| E{"Bounds check\n(CMP + conditional branch)\nbetween them?"}
-    E -->|Yes: guarded| D
-    E -->|No bounds check| F[/"HIGH: unvalidated propagation (CWE-122)"/]
-
-    style F fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    B:::primary --> C{"size_register used as\nsize arg to RtlCopyMemory?"}:::neutral
+    C:::neutral -->|No| D(["No finding"]):::output
+    C:::neutral -->|Yes| E{"Bounds check\n(CMP + conditional branch)\nbetween them?"}:::neutral
+    E:::neutral -->|Yes: guarded| D:::output
+    E:::neutral -->|No bounds check| F(["HIGH: unvalidated propagation (CWE-122)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#546e7a,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#546e7a,stroke-width:2px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 Combine with `KernelDriverAnalyzer` to avoid re-parsing the PE: `WindowsPoolTaintTrackerpath, kda_report=existing_report`.

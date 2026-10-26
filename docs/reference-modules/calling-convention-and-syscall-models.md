@@ -18,10 +18,20 @@ Annotate ARM32/Thumb function call sites with AAPCS argument register values: tr
 
 ```mermaid
 flowchart TD
-    A["ARM32RegAnnotator.from_path(path, thumb_funcs)\n  or .from_context(ctx)"] --> B["annotate_calls(func_va, end_va) → AnnotationResult\n  Single forward pass over ARM32/Thumb instructions:\n    MOV r0-r3, #imm → RegVal.Const(imm)\n    LDR r0-r3, [PC, #off] → RegVal.String(resolve_literal(off))\n    MOV r0, r3 → propagate existing RegVal\n    BL / BLX to PLT → CallSite(va, callee, {r0:val, r1:val, ...})\n    BL / BLX to internal → reset r0-r3 to Unknown (caller-saved)\n    Callee-save clobber r4-r11 → no reset (AAPCS guaranteed)"]
-    B --> C["AnnotationResult:\n  func_va: int\n  func_end_va: int\n  calls: List[CallSite]\n  reg_trace: List[Tuple[int, str, RegVal]]\n  (same type as RegAnnotator output)"]
-    C --> D["CallSite:\n  site_va: int\n  target_va: int\n  target_name: str\n  args: Dict[str, RegVal]  (r0/r1/r2/r3)\n  (same type as RegAnnotator output)"]
-    D --> E["Consumed by SinkArgClassifier, FuncProfiler\n  transparently — same API as x86-64 path"]
+    A(["ARM32RegAnnotator.from_path(path, thumb_funcs)\n  or .from_context(ctx)"]):::input --> B["annotate_calls(func_va, end_va) → AnnotationResult\n  Single forward pass over ARM32/Thumb instructions:\n    MOV r0-r3, #imm → RegVal.Const(imm)\n    LDR r0-r3, [PC, #off] → RegVal.String(resolve_literal(off))\n    MOV r0, r3 → propagate existing RegVal\n    BL / BLX to PLT → CallSite(va, callee, {r0:val, r1:val, ...})\n    BL / BLX to internal → reset r0-r3 to Unknown (caller-saved)\n    Callee-save clobber r4-r11 → no reset (AAPCS guaranteed)"]:::primary
+    B:::primary --> C["AnnotationResult:\n  func_va: int\n  func_end_va: int\n  calls: List[CallSite]\n  reg_trace: List[Tuple[int, str, RegVal]]\n  (same type as RegAnnotator output)"]:::secondary
+    C:::secondary --> D["CallSite:\n  site_va: int\n  target_va: int\n  target_name: str\n  args: Dict[str, RegVal]  (r0/r1/r2/r3)\n  (same type as RegAnnotator output)"]:::tertiary
+    D:::tertiary --> E(["Consumed by SinkArgClassifier, FuncProfiler\n  transparently · same API as x86-64 path"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

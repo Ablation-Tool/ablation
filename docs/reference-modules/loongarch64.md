@@ -51,20 +51,29 @@ A kernel binary built with `CONFIG_KASAN=y` inserts a 4–6 instruction shadow-m
 
 ```mermaid
 flowchart TD
-    A[/"/path/to/binary.elf"/] --> B["loongarch_decoder (V1)\nFixed-width 32-bit LE instruction decode\nALU · immediate · CSR/TLB/privilege · FP compare\nload/store · atomics · barriers · float load/store\nbranch/call/return\nLSX/LASX → .word (deferred)\njirl polymorphism: $zero/$ra/$ra → ret/call/br"]
+    A(["/path/to/binary.elf"]):::input --> B["loongarch_decoder (V1)\nFixed-width 32-bit LE instruction decode\nALU · immediate · CSR/TLB/privilege · FP compare\nload/store · atomics · barriers · float load/store\nbranch/call/return\nLSX/LASX → .word (deferred)\njirl polymorphism: $zero/$ra/$ra → ret/call/br"]:::primary
 
-    B --> C["loongarch_decoder_v2 (KASAN/KCOV-aware)\nPass 1: BL tagging:\n  every bl targeting KASAN_SYMBOL_PREFIXES\n  or KCOV_SYMBOL_PREFIXES → is_instrumentation=True\nPass 2: preamble walk:\n  from each tagged BL, walk backward up to 6 insns\n  tag: srli.d / lu12i.w / addi.d / ld.b / andi / add.d\n  stop: on call, branch, store, or function start\ndecode_frames_clean() skips all instrumentation"]
+    B:::primary --> C["loongarch_decoder_v2 (KASAN/KCOV-aware)\nPass 1: BL tagging:\n  every bl targeting KASAN_SYMBOL_PREFIXES\n  or KCOV_SYMBOL_PREFIXES → is_instrumentation=True\nPass 2: preamble walk:\n  from each tagged BL, walk backward up to 6 insns\n  tag: srli.d / lu12i.w / addi.d / ld.b / andi / add.d\n  stop: on call, branch, store, or function start\ndecode_frames_clean() skips all instrumentation"]:::secondary
 
-    C --> D["isa_loongarch64 + insn_loongarch64\nRegister model: $zero · $ra · $tp · $sp\n  $a0-$a7 · $t0-$t8 · $fp · $s0-$s8\nlp64 ABI: ARG_REGS=($a0..$a7), RET_REGS=($a0,$a1)\ninsn_loongarch64: typed Reg/Imm operands from op_str"]
+    C:::secondary --> D["isa_loongarch64 + insn_loongarch64\nRegister model: $zero · $ra · $tp · $sp\n  $a0-$a7 · $t0-$t8 · $fp · $s0-$s8\nlp64 ABI: ARG_REGS=($a0..$a7), RET_REGS=($a0,$a1)\ninsn_loongarch64: typed Reg/Imm operands from op_str"]:::tertiary
 
-    D --> E["cfg_loongarch64\nLeader set: entry VA + branch targets + fallthrough\nSplits at terminators (branch, call, ret, ertn, break)\nCalls treated as fall-through (callee abstracted)\nIndirect branches → no successors"]
+    D:::tertiary --> E["cfg_loongarch64\nLeader set: entry VA + branch targets + fallthrough\nSplits at terminators (branch, call, ret, ertn, break)\nCalls treated as fall-through (callee abstracted)\nIndirect branches → no successors"]:::tertiary
 
-    E --> F["analysis_loongarch64\nFlow-sensitive, path-insensitive fixpoint analysis\nLoop widening: bounded-iteration then widen to top\nState: taint_reg(name, label) / mem_taint(base, off)"]
+    E:::tertiary --> F["analysis_loongarch64\nFlow-sensitive, path-insensitive fixpoint analysis\nLoop widening: bounded-iteration then widen to top\nState: taint_reg(name, label) / mem_taint(base, off)"]:::tertiary
 
-    F --> G["LoongArch64TaintTracker\nInterprocedural BFS over call graph\nPLT/GOT stub resolution: .rela.plt + .dynsym\nFunction start: symbols + addi.d $sp,$sp,-N prologue\nfrom_path_full() adds: eh_frame FDE / DWARF / BTF"]
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style G fill:#14532d,stroke:#166534,color:#dcfce7
+    F:::tertiary --> G(["LoongArch64TaintTracker\nInterprocedural BFS over call graph\nPLT/GOT stub resolution: .rela.plt + .dynsym\nFunction start: symbols + addi.d $sp,$sp,-N prologue\nfrom_path_full() adds: eh_frame FDE / DWARF / BTF"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

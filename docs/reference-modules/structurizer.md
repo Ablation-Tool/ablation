@@ -47,28 +47,50 @@ guarantees dominators are visited before dominated nodes.
 
 ```mermaid
 flowchart TD
-    A["CFG\n.blocks · .entry · .flow · .flow_r()"] --> B["DomTree\nCooper-Harvey-Kennedy\nA dominates B if every path from entry to B passes through A"]
-    A --> C["PostDomTree\nreversed CFG → DomTree\nX post-dominates Y if every path from Y to exit passes through X"]
-    B --> D["LoopInfo\nback edges identify loop headers\nbody = all blocks dominated by header"]
-    B --> E["Structurizer\nRPO walk — dominators before dominated"]
-    C --> E
-    D --> E
-    E --> F{"block type?"}
-    F -->|"loop header"| G["WhileNode\nrecurse body\nskip to exit_block"]
-    F -->|"two successors\n(if/else)"| H["IfNode\nthen/else sub-trees\njoin = closest_common_post_dominator()"]
-    F -->|"no successors"| I["ReturnNode"]
-    F -->|"back-edge tail\ninside loop"| J["ContinueNode"]
-    F -->|"only exit successors"| K["BreakNode"]
-    F -->|"sequential"| L["InsnNode"]
-    G --> M[/"structured pseudo-C\nif / while / for — no goto chains"/]
-    H --> M
-    I --> M
-    J --> M
-    K --> M
-    L --> M
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style M fill:#14532d,stroke:#166534,color:#dcfce7
+    A(["CFG\n.blocks · .entry · .flow · .flow_r()"]):::input --> B["DomTree\nCooper-Harvey-Kennedy\nA dominates B if every path from entry to B passes through A"]:::primary
+    A:::input --> C["PostDomTree\nreversed CFG → DomTree\nX post-dominates Y if every path from Y to exit passes through X"]:::secondary
+    B:::primary --> D["LoopInfo\nback edges identify loop headers\nbody = all blocks dominated by header"]:::tertiary
+    B:::primary --> E["Structurizer\nRPO walk · dominators before dominated"]:::tertiary
+    C:::secondary --> E:::tertiary
+    D:::tertiary --> E:::tertiary
+    E:::tertiary --> F{"block type?"}:::neutral
+    F:::neutral -->|"loop header"| G["WhileNode\nrecurse body\nskip to exit_block"]:::tertiary
+    F:::neutral -->|"two successors\n(if/else)"| H["IfNode\nthen/else sub-trees\njoin = closest_common_post_dominator()"]:::tertiary
+    F:::neutral -->|"no successors"| I["ReturnNode"]:::tertiary
+    F:::neutral -->|"back-edge tail\ninside loop"| J["ContinueNode"]:::tertiary
+    F:::neutral -->|"only exit successors"| K["BreakNode"]:::tertiary
+    F:::neutral -->|"sequential"| L["InsnNode"]:::tertiary
+    G:::tertiary --> M(["structured pseudo-C\nif / while / for · no goto chains"]):::output
+    H:::tertiary --> M:::output
+    I:::tertiary --> M:::output
+    J:::tertiary --> M:::output
+    K:::tertiary --> M:::output
+    L:::tertiary --> M:::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#546e7a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 11 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 12 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 13 stroke:#2e7d32,stroke-width:3px
+    linkStyle 14 stroke:#2e7d32,stroke-width:3px
+    linkStyle 15 stroke:#2e7d32,stroke-width:3px
+    linkStyle 16 stroke:#2e7d32,stroke-width:3px
+    linkStyle 17 stroke:#2e7d32,stroke-width:3px
+    linkStyle 18 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

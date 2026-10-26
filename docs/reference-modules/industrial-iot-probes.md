@@ -18,9 +18,18 @@ Probe Modbus TCP for unauthenticated coil/register read access, test MQTT broker
 
 ```mermaid
 flowchart TD
-    A["probe_modbus_exposure(host, port=502, timeout=5.0) → list\n  in: modules/net_sniffer.py\n  TCP connect → port 502\n  FC1 (Read Coils): MBAP + PDU, unit_id=1\n  FC3 (Read Holding Registers): starting_addr=0, count=10\n  Response non-exception → data received\n  → [{severity, title: MODBUS_READ_COILS_UNAUTH|MODBUS_REGISTERS_UNAUTH,\n       detail, host, port}]"] --> B["probe_mqtt(host, port=1883, timeout=5) → list\n  in: modules/net_sniffer.py\n  TCP + MQTT CONNECT:\n    protocol_name: 'MQTT', level: 4 (v3.1.1)\n    connect_flags: 0x02 (clean_session, no credentials)\n    client_id: '' (empty)\n  CONNACK return_code=0 → anonymous accepted\n  → [{severity, title, detail, host, port}]\n\nprobe_mqtt_exposure(host, port=1883, timeout=5.0) → list\n  SUBSCRIBE '#' wildcard → all-topic access confirmed"]
-    B --> C["probe_snmp_community_strings(host, port=161,\n    community_list=['public','private','community',...]) → list\n  in: modules/net_sniffer.py\n  UDP socket → port 161\n  Per community string:\n    SNMP v2c GetRequest: OID 1.3.6.1.2.1.1.1.0 (sysDescr)\n    ASN.1 BER-encoded PDU\n    Response type 0xA2 + community match → valid\n  → [{severity, title: SNMP_COMMUNITY_<NAME>|SNMP_SYSDESCR, detail, host, port}]"]
-    C --> D["probe_coap_exposure(host, port=5683, timeout=5.0) → list\n  in: modules/net_sniffer.py\n  UDP socket → port 5683\n  CoAP GET: Token=b'\\x01', Uri-Path='.well-known/core'\n    Header: Ver=1, T=0 (CON), Code=0.01 (GET)\n  Response CoAP 2.05: Content-Format 40 (link-format)\n  Parse: </resource>; rt='type'; ct='0' links\n  → [{severity, title, detail, host, port}]"]
+    A(["probe_modbus_exposure(host, port=502, timeout=5.0) → list\n  in: modules/net_sniffer.py\n  TCP connect → port 502\n  FC1 (Read Coils): MBAP + PDU, unit_id=1\n  FC3 (Read Holding Registers): starting_addr=0, count=10\n  Response non-exception → data received\n  → [{severity, title: MODBUS_READ_COILS_UNAUTH|MODBUS_REGISTERS_UNAUTH,\n       detail, host, port}]"]):::input --> B["probe_mqtt(host, port=1883, timeout=5) → list\n  in: modules/net_sniffer.py\n  TCP + MQTT CONNECT:\n    protocol_name: 'MQTT', level: 4 (v3.1.1)\n    connect_flags: 0x02 (clean_session, no credentials)\n    client_id: '' (empty)\n  CONNACK return_code=0 → anonymous accepted\n  → [{severity, title, detail, host, port}]\n\nprobe_mqtt_exposure(host, port=1883, timeout=5.0) → list\n  SUBSCRIBE '#' wildcard → all-topic access confirmed"]:::primary
+    B:::primary --> C["probe_snmp_community_strings(host, port=161,\n    community_list=['public','private','community',...]) → list\n  in: modules/net_sniffer.py\n  UDP socket → port 161\n  Per community string:\n    SNMP v2c GetRequest: OID 1.3.6.1.2.1.1.1.0 (sysDescr)\n    ASN.1 BER-encoded PDU\n    Response type 0xA2 + community match → valid\n  → [{severity, title: SNMP_COMMUNITY_<NAME>|SNMP_SYSDESCR, detail, host, port}]"]:::secondary
+    C:::secondary --> D(["probe_coap_exposure(host, port=5683, timeout=5.0) → list\n  in: modules/net_sniffer.py\n  UDP socket → port 5683\n  CoAP GET: Token=b'\\x01', Uri-Path='.well-known/core'\n    Header: Ver=1, T=0 (CON), Code=0.01 (GET)\n  Response CoAP 2.05: Content-Format 40 (link-format)\n  Parse: </resource>; rt='type'; ct='0' links\n  → [{severity, title, detail, host, port}]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

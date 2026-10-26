@@ -20,24 +20,48 @@ The scanner operates in three phases per function: **subtraction detection**, **
 
 ```mermaid
 flowchart TD
-    A["LengthUnderflowScanner.from_context(ctx)"] --> B["scan(): load .text, disassemble with Capstone"]
-    B --> C[iterate instructions]
-    C --> D{mnemonic == lea -N or sub $N?}
-    D -->|N in 4..256 and dest not stack-relative| E[record: sub_va, sub_const, sub_reg]
-    D -->|no, or stack-relative| C
-    E --> F["Guard lookback: scan up to 25 insns before sub_va\nLook for CMP/TEST involving sub_reg family"]
-    F --> G{guard found?}
-    G -->|yes| H[guarded = True]
-    G -->|no| I[guarded = False]
-    H & I --> J["Truncation lookahead: scan up to 10 insns after sub_va\nLook for movzwl/movzbl on sub_reg family (register-to-register only)"]
-    J --> K{truncation found?}
-    K -->|no| C
-    K -->|yes| L[record: truncate_va]
-    L --> M["Call lookahead: scan up to 10 insns after truncate_va\nLook for CALL with direct target"]
-    M --> N{call found?}
-    N -->|no| C
-    N -->|yes| O["record: call_va, call_target\nresolve PLT name if available\nEmit UnderflowFinding"]
-    O --> C
+    A(["LengthUnderflowScanner.from_context(ctx)"]):::input --> B["scan(): load .text, disassemble with Capstone"]:::primary
+    B:::primary --> C["iterate instructions"]:::secondary
+    C:::secondary --> D{"mnemonic == lea -N or sub $N?"}:::neutral
+    D:::neutral -->|N in 4..256 and dest not stack-relative| E["record: sub_va, sub_const, sub_reg"]:::tertiary
+    D:::neutral -->|no, or stack-relative| C:::secondary
+    E:::tertiary --> F["Guard lookback: scan up to 25 insns before sub_va\nLook for CMP/TEST involving sub_reg family"]:::tertiary
+    F:::tertiary --> G{"guard found?"}:::neutral
+    G:::neutral -->|yes| H["guarded = True"]:::tertiary
+    G:::neutral -->|no| I(["guarded = False"]):::output
+    H:::tertiary --> J["Truncation lookahead: scan up to 10 insns after sub_va\nLook for movzwl/movzbl on sub_reg family (register-to-register only)"]:::tertiary
+    J:::tertiary --> K{"truncation found?"}:::neutral
+    K:::neutral -->|no| C:::secondary
+    K:::neutral -->|yes| L["record: truncate_va"]:::tertiary
+    L:::tertiary --> M["Call lookahead: scan up to 10 insns after truncate_va\nLook for CALL with direct target"]:::tertiary
+    M:::tertiary --> N{"call found?"}:::neutral
+    N:::neutral -->|no| C:::secondary
+    N:::neutral -->|yes| O["record: call_va, call_target\nresolve PLT name if available\nEmit UnderflowFinding"]:::tertiary
+    O:::tertiary --> C:::secondary
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#546e7a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#00695c,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#546e7a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#546e7a,stroke-width:2px
+    linkStyle 11 stroke:#00695c,stroke-width:2px
+    linkStyle 12 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 13 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 14 stroke:#546e7a,stroke-width:2px
+    linkStyle 15 stroke:#00695c,stroke-width:2px
+    linkStyle 16 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 17 stroke:#00695c,stroke-width:2px
 ```
 
 ### Subtraction detection

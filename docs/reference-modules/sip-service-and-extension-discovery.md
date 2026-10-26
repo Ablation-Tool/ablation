@@ -18,28 +18,51 @@ Fingerprint SIP servers, enumerate valid extensions, probe unauthenticated regis
 
 ```mermaid
 flowchart TD
-    A["SIPEnumerator(host, port=5060)"] --> B["enumerate_all():\nOrchestrates all class methods\nReturns dict keyed by probe name"]
-    B --> C["probe_sip_server():\nOPTIONS sip:host SIP/2.0\nParse: User-Agent, Server, Allow\nSIP_SERVER_IDENTIFIED (LOW)\nSIP_METHODS_DISCLOSED (LOW)\nSIP_PROXY_DETECTED (LOW)"]
-    B --> D["check_unauthenticated_register():\nREGISTER sip:1000@host, no auth\n200 → SIP_UNAUTH_REGISTER (CRITICAL)\n401/407 → auth required (expected)"]
-    B --> E["enumerate_extensions(start=100, end=110):\nREGISTER each extension\nBaseline: fakesipuser99999\n401 = extension exists\n403 = extension absent (FreePBX/Trixbox)\n200 → SIP_AUTH_BYPASS (CRITICAL)\nSIP_EXTENSION_FOUND (MEDIUM) per valid ext"]
-    B --> F["check_ami_interface():\nTCP 5038 banner grab\nadmin:admin / amp111 / password\nAMI_EXPOSED (HIGH) on banner\nAMI_AUTH_SUCCESS (CRITICAL) on login"]
-    B --> G["check_srtp_required():\nINVITE with RTP/AVP SDP (no SRTP)\n200 → SRTP_NOT_REQUIRED (MEDIUM)\n488 → SRTP_REQUIRED (LOW)\n401 → SIP_AUTH_REQUIRED (LOW)"]
+    A(["SIPEnumerator(host, port=5060)"]):::input --> B["enumerate_all():\nOrchestrates all class methods\nReturns dict keyed by probe name"]:::primary
+    B:::primary --> C(["probe_sip_server():\nOPTIONS sip:host SIP/2.0\nParse: User-Agent, Server, Allow\nSIP_SERVER_IDENTIFIED (LOW)\nSIP_METHODS_DISCLOSED (LOW)\nSIP_PROXY_DETECTED (LOW)"]):::output
+    B:::primary --> D(["check_unauthenticated_register():\nREGISTER sip:1000@host, no auth\n200 → SIP_UNAUTH_REGISTER (CRITICAL)\n401/407 → auth required (expected)"]):::output
+    B:::primary --> E(["enumerate_extensions(start=100, end=110):\nREGISTER each extension\nBaseline: fakesipuser99999\n401 = extension exists\n403 = extension absent (FreePBX/Trixbox)\n200 → SIP_AUTH_BYPASS (CRITICAL)\nSIP_EXTENSION_FOUND (MEDIUM) per valid ext"]):::output
+    B:::primary --> F(["check_ami_interface():\nTCP 5038 banner grab\nadmin:admin / amp111 / password\nAMI_EXPOSED (HIGH) on banner\nAMI_AUTH_SUCCESS (CRITICAL) on login"]):::output
+    B:::primary --> G(["check_srtp_required():\nINVITE with RTP/AVP SDP (no SRTP)\n200 → SRTP_NOT_REQUIRED (MEDIUM)\n488 → SRTP_REQUIRED (LOW)\n401 → SIP_AUTH_REQUIRED (LOW)"]):::output
 
-    H["probe_sip_enumeration(host, port=5060)"] --> I["OPTIONS sip:100@host, sip:200@host, sip:1000@host\n200 per ext → SIP_EXTENSION_VALID (HIGH)\nVia header RFC1918 IP → SIP_INTERNAL_IP_LEAK (HIGH)\nCode differential (200+403 mix) → SIP_EXTENSION_ENUM (HIGH)"]
-    H --> J["SUBSCRIBE Event:presence ext 100/200/1000\n200 → SIP_PRESENCE_UNAUTH (MEDIUM)\n(real-time extension occupancy without auth)"]
+    H(["probe_sip_enumeration(host, port=5060)"]):::input --> I(["OPTIONS sip:100@host, sip:200@host, sip:1000@host\n200 per ext → SIP_EXTENSION_VALID (HIGH)\nVia header RFC1918 IP → SIP_INTERNAL_IP_LEAK (HIGH)\nCode differential (200+403 mix) → SIP_EXTENSION_ENUM (HIGH)"]):::output
+    H:::input --> J(["SUBSCRIBE Event:presence ext 100/200/1000\n200 → SIP_PRESENCE_UNAUTH (MEDIUM)\n(real-time extension occupancy without auth)"]):::output
 
-    K["probe_sip_registration_hijacking(host, port=5060)"] --> L["REGISTER Expires:0 ext 1000, no auth\n200 → SIP_UNAUTH_DEREGISTER (CRITICAL)"]
-    K --> M["REGISTER Contact:sip:1000@203.0.113.99:5060 (RFC5737 TEST-NET-3)\n200 → SIP_REGISTRATION_HIJACK (CRITICAL)"]
-    K --> N["REGISTER Contact:* Expires:0\n200 + Contact header → SIP_CONTACT_DISCLOSURE (HIGH)"]
+    K(["probe_sip_registration_hijacking(host, port=5060)"]):::input --> L(["REGISTER Expires:0 ext 1000, no auth\n200 → SIP_UNAUTH_DEREGISTER (CRITICAL)"]):::output
+    K:::input --> M(["REGISTER Contact:sip:1000@203.0.113.99:5060 (RFC5737 TEST-NET-3)\n200 → SIP_REGISTRATION_HIJACK (CRITICAL)"]):::output
+    K:::input --> N(["REGISTER Contact:* Expires:0\n200 + Contact header → SIP_CONTACT_DISCLOSURE (HIGH)"]):::output
 
-    O["probe_sip_media_interception(host, port=5060)"] --> P["INVITE SDP RTP/AVP PCMU/8000, no crypto=\n100/180/183/200 → SIP_NO_SRTP_OFFERED (HIGH)\n(sends BYE to clean up dialog)"]
-    O --> Q["INVITE with no SDP body (late-media RFC3261§13.2.1)\n100/180/183/200 → SIP_LATE_MEDIA_ACCEPT (MEDIUM)"]
-    O --> R["SUBSCRIBE Event:dialog (RFC4235)\n200 → SIP_DIALOG_MONITOR (HIGH/CRITICAL)\nCRITICAL if NOTIFY body contains active dialog state"]
-    O --> S["OPTIONS → Allow+Supported header inspection\nNo SAVP/SRTP/SDES token → SIP_SAVP_NOT_ADVERTISED (MEDIUM)"]
+    O(["probe_sip_media_interception(host, port=5060)"]):::input --> P(["INVITE SDP RTP/AVP PCMU/8000, no crypto=\n100/180/183/200 → SIP_NO_SRTP_OFFERED (HIGH)\n(sends BYE to clean up dialog)"]):::output
+    O:::input --> Q(["INVITE with no SDP body (late-media RFC3261§13.2.1)\n100/180/183/200 → SIP_LATE_MEDIA_ACCEPT (MEDIUM)"]):::output
+    O:::input --> R(["SUBSCRIBE Event:dialog (RFC4235)\n200 → SIP_DIALOG_MONITOR (HIGH/CRITICAL)\nCRITICAL if NOTIFY body contains active dialog state"]):::output
+    O:::input --> S(["OPTIONS → Allow+Supported header inspection\nNo SAVP/SRTP/SDES token → SIP_SAVP_NOT_ADVERTISED (MEDIUM)"]):::output
 
-    T["probe_sip_options_extended(host, port=5060)"] --> U["OPTIONS → parse Allow header\nINVITE → MEDIUM\nSUBSCRIBE → MEDIUM\nREFER → HIGH (call-transfer hijack surface)\nNOTIFY → LOW"]
+    T(["probe_sip_options_extended(host, port=5060)"]):::input --> U(["OPTIONS → parse Allow header\nINVITE → MEDIUM\nSUBSCRIBE → MEDIUM\nREFER → HIGH (call-transfer hijack surface)\nNOTIFY → LOW"]):::output
 
-    V["check_rtp_port_range(host, start=10000, end=10010)"] --> W["12-byte RTP probe per UDP port\n3+ responsive ports → MEDIA_PORT_RANGE_OPEN (HIGH)"]
+    V(["check_rtp_port_range(host, start=10000, end=10010)"]):::input --> W(["12-byte RTP probe per UDP port\n3+ responsive ports → MEDIA_PORT_RANGE_OPEN (HIGH)"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#2e7d32,stroke-width:3px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#2e7d32,stroke-width:3px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:3px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
+    linkStyle 9 stroke:#2e7d32,stroke-width:3px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
+    linkStyle 12 stroke:#2e7d32,stroke-width:3px
+    linkStyle 13 stroke:#2e7d32,stroke-width:3px
+    linkStyle 14 stroke:#2e7d32,stroke-width:3px
+    linkStyle 15 stroke:#2e7d32,stroke-width:3px
+    linkStyle 16 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Finding reference: SIPEnumerator class

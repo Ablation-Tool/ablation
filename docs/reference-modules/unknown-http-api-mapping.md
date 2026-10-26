@@ -18,22 +18,39 @@ Autonomously reverse-engineer an unknown HTTP API from a base URL: detecting fra
 
 ```mermaid
 flowchart TD
-    A["run_re(base_url, depth='normal', focus=None)"] --> B["Phase 1: detect_framework(base):\n  GET / → Server header: uvicorn→FastAPI, gunicorn→Flask, nginx→proxy\n  GET /openapi.json, /docs, /redoc → FastAPI 0.95\n  GET /config, /queue/status + 'gradio' in body → Gradio 0.95\n  GET /graphql|/gql|/query + 'graphql' in body → GraphQL 0.90"]
-    B --> C["Phase 2: harvest_openapi(base):\n  18 paths: /openapi.json, /swagger.json, /api-docs, /_schema/, /spec.json...\n  Returns spec dict if 'paths'/'openapi'/'swagger' in parsed JSON\n  parse_openapi(spec): Endpoint(path, methods, params, responses) per operation\n  params: {name: {location, required, schema}} + __body__ for requestBody"]
-    C --> D["Phase 2b: discover_versions(base):\n  7 version patterns × versions 1-5: /v{n}, /api/v{n}, /rest/v{n}...\n  Non-404/400/405 → VERSION detected (shadow API candidate)"]
-    D --> E["Phase 3: fuzz_paths(base, workers=30):\n  95-entry PATH_WORDLIST × ('GET','POST')\n  Non-404/405 → found endpoint\n  ThreadPoolExecutor(max_workers=30)"]
-    E --> F["Phase 3b: probe_graphql(base):\n  6 paths: /graphql, /api/graphql, /gql...\n  POST __schema introspection → all types/fields\n  Error 'did you mean' → field suggestion leakage\n  POST mutation { __typename } → mutations enabled"]
-    F --> G["Phase 3c: discover_hidden_params(base):\n  8 JS paths: /static/js/main.js, /assets/index.js...\n  5 PARAM_PATTERNS regex over JS bundle text\n  Extracts undocumented param names"]
-    G --> H["Phase 4: probe_param(base, path, param, method):\n  7 injection categories × payloads\n  Per result: check CONFIRMING_SIGNALS\n  PATH_TRAVERSAL: FILE_READ|PATH_ACCESS\n  SQL: SQL_REFLECT ('syntax error', 'mysql', 'ora-')\n  SSTI: SSTI_EVAL ('49' in body when {{7*7}})\n  SSRF: SSRF_ACTIVE|SSRF_CLOUD_METADATA (no errno guard)\n  XXE: FILE_READ|SSRF_ACTIVE\n  Only confirmed categories reported"]
-    H --> I["Phase 4b-4f (parallel):\n  4b: probe_verb_tampering — 12 HTTP methods + 3 override headers × DELETE/PUT/PATCH\n  4c: probe_content_type_switch — JSON/XML/form-encoded body on POST/PUT\n  4d: probe_param_pollution — duplicate params: safe&sql-payload\n  4e: probe_mass_assignment — 18 admin fields in POST body, check reflection\n  4f: probe_bola — {placeholder} substitution + /path/1,2,admin,UUID suffix"]
-    I --> J["Phase 4g: analyze_tokens_in_response():\n  Extract JWT regex from body+headers\n  Decode header+payload (no verification)\n  forge_jwt_alg_none: alg=none, resend, check non-401\n  crack_jwt_secret: HMAC against 18 weak secrets\n  kid claim: log SQLi/path injection candidate\n  jku/x5u: log SSRF via JWK URL candidate"]
-    J --> K["Phase 5: extract_info_from_errors():\n  POST/GET with empty body, 1000-char string, __proto__:admin, invalid types\n  400/422/500 with 'detail' → validation_error (FastAPI schema leak)\n  400/422/500 with 'Traceback' → stack_trace_leak\n  /home/|/var/|/usr/ in body → path_disclosure"]
-    K --> L["Phase 8: probe_oauth2(base):\n  13 discovery paths: /.well-known/openid-configuration, /oauth/token...\n  Extract issuer/token_endpoint/authorization_endpoint/jwks_uri\n  redirect_uri: evil.com, javascript:alert, localhost (non-400 → open redirect)\n  client_credentials with 6 default client:secret pairs\n  Follow jwks_uri → log JWKS exposure"]
-    M["Phase 9: probe_grpc(base):\n  3 gRPC-Web paths: ListServices payload b'\\x00\\x00\\x00\\x00\\x02\\x0a\\x00'\n  'grpc' in content-type → gRPC endpoint\n  REST gateway paths: /v1/services, /grpc/services, /reflection"]
-    N["Phase 12: probe_wsdl_soap(base):\n  12 WSDL paths: /?wsdl, /service?wsdl, /soap...\n  body has 'wsdl'|<definitions|<schema → parse operation/type names\n  POST SOAP_XXE body → 'root:' in response → XXE confirmed"]
-    O["Phase 13: probe_jsonrpc(base):\n  10 paths × system.listMethods, system.describe, rpc.discover, help\n  result non-null → methods exposed\n  POST array → batch execution supported"]
-    P["Phase 15: probe_webhook_ssrf(base):\n  12 webhook paths + discovered endpoints\n  13 webhook param names × 3 cloud metadata URLs\n  sentinel baseline comparison: response diff = param consumed\n  ami-id/instance-id in body → SSRF metadata confirmed"]
-    Q["Phase 16: probe_default_creds(base):\n  16 auth path patterns × POST with 14 default pairs\n  status code difference (valid vs invalid username) → user enumeration\n  200 with token/access_token in JSON → auth success"]
+    A(["run_re(base_url, depth='normal', focus=None)"]):::input --> B["Phase 1: detect_framework(base):\n  GET / → Server header: uvicorn→FastAPI, gunicorn→Flask, nginx→proxy\n  GET /openapi.json, /docs, /redoc → FastAPI 0.95\n  GET /config, /queue/status + 'gradio' in body → Gradio 0.95\n  GET /graphql|/gql|/query + 'graphql' in body → GraphQL 0.90"]:::primary
+    B:::primary --> C["Phase 2: harvest_openapi(base):\n  18 paths: /openapi.json, /swagger.json, /api-docs, /_schema/, /spec.json...\n  Returns spec dict if 'paths'/'openapi'/'swagger' in parsed JSON\n  parse_openapi(spec): Endpoint(path, methods, params, responses) per operation\n  params: {name: {location, required, schema}} + __body__ for requestBody"]:::secondary
+    C:::secondary --> D["Phase 2b: discover_versions(base):\n  7 version patterns × versions 1-5: /v{n}, /api/v{n}, /rest/v{n}...\n  Non-404/400/405 → VERSION detected (shadow API candidate)"]:::tertiary
+    D:::tertiary --> E["Phase 3: fuzz_paths(base, workers=30):\n  95-entry PATH_WORDLIST × ('GET','POST')\n  Non-404/405 → found endpoint\n  ThreadPoolExecutor(max_workers=30)"]:::tertiary
+    E:::tertiary --> F["Phase 3b: probe_graphql(base):\n  6 paths: /graphql, /api/graphql, /gql...\n  POST __schema introspection → all types/fields\n  Error 'did you mean' → field suggestion leakage\n  POST mutation { __typename } → mutations enabled"]:::tertiary
+    F:::tertiary --> G["Phase 3c: discover_hidden_params(base):\n  8 JS paths: /static/js/main.js, /assets/index.js...\n  5 PARAM_PATTERNS regex over JS bundle text\n  Extracts undocumented param names"]:::tertiary
+    G:::tertiary --> H["Phase 4: probe_param(base, path, param, method):\n  7 injection categories × payloads\n  Per result: check CONFIRMING_SIGNALS\n  PATH_TRAVERSAL: FILE_READ|PATH_ACCESS\n  SQL: SQL_REFLECT ('syntax error', 'mysql', 'ora-')\n  SSTI: SSTI_EVAL ('49' in body when {{7*7}})\n  SSRF: SSRF_ACTIVE|SSRF_CLOUD_METADATA (no errno guard)\n  XXE: FILE_READ|SSRF_ACTIVE\n  Only confirmed categories reported"]:::tertiary
+    H:::tertiary --> I["Phase 4b-4f (parallel):\n  4b: probe_verb_tampering · 12 HTTP methods + 3 override headers × DELETE/PUT/PATCH\n  4c: probe_content_type_switch · JSON/XML/form-encoded body on POST/PUT\n  4d: probe_param_pollution · duplicate params: safe&sql-payload\n  4e: probe_mass_assignment · 18 admin fields in POST body, check reflection\n  4f: probe_bola · {placeholder} substitution + /path/1,2,admin,UUID suffix"]:::tertiary
+    I:::tertiary --> J["Phase 4g: analyze_tokens_in_response():\n  Extract JWT regex from body+headers\n  Decode header+payload (no verification)\n  forge_jwt_alg_none: alg=none, resend, check non-401\n  crack_jwt_secret: HMAC against 18 weak secrets\n  kid claim: log SQLi/path injection candidate\n  jku/x5u: log SSRF via JWK URL candidate"]:::tertiary
+    J:::tertiary --> K["Phase 5: extract_info_from_errors():\n  POST/GET with empty body, 1000-char string, __proto__:admin, invalid types\n  400/422/500 with 'detail' → validation_error (FastAPI schema leak)\n  400/422/500 with 'Traceback' → stack_trace_leak\n  /home/|/var/|/usr/ in body → path_disclosure"]:::tertiary
+    K:::tertiary --> L(["Phase 8: probe_oauth2(base):\n  13 discovery paths: /.well-known/openid-configuration, /oauth/token...\n  Extract issuer/token_endpoint/authorization_endpoint/jwks_uri\n  redirect_uri: evil.com, javascript:alert, localhost (non-400 → open redirect)\n  client_credentials with 6 default client:secret pairs\n  Follow jwks_uri → log JWKS exposure"]):::output
+    M(["Phase 9: probe_grpc(base):\n  3 gRPC-Web paths: ListServices payload b'\\x00\\x00\\x00\\x00\\x02\\x0a\\x00'\n  'grpc' in content-type → gRPC endpoint\n  REST gateway paths: /v1/services, /grpc/services, /reflection"]):::input
+    N(["Phase 12: probe_wsdl_soap(base):\n  12 WSDL paths: /?wsdl, /service?wsdl, /soap...\n  body has 'wsdl'|<definitions|<schema → parse operation/type names\n  POST SOAP_XXE body → 'root:' in response → XXE confirmed"]):::input
+    O(["Phase 13: probe_jsonrpc(base):\n  10 paths × system.listMethods, system.describe, rpc.discover, help\n  result non-null → methods exposed\n  POST array → batch execution supported"]):::input
+    P(["Phase 15: probe_webhook_ssrf(base):\n  12 webhook paths + discovered endpoints\n  13 webhook param names × 3 cloud metadata URLs\n  sentinel baseline comparison: response diff = param consumed\n  ami-id/instance-id in body → SSRF metadata confirmed"]):::input
+    Q(["Phase 16: probe_default_creds(base):\n  16 auth path patterns × POST with 14 default pairs\n  status code difference (valid vs invalid username) → user enumeration\n  200 with token/access_token in JSON → auth success"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 9 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 10 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Injection categories and confirming signals

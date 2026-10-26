@@ -18,14 +18,24 @@ Labeled-taint analysis, CFG-fixpoint dataflow, and structural lifting for RISC-V
 
 ```mermaid
 flowchart TD
-    A["taint_tracker_riscv.TaintEngine(Width.RV64)"] --> B["TaintEngine setup:\n  width = Width.RV64 (or RV32)\n  regs: {ra,sp,gp,tp,t0-t6,s0-s11,a0-a7} = Taint()\n  Sources: recv/recvfrom/read/fgets/gets/fread\n    (return value in a0)"]
-    B --> C["taint_register(reg, label) — seed initial taint\ne.g. taint_register('a0', 'user-input')"]
-    C --> D["run(insns: Iterable[Insn]) or analyze_cfg()\n\nLinear dispatch (run):\n  ld/lw/lb/lhu (load) — propagate taint from memory\n  sd/sw/sb (store) — store tainted value to memory\n  add/addi/sub (arithmetic) — union taint labels\n  and/andi (bitwise AND) — bound = immediate if AND with immediate\n  or/ori/xor/xori (bitwise) — union labels\n  mv/lui/li (move/immediate) — clear/assign\n  jal/jalr (call) — check PLT sink list; propagate args\n  beq/bne/blt/bge/bltu/bgeu (branch) — both edges explored\n  c.* RVC: c.add/c.lw/c.sw/c.j/c.beqz/c.bnez handled inline\n\nCFG fixpoint (analyze_cfg):\n  Build CFG via cfg_riscv.build_cfg(insns)\n  TaintState.join() at merge-points\n  Iterate to fixpoint (state.same_as(prev) check)"]
-    D --> E["Sinks: system/execve/execl/execvp\n  popen/strcpy/strcat/sprintf/vsprintf\n  snprintf/vsnprintf/memcpy/memmove/gets\n  (match by PLT symbol name or known VA)\n  → Finding(severity, source, sink, chain, va, bound)"]
+    A(["taint_tracker_riscv.TaintEngine(Width.RV64)"]):::input --> B["TaintEngine setup:\n  width = Width.RV64 (or RV32)\n  regs: {ra,sp,gp,tp,t0-t6,s0-s11,a0-a7} = Taint()\n  Sources: recv/recvfrom/read/fgets/gets/fread\n    (return value in a0)"]:::primary
+    B:::primary --> C["taint_register(reg, label) · seed initial taint\ne.g. taint_register('a0', 'user-input')"]:::secondary
+    C:::secondary --> D["run(insns: Iterable[Insn]) or analyze_cfg()\n\nLinear dispatch (run):\n  ld/lw/lb/lhu (load) · propagate taint from memory\n  sd/sw/sb (store) · store tainted value to memory\n  add/addi/sub (arithmetic) · union taint labels\n  and/andi (bitwise AND) · bound = immediate if AND with immediate\n  or/ori/xor/xori (bitwise) · union labels\n  mv/lui/li (move/immediate) · clear/assign\n  jal/jalr (call) · check PLT sink list; propagate args\n  beq/bne/blt/bge/bltu/bgeu (branch) · both edges explored\n  c.* RVC: c.add/c.lw/c.sw/c.j/c.beqz/c.bnez handled inline\n\nCFG fixpoint (analyze_cfg):\n  Build CFG via cfg_riscv.build_cfg(insns)\n  TaintState.join() at merge-points\n  Iterate to fixpoint (state.same_as(prev) check)"]:::tertiary
+    D:::tertiary --> E(["Sinks: system/execve/execl/execvp\n  popen/strcpy/strcat/sprintf/vsprintf\n  snprintf/vsnprintf/memcpy/memmove/gets\n  (match by PLT symbol name or known VA)\n  → Finding(severity, source, sink, chain, va, bound)"]):::output
 
-    F["taint_tracker_riscv32.py / taint_tracker_riscv64.py\nBinary-path (non-labeled) trackers:\n  from_path(binary, sources=[...], sinks=[...])\n  run() → List[Finding]\n  RV32: 32-bit regs; RV64: 64-bit regs; psABI a0-a7 both"]
+    F(["taint_tracker_riscv32.py / taint_tracker_riscv64.py\nBinary-path (non-labeled) trackers:\n  from_path(binary, sources=[...], sinks=[...])\n  run() → List[Finding]\n  RV32: 32-bit regs; RV64: 64-bit regs; psABI a0-a7 both"]):::input
 
-    G["insn_riscv.from_listing(text):\nParse objdump listing (address: hex mnemonic operands)\nInsn(va, mnemonic, operands) — handles 16-bit RVC mnemonics\n\ncfg_riscv.build_cfg(insns):\nBranch: beq/bne/blt/bge + RVC c.beqz/c.bnez\nCall: jal (non-ra target) / jalr with ra\nReturns: jalr ra (ret pseudo) / c.jr ra"]
+    G(["insn_riscv.from_listing(text):\nParse objdump listing (address: hex mnemonic operands)\nInsn(va, mnemonic, operands) · handles 16-bit RVC mnemonics\n\ncfg_riscv.build_cfg(insns):\nBranch: beq/bne/blt/bge + RVC c.beqz/c.bnez\nCall: jal (non-ra target) / jalr with ra\nReturns: jalr ra (ret pseudo) / c.jr ra"]):::input
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Module inventory

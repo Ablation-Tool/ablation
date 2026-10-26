@@ -18,9 +18,18 @@ Enumerate SSH private keys and `known_hosts` entries from all user home director
 
 ```mermaid
 flowchart TD
-    A["SSHKeyEnumerator(base_path='/home') → enumerator\n  Walk: /home/*/.ssh/, /root/.ssh/\n  Match: id_rsa, id_ecdsa, id_ed25519, *.pem\n  Per key file:\n    PEM header: -----BEGIN RSA PRIVATE KEY-----\n    ENCRYPTED in header → passphrase required\n    parse known_hosts: hash or plaintext hosts\n  → List[SSHKey{path, algo, encrypted, known_hosts}]"] --> B["APITokenDetector:\n  scan_env_variables(os.environ) → List[dict]\n    Name filter: TOKEN|KEY|SECRET|PASSWORD|APIKEY\n    Value entropy ≥ 3.5 bits/char AND len ≥ 20\n    → [{name, value_snippet, entropy, source}]\n  scan_config_files(paths) → List[dict]\n    Regex: (api_key|token|password|secret)\s*[:=]\s*['\"](\\S+)['\"]\n    → [{file, key_name, value_snippet}]"]
-    B --> C["CloudMetadataProber:\n  probe_all() → self.results dict:\n    aws_imdsv1: {status, keys}\n    aws_imdsv2: {status, token}\n    aws_iam_creds: {role, credentials_json}\n    gcp_metadata: {status, project_id, service_accounts, ...}\n    azure_imds: {status, subscription_id, ...}\n    oci_imds: {status, ...}\n  Private: _probe_aws(), _probe_gcp(), _probe_azure(), _probe_oci()"]
-    C --> D["detect_ssh_key_reuse(scan_path='/home') → list\n  Collect all authorized_keys public keys\n  Collect known_hosts (plaintext + hashed)\n  Cross-reference: same pubkey in N files\n  → [{pubkey_fingerprint, found_in: [path, ...], reuse_count}]"]
+    A(["SSHKeyEnumerator(base_path='/home') → enumerator\n  Walk: /home/*/.ssh/, /root/.ssh/\n  Match: id_rsa, id_ecdsa, id_ed25519, *.pem\n  Per key file:\n    PEM header: -----BEGIN RSA PRIVATE KEY-----\n    ENCRYPTED in header → passphrase required\n    parse known_hosts: hash or plaintext hosts\n  → List[SSHKey{path, algo, encrypted, known_hosts}]"]):::input --> B["APITokenDetector:\n  scan_env_variables(os.environ) → List[dict]\n    Name filter: TOKEN|KEY|SECRET|PASSWORD|APIKEY\n    Value entropy ≥ 3.5 bits/char AND len ≥ 20\n    → [{name, value_snippet, entropy, source}]\n  scan_config_files(paths) → List[dict]\n    Regex: (api_key|token|password|secret)\s*[:=]\s*['\"](\\S+)['\"]\n    → [{file, key_name, value_snippet}]"]:::primary
+    B:::primary --> C["CloudMetadataProber:\n  probe_all() → self.results dict:\n    aws_imdsv1: {status, keys}\n    aws_imdsv2: {status, token}\n    aws_iam_creds: {role, credentials_json}\n    gcp_metadata: {status, project_id, service_accounts, ...}\n    azure_imds: {status, subscription_id, ...}\n    oci_imds: {status, ...}\n  Private: _probe_aws(), _probe_gcp(), _probe_azure(), _probe_oci()"]:::secondary
+    C:::secondary --> D(["detect_ssh_key_reuse(scan_path='/home') → list\n  Collect all authorized_keys public keys\n  Collect known_hosts (plaintext + hashed)\n  Cross-reference: same pubkey in N files\n  → [{pubkey_fingerprint, found_in: [path, ...], reuse_count}]"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---

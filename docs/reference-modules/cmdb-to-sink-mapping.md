@@ -18,15 +18,30 @@ Phase 0.5 FortiOS/FortiWeb triage tool: enumerate every `cmf_query_create()` cal
 
 ```mermaid
 flowchart TD
-    A["CMDBSurfaceMapper.from_path(path) or\nCMDBSurfaceMapper.from_context(ctx)"] --> B["XRef graph: find all cmf_query_create() PLT entries\n+ all exec-class PLT entries\n(system, execve, popen, execl, execlp, etc.)"]
-    B --> C["For each function in binary:\n  Does it call cmf_query_create? → Yes → record call sites\n  Does it call exec-class sink? → Yes → mark as sink function"]
-    C --> D["For each cmf_query_create call site:\n  Backtrack from call VA\n  Look for: mov edi, <imm> or mov edi, <const>\n  → table_id = imm, or None if register/global-propagated"]
-    D --> E["CMDBTableEntry (per table_id):\n  name: str (from _CONFIRMED_TABLES or 'table_0x<hex>')\n  callers: List[int]  (function VAs calling cmf_query_create(table_id))\n  field_read_count: int\n  reaches_exec: bool\n  exec_func_va: Optional[int]\n  exec_call_va: Optional[int]\n  exec_sink_name: Optional[str]"]
-    E --> F{"reaches_exec?"}
-    F -->|Yes| G["Include in triage surface\n→ advance to Phase 1"]
-    F -->|No| H["Exclude (no exec co-location)"]
-    G --> I["map() → Dict[int, CMDBTableEntry]\n  keyed by table_id (int)"]
-    I --> J["report(surface) → str\n  table_id | name | callers | exec_sink_name"]
+    A(["CMDBSurfaceMapper.from_path(path) or\nCMDBSurfaceMapper.from_context(ctx)"]):::input --> B["XRef graph: find all cmf_query_create() PLT entries\n+ all exec-class PLT entries\n(system, execve, popen, execl, execlp, etc.)"]:::primary
+    B:::primary --> C["For each function in binary:\n  Does it call cmf_query_create? → Yes → record call sites\n  Does it call exec-class sink? → Yes → mark as sink function"]:::secondary
+    C:::secondary --> D["For each cmf_query_create call site:\n  Backtrack from call VA\n  Look for: mov edi, <imm> or mov edi, <const>\n  → table_id = imm, or None if register/global-propagated"]:::tertiary
+    D:::tertiary --> E["CMDBTableEntry (per table_id):\n  name: str (from _CONFIRMED_TABLES or 'table_0x<hex>')\n  callers: List[int]  (function VAs calling cmf_query_create(table_id))\n  field_read_count: int\n  reaches_exec: bool\n  exec_func_va: Optional[int]\n  exec_call_va: Optional[int]\n  exec_sink_name: Optional[str]"]:::tertiary
+    E:::tertiary --> F{"reaches_exec?"}:::neutral
+    F:::neutral -->|Yes| G["Include in triage surface\n→ advance to Phase 1"]:::tertiary
+    F:::neutral -->|No| H(["Exclude (no exec co-location)"]):::output
+    G:::tertiary --> I["map() → Dict[int, CMDBTableEntry]\n  keyed by table_id (int)"]:::tertiary
+    I:::tertiary --> J(["report(surface) → str\n  table_id | name | callers | exec_sink_name"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 4 stroke:#546e7a,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 8 stroke:#2e7d32,stroke-width:3px
 ```
 
 ---
