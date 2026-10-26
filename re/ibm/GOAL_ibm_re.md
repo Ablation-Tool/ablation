@@ -197,10 +197,13 @@ BoMC IMM2 sessions 1–9:
 
 **18. POWER7/POWER9/POWER10 functional simulators** (x86_64 RPMs)
 `re/ibm/power_sim_re.py`
-- rpm2cpio | cpio to extract. Find simulator binary (sim_ppc or
-  systemsim). Sweep for undocumented POWER ISA opcodes not in public
-  manuals — compare opcode dispatch tables across POWER7/POWER9/POWER10.
-  New ablation module: `undocumented_ppc_opcodes.py`.
+- [x] COMPLETE (session 14, 2026-10-25). FORGE PASS. POWERSIM-001 SAFE.
+- New ablation module: `undocumented_ppc_opcodes.PPCOpcodeScanner` (FORGE PASS).
+- decode.map P7: 1461 ops, P9: 2576 ops. P10 (systemsim): no decode.map.
+- sp_attn: primary opcode 0 (XO 0x100 P7 / 0x200 P9), NOT in public POWER ISA spec. Absent in P10.
+- rvwinkle: POWER7 CMU "Runlatch Winkle" — P7-only, removed in P9.
+- Power mgmt: doze/nap/sleep/rvwinkle (P7) → stop (P9). P10: stop x42, sp_attn removed.
+- Known FP: CMU-routed public instructions (sc, rfid, hrfid, isel, dst*) — documented in module.
 
 ---
 
@@ -231,7 +234,7 @@ BoMC IMM2 sessions 1–9:
 | Module | From | Status |
 |---|---|---|
 | `insn_alpha.py` | dxexec RE (target 2) | DONE (session 13) |
-| `undocumented_ppc_opcodes.py` | simulator RE (target 18) | OPEN |
+| `undocumented_ppc_opcodes.py` | simulator RE (target 18) | DONE (session 14) |
 | SH4 `disasm_engine.py` gap | IMM2 sessions | OPEN (logged session 2) |
 
 All new ablation modules follow `length_underflow.py` template.
