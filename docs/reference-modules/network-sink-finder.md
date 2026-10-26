@@ -110,7 +110,7 @@ NetworkSinkFinder: 7 network-reachable dangerous sinks
 
 **Before this module:** `BinaryContext.load_or_build` + `SinkArgClassifier.from_context`. NetworkSinkFinder runs both internally, but running SAC first lets you see the total sink count before filtering by reachability.
 
-**After this module:** `WindowAnalyzer.dump_text` on each confirmed func_va to trace the argument chain. `PathSolver` for feasibility.
+**After this module:** `TaintTracker` on each `ARG_PROPAGATED`/`UNKNOWN` result to confirm the data-flow path from network source to sink. Then `WindowAnalyzer.dump_text` on each confirmed func_va to trace the argument chain manually. `PathSolver` for feasibility.
 
 ---
 
