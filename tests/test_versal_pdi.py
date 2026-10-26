@@ -719,7 +719,7 @@ class TestRealGciPld:
         assert vp.partitions()[0].dst_load_addr == 0xFFFFFFFFFFFFFFFF
 
     def test_cdo_sections_present(self, vp):
-        assert len(vp.cdo_sections()) >= 2  # at least NPI CDO + CFICDR CDO
+        assert len(vp.cdo_sections()) >= 1  # single CDO: NPI writes + DmaWriteKeyHole for PL bitstream
 
     def test_cdo_version_is_v2(self, vp):
         for section in vp.cdo_sections():

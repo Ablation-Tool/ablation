@@ -667,7 +667,10 @@ class VersalPdi:
             )
             self._parse_cdo_commands(section, warnings)
             sections.append(section)
-            pos += 1
+            # Advance past the entire CDO payload — prevents re-scanning
+            # DmaWriteKeyHole payloads (which contain raw PL bitstream bytes)
+            # that otherwise produce false CDO hits with garbage module IDs.
+            pos = pos + CDO_HEADER_WORDS * 4 + length_w * 4
         return sections
 
     def _parse_cdo_commands(self, section: CdoSection, warnings: List[str]) -> None:
