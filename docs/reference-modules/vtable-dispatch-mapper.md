@@ -150,14 +150,13 @@ VtableDispatchMapper: PanGPS
 ## Pipeline position
 
 ```
-BinaryContext.load_or_build()
-    → VtableDispatchMapper          ← here (step 2.5 — before SemanticSearcher)
+BinaryContext → SemanticSearcher → FuncProfiler
+    → VtableDispatchMapper          ← here (before CrossBinaryExportDetector)
     → CrossBinaryExportDetector(vtable_mapper=mapper)
-    → SemanticSearcher → FuncProfiler
-    → SinkArgClassifier → [post-SAC filters] → TaintTracker → PathSolver
+    → SinkArgClassifier → TaintTracker → PathSolver
 ```
 
-Run immediately after `BinaryContext.load_or_build()` for any C++ binary. Must run before `CrossBinaryExportDetector` (vtable exclusion) and before `SemanticSearcher` / `SinkArgClassifier` (ensures `callers_of()` is accurate for virtual functions).
+Run after `BinaryContext.load_or_build()`. Must run before `CrossBinaryExportDetector` if you want vtable methods excluded from the zero-caller heuristic.
 
 ---
 

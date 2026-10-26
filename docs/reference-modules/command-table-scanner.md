@@ -76,20 +76,6 @@ IBM Storage Defender Sentinel 2.3.2 dispatch binary (183MB, 18584 funcs, non-PIE
 
 ---
 
-## Pipeline position
-
-```
-BinaryContext.load_or_build()
-    → SemanticSearcher.query()
-    → CommandTableScanner.from_context(ctx).scan()   ← here (step 4.5)
-    → FuncProfiler.profile() on handler_va results
-    → SinkArgClassifier → [post-SAC filters] → TaintTracker
-```
-
-Run after `SemanticSearcher` (step 4.5) for any dispatch-table target: firmware with a Q-shell layer, IBM Sentinel, or any binary where SemanticSearcher returns few results despite a large function count. Pass `handler_va` values from each `CommandTable` entry directly to `FuncProfiler` and `SinkArgClassifier` as the taint entry points.
-
----
-
 ## Notes
 
 - Only scans `_data_ranges` (PF_W segments). Rodata is used for pointer validation only, never scanned as a table source — this prevents false positives from the 177MB rodata segment in the dispatch binary.

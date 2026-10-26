@@ -43,7 +43,7 @@ if ctx.names_count():
 
 See `docs/guide-tool-selection.md` for the full task→tool lookup table.
 
-**Ordering:** BinaryContext → SemanticSearcher (new binary/vuln class) → FuncProfiler (candidate) → **SinkArgClassifier** (eliminate RODATA_CONST first) → post-SAC filters: TaintedStringTracker → SnprintfVariableFilter → SinkSanitizerFilter → FuncReachabilityAnalyzer → **NetworkSinkFinder** (networked binaries only) → TaintTracker (ARG_PROPAGATED/UNKNOWN sinks only) → PathSolver (confirm feasibility). Manual capstone only when TaintTracker has no configured sink. Conditional insertions: VtableDispatchMapper after BinaryContext for C++ binaries; CommandTableScanner after SemanticSearcher for dispatch-table targets; SetuidBeforeForkAnalyzer after BinaryContext for setuid binaries.
+**Ordering:** BinaryContext → SemanticSearcher (new binary/vuln class) → FuncProfiler (candidate) → **SinkArgClassifier** (eliminate RODATA_CONST first) → TaintedStringTracker → SnprintfVariableFilter → **NetworkSinkFinder** (networked binaries only) → TaintTracker (ARG_PROPAGATED/UNKNOWN sinks only) → PathSolver (confirm feasibility). Manual capstone only when TaintTracker has no configured sink.
 
 ---
 
@@ -59,21 +59,15 @@ See `docs/reference-modules/` for per-module constructor patterns and key method
 
 1. Read `SESSION.md` (root) + `re/<vendor>/SESSION_<target>.md`
 2. `BinaryContext.load_or_build()` + `ctx.summary()` + `ctx.names_table()`
-2.5. `VtableDispatchMapper.from_context(ctx)` if C++ binary (mangled symbols or `.eh_frame` present): enriches `callers_of()` for virtual functions before any further analysis. Skip for plain C binaries.
-2.6. `CrossBinaryExportDetector.from_context(ctx).detect()` if daemon+helper pair: finds exports with zero local callers that are called from a companion binary.
-2.7. `SetuidBeforeForkAnalyzer.from_path(elf).scan()` for any setuid binary: detects setuid(0)+fork+exec CWE-269. HMC-GAP-001. Skip for non-setuid binaries.
 3. `CorpusBuilder.build()` if no prior coverage
 4. `SemanticSearcher.query()`: sweep ALL vuln classes before touching disasm
-4.5. `CommandTableScanner.from_context(ctx).scan()` for dispatch-table targets (firmware, Q-shell, IBM Sentinel pattern): finds handler VAs invisible to SemanticSearcher.
 5. `PatternLibrary.sweep()`: replay confirmed patterns from prior engagements
 6. `FuncProfiler.profile()` on top candidates
 6.5. `SinkArgClassifier.from_context(ctx).classify_all()`: classify ALL shell sink call sites as RODATA_CONST / SNPRINTF_RODATA / ARG_PROPAGATED / UNKNOWN. Eliminate RODATA_CONST and parameterless SNPRINTF_RODATA before TaintTracker runs. Use `from_context(ctx)`, not `from_path()`: `from_path()` returns ~22 func_starts on stripped binaries.
 6.6. `TaintedStringTracker.from_context(ctx).upgrade_snprintf_rodata(sac_results)`: upgrade SNPRINTF_RODATA where snprintf format args are tainted (SAC-FORMAT-001). Skipping this caused the pam_hsc.so false-negative (session 2026-10-22).
 6.7. `SnprintfVariableFilter.from_context(ctx).apply(sac_results)`: re-classify SNPRINTF_RODATA as injectable when format string contains `%s`. Run on all SNPRINTF_RODATA results before closing them as safe.
-6.8. `SinkSanitizerFilter.from_path(elf).apply(sac_results)`: downgrade sanitizer-gated ARG_PROPAGATED to SANITIZER_VALIDATED. Eliminates manual disasm for structurally safe sites.
-6.9. `FuncReachabilityAnalyzer.from_context(ctx).filter_unreachable(sac_results)`: eliminate dead-code ARG_PROPAGATED findings before TaintTracker.
-6.10. `NetworkSinkFinder.from_context(ctx).find(depth=3)`: for any binary with network PLT imports, filter SAC results to network-reachable sinks only. Skip for local-only binaries (no recv/accept/read in PLT). Returns {} immediately if no network sources found.
-7. `TaintTracker` on ARG_PROPAGATED / UNKNOWN sinks from post-SAC filter output only (not the raw SAC set)
+6.8. `NetworkSinkFinder.from_context(ctx).find(depth=3)`: for any binary with network PLT imports, filter SAC results to network-reachable sinks only. Skip for local-only binaries (no recv/accept/read in PLT). Returns {} immediately if no network sources found.
+7. `TaintTracker` on ARG_PROPAGATED / UNKNOWN sinks only (not the raw SAC set)
 8. `IPRegAnnotator` for cross-library call chains
 9. `WindowAnalyzer.dump_text()` for manual disasm only when automated tools don't have the sink
 

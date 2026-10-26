@@ -168,7 +168,7 @@ A function with multiple paths where the sanitizer is only on one branch produce
 
 **Before this module:** `SinkArgClassifier.classify_all()`, this filter consumes its output directly. `BinaryContext.load_or_build()` and `SanitizerDetector` must also be built.
 
-**After this module:** Pass remaining `ARG_PROPAGATED` / `UNKNOWN` sites to `FuncReachabilityAnalyzer` (eliminate dead-code findings), then `NetworkSinkFinder` (networked binaries), then `TaintTracker`. The `SANITIZER_VALIDATED` sites are excluded from taint analysis.
+**After this module:** Pass remaining `ARG_PROPAGATED` / `UNKNOWN` sites to `TaintTracker`. The `SANITIZER_VALIDATED` sites are excluded from taint analysis.
 
 ---
 
