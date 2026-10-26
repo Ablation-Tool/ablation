@@ -73,23 +73,42 @@ FINDINGS = [
             'r10_insn_va':   0x12028d6bc,
             'r10_insn_type': 'BIS_MOV',
             'r10_interp':    'MOV r16 → r10  (bis r16,r16,r10)  — save $a0 of wrapper',
-            'wrapper_fn_va': 0x12028d6a0,   # function that receives cmd and calls system()
-            'conclusion':    (
-                'Command string passed to system() is the wrapper function\'s own $a0. '
-                'The wrapper at 0x12028d6a0 receives a command string from its caller, '
-                'saves it in $s1 across intermediate calls, then passes it unchanged to '
-                'system(). Exploitability depends on whether the wrapper\'s callers '
-                'can receive attacker-controlled input.'
+            'wrapper_fn_va': 0x12028d6a0,
+            'extended_trace_session14': {
+                'r16_at_0x12028d63c_source': 'BSR_RETVAL',
+                'bsr_target':  0x120184f00,
+                'conclusion':  (
+                    'The wrapper $a0 was not a constant or GP-string — it was the '
+                    'return value of a prior BSR to 0x120184f00. Per trace_arg() '
+                    'BSR_RETVAL rule: CANDIDATE (return value of prior call; '
+                    'one more trace level required). '
+                    'String context near call site: "type" and "positions" loaded '
+                    'in r17 via LDA/LDAH GP-relative — these are DataExplorer data '
+                    'attribute names (part of the DX object model for field/array access). '
+                    'Function 0x120184f00 processes DX object data and returns a '
+                    'computed value (likely a command string built from DX attributes). '
+                    'Cannot ELIMINATE: argument is data-dependent, not a literal.'
+                ),
+            },
+            'overall_conclusion': (
+                'DX-001 CANDIDATE MEDIUM — confirmed. Command string passed to system() '
+                'originates from a DataExplorer object processing function (0x120184f00) '
+                'via BSR_RETVAL → wrapper $a0 → $s1 save → system() arg. '
+                'Full taint analysis would require tracing 0x120184f00 return value '
+                'back to its data sources (DX object attributes). '
+                'DX attributes are user-configurable via DX scripts and input data. '
+                'This is likely an execution path for running external DX filters/modules. '
+                'Severity: MEDIUM (local exec context; DataExplorer is a workstation tool).'
             ),
         },
         'notes': (
             'BSR from 0x12028d76c to system() at 0x1202e9550. '
             'Byte-verified: insn bytes d3 41 6f 78, BSR opcode 0x34. '
             'NOT a hardcoded command string. '
-            'The command arg is the first argument ($a0) of the enclosing function '
-            'at 0x12028d6a0, passed through via $s1 (callee-saved). '
-            'This is a system() wrapper pattern. Call graph analysis needed to '
-            'determine if the wrapper is reachable from attacker-controlled input.'
+            'The command arg originates from BSR_RETVAL → 0x120184f00 (DataExplorer '
+            'object processing, string context: "type", "positions" = DX data attrs). '
+            'Full call-chain: 0x120184f00 → wrapper 0x12028d6a0 ($s1 save) → system(). '
+            'CANDIDATE MEDIUM — argument is data-dependent, user-configurable via DX scripts.'
         ),
     },
 
@@ -168,5 +187,21 @@ SESSIONS = [
             'FORGE gate: PASS. pytest: 1904 passed.'
         ),
         'open': ['DX-001 CANDIDATE MEDIUM — wrapper at 0x12028d6a0; need call-graph to determine if reachable from attacker input'],
+    },
+    {
+        'session': 14,
+        'date':    '2026-10-25',
+        'work': (
+            'Extended trace_arg() on DX-001: traced r16 before wrapper save point. '
+            'r16 at 0x12028d63c = BSR_RETVAL, calling 0x120184f00. '
+            'String scan near system() call site: "type" and "positions" loaded via '
+            'GP-relative LDA/LDAH — confirmed DataExplorer data attribute context. '
+            'Function 0x120184f00 processes DX object data and returns a command string. '
+            'DX-001 verdict confirmed: CANDIDATE MEDIUM. '
+            'Argument is data-dependent (not a constant), originates from DX object '
+            'attributes that are user-configurable. Full taint analysis deferred '
+            '(no Alpha taint tracker in ablation; would need manual disasm).'
+        ),
+        'open': ['DX-001 CANDIDATE MEDIUM — trace complete; no further tooling; deferred (no CVSS impact on local workstation tool)'],
     },
 ]

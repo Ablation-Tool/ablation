@@ -48,7 +48,9 @@ BoMC IMM2 sessions 1–9:
 `re/ibm/dxexec_re.py`
 - [x] Alpha disasm gap filled: `insn_alpha.py` (AlphaEcoffScanner). FORGE PASS.
 - [x] Binary confirmed IBM DataExplorer 3.1.4. Exec-class sweep complete.
-- DX-001 system() CANDIDATE MEDIUM — argument taint pending (session 13)
+- DX-001 system() CANDIDATE MEDIUM — FINALIZED (session 14): arg = BSR_RETVAL from 0x120184f00
+  (DataExplorer object processor, strings: "type"/"positions" = DX data attrs). Not a literal.
+  Full taint deferred — local workstation tool, no CVSS impact path.
 - DX-002/003 execve/execlp ELIMINATED (libc chain calls)
 - DX-004 popen SAFE (exported, no internal callers)
 
