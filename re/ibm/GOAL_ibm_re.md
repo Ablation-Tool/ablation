@@ -46,9 +46,11 @@ BoMC IMM2 sessions 1–9:
 
 **2. dxexec** (DEC Alpha AXP, 6MB COFF, `/media/cowboy/research/IBM-RE/dxexec`)
 `re/ibm/dxexec_re.py`
-- Alpha disasm gap: build SH4-style bsrf scanner equivalent for
-  Alpha BSR/JSR patterns. New ablation module: `insn_alpha.py`.
-- Confirm binary as IBM DataExplorer. Sweep for exec-class sinks.
+- [x] Alpha disasm gap filled: `insn_alpha.py` (AlphaEcoffScanner). FORGE PASS.
+- [x] Binary confirmed IBM DataExplorer 3.1.4. Exec-class sweep complete.
+- DX-001 system() CANDIDATE MEDIUM — argument taint pending (session 13)
+- DX-002/003 execve/execlp ELIMINATED (libc chain calls)
+- DX-004 popen SAFE (exported, no internal callers)
 
 **3. IPLROM.image.9705071651** (RS/6000 XCOFF, 623KB, 1817 symbols, POWER2)
 `re/ibm/iplrom_re.py`
@@ -196,7 +198,7 @@ BoMC IMM2 sessions 1–9:
 
 | Module | From | Status |
 |---|---|---|
-| `insn_alpha.py` | dxexec RE (target 2) | OPEN |
+| `insn_alpha.py` | dxexec RE (target 2) | DONE (session 13) |
 | `undocumented_ppc_opcodes.py` | simulator RE (target 18) | OPEN |
 | SH4 `disasm_engine.py` gap | IMM2 sessions | OPEN (logged session 2) |
 
