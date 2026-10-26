@@ -12,15 +12,91 @@ DEC was acquired by Compaq in 1998. Compaq was acquired by HP in 2002. HP EOL'd 
 
 ### Chip generations
 
-The three variants in the ablation corpus represent the three major commercial generations:
+#### Alpha 21064 — EV4 (1992)
 
-| Chip | Codename | Year | Key changes |
-|:--|:--|:--|:--|
-| **21064** | EV4 | 1992 | First Alpha. 200 MHz. 2-issue in-order pipeline. On-die 8 KB I-cache + 8 KB D-cache. 64-bit integer, 64-bit IEEE 754 FP. |
-| **21164** | EV5 | 1995 | 4-issue in-order. 96 KB L2 on-die. Added the `AMASK`/`IMPLVER` extension model. Up to 333 MHz. |
-| **21264** | EV6 | 1998 | Out-of-order execution (first Alpha with OoO). 2 MB L2 external. Up to 667 MHz. Added BWX (byte/word extension — prior Alphas had no byte-granular load/store). |
+The first Alpha chip. DEC shipped it at 150–200 MHz in the DEC 3000 workstation and DEC 4000/7000/10000 server lines. Systems running it shipped with **OSF/1 1.x–3.x** (later renamed Tru64) and **OpenVMS 6.x**.
 
-From a binary analysis standpoint the differences rarely matter — the instruction encoding and calling convention are the same across all three. The exception is **BWX** (`LDBU`/`LDWU`/`STB`/`STW` opcodes): binaries compiled for 21064 avoid byte/word memory operations and use masks instead; 21264 binaries may use them freely. The taint tracker handles all three transparently.
+**Microarchitecture:** 2-issue in-order superscalar with two parallel pipelines — one integer/branch, one FP. No out-of-order execution, no speculative loads. 8 KB direct-mapped I-cache and 8 KB direct-mapped D-cache on-die. External Bcache (L2) ranged from 512 KB to 16 MB depending on the system board. The 21064A (EV45) variant bumped clocks to 275–300 MHz and doubled the on-chip caches.
+
+**No byte or word memory operations.** This is the most important RE detail for 21064. The architecture defined only 32-bit (`LDL`/`STL`) and 64-bit (`LDQ`/`STQ`) memory operations. There is no `LDBU` (load byte unsigned), no `LDWU` (load word unsigned), no `STB`, no `STW`. This was a deliberate simplification that DEC later had to reverse.
+
+What this means in practice: any code that copies strings, processes network packets, or handles byte arrays on a 21064-targeted binary uses a **load-mask-shift-store** sequence instead of byte stores. A `strcpy` on 21064 looks like:
+
+```asm
+LDQ  r1, 0(r16)       ; load 8 bytes at once
+...                   ; mask, shift, merge ops (ZAPNOT, SRL, SLL, BIS)
+STQ  r1, 0(r17)       ; store 8 bytes at once
+ADDQ r16, 8, r16      ; advance source pointer
+```
+
+When you see ZAPNOT (zero bytes not) patterns interleaved with loads and stores, you're looking at byte-level operations emulated on a 21064 binary. The taint tracker treats ZAPNOT as an integer op (opcode 0x12), so taint propagates through it correctly — but it means the disassembly is more verbose than equivalent code on later chips.
+
+**No ISA extension detection.** The `AMASK` and `IMPLVER` instructions added in 21164 don't exist on 21064. Binaries compiled strictly for 21064 never check for extensions at runtime.
+
+---
+
+#### Alpha 21164 — EV5 (1995) and EV56 (1996)
+
+DEC's second-generation Alpha. Shipped in the DEC AlphaServer 2000, 4000, and 8000 lines at 266–500 MHz. The primary platform for **Tru64 UNIX 4.x–5.x** and **OpenVMS 7.x**.
+
+**Microarchitecture:** 4-issue in-order superscalar with four parallel execution pipelines (2 integer, 1 FP, 1 load/store). Still in-order, so instruction scheduling by the compiler matters enormously. Added **96 KB of on-chip L2 cache** (the "Bcache"), which made a large real-world performance difference — the 21064 depended heavily on external SRAM L2, which had far higher latency. The 21164 also introduced a dedicated third cache level: an optional external L3 that could be up to 64 MB.
+
+**The AMASK / IMPLVER extension model.** DEC added runtime ISA extension detection to the architecture starting with 21164. Two new instructions:
+
+- `IMPLVER` — writes the implementation version into a register. Returns 1 for 21164, 2 for 21264.
+- `AMASK mask, result` — clears bits in `mask` that correspond to **supported** extensions. If a bit is cleared in the result, that extension is present. A bit left set means absent.
+
+The extension bits are:
+- Bit 0: **BWX** — byte and word memory extensions
+- Bit 1: **FIX** — square root and FP convert instructions
+- Bit 2: **CIX** — count extension (leading zeros, popcount)
+- Bit 8: **MVI** — motion video instructions (multimedia SIMD)
+
+Code that runs on both 21064 and 21164+ checks `AMASK` at startup and branches to a byte-loop fallback vs. a BWX fast path. When you see `AMASK` / `BEQ` / `IMPLVER` in a binary, you're looking at a multi-path implementation with a chip detection branch.
+
+**The EV56 sub-variant** (1996) is the binary-analysis-critical one. EV56 is a die shrink of EV5 that adds **BWX** as a standard feature. The `LDBU`/`LDWU`/`STB`/`STW` opcodes work correctly on EV56 but trap (illegal instruction fault) on plain EV5. Tru64 5.x shipped binaries in two forms: "generic" (21164 baseline, avoids BWX) and "tuned" (EV56+, uses BWX freely). When you're analysing a Tru64 binary and see LDBU/STB without a preceding AMASK guard, you're on an EV56-targeted binary.
+
+**RE implication:** EV56 binaries doing string operations look like normal modern code. EV5 (non-EV56) binaries look like 21064 binaries — mask/shift sequences everywhere for byte ops.
+
+---
+
+#### Alpha 21264 — EV6 (1998), EV67 (1999), EV68 (2001)
+
+Compaq's (ex-DEC) third-generation Alpha. Shipped in the AlphaServer ES40, DS20, and GS-series at 466–1000 MHz. The primary platform for **Tru64 UNIX 5.1** and **OpenVMS 7.3**. Also used in the Nintendo GameBoy Advance predecessor project (cancelled) and Cray supercomputer nodes.
+
+**Microarchitecture:** The first Alpha with **out-of-order execution**. 4-issue OoO with a 20-entry integer and 15-entry FP reorder buffer. Two integer clusters, each capable of two operations per cycle. Register renaming with 41 physical integer registers (31 architectural + 10 rename). 64 KB I-cache and 64 KB D-cache on-chip (up from 21164's 8+8 KB). External L2 of 2–16 MB.
+
+From a static analysis perspective, out-of-order execution is invisible — the compiler still emits sequential instructions and the hardware reorders them transparently. The disassembly looks the same as EV5. What changed is that the compiler could now issue more aggressive instruction sequences without worrying about pipeline interlocks (the hardware resolves them).
+
+**BWX is baseline on EV6.** Unlike EV56 where BWX was an extension, EV6 made it mandatory. All EV6+ binaries use byte/word memory operations freely. You will not see ZAPNOT/mask sequences for byte operations in EV6-targeted binaries.
+
+**Sub-variants and their ISA additions:**
+
+*EV6 (21264 base):* Adds BWX as mandatory, MVI (motion video) as optional.
+
+*EV67 (21264A, 1999):* Adds **CIX** — the count extension. Three new instructions:
+- `CTLZ` — count leading zeros
+- `CTTZ` — count trailing zeros  
+- `CTPOP` — population count (number of set bits)
+
+When you see `CTPOP` or `CTLZ` in a binary, you have an EV67+ target. These appear in cryptographic code (popcount for Hamming weight), network packet classifiers, and anywhere that bitfield operations would otherwise need a loop.
+
+*EV68 (21264B, 2001):* Die shrink to 180nm. No new user-visible instructions. Added hardware prefetch improvements and cache refinements. IMPLVER still returns 2.
+
+**Detecting which sub-variant a binary targets:** look for `CTPOP`/`CTLZ`/`CTTZ` (EV67+) and for `LDBU`/`STB` without `AMASK` guards (EV56+ or EV6+). The `IMPLVER` return value is 1 for 21164 and 2 for 21264 regardless of EV6/EV67/EV68.
+
+---
+
+#### Summary: what each generation means when you see a binary
+
+| You see this in the disassembly | What it tells you |
+|:--|:--|
+| ZAPNOT / SRL / SLL / BIS patterns around LDQ/STQ | Byte-level operations on a 21064 target — no BWX |
+| LDBU / LDWU / STB / STW without preceding AMASK | EV56 or EV6+ target — BWX always present |
+| AMASK → BEQ dispatch before string code | Multi-path binary: 21164 generic target with runtime BWX check |
+| IMPLVER result used in conditional branch | Runtime chip detection — binary runs on multiple Alpha generations |
+| CTPOP / CTLZ / CTTZ | EV67+ target (21264A or later) |
+| None of the above, strict LDQ/STQ only | 21064 strict target — oldest and most restrictive |
 
 ### Binary formats: ECOFF vs ELF
 
