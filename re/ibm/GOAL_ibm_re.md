@@ -135,9 +135,10 @@ BoMC IMM2 sessions 1–9:
 
 **12. collections/dhe/network/workspace/tips/multi.rom** (52KB x86 real-mode)
 `re/ibm/tokenring_rom_re.py`
-- Disassemble as 16-bit x86 at offset 0 (BIOS ROM extension entry at
-  0x03 per standard). Sweep for hardcoded I/O port sequences, PCI
-  config writes, exec or self-modify patterns.
+- [x] COMPLETE (session 14, 2026-10-25). FORGE PASS. TOKENRING-ROM-001 SAFE. (commit 23ef449f)
+- Madge Networks Smart 16/4 Ringnode BootROM v2.99.99 Dev (1989-1996).
+- Boot protocols: IBM RPL + Novell NetWare Remote Reset (passive, server-controlled).
+- No PCI writes, no self-modification, no credentials, no compression payloads (all FP).
 
 **13. dcconnect hardware 7526** (3 × 128KB, arch TBD)
 `7526b323.bin`, `7526b325.bin`, `7526b331.bin`
