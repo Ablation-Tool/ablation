@@ -593,6 +593,128 @@ class TestStringExtraction:
 # 8. Partition type names
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# 8a. CFICDR false-positive suppression
+# ---------------------------------------------------------------------------
+
+class TestCficdrFalsePositiveSuppression:
+    """CFICDR partitions contain raw PL bitstream data that may embed CDO\x00
+    byte patterns.  These must NOT appear as parsed CDO sections.  The
+    legitimate CDO at cdo_byte_offset must still be found."""
+
+    def _build_cficdr_pdi_with_false_cdo(self) -> bytes:
+        """Build a pld PDI with:
+          - 1 CFICDR partition whose data starts at word offset 0x40
+          - a legitimate CDO at cdo_byte_offset (4-byte prefix + CDO header)
+          - a false CDO\x00 pattern embedded 64 bytes after the legitimate CDO
+            ends (simulates CDO\x00 inside raw PL CFRAME data)
+        """
+        sync = _pld_sync()
+        # IHT at 0x10: part_hdr_off = word 0x10 → byte 0x40
+        iht = (
+            _u32le(0x00040000) +   # pdi_flags
+            _u32le(0) +             # no_of_imgs
+            _u32le(0x00000000) +    # img_hdr_off
+            _u32le(1) +             # total_prtns
+            _u32le(0x10) +          # part_hdr_off = word 0x10 → byte 0x40
+            _u32le(0x00000000) +
+            _u32le(0x00000000)
+        )
+        data = sync + iht                    # 0x10 + 0x1C = 0x2C bytes
+        data += b"\x00" * (0x40 - len(data)) # pad to 0x40 (partition header)
+
+        # Partition data will be placed at word offset 0x40 → byte offset 0x100
+        # 4-byte prefix at 0x100; CDO at 0x104
+        DATA_WORD_OFF = 0x40           # → byte 0x100
+        CDO_START     = DATA_WORD_OFF * 4 + 4   # = 0x104
+
+        # Build a legitimate CDO: 3 NOP commands
+        legit_cdo_payload = _make_nop_cmd(3)
+        legit_cdo = _make_cdo(legit_cdo_payload)      # 16 + 12 = 28 bytes
+        legit_cdo_total = 4 + len(legit_cdo)           # prefix (4) + CDO header+payload
+
+        # Total partition size: prefix + legit CDO + 64 gap + false CDO + 16 tail
+        false_cdo_words = [0xFF40FF80, 0xFDFEFF00]    # module IDs 0x40, 0x80, 0xFD, 0xFF
+        false_cdo = _make_cdo(false_cdo_words)
+        partition_data = (
+            b"\xAA\xBB\xCC\xDD" +      # 4-byte prefix
+            legit_cdo +                  # legitimate CDO
+            b"\xFF" * 64 +              # gap (raw PL-like data)
+            false_cdo +                  # false CDO: would produce garbage module IDs
+            b"\x00" * 16               # tail
+        )
+        partition_size_words = len(partition_data) // 4
+
+        # Partition header (0x3C bytes) at byte 0x40
+        ph = (
+            _u32le(partition_size_words) +      # enc_data_word_len
+            _u32le(partition_size_words) +      # unenc_data_word_len
+            _u32le(partition_size_words) +      # total_data_word_len
+            _u32le(0) +                          # next_prtn_off (last)
+            _u32le(0) + _u32le(0) +              # dst_exec_addr lo, hi
+            _u32le(0xFFFFFFFF) + _u32le(0xFFFFFFFF) +  # dst_load_addr (PL)
+            _u32le(DATA_WORD_OFF) +              # data_word_off
+            _u32le(0x02000006) +                 # prtn_attrb: CFICDR (type=6)
+            _u32le(0) +                          # section_count
+            _u32le(0) +                          # checksum_word_off
+            _u32le(0) +                          # img_hdr_off
+            _u32le(0) +                          # auth_cert_off
+            _u32le(0xDEADBEEF)                   # checksum
+        )
+        data += ph
+        # Pad from end of partition header (0x40 + 0x3C = 0x7C) to DATA_WORD_OFF * 4 (0x100)
+        data += b"\x00" * (DATA_WORD_OFF * 4 - len(data))
+        data += partition_data
+        return data
+
+    def test_only_legitimate_cdo_found(self):
+        """After fix: only the CDO at cdo_byte_offset is in cdo_sections(); the
+        false CDO embedded in raw PL data is suppressed."""
+        data = self._build_cficdr_pdi_with_false_cdo()
+        vp = VersalPdi.from_bytes(data, "cficdr_test.pdi")
+        sections = vp.cdo_sections()
+        assert len(sections) == 1, (
+            f"Expected 1 CDO section (legitimate), got {len(sections)}: "
+            f"{[s.offset for s in sections]}"
+        )
+
+    def test_legitimate_cdo_offset_matches_partition_header(self):
+        """The found CDO is at cdo_byte_offset, not somewhere else."""
+        data = self._build_cficdr_pdi_with_false_cdo()
+        vp = VersalPdi.from_bytes(data, "cficdr_test.pdi")
+        ph = vp.partitions()[0]
+        sections = vp.cdo_sections()
+        assert len(sections) >= 1
+        assert sections[0].offset == ph.cdo_byte_offset
+
+    def test_legitimate_cdo_commands_parsed(self):
+        """The legitimate CDO's NOP commands are parsed correctly."""
+        data = self._build_cficdr_pdi_with_false_cdo()
+        vp = VersalPdi.from_bytes(data, "cficdr_test.pdi")
+        sections = vp.cdo_sections()
+        assert len(sections) >= 1
+        assert len(sections[0].commands) == 3
+        assert all(c.cmd_id == CDO_CMD_NOP for c in sections[0].commands)
+
+    def test_false_cdo_module_ids_absent(self):
+        """Module IDs 0x40 and 0x80 (garbage from raw PL bytes) must not appear."""
+        data = self._build_cficdr_pdi_with_false_cdo()
+        vp = VersalPdi.from_bytes(data, "cficdr_test.pdi")
+        for section in vp.cdo_sections():
+            for cmd in section.commands:
+                assert cmd.module_id not in (0x40, 0x80, 0xFD, 0xFF), (
+                    f"Garbage module ID {cmd.module_id:#04x} from false CDO in "
+                    f"PL bitstream data — CFICDR exclusion not working"
+                )
+
+    def test_cficdr_partition_still_present(self):
+        """The CFICDR partition header must still be parsed."""
+        data = self._build_cficdr_pdi_with_false_cdo()
+        vp = VersalPdi.from_bytes(data, "cficdr_test.pdi")
+        assert len(vp.partitions()) == 1
+        assert vp.partitions()[0].is_pl
+
+
 class TestPartitionTypeNames:
 
     def test_all_known_types_named(self):

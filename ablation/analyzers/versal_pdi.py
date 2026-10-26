@@ -459,8 +459,37 @@ class VersalPdi:
                 result.images = self._parse_image_headers_best_effort(warnings)
                 result.partitions = []
 
-        # -- CDO scanner: pattern-based, works for all PDI types --
-        result.cdo_sections = self._scan_cdo_sections(warnings)
+        # -- CDO sections: parse CFICDR partitions directly; blind-scan everything else --
+        # CFICDR partitions contain raw PL CFRAME bitstream bytes that may include
+        # CDO\x00 byte patterns, producing false positives with garbage module IDs
+        # (0x40+, 0x80+) if scanned blindly.  For each CFICDR partition we:
+        #   1. parse the CDO at the known cdo_byte_offset directly, and
+        #   2. exclude the entire partition data range from the blind scan.
+        cficdr_cdo_sections: List[CdoSection] = []
+        cficdr_data_ranges: List[Tuple[int, int]] = []
+        for ph in result.partitions:
+            if ph.is_pl and ph.data_size_bytes > 0:
+                cdo_off = ph.cdo_byte_offset
+                if cdo_off + 16 <= len(self._data):
+                    r = self._u32le
+                    version  = r(cdo_off + 4)
+                    length_w = r(cdo_off + 8)
+                    checksum = r(cdo_off + 12)
+                    if 0 <= length_w < 8_000_000 and (version >> 16) <= 10:
+                        section = CdoSection(
+                            offset=cdo_off,
+                            version=version,
+                            length_words=length_w,
+                            checksum=checksum,
+                        )
+                        self._parse_cdo_commands(section, warnings)
+                        cficdr_cdo_sections.append(section)
+                start = ph.data_byte_offset
+                end   = start + ph.data_size_bytes
+                cficdr_data_ranges.append((start, end))
+
+        blind_sections = self._scan_cdo_sections(warnings, exclude_ranges=cficdr_data_ranges)
+        result.cdo_sections = cficdr_cdo_sections + blind_sections
 
         return result
 
@@ -639,16 +668,31 @@ class VersalPdi:
     # CDO scanner
     # ------------------------------------------------------------------
 
-    def _scan_cdo_sections(self, warnings: List[str]) -> List[CdoSection]:
-        """Find all CDO\x00 patterns in the file and parse each."""
+    def _scan_cdo_sections(
+        self,
+        warnings: List[str],
+        exclude_ranges: Optional[List[Tuple[int, int]]] = None,
+    ) -> List[CdoSection]:
+        """Find all CDO\x00 patterns in the file and parse each.
+
+        exclude_ranges: byte ranges to skip during the blind scan.  Used to
+        exclude CFICDR (PL bitstream) partition data, which is parsed via
+        direct offset instead to avoid false-positive CDO magic matches in
+        raw PL frame bytes.
+        """
         data = self._data
         sections: List[CdoSection] = []
+        excluded = exclude_ranges or []
         pos = 0
         while True:
             pos = data.find(CDO_MAGIC, pos)
             if pos < 0:
                 break
             if pos + 16 > len(data):
+                pos += 1
+                continue
+            # Skip positions inside CFICDR partition data ranges
+            if any(start <= pos < end for start, end in excluded):
                 pos += 1
                 continue
             r = self._u32le
