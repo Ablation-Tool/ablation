@@ -53,15 +53,16 @@ BoMC IMM2 sessions 1–9:
 - DX-004 popen SAFE (exported, no internal callers)
 
 **3. IPLROM.image.9705071651** (RS/6000 XCOFF, 623KB, 1817 symbols, POWER2)
-`re/ibm/iplrom_re.py`
-- Load as XCOFF; confirm all 1817 symbols parse correctly via
-  BinaryContext. Sweep for hardcoded credentials, debug backdoors,
-  privileged POWER2 instructions (TLBIA, MFMSR).
+`re/ibm/prep_iplrom_re.py`
+- [x] COMPLETE (sessions prior to 13). FORGE PASS. Zero confirmed findings.
+- IPLROM-NET-001 ELIMINATED 2026-10-18 (BOOTP src fields are firmware-controlled, not network data).
+- Phase 2 done 2026-10-24: 735 symbols, 5 microcode blobs, 8 text sections fully mapped.
 
 **4. cd7200_bootfile.exe** (PPC32 ELF, 27MB bare-metal, no section headers)
 `re/ibm/cd7200_re.py`
-- BinaryContext bare-metal load (base=0x0, entry=0x416c).
-  Sweep for network stack (TFTP, FTP, telnet) exec-class sinks.
+- [x] COMPLETE (sessions 2026-10-03, 2026-10-08). Zero confirmed findings.
+- CD7200-001 ELIMINATED: security-password reference is a filter, not a reader. No vulnerability.
+- New ablation module: ppc32_func_discovery.py (commit 9e5af87), 18 919 functions found.
 
 **5. zOS-IOC/iocchk** (z/OS GOFF/XOBJ, 84KB, s390x)
 `re/ibm/zos_ioc_re.py`

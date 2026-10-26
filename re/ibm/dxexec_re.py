@@ -59,21 +59,37 @@ FINDINGS = [
     {
         'id':          'DX-001',
         'verdict':     'CANDIDATE MEDIUM',
-        'title':       'system() call in DataExplorer application code',
+        'title':       'system() call — command arg is wrapper function\'s own $a0',
         'function_va': 0x12028d76c,
         'callee_va':   0x1202e9550,   # system()
         'sink':        'system',
         'byte_verify': True,
         'bytes':       b'\x78\x6f\x41\xd3',   # BSR insn word 0xd3416f78 at file_off 0x28bd3c
+        'arg_trace': {
+            'method':        'AlphaEcoffScanner.trace_arg()',
+            'a0_insn_va':    0x12028d768,
+            'a0_insn_type':  'BIS_MOV',
+            'a0_interp':     'MOV r10 → r16  (bis r10,r10,r16)',
+            'r10_insn_va':   0x12028d6bc,
+            'r10_insn_type': 'BIS_MOV',
+            'r10_interp':    'MOV r16 → r10  (bis r16,r16,r10)  — save $a0 of wrapper',
+            'wrapper_fn_va': 0x12028d6a0,   # function that receives cmd and calls system()
+            'conclusion':    (
+                'Command string passed to system() is the wrapper function\'s own $a0. '
+                'The wrapper at 0x12028d6a0 receives a command string from its caller, '
+                'saves it in $s1 across intermediate calls, then passes it unchanged to '
+                'system(). Exploitability depends on whether the wrapper\'s callers '
+                'can receive attacker-controlled input.'
+            ),
+        },
         'notes': (
-            'BSR from 0x12028d76c to system() at 0x1202e9550 (offset in function '
-            'containing lda $27, -9384($gp) four instructions prior — standard Alpha '
-            'ABI: load callee PV into $27 before BSR). '
-            'The function at this VA is in a region 5.8MB into .text — not in the '
-            'exec-family libc block (which starts at 0x12031E000+). '
-            'This is application-level code calling system(). '
-            'Argument construction requires manual trace (what goes into $a0 before BSR). '
-            'CANDIDATE pending argument taint analysis.'
+            'BSR from 0x12028d76c to system() at 0x1202e9550. '
+            'Byte-verified: insn bytes d3 41 6f 78, BSR opcode 0x34. '
+            'NOT a hardcoded command string. '
+            'The command arg is the first argument ($a0) of the enclosing function '
+            'at 0x12028d6a0, passed through via $s1 (callee-saved). '
+            'This is a system() wrapper pattern. Call graph analysis needed to '
+            'determine if the wrapper is reachable from attacker-controlled input.'
         ),
     },
 
@@ -151,6 +167,6 @@ SESSIONS = [
             'BSR opcode 0x34, target 0x1202e9550 confirmed. '
             'FORGE gate: PASS. pytest: 1904 passed.'
         ),
-        'open': ['DX-001 argument taint trace pending (requires manual WindowAnalyzer on 0x12028d76c)'],
+        'open': ['DX-001 CANDIDATE MEDIUM — wrapper at 0x12028d6a0; need call-graph to determine if reachable from attacker input'],
     },
 ]

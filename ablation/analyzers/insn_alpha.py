@@ -47,22 +47,23 @@ _AOUTHDR_SIZE  = 80
 _SCNHDR_SIZE   = 64             # 64-byte section headers with 64-bit addresses
 
 # Alpha register numbers
-_REG_RA  = 26   # return address
-_REG_T12 = 27   # procedure value / t12 (used for indirect calls)
-_REG_AT  = 28   # assembler temporary
-_REG_GP  = 29   # global pointer
+_REG_RA   = 26   # return address
+_REG_T12  = 27   # procedure value / t12 (used for indirect calls)
+_REG_GP   = 29   # global pointer
+_REG_ZERO = 31   # always-zero register
 
-# Opcodes relevant to exec-class scanning
-_OP_LDA  = 0x08   # Load Address: lda Ra, disp(Rb)
-_OP_LDAH = 0x09   # Load Address High
-_OP_LDQ  = 0x29   # Load Quadword: ldq Ra, disp(Rb)
+# Callee-saved registers: preserved across BSR/JSR calls.
+# trace_arg() must not stop at a BSR when tracing one of these.
+_CALLEE_SAVED: frozenset = frozenset(range(9, 16))  # r9-r15: $s0-$s6/fp
+
+# Opcodes relevant to exec-class scanning and argument tracing
+_OP_LDA  = 0x08   # Load Address:    lda  Ra, disp(Rb)
+_OP_LDAH = 0x09   # Load Addr High:  ldah Ra, disp(Rb)   (disp shifted <<16)
+_OP_LDQ  = 0x29   # Load Quadword:   ldq  Ra, disp(Rb)
+_OP_BIS  = 0x11   # Integer Logical: bis/or (func=0x20); also MOV pseudo-op
 _OP_BSR  = 0x34   # Branch SubRoutine (PC-relative call)
-_OP_JMP  = 0x1A   # JMP/JSR/RET family
 
-# JMP-family function field (bits 15-14)
-_JF_JMP = 0x0
-_JF_JSR = 0x1
-_JF_RET = 0x2
+_BIS_FUNC = 0x20  # function field for BIS within opcode 0x11
 
 # Exec-class sink names to detect
 _EXEC_SINKS: Set[str] = {
@@ -152,19 +153,6 @@ def _parse_ecoff(data: bytes) -> Tuple[Optional[int], Dict[str, _Section]]:
 
 # ── Dynamic symbol resolution ──────────────────────────────────────────────────
 
-def _dynsym_entry_size(hash_sec: Optional[_Section], dynsym: _Section) -> int:
-    """
-    Derive Elf64_Sym entry size from the .hash section's nchain field.
-
-    OSF/1 Alpha uses Elf64_Sym (24 bytes): name(4) info(1) other(1) shndx(2) value(8) size(8).
-    The .hash nchain field equals the number of .dynsym entries, so
-    entry_size = dynsym.size / nchain.  Falls back to 24 on parse failure.
-    """
-    if hash_sec and hash_sec.size >= 8:
-        # .hash layout: nbucket(4) nchain(4) bucket[nbucket] chain[nchain]
-        return 24  # OSF/1 Alpha always uses Elf64_Sym
-    return 24
-
 
 def _resolve_exec_sinks(
     data: bytes,
@@ -207,6 +195,30 @@ def _resolve_exec_sinks(
             result[name] = fn_va
     return result
 
+
+
+# ── Argument trace result ──────────────────────────────────────────────────────
+
+@dataclass
+class AlphaArgTrace:
+    """Result of a single-level backward register trace from a call site."""
+    reg:        int    # register traced (16 = $a0, 17 = $a1, …)
+    anchor_va:  int    # VA of the BSR/call being analysed
+    found_va:   int    # VA of the instruction that last wrote the register (0 = not found)
+    insn_word:  int    # raw 32-bit instruction word
+    insn_type:  str    # 'LDA_CONST'|'LDA_GP'|'LDA_REG'|'LDAH_CONST'|'LDAH_GP'|'LDAH_REG'|
+                       # 'LDQ_GP'|'LDQ_REG'|'BIS_MOV'|'BIS_OR'|'BIS_LIT'|
+                       # 'BSR_RETVAL'|'UNKNOWN'
+    value:      int    # literal value or address (0 when not applicable)
+    interp:     str    # human-readable interpretation
+
+    def fmt(self) -> str:
+        return (
+            f'AlphaArgTrace [r{self.reg}] [{self.insn_type}]\n'
+            f'  anchor : 0x{self.anchor_va:016x}\n'
+            f'  found  : 0x{self.found_va:016x}\n'
+            f'  interp : {self.interp}\n'
+        )
 
 
 # ── Finding data class ─────────────────────────────────────────────────────────
@@ -256,9 +268,31 @@ class AlphaEcoffScanner:
     # ── internal helpers ──────────────────────────────────────────────────────
 
     def _load(self) -> Tuple[bytes, Optional[int], Dict[str, _Section]]:
-        data = Path(self.binary_path).read_bytes()
-        gp_value, sections = _parse_ecoff(data)
-        return data, gp_value, sections
+        if not hasattr(self, '_cache'):
+            data = Path(self.binary_path).read_bytes()
+            gp_value, sections = _parse_ecoff(data)
+            self._cache = (data, gp_value, sections)
+        return self._cache
+
+    def _try_read_string(
+        self,
+        data: bytes,
+        sections: Dict[str, _Section],
+        addr: int,
+        maxlen: int = 128,
+    ) -> str:
+        """Return a printable ASCII string at VA addr, or '' if none found."""
+        for sec in sections.values():
+            if not sec.rawptr:
+                continue
+            if sec.vaddr <= addr < sec.vaddr + sec.size:
+                off = sec.rawptr + (addr - sec.vaddr)
+                end = data.find(b'\x00', off, off + maxlen)
+                raw = data[off: end if end >= 0 else off + maxlen]
+                if raw and all(0x20 <= b < 0x7F for b in raw):
+                    return raw.decode('ascii', errors='replace')
+                break
+        return ''
 
     # ── public API ────────────────────────────────────────────────────────────
 
@@ -346,8 +380,162 @@ class AlphaEcoffScanner:
             counts[f.sink_name] = counts.get(f.sink_name, 0) + 1
         return counts
 
+    def trace_arg(
+        self,
+        caller_va: int,
+        reg: int = 16,
+        window: int = 32,
+    ) -> 'AlphaArgTrace':
+        """
+        Backward single-level register trace from a call site.
+
+        Scans up to `window` instructions before `caller_va` and returns the
+        first instruction that writes `reg` (default 16 = $a0, first argument).
+
+        Handles:
+          LDA_CONST   lda  r, disp($zero)       — small signed literal
+          LDA_GP      lda  r, disp($gp)          — GP-relative data pointer
+          LDA_REG     lda  r, disp(other)        — register-relative (not traced deeper)
+          LDAH_CONST  ldah r, disp($zero)        — upper-half literal
+          LDAH_GP     ldah r, disp($gp)          — GP-relative upper half
+          LDAH_REG    ldah r, disp(other)        — (not traced deeper)
+          LDQ_GP      ldq  r, disp($gp)          — 64-bit load via GOT/data
+          LDQ_REG     ldq  r, disp(other)        — memory load (not traced deeper)
+          BIS_MOV     bis  $zero, Rb, r  (MOV)   — value field holds source reg number
+          BIS_OR      bis  Ra, Rb, r             — genuine OR; value=0, two sources listed
+          BIS_LIT     bis  Ra, #lit8, r           — literal-form BIS
+          BSR_RETVAL  BSR encountered first       — arg comes from prior call's return
+          UNKNOWN     window exhausted            — no write to reg found
+
+        Does not recurse into BIS_MOV, BIS_OR, or register-relative loads — one
+        level is enough to classify the origin as constant / data-pointer / dynamic.
+        """
+        _unk = AlphaArgTrace(reg=reg, anchor_va=caller_va, found_va=0, insn_word=0,
+                             insn_type='UNKNOWN', value=0,
+                             interp=f'no write to r{reg} in {window}-insn window')
+        try:
+            data, gp_value, sections = self._load()
+        except (ValueError, OSError):
+            return AlphaArgTrace(reg=reg, anchor_va=caller_va, found_va=0, insn_word=0,
+                                 insn_type='UNKNOWN', value=0, interp='binary load failed')
+
+        text_sec = sections.get('.text')
+        if not text_sec or gp_value is None:
+            return _unk
+
+        if not (text_sec.vaddr <= caller_va < text_sec.vaddr + text_sec.size):
+            return _unk
+
+        text_data = data[text_sec.rawptr: text_sec.rawptr + text_sec.size]
+        anchor_idx = (caller_va - text_sec.vaddr) // 4
+        start_idx  = max(0, anchor_idx - window)
+
+        for i in range(anchor_idx - 1, start_idx - 1, -1):
+            insn = struct.unpack_from('<I', text_data, i * 4)[0]
+            va   = text_sec.vaddr + i * 4
+            op, ra, rb, disp = _decode(insn)
+
+            # BSR hit before finding the register.
+            # Callee-saved registers (r9-r15) are preserved across BSR — skip.
+            # For caller-saved registers the BSR is the source (return value).
+            if op == _OP_BSR:
+                if reg in _CALLEE_SAVED:
+                    continue
+                tgt = _bsr_target(va, insn)
+                return AlphaArgTrace(reg=reg, anchor_va=caller_va, found_va=va,
+                                     insn_word=insn, insn_type='BSR_RETVAL', value=tgt,
+                                     interp=f'r{reg} = return value of BSR→0x{tgt:x}')
+
+            # LDA Ra, disp(Rb)
+            if op == _OP_LDA and ra == reg:
+                sd = _sign16(disp)
+                if rb == _REG_ZERO:
+                    return AlphaArgTrace(reg=reg, anchor_va=caller_va, found_va=va,
+                                         insn_word=insn, insn_type='LDA_CONST',
+                                         value=sd & 0xFFFFFFFFFFFFFFFF,
+                                         interp=f'constant {sd}  (0x{sd & 0xFFFFFFFFFFFFFFFF:x})')
+                if rb == _REG_GP:
+                    addr = (gp_value + sd) & 0xFFFFFFFFFFFFFFFF
+                    s = self._try_read_string(data, sections, addr)
+                    suffix = f' → "{s}"' if s else ''
+                    return AlphaArgTrace(reg=reg, anchor_va=caller_va, found_va=va,
+                                         insn_word=insn, insn_type='LDA_GP', value=addr,
+                                         interp=f'GP+{sd} = 0x{addr:x}{suffix}')
+                return AlphaArgTrace(reg=reg, anchor_va=caller_va, found_va=va,
+                                     insn_word=insn, insn_type='LDA_REG', value=0,
+                                     interp=f'LDA r{rb}+{sd}; source r{rb} not traced')
+
+            # LDAH Ra, disp(Rb)
+            if op == _OP_LDAH and ra == reg:
+                sd = _sign16(disp)
+                if rb == _REG_ZERO:
+                    val = (sd << 16) & 0xFFFFFFFFFFFFFFFF
+                    return AlphaArgTrace(reg=reg, anchor_va=caller_va, found_va=va,
+                                         insn_word=insn, insn_type='LDAH_CONST', value=val,
+                                         interp=f'LDAH upper constant 0x{val:x}')
+                if rb == _REG_GP:
+                    addr = (gp_value + (sd << 16)) & 0xFFFFFFFFFFFFFFFF
+                    return AlphaArgTrace(reg=reg, anchor_va=caller_va, found_va=va,
+                                         insn_word=insn, insn_type='LDAH_GP', value=addr,
+                                         interp=f'LDAH GP+(disp<<16) = 0x{addr:x}')
+                return AlphaArgTrace(reg=reg, anchor_va=caller_va, found_va=va,
+                                     insn_word=insn, insn_type='LDAH_REG', value=0,
+                                     interp=f'LDAH r{rb}; source not traced')
+
+            # LDQ Ra, disp(Rb)
+            if op == _OP_LDQ and ra == reg:
+                sd = _sign16(disp)
+                if rb == _REG_GP:
+                    addr = (gp_value + sd) & 0xFFFFFFFFFFFFFFFF
+                    return AlphaArgTrace(reg=reg, anchor_va=caller_va, found_va=va,
+                                         insn_word=insn, insn_type='LDQ_GP', value=addr,
+                                         interp=f'LDQ *[GP+{sd}] = *[0x{addr:x}]  (GOT/data ptr)')
+                return AlphaArgTrace(reg=reg, anchor_va=caller_va, found_va=va,
+                                     insn_word=insn, insn_type='LDQ_REG', value=0,
+                                     interp=f'LDQ *[r{rb}+{sd}]; source not traced')
+
+            # BIS / integer-OR family (opcode 0x11)
+            if op == _OP_BIS:
+                bit12 = (insn >> 12) & 1
+                func  = (insn >> 5) & 0x7F
+                rc    = insn & 0x1F
+                if func == _BIS_FUNC and rc == reg:
+                    if bit12:  # literal form
+                        lit = (insn >> 13) & 0xFF
+                        if ra == _REG_ZERO:
+                            return AlphaArgTrace(reg=reg, anchor_va=caller_va, found_va=va,
+                                                 insn_word=insn, insn_type='BIS_LIT',
+                                                 value=lit,
+                                                 interp=f'BIS $zero|lit 0x{lit:x} → r{reg}')
+                        return AlphaArgTrace(reg=reg, anchor_va=caller_va, found_va=va,
+                                             insn_word=insn, insn_type='BIS_LIT', value=lit,
+                                             interp=f'BIS r{ra}|lit 0x{lit:x} → r{reg}; r{ra} not traced')
+                    else:  # register form
+                        if ra == _REG_ZERO:
+                            return AlphaArgTrace(reg=reg, anchor_va=caller_va, found_va=va,
+                                                 insn_word=insn, insn_type='BIS_MOV', value=rb,
+                                                 interp=f'MOV r{rb} → r{reg}')
+                        if rb == _REG_ZERO:
+                            return AlphaArgTrace(reg=reg, anchor_va=caller_va, found_va=va,
+                                                 insn_word=insn, insn_type='BIS_MOV', value=ra,
+                                                 interp=f'MOV r{ra} → r{reg}')
+                        if ra == rb:  # bis Rx, Rx, Rc is also a MOV pseudo-op
+                            return AlphaArgTrace(reg=reg, anchor_va=caller_va, found_va=va,
+                                                 insn_word=insn, insn_type='BIS_MOV', value=ra,
+                                                 interp=f'MOV r{ra} → r{reg}  (bis r{ra},r{ra},r{reg})')
+                        return AlphaArgTrace(reg=reg, anchor_va=caller_va, found_va=va,
+                                             insn_word=insn, insn_type='BIS_OR', value=0,
+                                             interp=f'r{reg} = r{ra} | r{rb}; sources not traced')
+
+        return _unk
+
     def report(self, findings: Optional[List[AlphaExecFinding]] = None) -> str:
-        """Format findings as a human-readable text report."""
+        """Format findings as a human-readable text report.
+
+        For system() and popen() call sites, automatically appends a
+        single-level $a0 backward trace so the caller's command argument
+        origin is visible without a separate trace_arg() call.
+        """
         if findings is None:
             findings = self.scan()
         if not findings:
@@ -361,4 +549,7 @@ class AlphaEcoffScanner:
             lines.append(f'  {sink} [callee 0x{callee_va:016x}]: {len(group)} call site(s)')
             for f in sorted(group, key=lambda x: x.caller_va):
                 lines.append(f'    BSR 0x{f.caller_va:016x}')
+                if sink in ('system', 'popen', 'popen64'):
+                    t = self.trace_arg(f.caller_va, reg=16)
+                    lines.append(f'      $a0: [{t.insn_type}] {t.interp}')
         return '\n'.join(lines) + '\n'
