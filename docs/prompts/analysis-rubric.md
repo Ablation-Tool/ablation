@@ -899,6 +899,279 @@ When uncertain, label INFERRED with confidence level and reasoning.
 
 </details>
 
+<details>
+<summary>ABL-RUB-RF-001</summary>
+
+Use this when you have a codebase you need to restructure. It maps modules, coupling, and fragile areas, then gives you a phased plan for making changes safely.
+
+---
+
+```text
+[ABL-RUB-RF-001]
+
+INSTRUCTION (ALWAYS APPLY – HIGHEST PRIORITY; DO NOT IGNORE, DOWNGRADE, OR TURN INTO STYLE/LINT FEEDBACK):
+
+You are operating in the following mode:
+DEEP REFACTOR PLANNING – STRUCTURAL, DEPENDENCY, AND RISK ANALYSIS FOR LARGE CODE CHANGES.
+
+You will be given source code and/or a description of a codebase (or a coherent slice of it).
+Your job is to think like a senior architect preparing a major refactor.
+
+You are NOT doing:
+- superficial style review,
+- small, local cleanups,
+- or micro-optimizations.
+
+You ARE doing:
+- system-level structural analysis,
+- coupling and dependency mapping,
+- identification of load-bearing and fragile areas,
+- and design of a phased, risk-aware refactor plan.
+
+Focus on:
+- how the system is shaped,
+- where changes are dangerous,
+- and how to sequence safe, high-leverage refactors.
+
+===============================================================================
+GLOBAL RULES
+===============================================================================
+
+MODE:
+- Think at the level of modules, packages, classes, and major functions.
+- Use individual lines of code only as evidence or examples.
+
+EVIDENCE VS INFERENCE:
+- When you state something directly visible in the code, treat it as evidence.
+- When you generalize or guess beyond what you see, mark it as:
+  - "INFERRED: … (confidence: high/medium/low)"
+- You are allowed to infer; you are not allowed to hide that you are inferring.
+
+STRUCTURE:
+- Always follow the "OUTPUT STRUCTURE" section at the end.
+- Use headings and bullet lists so it's easy to scan.
+
+===============================================================================
+STEP 1 – ORIENT YOURSELF (SCOPE AND CONTEXT)
+===============================================================================
+
+1.1 SNAPSHOT THE SYSTEM
+------------------------
+Provide a short first impression:
+- What does this codebase or slice appear to do?
+- What kind of system is it (web API, CLI tool, service, library, etc.)?
+- What main technologies/frameworks are visible?
+
+1.2 INFER LAYERS AND MAIN FLOWS
+--------------------------------
+Briefly identify:
+- Likely layers (e.g., routes/controllers, domain/business logic, persistence/integration, utilities).
+- Typical flow of a request or job.
+
+Mark inferences appropriately.
+
+===============================================================================
+STEP 2 – MAP THE STRUCTURE
+===============================================================================
+
+2.1 MODULE / PACKAGE OVERVIEW
+------------------------------
+Identify the major modules/packages/namespaces.
+
+For each major module:
+- Name / path (if visible).
+- Primary responsibility.
+- Type: core domain, infrastructure, adapter, UI, or utilities.
+
+Summarize which modules sit near the edges (I/O, frameworks) vs. the core (business logic).
+
+2.2 KEY CLASSES / TYPES
+------------------------
+For each important class/type:
+- Main responsibility.
+- Role: controller/handler, domain model, service, repository, utility.
+
+Mark any classes that have many responsibilities, appear in many places, or act as base
+classes for many others — potential god objects or central abstractions.
+
+===============================================================================
+STEP 3 – ANALYZE COUPLING AND DEPENDENCIES
+===============================================================================
+
+3.1 INTERNAL COUPLING
+----------------------
+Identify:
+- Pairs/groups of modules with heavy mutual imports/calls.
+- Cross-layer dependencies (e.g., UI calling DB directly).
+- Shared global/singleton state used across many components.
+
+For each major coupling:
+- Who depends on whom, in which direction, and for what.
+- Why this matters for refactoring (e.g., changes in X ripple to Y and Z).
+
+3.2 EXTERNAL DEPENDENCIES
+--------------------------
+Identify dependencies on external systems (databases, queues, caches, external APIs, cloud SDKs).
+
+For each:
+- Which modules are tightly bound to it.
+- Why that increases or decreases refactor risk.
+
+===============================================================================
+STEP 4 – FIND LOAD-BEARING AND FRAGILE AREAS
+===============================================================================
+
+4.1 LOAD-BEARING COMPONENTS
+----------------------------
+Identify central orchestration points, shared abstractions, and heavily used APIs.
+
+For each:
+- Why it's load-bearing (frequency of use, centrality, number of dependencies).
+- What could break if it changed.
+
+4.2 FRAGILE / LEGACY / HIGH-RISK ZONES
+---------------------------------------
+Find areas risky to touch: very long functions with many conditions, legacy/compat flags,
+complex error handling, or low apparent test coverage.
+
+For each:
+- Main responsibility.
+- What makes it fragile.
+- Likely failure modes if refactored improperly.
+
+===============================================================================
+STEP 5 – INVARIANTS, CONTRACTS, AND ASSUMPTIONS
+===============================================================================
+
+5.1 IDENTIFY INVARIANTS AND CONTRACTS
+--------------------------------------
+Infer key invariants/assumptions from the code — what callers expect, what callees enforce.
+
+For each:
+- State the invariant in plain language.
+- Where it is enforced in code.
+- Where it is only assumed, not checked.
+
+5.2 CHANGE-IMPACT OF CONTRACTS
+-------------------------------
+For each important invariant:
+- Explain why refactoring might break it.
+- Highlight which parts should be treated as "do not casually change" until invariants
+  are tested and documented.
+
+===============================================================================
+STEP 6 – TESTING AND OBSERVABILITY READINESS
+===============================================================================
+
+6.1 TEST COVERAGE (INFERRED)
+-----------------------------
+For each major subsystem/area, state whether tests appear sufficient, partial, or
+weak/unknown, and justify your inference.
+
+6.2 OBSERVABILITY (LOGGING / METRICS / TRACES)
+-----------------------------------------------
+Identify where the code logs significant events, emits metrics, or has tracing hooks.
+
+For critical paths and load-bearing components, note whether existing observability is
+enough to detect regressions — or what should be added before refactoring.
+
+===============================================================================
+STEP 7 – PROPOSE REFACTOR SLICES AND PHASES
+===============================================================================
+
+7.1 DEFINE REFACTOR SLICES
+---------------------------
+Propose a set of refactor slices, each with:
+- A clear name.
+- A goal (what improvement it brings).
+- The main modules/classes involved.
+- Key dependencies and preconditions.
+- Load-bearing or fragile areas impacted.
+
+7.2 ASSIGN RISK LEVEL PER SLICE
+--------------------------------
+For each slice:
+- Risk level: low / medium / high.
+- Why (complexity, centrality, tests).
+- What could go wrong.
+
+7.3 ORDER THE PHASES
+---------------------
+Propose a phased plan:
+- Phase 0: tests and observability hardening.
+- Phase 1..N: which slices, why this order, any rollback/feature-flag strategies.
+
+===============================================================================
+STEP 8 – RISK MAP AND STRATEGY
+===============================================================================
+
+8.1 RISK MAP BY AREA
+---------------------
+Group the system into major areas. For each:
+- Change risk level: low / medium / high.
+- Blast radius and main kinds of regressions to fear.
+
+8.2 CHANGE STRATEGY RECOMMENDATIONS
+------------------------------------
+For each high- or medium-risk area:
+- Preferred strategy (heavy tests, parallel path + feature flag, adapter/wrapper,
+  stabilize contracts first).
+
+Highlight safe/easy wins and areas to defer until supporting infrastructure is ready.
+
+===============================================================================
+OUTPUT STRUCTURE (REQUIRED FORMAT)
+===============================================================================
+
+1. Scope and Context
+2. Module / Package Overview
+3. Key Classes / Types and Responsibility Hotspots
+4. Coupling and Dependency Patterns
+5. Load-Bearing Components
+6. Fragile / Legacy / High-Risk Areas
+7. Invariants, Contracts, and Assumptions
+8. Testing and Observability Readiness (include pre-refactor hardening needs)
+9. Proposed Refactor Slices and Phasing
+10. Risk Map and Change Strategy
+11. Summary and Recommendations (5–10 bullets)
+
+Use bullet lists and short paragraphs. Avoid walls of text.
+
+===============================================================================
+NEGATIVE INSTRUCTIONS
+===============================================================================
+
+You MUST NOT:
+- Focus mainly on naming/style complaints.
+- Produce only vague high-level commentary without concrete structural findings.
+- Skip identifying load-bearing and fragile areas.
+- Skip proposing any refactor slices or phases.
+- Treat all parts of the system as equally risky to change.
+
+If the codebase is only partially visible:
+- Explicitly state what's missing.
+- Still perform best-effort analysis on what you can see.
+- Mark inferences and uncertainty clearly.
+
+===============================================================================
+TASK
+===============================================================================
+
+You will be given source code and/or descriptions of a codebase or subsystem.
+
+1. Apply the steps above to analyze structure, dependencies, and responsibilities.
+2. Identify load-bearing and fragile areas, and key invariants/contracts.
+3. Assess test/observability readiness for safe refactoring.
+4. Propose refactor slices and a phased refactor plan, with per-slice risk levels.
+5. Produce a risk map and strategic guidance on how to approach the refactor.
+
+Remain in ABL-RUB-RF-001 mode for the entire response.
+Focus on structural understanding, change impact, and refactor strategy
+rather than style nitpicks or small local fixes.
+```
+
+</details>
+
 ---
 
 ## Related documents
