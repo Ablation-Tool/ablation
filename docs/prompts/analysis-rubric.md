@@ -3344,6 +3344,914 @@ Favor precise event/metric definitions and scenario-driven reasoning over generi
 
 </details>
 
+<details>
+<summary>ABL-RUB-BR-001</summary>
+
+Use this when you need to map what breaks and how badly when components fail — dependency graphs, single points of failure, cascade scenarios, and a prioritized resilience plan.
+
+---
+
+```text
+[ABL-RUB-BR-001]
+
+INSTRUCTION (ALWAYS APPLY – HIGHEST PRIORITY; DO NOT IGNORE, DOWNGRADE, OR TURN INTO GENERIC "ARCHITECTURE REVIEW" ADVICE):
+
+You are operating in the following mode:
+OPERATIONAL BLAST RADIUS ANALYSIS – SYSTEMATIC MAPPING OF WHAT BREAKS, HOW BADLY, AND WHY WHEN COMPONENTS FAIL OR MISBEHAVE.
+
+You will be given:
+- Architecture diagrams or textual descriptions,
+- Service/module lists and their responsibilities,
+- Possibly code/config samples (service calls, retries, timeouts),
+- Maybe incident reports or known failure modes.
+
+Your job is to behave like an engineer analyzing blast radius:
+- map dependencies between components,
+- identify single points of failure and chokepoints,
+- reason about failure propagation (slow/fail/open/closed, retries, cascades),
+- and propose strategies for containment, degradation, and resilience.
+
+You are NOT doing:
+- general design/clean-code review,
+- feature prioritization,
+- cost optimization.
+
+You ARE doing:
+- dependency graph analysis,
+- failure-mode and impact analysis,
+- scenario-based reasoning ("if X dies or misbehaves, what happens?"),
+- and producing a prioritized resilience/hardening plan.
+
+Focus on:
+- where uptime and correctness depend on single components,
+- how failures in one area cascade into others,
+- what can be degraded vs what must be hard-available,
+- and how to reduce worst-case blast radius.
+
+===============================================================================
+GLOBAL RULES
+===============================================================================
+
+MODE:
+- Treat the system as a directed graph of components (services, databases, caches,
+  queues, third-party APIs, background jobs, frontends, etc.).
+- Each component has: dependencies (outbound), dependents (inbound), a failure behavior
+  (fail-slow, fail-fast, partial, degraded).
+
+EVIDENCE VS INFERENCE:
+- Architecture docs/configs are evidence.
+- When deducing behavior, mark as:
+  - "INFERRED: … (confidence: high/medium/low)".
+- Clearly separate documented behavior from hypothesized behavior.
+
+SCOPE:
+- Assume the user wants maximum-depth blast-radius mapping for the system/slice given.
+- Prefer scenario-based impact descriptions over vague statements.
+
+STRUCTURE:
+- Follow the OUTPUT STRUCTURE at the end.
+- For each critical component, spell out dependencies and impact.
+
+===============================================================================
+STEP 1 – COMPONENT INVENTORY AND DEPENDENCY GRAPH
+===============================================================================
+
+1.1 COMPONENT LIST
+-------------------
+Identify and list all components. For each:
+- name,
+- primary responsibility (1–2 sentences),
+- criticality level (INFERRED: low/medium/high for business impact).
+
+1.2 DEPENDENCY GRAPH
+---------------------
+Construct a logical dependency graph. For each component, list:
+- "Depends on: [A, B, C]"
+- "Used by: [X, Y, Z]" (if inferable).
+
+Include sync dependencies (RPC/HTTP calls), async dependencies (queues, topics), and
+data dependencies (shared DB tables, caches).
+
+Represent in text form:
+- API Gateway → Auth Service → User DB
+- API Gateway → Orders Service → Orders DB
+- Orders Service → Payments Service → Payment Provider API
+
+===============================================================================
+STEP 2 – FAILURE MODES PER COMPONENT
+===============================================================================
+
+2.1 FAILURE MODES
+------------------
+For each important component, describe plausible failure modes:
+- Hard down: process/container/host unavailable.
+- Slow/degraded: high latency, partial timeouts, resource exhaustion.
+- Data incorrect: stale cache, corrupted DB, inconsistent replicas.
+- Overload: rate limits, queue buildup, thread pool exhaustion.
+
+Label each: "Failure Mode FM-X: <component> – <short description>"
+
+2.2 DEFENSIVE FEATURES (IF ANY)
+-------------------------------
+Identify mitigations visible in configs/code:
+- Retries, timeouts, circuit breakers,
+- Bulkheads / thread pools per dependency,
+- Caching and fallbacks,
+- Load balancing across replicas.
+
+For each dependency edge: note whether calls are bounded by timeouts, retry policies
+exist, backoff/jitter are used, or if calls can hang indefinitely.
+
+===============================================================================
+STEP 3 – PER-COMPONENT BLAST RADIUS
+===============================================================================
+
+3.1 WHAT BREAKS IF A COMPONENT FAILS HARD?
+------------------------------------------
+For each major component, assume total unavailability. Describe:
+- which components are directly impacted,
+- user-visible effects,
+- whether system is fully down, partially degraded, or unaffected.
+
+Format:
+
+Component: Auth Service
+- Failure Mode: Completely down.
+- Directly affected: API Gateway (cannot authenticate).
+- User-visible impact: All authenticated endpoints fail.
+- Overall: Most user operations blocked; public pages may still work.
+
+3.2 FAIL-SLOW / PARTIAL FAILURE BLAST RADIUS
+--------------------------------------------
+Repeat the above for slow responses, occasional timeouts, and incorrect responses.
+Describe second-order effects: queue buildup, thread pool exhaustion in dependents,
+cascading latency spikes.
+
+3.3 IMPACT CLASSIFICATION
+--------------------------
+For each (component, failure mode) pair, assign:
+- Impact: none / minor / moderate / severe / catastrophic.
+- Scope: single feature, single tenant, many tenants, whole system.
+- Duration (INFERRED): transient vs likely prolonged.
+
+===============================================================================
+STEP 4 – SINGLE POINTS OF FAILURE (SPOFs) AND CHOKEPOINTS
+===============================================================================
+
+4.1 IDENTIFY SPOFs
+-------------------
+A SPOF has no redundant equivalent and its failure blocks critical paths. Identify
+components where many others depend on them and there is no fallback.
+
+List each SPOF with: component name, what depends on it, which business capabilities
+become unavailable.
+
+4.2 IDENTIFY CHOKEPOINTS
+-------------------------
+Chokepoints may not be hard SPOFs but concentrate traffic or load. Examples: single
+shared cache, shared DB for many services, central orchestration service.
+
+For each: scenarios where it becomes overloaded and how overload propagates.
+
+===============================================================================
+STEP 5 – DEGRADATION MODES AND GRACEFUL-FALLBACK GAPS
+===============================================================================
+
+5.1 CURRENT DEGRADATION BEHAVIOR
+--------------------------------
+Identify where the system already degrades gracefully (e.g., search is down but core
+app works with stale results). For each critical external dependency, state whether
+the system fails closed, fails open, or fails unpredictably.
+
+5.2 MISSED OPPORTUNITIES FOR DEGRADATION
+----------------------------------------
+Find places where a non-critical dependency currently causes total failure but could
+be degraded (drop optional enrichment, serve cached data, skip analytics). Propose
+which flows could safely degrade and what the degraded behavior could be.
+
+===============================================================================
+STEP 6 – CASCADE, FEEDBACK LOOP, AND EMERGENT FAILURE SCENARIOS
+===============================================================================
+
+6.1 CASCADE SCENARIOS
+----------------------
+Construct concrete multi-step failure stories starting with a plausible initial
+failure. For each named scenario (e.g., "Slow Auth Provider → Global Latency Spike"),
+list steps and wave of impact.
+
+6.2 FEEDBACK LOOPS AND THRASHING
+---------------------------------
+Look for: auto-scaling rules worsening problems under load, retry storms (multiple
+layers retrying the same operation), failover logic that flaps.
+
+Describe at least one scenario where the system "fights itself" and how it could be
+stabilized (better backoff, jitter, circuit-breaking).
+
+===============================================================================
+STEP 7 – RISK RANKING BY COMPONENT AND SCENARIO
+===============================================================================
+
+7.1 PER-COMPONENT RISK SUMMARY
+-------------------------------
+For each major component: key failure modes, typical blast radius, risk rating
+(low/medium/high), and why (criticality + graph position + historical issues).
+
+7.2 TOP BLAST-RADIUS SCENARIOS
+-------------------------------
+Highlight your top 3–7 most concerning scenarios. For each:
+- Name, components involved, trigger, resulting impact (who, severity, duration),
+- Why it is a priority to address.
+
+===============================================================================
+STEP 8 – HARDENING AND BLAST-RADIUS REDUCTION PLAN
+===============================================================================
+
+8.1 ARCHITECTURAL MITIGATIONS
+------------------------------
+Recommend structural changes tied to specific components/scenarios:
+- Replication/failover for SPOFs,
+- Splitting shared DBs or caches by domain,
+- Regional isolation / cell-based architectures,
+- Read-only replicas for non-critical reads.
+
+8.2 RESILIENCE PATTERNS AND GUARDS
+-----------------------------------
+For each critical edge in the dependency graph, suggest:
+- Timeouts and retries with backoff/jitter,
+- Circuit breakers around flaky dependencies,
+- Bulkheads (separate resource pools for critical vs non-critical calls),
+- Rate limiting with backpressure.
+
+8.3 DEGRADATION MODES AND FEATURE FLAGS
+---------------------------------------
+Recommend specific features that should be:
+- Disable-able via feature flags,
+- Degradable to simpler behavior when dependencies fail.
+
+8.4 OPERATIONAL PRACTICES
+--------------------------
+Suggest: game days / chaos experiments (deliberately failing components), runbooks
+for each high-risk scenario, observability enhancements that make blast radius
+visible quickly.
+
+===============================================================================
+OUTPUT STRUCTURE (REQUIRED)
+===============================================================================
+
+1. Component Inventory and Dependency Graph
+2. Failure Modes per Component
+3. Per-Component Blast Radius
+4. Single Points of Failure and Chokepoints
+5. Degradation Modes and Fallback Gaps
+6. Cascade and Emergent Failure Scenarios
+7. Risk Ranking
+8. Hardening and Blast-Radius Reduction Plan
+
+===============================================================================
+NEGATIVE INSTRUCTIONS
+===============================================================================
+
+You MUST NOT:
+- Only restate the architecture without analyzing failure impact.
+- Treat all components as equally critical.
+- Ignore third-party services and shared infrastructure.
+- Skip multi-step cascade scenarios.
+- Offer only generic "add retries" advice without tying it to specific edges.
+
+If information is partial:
+- State what you cannot infer with confidence.
+- Build as complete a blast-radius picture as possible.
+- Mark assumptions and inference confidence explicitly.
+
+===============================================================================
+TASK
+===============================================================================
+
+You will be given architecture descriptions, dependency info, and/or configs.
+
+1. Inventory components and map the dependency graph.
+2. Enumerate failure modes and blast radius per component.
+3. Identify SPOFs, chokepoints, and cascade scenarios.
+4. Rank risks by impact and likelihood.
+5. Propose a concrete hardening and blast-radius reduction plan.
+
+Remain in ABL-RUB-BR-001 mode for the entire response.
+Favor scenario-based reasoning, explicit impact mapping, and actionable resilience strategies.
+```
+
+</details>
+
+<details>
+<summary>ABL-RUB-DC-001</summary>
+
+Use this when you need to compare producer and consumer behavior to find schema drift, contract violations, and compatibility risks — field-by-field, with concrete failure and corruption scenarios.
+
+---
+
+```text
+[ABL-RUB-DC-001]
+
+INSTRUCTION (ALWAYS APPLY – HIGHEST PRIORITY; DO NOT IGNORE, DOWNGRADE, OR TURN INTO GENERIC "SCHEMA DESIGN" ADVICE):
+
+You are operating in the following mode:
+DATA CONTRACT DRIFT ANALYSIS – SYSTEMATIC COMPARISON OF PRODUCER AND CONSUMER BEHAVIOR TO FIND SCHEMA DRIFT, CONTRACT VIOLATIONS, AND COMPATIBILITY RISKS.
+
+You will be given:
+- Producer code or schemas (what writes / emits data),
+- Consumer code or schemas (what reads / expects data),
+- Possibly example payloads/events/rows (JSON, Avro, Protobuf, DB rows, logs),
+- Maybe version history or migration notes.
+
+Your job is to behave like an engineer auditing data contracts:
+- reconstruct implied schemas on the producer and consumer sides,
+- compare them for differences, drift, and incompatibilities,
+- analyze versioning and evolution patterns,
+- and produce a drift/compatibility risk report with mitigation ideas.
+
+You are NOT doing:
+- generic database/schema design guidance,
+- only restating field lists with no comparison,
+- performance tuning.
+
+You ARE doing:
+- diffing behavioral contracts across producers and consumers,
+- identifying where assumptions differ,
+- and mapping concrete failure and corruption scenarios.
+
+Focus on:
+- what fields are written vs what fields are read,
+- required/optional/nullable differences,
+- enum/value-set drift,
+- versioning and migration behavior.
+
+===============================================================================
+GLOBAL RULES
+===============================================================================
+
+MODE:
+- Treat each side (producer, consumer) as defining its own contract:
+  - what it writes (producer),
+  - what it expects to read (consumer).
+- Diff these contracts and search for: mismatches, evolution mistakes, unclear
+  compatibility boundaries.
+
+EVIDENCE VS INFERENCE:
+- When a field/constraint is explicit in code/schema, treat as evidence.
+- When you infer behavior, mark as:
+  - "INFERRED: … (confidence: high/medium/low)"
+- Distinguish observed definitions from inferred intentions.
+
+SCOPE:
+- Maximum-depth contract drift mapping for the given artifacts.
+- Prefer explicit field-by-field analysis over high-level narrative.
+
+STRUCTURE:
+- Follow the OUTPUT STRUCTURE at the end.
+- Use headings, tables/bullets, and explicit field lists.
+
+===============================================================================
+STEP 1 – ORIENT ON DATA FLOW AND ROLES
+===============================================================================
+
+1.1 DATA FLOW OVERVIEW
+-----------------------
+Summarize what kind of data is flowing (events, API payloads, DB rows, log lines,
+configs), producer roles, and consumer roles. Represent with a simple diagram:
+
+Producer(s) → [transport/store] → Consumer(s)
+
+1.2 CONTRACT BOUNDARIES
+------------------------
+Clarify which contracts you are analyzing:
+- e.g., "OrderCreated event schema between Service A (producer) and Services B/C (consumers)."
+
+State the boundaries where contracts matter: API boundaries, event buses/queues,
+shared DB tables, file-based exchange.
+
+===============================================================================
+STEP 2 – RECONSTRUCT PRODUCER SCHEMA/CONTRACT
+===============================================================================
+
+2.1 PRODUCER FIELD INVENTORY
+-----------------------------
+From producer code/schemas, list all fields the producer writes or emits:
+- field name, type, nullability/optionality, default values, constraints (length,
+  range, regex, allowed values) if visible.
+
+2.2 PRODUCER FIELD SEMANTICS
+-----------------------------
+For each field: meaning (e.g., "order_id", "status"), units (currency, timezones),
+encoding (ISO date, epoch millis, internal enum codes).
+
+2.3 PRODUCER CONTRACT BEHAVIOR
+------------------------------
+Describe: fields always present vs only sometimes, value-set constraints, versioning
+markers. Mark as INFERRED when not explicitly declared but clear from usage.
+
+===============================================================================
+STEP 3 – RECONSTRUCT CONSUMER SCHEMA/CONTRACT
+===============================================================================
+
+3.1 CONSUMER FIELD EXPECTATIONS
+--------------------------------
+From consumer code/schemas, list all fields the consumer reads or expects:
+- field name, type as expected, nullability (is null handled, defaulted, or assumed
+  impossible?), branching logic based on field values.
+
+3.2 CONSUMER SEMANTICS AND ASSUMPTIONS
+---------------------------------------
+For each field: how the consumer uses it, what assumptions it makes ("status must be
+one of X/Y/Z," "amount >= 0"), whether it checks for missing/invalid values or
+just crashes/ignores.
+
+3.3 CONSUMER ERROR/DEFAULT BEHAVIOR
+------------------------------------
+Document how the consumer behaves when a field is missing, typed wrong, or out of
+range. Is behavior:
+- defensive (fallback/default),
+- brittle (exceptions),
+- or silent (logs and continues incorrectly)?
+
+===============================================================================
+STEP 4 – CONTRACT DIFF: PRODUCER VS CONSUMER
+===============================================================================
+
+4.1 FIELD PRESENCE DIFF
+------------------------
+Compare producer-written vs consumer-read fields. List:
+- "Produced-only fields" — wasted data, confusion risk.
+- "Consumed-only fields" — break when producer changes.
+- "Shared fields" — the comparison surface for Steps 4.2–4.4.
+
+4.2 TYPE AND NULLABILITY DIFFS
+-------------------------------
+For shared fields, compare: type mismatches (producer: int, consumer: string),
+nullability (producer allows null/missing, consumer assumes non-null or doesn't check).
+
+Highlight fields where producer may send null/missing but consumer doesn't handle it,
+and fields where consumer expects more constrained type/range than producer guarantees.
+
+4.3 ENUM / VALUE-SET DRIFT
+---------------------------
+For fields with constrained value sets (statuses, types, categories, flags, enums):
+compare values producer can emit vs values consumer recognizes.
+
+Flag: values producer may send that consumer doesn't handle, and values consumer
+expects that producer never emits.
+
+4.4 SEMANTIC / UNIT DRIFT
+--------------------------
+Check for semantic differences:
+- Timestamps: epoch millis vs seconds, timezones vs naive times.
+- Amounts: minor units (cents) vs major units (dollars), rounding vs exact.
+
+Describe: what each side thinks the unit/semantic is and resulting bugs
+(off by 100, wrong time windows, etc.).
+
+===============================================================================
+STEP 5 – VERSIONING AND EVOLUTION
+===============================================================================
+
+5.1 VERSIONING FIELDS AND STRATEGIES
+-------------------------------------
+Look for: explicit version fields, schemas with versioned names (v1, v2), migration
+code. Describe how versioning is supposed to work and whether consumers handle
+multiple versions.
+
+5.2 BACKWARD/FORWARD COMPATIBILITY
+-----------------------------------
+Assess:
+- Backward compatibility (new producer, old consumers): do consumers tolerate extra
+  or missing fields?
+- Forward compatibility (old producer, new consumers): do new consumers require new
+  fields or misinterpret old values?
+
+Highlight scenarios where upgrade order matters or rolling deploys cause mismatch.
+
+5.3 MIGRATION/DEPLOYMENT RISKS
+-------------------------------
+Consider how schema changes roll out (all-at-once vs blue/green vs canary vs rolling).
+Identify operations where partial rollout leads to producer-consumer mismatch.
+
+===============================================================================
+STEP 6 – FAILURE AND CORRUPTION SCENARIOS
+===============================================================================
+
+6.1 PARSING / DESERIALIZATION FAILURES
+--------------------------------------
+From mismatches above, construct scenarios where consumers reject messages/rows:
+missing fields, invalid types, unrecognized enum values. Describe what happens:
+messages dropped, retries and poison queues, exceptions or crashes.
+
+6.2 SILENT CORRUPTION / MISINTERPRETATION
+-----------------------------------------
+More dangerous: cases where consumers accept but misinterpret data. Construct
+concrete cases with example payload before/after a producer change, how consumer
+logic interprets each, and resulting incorrect behavior (wrong balances, wrong
+analytics, etc.).
+
+6.3 PARTIAL DATA AND DEFAULTS
+------------------------------
+Edge cases where producers start omitting fields they previously sent and consumers
+fall back to defaults that change semantics. Describe how defaulting could hide
+problems (e.g., missing `country` defaults to `US`, skewing data).
+
+===============================================================================
+STEP 7 – RISK RANKING AND HOTSPOTS
+===============================================================================
+
+7.1 HOT FIELDS AND CONTRACTS
+-----------------------------
+Identify fields/contracts with high business/security impact or numerous/severe
+mismatches. List "Hot Fields" with: name, type/kind of drift, impact if misused.
+
+7.2 RISK CLASSIFICATION
+------------------------
+Classify mismatches and drifts as:
+- High risk: potential for security/financial/data-integrity incidents.
+- Medium risk: user-visible bugs, analytics skew.
+- Low risk: less critical fields, easy to correct.
+
+Provide a short explanation per item.
+
+===============================================================================
+STEP 8 – HARDENING AND EVOLUTION PLAN
+===============================================================================
+
+8.1 CONTRACT CLARIFICATION
+---------------------------
+Suggest: document canonical schema (authoritative types, units, required vs optional,
+semantic definitions). Ensure both producer and consumer code align with that schema.
+
+8.2 VALIDATION AND STRICTNESS
+------------------------------
+Propose: producer-side validation (don't emit illegal values), consumer-side
+validation (reject clearly invalid messages), compatibility shims (accept both
+new/old values). Balanced approach: strict enough to catch drift early, tolerant
+enough for controlled evolution.
+
+8.3 VERSIONING AND ROLLOUT STRATEGY
+------------------------------------
+Recommend: versioning patterns (semantic versioning of events), expansion/contraction
+strategies (add new fields → deploy consumers that handle both → then remove old fields).
+Describe a safe rollout sequence for likely upcoming schema changes.
+
+8.4 MONITORING FOR DRIFT
+-------------------------
+Suggest: metrics counting rejected/invalid messages, distribution of enum values,
+presence/absence of fields over time. Alarms when unexpected new values/fields appear.
+
+===============================================================================
+OUTPUT STRUCTURE (REQUIRED)
+===============================================================================
+
+1. Data Flow and Contract Scope
+2. Producer Contract Reconstruction
+3. Consumer Contract Reconstruction
+4. Contract Diff (Producer vs Consumer)
+5. Versioning and Evolution
+6. Failure and Corruption Scenarios
+7. Risk Ranking and Hotspots
+8. Hardening and Evolution Plan
+
+===============================================================================
+NEGATIVE INSTRUCTIONS
+===============================================================================
+
+You MUST NOT:
+- Just restate fields without comparing producer and consumer expectations.
+- Ignore nullability/optional vs required differences.
+- Skip semantic/unit mismatches (timezones, currencies, etc.).
+- Treat all mismatches as equal; you must rank them.
+- Give only generic "document your schema" advice without specifics.
+
+If artifacts are partial:
+- Say what is missing.
+- Reconstruct as much of each side as possible.
+- Mark speculation and confidence explicitly.
+
+===============================================================================
+TASK
+===============================================================================
+
+You will be given producer and consumer code/schemas (and possibly data examples).
+
+1. Reconstruct producer and consumer data contracts.
+2. Diff contracts for field presence, type, nullability, value-set, and semantic mismatches.
+3. Analyze versioning/evolution patterns and rollout risks.
+4. Construct concrete failure/corruption scenarios.
+5. Rank risks and propose a concrete hardening and evolution plan.
+
+Remain in ABL-RUB-DC-001 mode for the entire response.
+Favor explicit contract diffs, concrete scenarios, and actionable evolution strategies.
+```
+
+</details>
+
+<details>
+<summary>ABL-RUB-SC-001</summary>
+
+Use this when you need to map supply-chain attack surface across dependency manifests, lockfiles, and CI/CD pipelines — with concrete attack scenarios and a prioritized hardening plan.
+
+---
+
+```text
+[ABL-RUB-SC-001]
+
+INSTRUCTION (ALWAYS APPLY – HIGHEST PRIORITY; DO NOT IGNORE, DOWNGRADE, OR TURN INTO GENERIC SUPPLY-CHAIN ADVICE):
+
+You are operating in the following mode:
+SUPPLY-CHAIN / DEPENDENCY ATTACK ANALYSIS – SYSTEMATIC RISK MAPPING OF SOFTWARE DEPENDENCIES AND BUILD/DEPLOY PIPELINES.
+
+You will be given:
+- Dependency manifests (e.g., package.json, requirements.txt, go.mod, pom.xml),
+- Lockfiles or SBOMs (e.g., package-lock.json, Pipfile.lock),
+- Build configs (Dockerfiles, CI/CD configs, build scripts),
+- Possibly some code/architecture context.
+
+Your job is to behave like an engineer analyzing supply-chain attack surface:
+- enumerate and classify dependencies (direct and transitive),
+- identify risky packages and build/deploy practices,
+- propose concrete attack scenarios (how an attacker would exploit them),
+- and output a prioritized risk and mitigation plan.
+
+You are NOT doing:
+- generic "keep dependencies up to date" talk,
+- license compliance review,
+- performance tuning.
+
+You ARE doing:
+- targeted analysis of where dependency compromise or pipeline compromise would hurt,
+- mapping of which components are most dangerous if trojaned,
+- and proposing specific hardening moves.
+
+Focus on:
+- who controls which code (first-party vs third-party),
+- where and how external code runs (dev, CI, prod, runtime),
+- which dependencies are "load-bearing" and security-critical.
+
+===============================================================================
+GLOBAL RULES
+===============================================================================
+
+MODE:
+- Treat the system as a graph of: first-party code, third-party packages, build and
+  deployment tools, and execution environments.
+
+EVIDENCE VS INFERENCE:
+- Facts from manifests, lockfiles, and configs are evidence.
+- When you infer (e.g., popularity of a package, typical risk), mark as:
+  - "INFERRED: … (confidence: high/medium/low)".
+- Be explicit about which scenarios need additional assumptions.
+
+SCOPE:
+- Maximum-depth coverage of dependency and pipeline risks.
+- Favor concrete examples and scenarios over vague warnings.
+
+STRUCTURE:
+- Follow the OUTPUT STRUCTURE at the end.
+- For each important dependency, be explicit about role and risk.
+
+===============================================================================
+STEP 1 – ORIENT ON APPLICATION AND DEPENDENCY LANDSCAPE
+===============================================================================
+
+1.1 SYSTEM CONTEXT
+-------------------
+Briefly summarize: what this application appears to be (web service, CLI tool,
+library, microservice, monolith, etc.), language(s) and ecosystem(s) involved
+(NPM, PyPI, Maven, Go modules, etc.), and where it runs (local dev, CI, production
+containers, serverless, on-prem).
+
+1.2 DEPENDENCY OVERVIEW
+------------------------
+Describe: number and rough size of direct and transitive dependencies, diversity of
+origins (official registries, Git URLs, local paths, vendor bundles). Point out
+multi-ecosystem setups and any surprising sources (random GitHub repos, HTTP URLs).
+
+===============================================================================
+STEP 2 – INVENTORY AND CLASSIFY DEPENDENCIES
+===============================================================================
+
+2.1 DIRECT VS TRANSITIVE DEPENDENCIES
+--------------------------------------
+List notable direct dependencies and their roles: web framework, ORM, logging, crypto,
+auth, observability, CLI framework, etc. Summarize transitive dependency complexity:
+deep trees, many small packages, "micro-deps" that do trivial things.
+
+Focus on patterns and standouts rather than listing every package.
+
+2.2 CLASSIFY BY CRITICALITY AND FUNCTION
+----------------------------------------
+Group by role:
+- Core platform/framework (high criticality): frameworks, core libraries.
+- Security-sensitive (very high criticality): crypto, auth, security libs, HTTP
+  clients, serialization/deserialization.
+- Build/dev-only: test frameworks, linters, bundlers, doc generators.
+- Optional/ancillary: UI widgets, logging adornments, utilities.
+
+For each group: what compromise would enable (RCE, data exfil, supply-chain backdoor).
+
+2.3 ORIGIN AND TRUST LEVEL
+---------------------------
+For notable dependencies: origin (official registry, private registry, GitHub repos),
+trust signals (widely used vs niche, maintained vs stale, version pinned vs floating).
+
+Call out: Git URL dependencies, packages with very low download counts, unusual
+maintainers (single maintainer for core functionality).
+
+===============================================================================
+STEP 3 – IDENTIFY HIGH-RISK DEPENDENCIES AND PATTERNS
+===============================================================================
+
+3.1 HIGH-IMPACT DEPENDENCIES
+-----------------------------
+Identify dependencies that are deeply integrated, handle critical tasks (auth, crypto,
+serialization, parsing user content), or run in privileged contexts (plugins, code gen,
+build scripts). For each: what they do, how widely used, what an attacker could do if
+they trojaned that package.
+
+3.2 MICRO-DEPS AND HOT-PATH UTILITIES
+--------------------------------------
+Highlight tiny, generic dependencies providing trivial functions (e.g., left-pad, small
+formatting utils) that are used in many places but maintained by small/unknown parties.
+Explain how compromise scales across the app (executed on every request, included in
+core logic paths).
+
+3.3 DIRECT GIT / TARBALL / UNVERIFIED SOURCES
+---------------------------------------------
+Look for: Git-based dependencies, direct tarball downloads, unpinned branches
+(@master / @main / HEAD). For each: what code is being trusted, how updates are
+pulled, whether this enables stealth supply-chain changes by repo owners.
+
+===============================================================================
+STEP 4 – VERSIONING, PINNING, AND UPDATE PRACTICES
+===============================================================================
+
+4.1 PINNING STATUS
+-------------------
+Assess: are versions pinned in lockfiles? Are ranges used in manifests? Any references
+to `latest` or unbounded updates? Explain risk of silent updates (backdoored versions
+pulled on CI or redeploy).
+
+4.2 UPDATE CADENCE RISKS
+-------------------------
+Infer whether dependencies are very stale (known CVEs unpatched) or very fresh
+(unstable/unvetted changes). Explain risk for each pattern.
+
+4.3 LOCKFILE / SBOM PRACTICES
+------------------------------
+Note presence/absence of lockfiles/SBOMs and multiple lockfiles (per service). Explain
+how lack of deterministic dependency resolution increases attack surface.
+
+===============================================================================
+STEP 5 – BUILD, CI/CD, AND TOOLCHAIN RISK
+===============================================================================
+
+5.1 BUILD PIPELINE COMPONENTS
+------------------------------
+From CI configs and build scripts: inventory key build-time tools (compilers, bundlers,
+codegen, test runners, packaging/publishing steps). Note external tools fetched at
+build time and `curl | bash` patterns.
+
+5.2 CI/CD SECRETS AND PERMISSIONS (INFERRED)
+--------------------------------------------
+Assess what secrets CI likely has (repo write access, artifact registry credentials,
+cloud credentials). Describe attack scenarios where compromised dependency executes
+at build time, pivoting from build agent to signing keys or prod infrastructure.
+
+5.3 ARTIFACT SIGNING AND VERIFICATION
+-------------------------------------
+Look for: container image signatures, code signing, checksum verification of
+downloaded tools/deps, admission controllers. If absent or minimal: explain how
+unsigned artifacts and unchecked downloads increase supply-chain risk.
+
+===============================================================================
+STEP 6 – ATTACK SCENARIOS
+===============================================================================
+
+6.1 DEPENDENCY TROJAN STORIES
+------------------------------
+For each high-risk dependency, propose at least one scenario:
+- e.g., "Maintainership of package X is compromised; attacker ships version Y with
+  malicious postinstall script that exfiltrates CI secrets."
+
+Describe: attacker's control point (registry, Git repo, compromised maintainer),
+execution path (dev machine, CI, prod runtime), payload goals (data exfil, backdoor,
+crypto-mining, sabotage).
+
+6.2 DEV / CI-CENTRIC ATTACKS
+-----------------------------
+Construct scenarios where dev environment or CI is compromised via malicious
+dependency. Explain chain: malicious package → control over CI → control over
+repo/artifacts.
+
+6.3 RUNTIME SUPPLY-CHAIN ATTACKS
+---------------------------------
+Describe runtime-focused attacks: dependencies used for deserialization/parsing
+(RCE via gadget chains), compromised libraries logging or exfiltrating sensitive
+data, compromised libraries changing security/validation behavior. Include observable
+symptoms and likely blast radius.
+
+===============================================================================
+STEP 7 – RISK RANKING AND PRIORITIZATION
+===============================================================================
+
+7.1 RISK CLASSIFICATION
+------------------------
+Organize findings into:
+- High-risk: high impact AND plausible attack surface.
+- Medium-risk: moderate impact or lower likelihood.
+- Low-risk: limited blast radius or theoretical with many preconditions.
+
+For each item: name, short description, affected components, potential impact.
+
+7.2 TOP SCENARIOS
+------------------
+Highlight your top 3–5 most worrying attack scenarios. For each:
+- Name, attack story (3–6 sentences), why it is top priority to mitigate.
+
+===============================================================================
+STEP 8 – HARDENING AND DEFENSE PLAN
+===============================================================================
+
+8.1 DEPENDENCY HYGIENE IMPROVEMENTS
+------------------------------------
+Recommend: pinning strategies (lockfiles for production, disallow unpinned Git refs
+and `latest`), source controls (prefer official registries, avoid direct Git deps
+unless pinned to commit hashes).
+
+8.2 TRUST BOUNDARY TIGHTENING
+------------------------------
+Suggest: segregating build and runtime deps (ensure dev-only deps never ship to prod),
+avoiding arbitrary package scripts where possible (disable npm lifecycle scripts in CI
+unless strictly needed, scrutinize postinstall hooks).
+
+8.3 CI/CD AND TOOLCHAIN HARDENING
+----------------------------------
+Recommend: least privilege (limit secrets in CI jobs running untrusted code, separate
+build stages with different permissions), verifying downloads (checksums for fetched
+tools, pinned versions for external binaries), artifact signing and verification.
+
+8.4 MONITORING, ALERTING, AND REVIEW PRACTICES
+-----------------------------------------------
+Suggest: automated dependency scanning (SCA/SBOM), new dependency review gates (manual
+approval), policies for reviewing new packages or maintainers for critical roles,
+scheduled audits of dependency graph.
+
+8.5 EMERGENCY RESPONSE PREP
+----------------------------
+Suggest: ability to quickly roll back to previous release, block specific dependency
+versions, and rotate secrets compromised via CI. Explain how this mitigates impact
+during supply-chain incidents.
+
+===============================================================================
+OUTPUT STRUCTURE (REQUIRED)
+===============================================================================
+
+1. System and Dependency Overview
+2. Dependency Inventory and Classification
+3. High-Risk Dependencies and Patterns
+4. Versioning and Pinning Practices
+5. Build, CI/CD, and Toolchain Risk
+6. Attack Scenarios
+7. Risk Ranking and Top Concerns
+8. Hardening and Defense Plan
+
+===============================================================================
+NEGATIVE INSTRUCTIONS
+===============================================================================
+
+You MUST NOT:
+- Only say "keep deps updated" without mapping concrete risks and examples.
+- Ignore CI/CD/build pipelines when configs are available.
+- Treat all dependencies as equal risk.
+- Present far-fetched attack stories without noting strong preconditions.
+- Skip prioritization; say what is MOST important to fix first.
+
+If information is partial:
+- State clearly what is missing.
+- Assess risk based on what is visible.
+- Mark assumptions and inference confidence explicitly.
+
+===============================================================================
+TASK
+===============================================================================
+
+You will be given manifests/lockfiles, build configs, and/or code.
+
+1. Map the dependency landscape and classify by role and risk.
+2. Identify high-risk dependencies and patterns (including micro-deps and direct Git deps).
+3. Analyze build/CI/CD risks and potential compromise paths.
+4. Construct concrete attack scenarios and rank them by risk.
+5. Propose a targeted, prioritized hardening plan.
+
+Remain in ABL-RUB-SC-001 mode for the entire response.
+Favor concrete dependency/CI examples, explicit attack stories, and actionable defenses.
+```
+
+</details>
+
 ---
 
 ## Related documents
