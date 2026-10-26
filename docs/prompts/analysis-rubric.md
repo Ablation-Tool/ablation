@@ -25,6 +25,8 @@ A collection of reusable, system-level instruction blocks ("rubrics") designed t
 
 ## ABL-RUB-RE-001
 
+[↑ Back to top](#rubric-library)
+
 Use this when you want an exhaustive breakdown of a binary or source file — every function, branch, and data flow. It produces a detailed spec-level report.
 
 ---
@@ -274,6 +276,8 @@ and any known context (product name, version, role in the system).
 
 
 ## ABL-RUB-RE-002
+
+[↑ Back to top](#rubric-library)
 
 Use this when you have two versions of the same binary and want to know what changed, what was fixed, and whether the fix holds.
 
@@ -672,6 +676,8 @@ When uncertain, default to more detail and explicit INFERRED reasoning.
 
 ## ABL-RUB-TR-001
 
+[↑ Back to top](#rubric-library)
+
 Use this when you have multiple targets and want to know which one to dig into first. It goes through each one and gives you a ranked list with suggested next steps.
 
 ---
@@ -910,6 +916,8 @@ When uncertain, label INFERRED with confidence level and reasoning.
 
 
 ## ABL-RUB-RF-001
+
+[↑ Back to top](#rubric-library)
 
 Use this when you have a codebase you need to restructure. It maps modules, coupling, and fragile areas, then gives you a phased plan for making changes safely.
 
@@ -1181,6 +1189,8 @@ rather than style nitpicks or small local fixes.
 
 
 ## ABL-RUB-SA-001
+
+[↑ Back to top](#rubric-library)
 
 Use this when you have source code and want an exhaustive security audit. It maps every source, sink, trust boundary, and assumption, then gives you a prioritized list of vulnerabilities and fixes.
 
@@ -1512,6 +1522,8 @@ Favor thoroughness, explicit mapping of behavior, and clear categorization of ri
 
 ## ABL-RUB-PR-001
 
+[↑ Back to top](#rubric-library)
+
 Use this when you have protocol artifacts (pcaps, handler code, logs) and want to reconstruct message types, field layouts, the state machine, and security properties.
 
 ---
@@ -1800,6 +1812,8 @@ Favor detailed, explicit reconstruction and clear marking of inferences.
 
 
 ## ABL-RUB-OB-001
+
+[↑ Back to top](#rubric-library)
 
 Use this when you have obfuscated or packed code and want to systematically peel the layers, separate real logic from scaffolding, and design a deobfuscation workflow.
 
@@ -2114,6 +2128,8 @@ Favor concrete characterization, explicit strategies, and clear marking of infer
 
 ## ABL-RUB-RG-001
 
+[↑ Back to top](#rubric-library)
+
 Use this when you have a RAG system and want to map the full pipeline, find hallucination and injection risks, and get a concrete hardening plan.
 
 ---
@@ -2416,6 +2432,8 @@ Favor concrete, implementation-aware analysis and explicit risk mapping.
 
 
 ## ABL-RUB-BS-001
+
+[↑ Back to top](#rubric-library)
 
 Use this when you have source code and want to extract formal behavioral specs — preconditions, postconditions, state machines, and invariants — from the code, comments, and tests.
 
@@ -2729,6 +2747,8 @@ Favor precise, structured specification over casual explanation.
 
 
 ## ABL-RUB-EC-001
+
+[↑ Back to top](#rubric-library)
 
 Use this when you want to find every weird, rare, and dangerous edge case in a codebase — input boundaries, state anomalies, concurrency races, and resource limits.
 
@@ -3044,6 +3064,8 @@ Favor concrete, adversarial edge-case scenarios and explicit mapping to code pat
 
 ## ABL-RUB-LT-001
 
+[↑ Back to top](#rubric-library)
+
 Use this when you need to design or critique logging and metrics for a system — event taxonomy, field schemas, instrumentation points, and a phased adoption plan.
 
 ---
@@ -3340,6 +3362,8 @@ Favor precise event/metric definitions and scenario-driven reasoning over generi
 
 ## ABL-RUB-BR-001
 
+[↑ Back to top](#rubric-library)
+
 Use this when you need to map what breaks and how badly when components fail — dependency graphs, single points of failure, cascade scenarios, and a prioritized resilience plan.
 
 ---
@@ -3634,6 +3658,8 @@ Favor scenario-based reasoning, explicit impact mapping, and actionable resilien
 
 
 ## ABL-RUB-DC-001
+
+[↑ Back to top](#rubric-library)
 
 Use this when you need to compare producer and consumer behavior to find schema drift, contract violations, and compatibility risks — field-by-field, with concrete failure and corruption scenarios.
 
@@ -3939,6 +3965,8 @@ Favor explicit contract diffs, concrete scenarios, and actionable evolution stra
 
 
 ## ABL-RUB-SC-001
+
+[↑ Back to top](#rubric-library)
 
 Use this when you need to map supply-chain risk across dependency manifests, lockfiles, and CI/CD pipelines — with concrete attack scenarios and a prioritized hardening plan.
 
