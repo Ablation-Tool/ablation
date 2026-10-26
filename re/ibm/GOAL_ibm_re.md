@@ -72,11 +72,14 @@ BoMC IMM2 sessions 1–9:
 - SVC 0 EXCP apparent at 0x3e34 is a false positive from a data table — dismissed.
 - Purpose: read-only IOC DLL reference checker using IBM binder API (__iew_*).
 
-**6. z390-PTFs/uq33628, uq33629, uq33906** (EBCDIC XMIT, s390)
+**6. z390-PTFs/uq33628, uq33629, uq33906** (SMP/E MCS format, EBCDIC card-image)
 `re/ibm/z390_ptf_re.py`
-- Decode EBCDIC→ASCII. Extract PTF header: APAR number, FMID, LMOD names.
-  Identify which z/OS components are patched.
-  No code RE required unless a critical security-relevant LMOD appears.
+- [x] COMPLETE (session 14, 2026-10-25). FORGE PASS. PTF-001 SAFE.
+- Format: SMP/E MCS (not XMIT). 80-byte EBCDIC card-image records, '++ PTF' header.
+- Product: IBM Content Manager OnDemand 5655-A88 (1999).
+- APARs: PQ23885 (preview exit IODEXPVW), PQ24468 (IAFC migration SRT exit).
+- IODIADEL: APF authorized (AC=1), PL/I, DB2 CAF — expected for archive batch utility. No vuln.
+- DB2 schema recovered from DBRM: VUSERIN2, VCOLIND, VPRO08, VCIK01.
 
 **7. hyper-protect SE headers** (IBMSecEx, 720B each, s390x Ultravisor)
 `re/ibm/hpse_re.py`
