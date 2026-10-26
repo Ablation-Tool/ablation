@@ -204,6 +204,20 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 
 ---
 
+## IoT firmware + CGI surface
+
+| Task | First reach |
+|---|---|
+| "Identify IoT firmware container format without extracting" | `IoTFirmwareUnpacker.probe(fw_path)` → `FirmwareInfo(format, encrypted, inner_offset)`; detects 15+ formats; returns early with error hint on OpenSSL AES encrypted images |
+| "Extract IoT firmware: strip VIVOTEK 49-byte header / uImage 64-byte header, decompress, unpack squashfs/cpio/tar" | `IoTFirmwareUnpacker.unpack(fw_path, outdir)` → `UnpackResult(format_chain, rootfs_path, inventory, error)` |
+| "Map HTTP CGI attack surface of a firmware rootfs: classify handlers as shell vs ELF, run ShellSinkClassifier on all shell CGIs, return sorted findings table" | `CGISurfaceMapper.from_rootfs(rootfs_path).map()` → `CGISurface`; `CGISurfaceMapper.report(surface)` for formatted output |
+| "Get only risky CGI handlers (ARG_PROPAGATED / EVAL_SINK / UNKNOWN)" | `surface.risky` — list of `CGIHandler` with worst-case verdicts first |
+| "Get ELF CGI handlers for binary RE queue" | `surface.elf_handlers` → `[CGIHandler]`; pass `h.abs_path` to `BinaryContext.load_or_build()` |
+| "Classify exec sinks in a single shell script or CGI handler" | `ShellSinkClassifier.from_path(path).classify()` → `List[ShellSinkResult]`; use `ShellSinkClassifier.report(results)` for formatted output |
+| "Sweep all shell scripts in a directory for exec sinks" | `ShellSinkClassifier.from_dir(dir, exts={'.sh','.cgi'}).classify()` |
+
+---
+
 ## Firmware extraction
 
 | Task | First reach |
