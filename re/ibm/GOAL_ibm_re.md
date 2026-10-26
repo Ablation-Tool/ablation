@@ -211,8 +211,11 @@ BoMC IMM2 sessions 1–9:
 
 **19. TWS-ExoticPlatforms IRIX** (MIPS ELFs, 55MB tar)
 `re/ibm/tws_irix_re.py`
-- Extract tar. Find MIPS ELFs. BinaryContext + SemanticSearcher.
-  Sweep for exec-class sinks in scheduler/job dispatch paths.
+- [x] COMPLETE (session 14, 2026-10-25). FORGE PASS. TWSIRIX-001 SAFE.
+- 5 MIPS N32 ELFs: instmecho, TWScomponents, TWSconfig, TWSbackup, TWSupdate_file.
+- All installer/migration utilities. 0 daemons, 0 setuid, 0 network-facing.
+- BinaryContext gap: MIPS N32 function detection = 0 functions; string sweep sufficient.
+- execl('/bin/ucomp'): hardcoded IBM binary. system(cp-p): admin-only argv. SAFE.
 
 **20. TWS-ExoticPlatforms OSF/1** (Alpha/MIPS, Tru64)
 `re/ibm/tws_osf1_re.py`
