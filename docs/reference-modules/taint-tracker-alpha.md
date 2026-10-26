@@ -1,8 +1,64 @@
 # AlphaTaintTracker
 
-## Why this exists
+## What Alpha AXP is
 
-The existing `taint_tracker_*.py` family does linear backward scans within a single basic-block window. Three concrete gaps motivated a separate tracker:
+**Alpha AXP** (also written Alpha or DEC Alpha) is a 64-bit RISC processor architecture designed by Digital Equipment Corporation (DEC) and released in 1992. It was DEC's attempt to replace their aging 32-bit VAX line with something fast enough to last twenty years. The architecture was pure 64-bit from day one — no 32-bit compatibility mode, no segmentation, no x87 float stack. Every instruction is 32 bits wide, every register is 64 bits wide, and the load/store model is strict (no memory-to-memory operations).
+
+Alpha was used in DEC workstations and servers running **Tru64 UNIX** (originally called OSF/1) and **OpenVMS**. IBM AIX and several other commercial UNIX systems ran on Alpha hardware. Later, Linux was ported to Alpha and saw production use into the 2000s.
+
+DEC was acquired by Compaq in 1998. Compaq was acquired by HP in 2002. HP EOL'd Alpha in 2007. The result is a large installed base of Alpha firmware, server software, and embedded code that is still running today — on real hardware in some cases, and far more commonly in emulated environments used to host legacy applications.
+
+**Why Alpha binaries show up in RE work:** industrial control systems, telecoms infrastructure, financial backend systems, and military/government installations ran Tru64 or OpenVMS for decades and many never migrated off. When you're doing RE on legacy infrastructure or doing firmware analysis on hardware that predates ARM-everywhere, you encounter Alpha. It is also common in IBM research/academic code distributions and in archived OS source trees.
+
+### Chip generations
+
+The three variants in the ablation corpus represent the three major commercial generations:
+
+| Chip | Codename | Year | Key changes |
+|:--|:--|:--|:--|
+| **21064** | EV4 | 1992 | First Alpha. 200 MHz. 2-issue in-order pipeline. On-die 8 KB I-cache + 8 KB D-cache. 64-bit integer, 64-bit IEEE 754 FP. |
+| **21164** | EV5 | 1995 | 4-issue in-order. 96 KB L2 on-die. Added the `AMASK`/`IMPLVER` extension model. Up to 333 MHz. |
+| **21264** | EV6 | 1998 | Out-of-order execution (first Alpha with OoO). 2 MB L2 external. Up to 667 MHz. Added BWX (byte/word extension — prior Alphas had no byte-granular load/store). |
+
+From a binary analysis standpoint the differences rarely matter — the instruction encoding and calling convention are the same across all three. The exception is **BWX** (`LDBU`/`LDWU`/`STB`/`STW` opcodes): binaries compiled for 21064 avoid byte/word memory operations and use masks instead; 21264 binaries may use them freely. The taint tracker handles all three transparently.
+
+### Binary formats: ECOFF vs ELF
+
+Alpha binaries come in two formats:
+
+**ECOFF** (Extended COFF) is the native Tru64/OSF/1 format. It stores the **GP (global pointer) value** in the optional header — a literal integer that tells the dynamic linker what value to load into r29 before calling any function. Every `LDQ Ra, disp(gp)` instruction is a GOT dereference: `Ra ← *GOT[gp + disp]`. Without the correct GP value you cannot resolve what string a `system()` argument points to. `AlphaEcoffScanner._load()` reads GP from the ECOFF header automatically.
+
+**ELF** is used for Linux Alpha and cross-compiled targets. GP is not stored in the header; it must be recovered from the `.got` section or from `_gp` symbol. The tracker falls back to heuristic GP recovery for ELF (see Limitations).
+
+---
+
+## Taint tracking vs. decompilation — what each one does
+
+Ablation has two separate pipelines for Alpha AXP. They answer different questions.
+
+**The decompiler pipeline** (`AlphaIRLifter` → `SSABuilder` → `PseudoCEmitter`) answers: *what does this function compute?* It lifts raw Alpha instructions to an architecture-neutral IR, builds SSA form, recovers struct field access patterns, and emits pseudo-C. Use it when you need to understand a function's logic.
+
+**The taint tracker** (`AlphaTaintTracker`) answers: *does attacker-controlled data reach a dangerous function call?* It does not try to understand what the code computes — it only asks whether a register holding user-controlled data is passed as the first argument to `system()`, `execv()`, `popen()`, or similar exec-class sinks. This is the vulnerability scanner path.
+
+The two pipelines are independent but complementary. A typical workflow:
+
+```
+1. AlphaEcoffScanner.scan()          → find all BSR calls to exec-class sinks (fast)
+2. AlphaEcoffScanner.trace_arg()     → single-block backward trace on each call site
+3. AlphaTaintTracker.scan_function() → full CFG-fixpoint trace for calls trace_arg can't resolve
+4. AlphaCFGBuilder.trace_return_value() → recover what string a tainted return value points to
+5. AlphaIRLifter / PseudoCEmitter    → read the code around a confirmed finding to understand context
+```
+
+Steps 1–2 classify the easy cases (hardcoded strings, GP-relative constants). Steps 3–4 handle the hard cases (values assembled across multiple basic blocks or passed through wrappers). Step 5 is confirmation and write-up.
+
+**Taint** means: this register may contain a value that an attacker can influence. The tracker seeds entry registers as tainted (all of r16–r21 = the six argument registers) and forwards that label through the function. If a tainted register is passed to `system()`, that is a finding. The label doesn't say what the attacker can do — only that the data came from an attacker-influenced source. Whether it's actually exploitable requires the manual step (step 5).
+
+---
+
+## Why AlphaTaintTracker exists (gaps in the linear scanner)
+
+The existing `taint_tracker_*.py` family — and `AlphaEcoffScanner.trace_arg()` — does **linear backward scans within a single basic-block window**. That is fast and sufficient for the common case (a string constant loaded two instructions before the call). Three concrete gaps motivated a CFG-aware replacement:
 
 1. **No cross-block propagation.** Taint does not follow edges across basic block boundaries. A value set in block A that flows to block B via a conditional branch is invisible to block B's analysis.
 
