@@ -2,6 +2,16 @@
 
 Scan Android APK packages for hardcoded secrets, dangerous API invocations, cryptographic misuse, cleartext network endpoints, exported attack surface, and dangerous permission combinations: without external dependencies, using ablation's native DEX and AXML parsers.
 
+- [Why this exists](#why-this-exists)
+- [How it works](#how-it-works)
+  - [Finding reference](#finding-reference)
+- [Usage](#usage)
+- [Example output](#example-output)
+- [False positives](#false-positives)
+- [Pipeline position](#pipeline-position)
+- [Reading findings](#reading-findings)
+- [See also](#see-also)
+
 ---
 
 ## Why this exists <sup>[↑](#dexanalyzer)</sup>
@@ -126,11 +136,11 @@ MEDIUM (2)
 
 ## False positives <sup>[↑](#dexanalyzer)</sup>
 
-**`HARDCODED_SECRET` fires on any high-entropy string matching a key pattern: including test fixture values and build-time-injected constants that are not real credentials.** Debug builds frequently embed test API keys with real entropy. Cross-reference `HARDCODED_SECRET` findings against the class name: strings in classes ending with `Test`, `Mock`, or `Fixture` are unlikely production secrets. Also check whether the string appears only in `static final` constants initialized to known-bad test values from a test library.
+`HARDCODED_SECRET` fires on any high-entropy string matching a key pattern, including test fixture values and build-time-injected constants that are not real credentials. Debug builds frequently embed test API keys with real entropy. Cross-reference findings against the class name: strings in classes ending with `Test`, `Mock`, or `Fixture` are unlikely production secrets. Also check whether the string appears only in `static final` constants initialized to known-bad test values from a test library.
 
-**`EXPORTED_COMPONENT` fires on any exported component with no `permission=` attribute, but deep links and intent filters legitimately require exported components.** Android deep link receivers (handling `android:scheme=` URIs) and system broadcast receivers ACTION_BOOT_COMPLETED, etc. must be exported. Confirm that the exported component handles only deep-link intents and does not expose internal data or privileged operations before escalating to HIGH.
+`EXPORTED_COMPONENT` fires on any exported component with no `permission=` attribute, but deep links and intent filters legitimately require exported components. Android deep link receivers (handling `android:scheme=` URIs) and system broadcast receivers (`ACTION_BOOT_COMPLETED`, etc.) must be exported. Confirm that the exported component handles only deep-link intents and does not expose internal data or privileged operations before escalating to HIGH.
 
-**`REFLECTION` fires on any `Class.forName` or `Method.invoke` reference, but this includes standard Java serialization, dependency injection frameworks Dagger, Hilt, and annotation processors.** The finding is present because reflection enables dynamic code execution that bypasses static taint analysis. Filter by class path: reflection in `com.google.inject`, `dagger`, `javax.annotation` packages is framework boilerplate; reflection in application-layer classes company package names warrants investigation.
+`REFLECTION` fires on any `Class.forName` or `Method.invoke` reference, but this includes standard Java serialization, dependency injection frameworks (Dagger, Hilt), and annotation processors. The finding is present because reflection enables dynamic code execution that bypasses static taint analysis. Filter by class path: reflection in `com.google.inject`, `dagger`, and `javax.annotation` packages is framework boilerplate; reflection in application-layer classes warrants investigation.
 
 ---
 
