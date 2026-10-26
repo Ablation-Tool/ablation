@@ -74,6 +74,18 @@ class HDLVersionDiff:
         self._new = vs_new
         self._label_old = label_old
         self._label_new = label_new
+        # Declared here so mypy can resolve types set inside _compute().
+        self._added_constants: Dict[str, dict] = {}
+        self._removed_constants: Dict[str, dict] = {}
+        self._changed_constants: Dict[str, ConstantChange] = {}
+        self._added_signals: Dict[str, int] = {}
+        self._removed_signals: Dict[str, int] = {}
+        self._changed_signals: Dict[str, SignalChange] = {}
+        self._added_states: Dict[str, dict] = {}
+        self._removed_states: Dict[str, dict] = {}
+        self._changed_states: Dict[str, StateChange] = {}
+        self._added_modules: List[str] = []
+        self._removed_modules: List[str] = []
         self._compute()
 
     # ── Constructors ──────────────────────────────────────────────────────────
@@ -113,13 +125,8 @@ class HDLVersionDiff:
         names_old = set(c_old)
         names_new = set(c_new)
 
-        self._added_constants: Dict[str, dict] = {
-            n: c_new[n] for n in (names_new - names_old)
-        }
-        self._removed_constants: Dict[str, dict] = {
-            n: c_old[n] for n in (names_old - names_new)
-        }
-        self._changed_constants: Dict[str, ConstantChange] = {}
+        self._added_constants = {n: c_new[n] for n in (names_new - names_old)}
+        self._removed_constants = {n: c_old[n] for n in (names_old - names_new)}
         for name in names_old & names_new:
             ov = _normalise(c_old[name]["value"])
             nv = _normalise(c_new[name]["value"])
@@ -138,13 +145,9 @@ class HDLVersionDiff:
         pw_new = self._new.port_widths()
         sigs_old = set(pw_old)
         sigs_new = set(pw_new)
-        self._added_signals: Dict[str, int] = {
-            n: pw_new[n] for n in (sigs_new - sigs_old)
-        }
-        self._removed_signals: Dict[str, int] = {
-            n: pw_old[n] for n in (sigs_old - sigs_new)
-        }
-        self._changed_signals: Dict[str, SignalChange] = {
+        self._added_signals = {n: pw_new[n] for n in (sigs_new - sigs_old)}
+        self._removed_signals = {n: pw_old[n] for n in (sigs_old - sigs_new)}
+        self._changed_signals = {
             n: SignalChange(n, pw_old[n], pw_new[n])
             for n in sigs_old & sigs_new
             if pw_old[n] != pw_new[n]
@@ -154,13 +157,9 @@ class HDLVersionDiff:
         se_new = self._new.state_encodings()
         states_old = set(se_old)
         states_new = set(se_new)
-        self._added_states: Dict[str, dict] = {
-            n: se_new[n] for n in (states_new - states_old)
-        }
-        self._removed_states: Dict[str, dict] = {
-            n: se_old[n] for n in (states_old - states_new)
-        }
-        self._changed_states: Dict[str, StateChange] = {
+        self._added_states = {n: se_new[n] for n in (states_new - states_old)}
+        self._removed_states = {n: se_old[n] for n in (states_old - states_new)}
+        self._changed_states = {
             n: StateChange(n, se_old[n]["encoding"], se_new[n]["encoding"])
             for n in states_old & states_new
             if se_old[n]["encoding"] != se_new[n]["encoding"]
@@ -168,8 +167,8 @@ class HDLVersionDiff:
 
         mods_old = set(self._old.modules())
         mods_new = set(self._new.modules())
-        self._added_modules: List[str] = sorted(mods_new - mods_old)
-        self._removed_modules: List[str] = sorted(mods_old - mods_new)
+        self._added_modules = sorted(mods_new - mods_old)
+        self._removed_modules = sorted(mods_old - mods_new)
 
     # ── Public accessors ─────────────────────────────────────────────────────
 
@@ -279,8 +278,8 @@ class HDLVersionDiff:
                 lines.append(f"  + {name} = {entry['value'].strip()!r}  ({entry.get('file','')}:{entry.get('line','')})")
             for name, entry in sorted(self._removed_constants.items()):
                 lines.append(f"  - {name} = {entry['value'].strip()!r}  ({entry.get('file','')}:{entry.get('line','')})")
-            for name, chg in sorted(self._changed_constants.items()):
-                lines.append(f"  ~ {name}: {chg.old_value!r} → {chg.new_value!r}")
+            for name, cchg in sorted(self._changed_constants.items()):
+                lines.append(f"  ~ {name}: {cchg.old_value!r} → {cchg.new_value!r}")
 
         if self._added_signals or self._removed_signals or self._changed_signals:
             lines.append("\nSignals / ports:")
@@ -288,8 +287,8 @@ class HDLVersionDiff:
                 lines.append(f"  + {name} [{w}b]")
             for name, w in sorted(self._removed_signals.items()):
                 lines.append(f"  - {name} [{w}b]")
-            for name, chg in sorted(self._changed_signals.items()):
-                lines.append(f"  ~ {name}: {chg.old_width}b → {chg.new_width}b")
+            for name, schg in sorted(self._changed_signals.items()):
+                lines.append(f"  ~ {name}: {schg.old_width}b → {schg.new_width}b")
 
         if self._added_states or self._removed_states or self._changed_states:
             lines.append("\nFSM states:")
@@ -297,8 +296,8 @@ class HDLVersionDiff:
                 lines.append(f"  + {name}  (encoding {entry['encoding']})")
             for name, entry in sorted(self._removed_states.items()):
                 lines.append(f"  - {name}  (encoding {entry['encoding']})")
-            for name, chg in sorted(self._changed_states.items()):
-                lines.append(f"  ~ {name}: encoding {chg.old_encoding} → {chg.new_encoding}")
+            for name, stchg in sorted(self._changed_states.items()):
+                lines.append(f"  ~ {name}: encoding {stchg.old_encoding} → {stchg.new_encoding}")
 
         if self._added_modules or self._removed_modules:
             lines.append("\nModules / entities:")
