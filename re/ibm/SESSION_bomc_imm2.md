@@ -283,10 +283,39 @@ Not a standalone finding — requires BOMC-IMM2-002 chain to corrupt eMMC partit
 **upd.flash**: initramfs installer script. Writes rootfs via `dd of=/dev/mmcblk0p2`. Platform
 check via awk on imm2.xml. No injection in installer itself.
 
+## Session 9 — rdumount Full Taint Trace
+
+**Binary**: `/tmp/bomc_work/rdumount`, x86_64 ELF, not stripped, debug_info, 79,744 bytes
+
+**system() call sites** (2 total):
+
+| VA | Function | Verdict |
+|---|---|---|
+| 0x406610 | `Linux::execCmd(char*)` | ELIMINATED — only reachable with RODATA_CONST or `snprintf("%d",pid)` arg |
+| 0x406873 | `System::makeDierForLog` | ELIMINATED — `system("mkdir /var/log/IBM_Support/")` RODATA_CONST |
+
+**Virtual dispatch map (RdUmountUI vtable @ 0x409d70)**:
+
+| Offset | VA | Function |
+|---|---|---|
+| +0x00 | 0x405024 | `RdUmountUI::parse()` |
+| +0x08 | 0x404caa | `RdUmountUI::go()` |
+| +0x10 | 0x405290 | (inherited) |
+| +0x38 | 0x406f30 | `Linux::getCommandOutput` |
+
+**Linux vtable (osP global)**:
+- `vtable[2]` = `Linux::execCmd` (offset 0x10)
+- `vtable[7]` = `Linux::getCommandOutput` (offset 0x38)
+
+**Taint trace**:
+- `go()` → `doQuery("rdmount")` → `getCommandOutput("ps -elf | grep rdmount")` → RODATA_CONST
+- `go()` → `verify_pid(atoi(argv[i]))` → `snprintf("%d", pid)` → `getCommandOutput("ps " + decimal_int)` → integer-sanitized
+
+No attacker-controlled data reaches any system() call. **No finding.**
+
 ## Next Targets
 
-1. rdumount — 2 confirmed system() call sites not yet taint-traced
-2. asu64 — 15 popen() + Linux::execCmd() callers
+1. asu64 — 15 popen() + Linux::execCmd() callers
 
 ## SH4 Ablation Gap
 

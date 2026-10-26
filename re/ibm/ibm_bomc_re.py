@@ -714,9 +714,7 @@ DEFERRED = {
             'sshd_config-immcli: PermitUserEnvironment=no → post-exploitation only.'
         ),
         'remaining': [
-            'rdumount: 2 confirmed system() call sites not taint-traced',
             'asu64: 15 popen() call sites not traced; Linux::execCmd() callers',
-            'IMM2 U-Boot binary (imm2-uboot.bin, 360KB): network attack surface analysis',
         ],
         'arch_correction': (
             'IMM2 firmware is SH4 (Renesas SuperH-4 32-bit LSB), NOT ARM Cortex-M. '
@@ -777,9 +775,39 @@ TRIAGE_RESULTS = {
         'analysis_depth': 'CANDIDATE level — df|grep command injection documented',
     },
     'rdumount': {
-        'format': 'x86_64 ELF, NOT stripped, 80KB',
-        'imports_exec_class': ['system@GLIBC_2.2.5', 'sprintf@GLIBC_2.2.5'],
-        'analysis_depth': 'SURFACE level — imports noted, call sites not traced',
+        'format': 'x86_64 ELF, NOT stripped, debug_info, 79744 bytes',
+        'imports_exec_class': ['system@GLIBC_2.2.5'],
+        'system_call_sites': 2,
+        'analysis_depth': 'COMPLETE — all system() call sites taint-traced. ALL SAFE.',
+        'exec_class_verdict': 'ELIMINATED',
+        'call_site_1': {
+            'va': '0x406610',
+            'function': 'Linux::execCmd(char*)',
+            'classification': 'WRAPPER — passes char* arg directly to system(). '
+                              'Called only via vtable[2]. Callers: getCommandOutput (vtable[7]). '
+                              'getCommandOutput callers: doQuery("rdmount") → RODATA_CONST, '
+                              'verify_pid(snprintf("%d",pid)) → integer-sanitized PID from argv.',
+            'verdict': 'SAFE — no attacker-controlled data reaches system() via this site.',
+        },
+        'call_site_2': {
+            'va': '0x406873',
+            'function': 'System::makeDierForLog(std::string const&)',
+            'classification': 'RODATA_CONST',
+            'command': 'system("mkdir /var/log/IBM_Support/")',
+            'source': 'getSecurityDir() returns hardcoded rodata "/var/log/IBM_Support/" (0x409de0)',
+            'verdict': 'SAFE — fully hardcoded, no attacker input.',
+        },
+        'eliminated': [
+            'BOMC-RDU-001: Linux::execCmd only reachable with hardcoded or integer-sanitized args.',
+            'BOMC-RDU-002: makeDierForLog system() arg is rodata literal.',
+        ],
+        'second_pass': (
+            'rdumount is a "kill rdmount process" companion to rdmount. '
+            'parse() reads PID argument from argv, go() calls verify_pid(atoi(argv[i])). '
+            'snprintf("%d", pid) sanitizes any user input to decimal integer string. '
+            'doQuery("rdmount") always uses the hardcoded string "rdmount" as the grep pattern. '
+            'No network-facing code. No setuid. No attack surface beyond local CLI invocation.'
+        ),
     },
 }
 
@@ -911,6 +939,45 @@ SESSIONS = {
         'eliminated': 0,
         'deferred': 0,
     },
+    8: {
+        'date': '2026-10-25',
+        'scope': (
+            'imm2-uboot.bin (360KB SH4 LE raw binary, U-Boot 2009.06p built 2015-08-27). '
+            'Extracted from imm2.tar at offset 0x2205 inside imm2_tcoo18m-3.00.upd. '
+            'BOOT SEQUENCE: eMMC p1 (recovery) → p2 (primary) → p3 (secondary) → USB → TFTP fallback. '
+            'RSA/TPM verification: local boot only (/boot/uImage.sig). TFTP fetch: NO verification. '
+            'INFERRED HIGH (chained): TFTPREC=1 + all partitions invalid + attacker at 192.168.70.200 → '
+            'unsigned Script-type uImage → U-Boot command execution → firmware implant. '
+            'Console (ttySC2): no autoboot password, sf/run/setenv available. Physical access only. '
+            'upd.flash installer: SAFE (no exec injection). '
+            'VERDICT: No standalone network-facing finding. Chained post-BOMC-IMM2-002 only.'
+        ),
+        'findings': 0,
+        'candidates': 0,
+        'eliminated': 0,
+        'deferred': 0,
+    },
+    9: {
+        'date': '2026-10-25',
+        'scope': (
+            'rdumount (x86_64 ELF, not stripped, debug_info, 79744 bytes). '
+            '2 direct system() call sites traced to verdict. '
+            'Site 1 — Linux::execCmd(char*) at 0x406610: vtable[2] wrapper, system(arg). '
+            'Reachable only via Linux::getCommandOutput (vtable[7]). '
+            'getCommandOutput callers: '
+            '  doQuery("rdmount") → "ps -elf | grep rdmount" — RODATA_CONST. '
+            '  verify_pid(pid) → snprintf("%d", atoi(argv[i])) — integer-sanitized, no metacharacters. '
+            'Site 2 — System::makeDierForLog at 0x406873: system("mkdir /var/log/IBM_Support/") — RODATA_CONST. '
+            'Virtual dispatch trace: RdUmountUI vtable at 0x409d70. '
+            'vtable[2]=0x405024 (parse), vtable[3]=0x404caa (go), vtable[7]=0x406f30 (getCommandOutput). '
+            'No attacker-controlled data reaches any system() call. '
+            'VERDICT: ALL SAFE. No finding.'
+        ),
+        'findings': 0,
+        'candidates': 0,
+        'eliminated': 2,
+        'deferred': 0,
+    },
 }
 
 
@@ -1012,6 +1079,12 @@ FORGE.record_result(__file__, findings=['BOMC-RDM-001', 'BOMC-IMM2-001', 'BOMC-I
     'All point to same TFTP server 192.168.70.200 — single server compromise covers all variants. '
     '(3) U-Boot 2009.06p is decade-old codebase with known CVEs (e.g. CVE-2016-3236 TFTP path '
     'traversal, buffer overflows in net stack). INFERRED: unpatched given 2015 build date. '
-    'SS APPLICABLE SH4. FORGE PASS'
+    'SS APPLICABLE SH4. FORGE PASS. '
+    'SESSION 9 — rdumount (x86_64 ELF, 79744 bytes, not stripped): '
+    '2 system() call sites fully taint-traced. ALL ELIMINATED. '
+    'Site 1 (0x406610 Linux::execCmd): only reachable via getCommandOutput with RODATA_CONST '
+    'or snprintf("%d",pid)-sanitized string. '
+    'Site 2 (0x406873 makeDierForLog): system("mkdir /var/log/IBM_Support/") RODATA_CONST. '
+    'No attacker-controlled data reaches system(). No finding.'
 ))
 FORGE.audit_module(__file__)
