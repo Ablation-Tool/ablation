@@ -174,8 +174,14 @@ BoMC IMM2 sessions 1–9:
 
 **16. IBM4690 POS OS** (`4690gsa-csd.iso` + `4690saem-csd.iso`, x86)
 `re/ibm/pos4690_re.py`
-- Mount ISO. Find core POS ELFs. Sweep for payment-card handling
-  primitives (PAN, track data), network listeners, hardcoded credentials.
+- [x] COMPLETE (session 14, 2026-10-25). FORGE PASS. POS4690-001 SAFE.
+- Arch: IBM 4690 OS 286 protected-mode `.286` load modules — NOT ELF.
+  BinaryContext/SemanticSearcher/SinkArgClassifier not applicable.
+- GSA ISO: 53 files (14 × .286, 10 × .dat, 20 × .bat, 7 × .doc). SAEM ISO: 15 files.
+- String sweep: 0 credentials, 0 net listeners, 0 crypto keys, 0 IPs in binary modules.
+- Track data refs all in .DOC APAR documentation (MSR format specs), not binary.
+- IR48076: customer card ≠ credit card confusion — historical bug patched by PTF Q001.
+- IR25274: encrypted operator passwords = security improvement, not finding.
 
 **17. VIOS/sp01/U828079.bff** (AIX BFF, 6MB, PowerPC)
 `re/ibm/vios_re.py`
