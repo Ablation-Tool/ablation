@@ -49,3 +49,6 @@ PLAN.md
 test/
 models/
 *.bff
+
+# Local Claude commands — never in public repo
+.claude/commands/
