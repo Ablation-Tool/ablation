@@ -185,9 +185,11 @@ BoMC IMM2 sessions 1–9:
 
 **17. VIOS/sp01/U828079.bff** (AIX BFF, 6MB, PowerPC)
 `re/ibm/vios_re.py`
-- Extract with `restore -xvf U828079.bff` or parse BFF header.
-  Extract PPC ELFs. Sweep for VIOS-specific commands
-  (ioscli, cfgdev, mkvdev) with exec-class sinks.
+- [x] COMPLETE (session 14, 2026-10-25). FORGE PASS. VIOS-001 SAFE.
+- Package: bos.net.nfs.client 6.1.4.2 — AIX NFS client, NOT VIOS-specific.
+- 0 VIOS commands (ioscli/cfgdev/mkvdev absent). Format: XCOFF (not ELF).
+- BinaryContext not applicable. popen() in 2 XCOFF modules = rpc.rwalld + rpc.rusersd (expected).
+- XCOFF support gap logged (base AIX package, deferred).
 
 ---
 
