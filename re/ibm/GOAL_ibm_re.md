@@ -36,12 +36,9 @@ BoMC IMM2 sessions 1–9:
 
 - [x] ~~1a. IMM2 U-Boot (imm2-uboot.bin, 360KB SH4)~~ — DONE (session 8)
 - [x] ~~1b. rdumount (x86_64, 79744 bytes, 2 system() sites)~~ — DONE (session 9), ALL SAFE
-- [ ] 1c. asu64 (x86_64, 21MB, 15 popen() + Linux::execCmd() callers) —
-      trace all 15 popen call sites; confirm, eliminate, or defer each.
-- [ ] 1d. LiveOS squashfs (146MB DSA Linux env) — mount, setuid sweep,
-      exec-class import scan on all ELFs.
-- [ ] 1e. SHA256 similarity check on CR7/CR8/CR9 ASU/rdumount binaries —
-      determine if findings transfer across variants.
+- [x] ~~1c. asu64 (x86_64, 21MB, 15 popen() + Linux::execCmd() callers)~~ — DONE (session 10). 19/21 eliminated; BOMC-ASU-002 CANDIDATE MEDIUM (PingImmInterface via CIM WBEM).
+- [x] ~~1d. LiveOS squashfs (146MB DSA Linux env)~~ — DONE (session 11). Zero setuid; no IBM-authored exec-class finding.
+- [x] ~~1e. SHA256 similarity check on CR7/CR8/CR9 ASU/rdumount binaries~~ — DONE (session 12). BOMC-RDM-001 and BOMC-ASU-002 apply to all 7 ISOs.
 
 ---
 

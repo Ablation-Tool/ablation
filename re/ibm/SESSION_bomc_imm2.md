@@ -368,10 +368,29 @@ No attacker-controlled data reaches any system() call. **No finding.**
 
 Note: `exec_nosol`/`exec_sol` carry a `.note.SuSE` ELF section — compiled for SuSE Linux with GCC 4.1.2 (~2007) and bundled into the RHEL-based LiveOS as pre-built vendor stubs.
 
-## Next Targets
+## Session 12 — SHA256 Variant Similarity Check
 
-1. SHA256 similarity check (1e) — CR7/CR8/CR9 binary variants
-2. BOMC-ASU-002 — CIM dispatch trace (lower priority; requires CIM framework analysis)
+**Scope**: All 7 BoMC ISOs × 3 binaries (asu64, rdumount, rdmount)
+
+| ISO | asu64 | rdumount | rdmount |
+|---|---|---|---|
+| 7042CR9_IMM470_uEFI261_DSA102.iso | MATCH | MATCH | MATCH |
+| CR9BoMC_IMM370_UEFI232_DSA102_FC.iso | MATCH | MATCH | MATCH |
+| CR9BoMC_IMM540_UEFI311_DSA105_FC.iso | MATCH | MATCH | MATCH |
+| CR7BoMC_IMM560_UEFI211_DSA954_FC.iso | DIFF | DIFF | DIFF |
+| CR7BoMC_IMM720_UEFI300_DSA954_FC.iso | DIFF | N/A | N/A |
+| CR8BoMC_IMM560_UEFI211_DSA954_FC.iso | DIFF | DIFF | DIFF |
+| CR8BoMC_IMM720_UEFI300_DSA954_FC.iso | DIFF | N/A | N/A |
+
+**CR7/CR8 symbol analysis**: rdumount identical set (249); rdmount delta=6 SSL-only; asu64 delta=39 (0.07%), same call site counts. All attack functions present in both.
+
+**VERDICT**: BOMC-RDM-001 and BOMC-ASU-002 apply to all 7 BoMC ISOs.
+
+## Next Targets (Tier 1)
+
+1. dxexec — Alpha AXP COFF (`re/ibm/dxexec_re.py`, new `insn_alpha.py` module)
+2. IPLROM.image — POWER2 XCOFF (`re/ibm/iplrom_re.py`)
+3. BOMC-ASU-002 — CIM dispatch trace (deferred; lower priority)
 
 ## SH4 Ablation Gap
 

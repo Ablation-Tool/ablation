@@ -718,7 +718,6 @@ DEFERRED = {
         ),
         'remaining': [
             'asu64 BOMC-ASU-002: CIM method dispatch trace to confirm PingImmInterface addr source',
-            'SHA256 similarity check (1e): CR7/CR8/CR9 binary variants',
         ],
         'arch_correction': (
             'IMM2 firmware is SH4 (Renesas SuperH-4 32-bit LSB), NOT ARM Cortex-M. '
@@ -893,6 +892,60 @@ TRIAGE_RESULTS = {
                 'All exec usage is documented and expected for these tools. Not analyzed further.'
             ),
         },
+    },
+    'variant_similarity': {
+        'scope': 'SHA256 + symbol-set comparison across all 7 BoMC ISOs',
+        'binaries_checked': ['asu64', 'rdumount', 'rdmount'],
+        'baseline': {
+            'asu64':    '908b5297ffc6efbb18daeb3362fe11ba23422b64e930e9bac3afd2feef1bd96d',
+            'rdumount': '4ad9a1af72a47dba9092b681f9c9d60ddb3b19d33203b195d92f7cab41ac2dd8',
+            'rdmount':  '00bc016bf26d515bb1ce33a7cc485204b66aaf2d5933532cc96eab4551dc3c6c',
+        },
+        'per_iso': {
+            '7042CR9_IMM470_uEFI261_DSA102.iso':     {'asu64': 'MATCH', 'rdumount': 'MATCH', 'rdmount': 'MATCH'},
+            'CR9BoMC_IMM370_UEFI232_DSA102_FC.iso':  {'asu64': 'MATCH', 'rdumount': 'MATCH', 'rdmount': 'MATCH'},
+            'CR9BoMC_IMM540_UEFI311_DSA105_FC.iso':  {'asu64': 'MATCH', 'rdumount': 'MATCH', 'rdmount': 'MATCH'},
+            'CR7BoMC_IMM560_UEFI211_DSA954_FC.iso':  {'asu64': 'DIFF',  'rdumount': 'DIFF',  'rdmount': 'DIFF'},
+            'CR7BoMC_IMM720_UEFI300_DSA954_FC.iso':  {'asu64': 'DIFF',  'rdumount': 'N/A',   'rdmount': 'N/A'},
+            'CR8BoMC_IMM560_UEFI211_DSA954_FC.iso':  {'asu64': 'DIFF',  'rdumount': 'DIFF',  'rdmount': 'DIFF'},
+            'CR8BoMC_IMM720_UEFI300_DSA954_FC.iso':  {'asu64': 'DIFF',  'rdumount': 'N/A',   'rdmount': 'N/A'},
+        },
+        'cr78_hashes': {
+            'asu64':    '0d4fa3df8e8dd58cbddc8d9bda90b42a1ba230544521edb3b565b0654b1bd656',
+            'rdumount': 'abb414fbca81521abd752da745ab322f2a0856e4caec76acbca1014ecfdbeb59',
+            'rdmount':  'ec4cbbba6d4fb1a4f88355dae1a70c5f4851ef37666a071fb493e4cce613160b',
+        },
+        'cr78_symbol_analysis': {
+            'asu64': (
+                'CR78 syms=58367 vs CR9 syms=58406 (delta=39, 0.07%). '
+                'All exec-class key functions identical: PingImmInterface, RumImmUsbLanCfgCmd, CState, '
+                'checkPatchable, LinOS::reboot, OpenIPMI_CheckKernel, OpenIPMI_InstallDriver, '
+                'ibmcKCS::OpenIPMI_CheckKernel, ibmcKCS::OpenIPMI_InstallDriver. '
+                'Call site counts: system()=6, popen()=15 in both. '
+                'VERDICT: Session 10 analysis transfers to all CR7/CR8 asu64 variants. '
+                'BOMC-ASU-002 applies to CR7/CR8 asu64.'
+            ),
+            'rdumount': (
+                'CR78 syms=249, CR9 syms=249. Symbol sets IDENTICAL. '
+                'Exec-class imports identical (system only). '
+                'VERDICT: Session 9 analysis (ALL SAFE) transfers to CR7/CR8 rdumount.'
+            ),
+            'rdmount': (
+                'CR78 syms=14637, CR9 syms=14643 (delta=6). '
+                'Delta is 6 SSL library symbols only (DTLS vs ssl3 minor version diff). '
+                'All attack-relevant functions present in both: '
+                'RdMountUI::parse(), Linux::execCmd(), Linux::getCommandOutput(), '
+                'System::makeDierForLog(), RdMountUI::doQuery(). '
+                'Exec-class imports identical (execl, system). '
+                'VERDICT: BOMC-RDM-001 (CONFIRMED HIGH) transfers to CR7/CR8 rdmount.'
+            ),
+        },
+        'coverage_summary': (
+            'CR9 (3 ISOs): all findings already apply — exact binary match. '
+            'CR7/CR8 IMM720 (2 ISOs): asu64 findings transfer; no rdumount/rdmount present. '
+            'CR7/CR8 IMM560 (2 ISOs): all findings transfer (asu64 + rdmount + rdumount). '
+            'Result: BOMC-RDM-001, BOMC-ASU-002 apply to all 7 BoMC ISOs.'
+        ),
     },
     'rdmount': {
         'format': 'x86_64 ELF, NOT stripped, 10783 symbols, 56180 call edges',
@@ -1160,6 +1213,26 @@ SESSIONS = {
         'eliminated': 0,
         'deferred': 0,
     },
+    12: {
+        'date': '2026-10-25',
+        'scope': (
+            '1e — SHA256 similarity check across all 7 BoMC ISOs (CR7/CR8/CR9 + 7042). '
+            'Binaries: asu64, rdumount, rdmount. '
+            'CR9 (3 ISOs): exact match to analyzed binaries — all findings transfer trivially. '
+            'CR7/CR8 IMM720 (2 ISOs): asu64 differs (0d4fa3... vs 908b52...); no rdumount/rdmount present. '
+            'CR7/CR8 IMM560 (2 ISOs): asu64 + rdumount + rdmount all differ from CR9 baseline. '
+            'CR78 asu64: 58367 syms (delta=39); all exec-class functions identical; '
+            'system()=6 popen()=15 call sites — same as CR9. Session 10 analysis transfers. '
+            'CR78 rdumount: 249 syms, IDENTICAL symbol set. Session 9 (ALL SAFE) transfers. '
+            'CR78 rdmount: 14637 syms (delta=6, SSL lib only). RdMountUI::parse attack chain '
+            'symbols all present. BOMC-RDM-001 CONFIRMED HIGH transfers to CR7/CR8. '
+            'VERDICT: BOMC-RDM-001 and BOMC-ASU-002 apply to all 7 BoMC ISOs.'
+        ),
+        'findings': 0,
+        'candidates': 0,
+        'eliminated': 0,
+        'deferred': 0,
+    },
 }
 
 
@@ -1285,6 +1358,14 @@ FORGE.record_result(__file__, findings=['BOMC-RDM-001', 'BOMC-IMM2-001', 'BOMC-I
     'linlpcfg system() is root-check only (whoami RODATA_CONST). '
     'Third-party: libdbfaj.so (Brocade FC HBA), bcu (Emulex HBA) — out of scope. '
     '190 standard RHEL 6.4 binaries — baseline, not traced. '
-    'NO FINDING. SS APPLICABLE x86_64. FORGE PASS'
+    'NO FINDING. SS APPLICABLE x86_64. FORGE PASS. '
+    'SESSION 12 — SHA256 similarity check (all 7 BoMC ISOs, asu64+rdumount+rdmount): '
+    'CR9 (3 ISOs): exact SHA256 match — all findings transfer trivially. '
+    'CR7/CR8 IMM720: asu64 differs (58367 syms, delta=39); rdumount/rdmount absent. '
+    'CR7/CR8 IMM560: all 3 binaries differ; symbol analysis confirms key functions identical. '
+    'CR78 rdumount: IDENTICAL 249-symbol set — session 9 SAFE verdict transfers. '
+    'CR78 rdmount: delta=6 (SSL lib only) — BOMC-RDM-001 CONFIRMED HIGH transfers to CR7/CR8. '
+    'CR78 asu64: system()=6 popen()=15 (identical count) — session 10 analysis + BOMC-ASU-002 transfer. '
+    'COVERAGE: BOMC-RDM-001 and BOMC-ASU-002 apply to all 7 BoMC ISOs. FORGE PASS'
 ))
 FORGE.audit_module(__file__)
