@@ -61,6 +61,33 @@ _REGS_S2E: Dict[int, str] = {
     0x0C: "KEY",   0x0D: "AXSS",  0x0E: "IDCODE",
 }
 
+# Virtex-4 register map (5-bit addresses, from UG071 Table 6-2)
+# Nearly identical to 7-series but: single COR (not COR0/COR1), CTL (not CTL0),
+# no WBSTAR/TIMER/BOOTSTS/CTL1 (those are 7-series-only).
+_REGS_V4: Dict[int, str] = {
+    0x00: "CRC",   0x01: "FAR",   0x02: "FDRI",  0x03: "FDRO",
+    0x04: "CMD",   0x05: "CTL",   0x06: "MASK",  0x07: "STAT",
+    0x08: "LOUT",  0x09: "COR",   0x0A: "MFWR",  0x0B: "CBC",
+    0x0C: "IDCODE",0x0D: "AXSS",
+}
+
+# Virtex-4 FAR block type field [25:24] (UG071 Table 6-1)
+# FAR layout: [31:26]=rsvd, [25:24]=block(2b), [23:17]=row(7b), [16:8]=col(9b), [7:0]=minor(8b)
+_V4_FAR_BLOCK_TYPES: Dict[int, str] = {
+    0: "CLB/IO/GCLK",
+    1: "BRAM_content",
+    2: "CFG_CLK_DCM",
+    3: "BRAM_cfg",
+}
+
+# 7-series / UltraScale FAR block type field [25:23] (UG470 Table 5-31)
+# FAR layout: [31:26]=rsvd, [25:23]=block(3b), [22:17]=row(6b), [16:7]=col(10b), [6:0]=minor(7b)
+_7S_FAR_BLOCK_TYPES: Dict[int, str] = {
+    0: "CLB/IO/CLK",
+    1: "BRAM_content",
+    2: "CFG_CLK",
+}
+
 # Spartan-6 register map (5-bit addresses, from UG380)
 _REGS_S6: Dict[int, str] = {
     0x00: "CRC",    0x01: "FAR_MAJ",0x02: "FAR_MIN",0x03: "FDRI",
@@ -98,6 +125,7 @@ _FRAME_WORDS: Dict[str, int] = {
     "s3":  208,   # Spartan-3: varies; 208 for XC3S50AN
     "ku":  123,   # Kintex UltraScale+
     "s2e":  30,   # Spartan-2E: FLR=0x1D (29) → frame_words=30 (XC2S200E/XC2S600E)
+    "v4":   41,   # Virtex-4 (all variants LX/FX/SX): UG071 Table 9-1
 }
 
 # ── Data structures ───────────────────────────────────────────────────────────
@@ -308,6 +336,45 @@ class XilinxFrameDecoder:
         """Return the number of 32-bit words per configuration frame."""
         return self._frame_words
 
+    def decode_far(self, far_val: int) -> Dict[str, object]:
+        """
+        Decode a FAR register value into component fields for the detected family.
+
+        Returns a dict with 'block', 'row', 'col', 'minor' keys (all int), plus
+        'block_name' (str) where the block type has a known name.
+
+        Virtex-4 FAR:  [25:24]=block(2b), [23:17]=row(7b), [16:8]=col(9b), [7:0]=minor(8b)
+        7s/ku FAR:     [25:23]=block(3b), [22:17]=row(6b), [16:7]=col(10b), [6:0]=minor(7b)
+        S6 uses FAR_MAJ/FAR_MIN separately; this returns {'raw': far_val}.
+        """
+        if self._family == "v4":
+            block = (far_val >> 24) & 0x3
+            return {
+                "block":      block,
+                "block_name": _V4_FAR_BLOCK_TYPES.get(block, f"RSVD({block})"),
+                "row":        (far_val >> 17) & 0x7F,
+                "col":        (far_val >>  8) & 0x1FF,
+                "minor":       far_val        & 0xFF,
+            }
+        if self._family in ("7s", "ku"):
+            block = (far_val >> 23) & 0x7
+            return {
+                "block":      block,
+                "block_name": _7S_FAR_BLOCK_TYPES.get(block, f"RSVD({block})"),
+                "row":        (far_val >> 17) & 0x3F,
+                "col":        (far_val >>  7) & 0x3FF,
+                "minor":       far_val        & 0x7F,
+            }
+        if self._family == "s2e":
+            return {
+                "block": (far_val >> 25) & 0x1,
+                "row":   (far_val >> 17) & 0xFF,
+                "col":   (far_val >>  9) & 0xFF,
+                "minor":  far_val        & 0x1FF,
+            }
+        # S6 (FAR_MAJ/FAR_MIN) and others: return raw
+        return {"raw": far_val}
+
     def heuristic_frame_bytes(self) -> bytes:
         """
         Return a raw byte slice spanning the configuration frame region.
@@ -339,6 +406,8 @@ def _detect_family(
         return "s6", _REGS_S6, _FRAME_WORDS["s6"]
     if part.startswith("3s"):
         return "s3", _REGS_S6, _FRAME_WORDS["s3"]  # Spartan-3 regs ~ S6
+    if part.startswith("xc4v"):
+        return "v4", _REGS_V4, _FRAME_WORDS["v4"]
     if part.startswith(("xcku", "xcvu", "xcvm", "xcvp")):
         return "ku", _REGS_7S, _FRAME_WORDS["ku"]
     # Default: 7-series (xc7a, xc7k, xc7v, xc7z, xcartix, xckintex, ...)
