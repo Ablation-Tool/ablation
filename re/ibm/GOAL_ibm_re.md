@@ -219,8 +219,11 @@ BoMC IMM2 sessions 1–9:
 
 **20. TWS-ExoticPlatforms OSF/1** (Alpha/MIPS, Tru64)
 `re/ibm/tws_osf1_re.py`
-- If Alpha ELFs present: feed into dxexec Alpha patterns (target 2).
-  If MIPS: same sweep as IRIX. Focus on unique patterns vs IRIX.
+- [x] COMPLETE (session 14, 2026-10-25). FORGE PASS. TWSOSF1-001 SAFE.
+- 5 DEC Alpha AXP ECOFF binaries (Tru64 UNIX, same source tree as IRIX target).
+- AlphaEcoffScanner: 0 findings — Tru64 ECOFF dynamic linking format != ELF PLT/GOT.
+- String sweep: identical exec-class pattern to IRIX (execl hardcoded, system cp-p argv).
+- Tooling gap: Tru64 ECOFF dynamic linking parser needed for AlphaEcoffScanner.
 
 ---
 
