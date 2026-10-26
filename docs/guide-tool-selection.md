@@ -303,3 +303,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Search Verilog/VHDL source for a protocol pattern" | `VerilogSemantic.from_directory(src_dir).query('opcode broadcast reset')` |
 | "List all module/entity names in a source tree" | `VerilogSemantic.from_directory(src_dir).modules()` |
 | "Get port bit widths from Verilog/VHDL" | `VerilogSemantic.from_directory(src_dir).port_widths()` |
+| "Classify the dominant analog topology in a SPICE netlist" | `SpiceAnalyzer.from_path(path).classify()` |
+| "Count transistors by type in a SPICE file" | `SpiceAnalyzer.from_path(path).transistors_by_type()` |
+| "Find current mirrors, diff pairs, LVDS structures in a SPICE netlist" | `SpiceAnalyzer.from_path(path).known_structures()` |
+| "Extract supply voltages from a SPICE netlist" | `SpiceAnalyzer.from_path(path).supply_rails()` |
