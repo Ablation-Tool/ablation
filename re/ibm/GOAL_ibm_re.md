@@ -163,9 +163,14 @@ BoMC IMM2 sessions 1–9:
 
 **15. HMC-V11/network-ppc/base.img** (1.76GB squashfs, PowerPC HMC Linux)
 `re/ibm/hmc_re.py`
-- Mount: `mount -t squashfs -o loop,ro base.img /mnt/hmc`
-  Setuid/setgid sweep. Exec-class import scan on all PPC ELFs.
-  SemanticSearcher on top 5 largest ELFs. Time-box to 4 sessions max.
+- [x] COMPLETE (session 14, 2026-10-25). FORGE PASS. HMC-001 SAFE.
+- IBM Linux 10 (hmc10p), RHEL9-based. Mounted OK. 65268 inodes.
+- Setuid: 26 files, all standard Linux utils; 0 IBM HMC authored.
+- IBM HMC native ELFs: only 2 (AuthImage X.509 cert verifier + hard_reboot wrapper).
+  Both: SinkArgClassifier = 0 exec-class sinks. SAFE.
+- HMC app is Java (Semeru JDK 17 + JARs) — minimal native attack surface.
+- Exec import scan (2102 PPC ELFs): 753 with exec — all Linux OS packages, not IBM HMC.
+- pkexec 0.117-14.el9.ibm.1: IBM RHEL9 backport includes CVE-2021-4034 fix.
 
 **16. IBM4690 POS OS** (`4690gsa-csd.iso` + `4690saem-csd.iso`, x86)
 `re/ibm/pos4690_re.py`
