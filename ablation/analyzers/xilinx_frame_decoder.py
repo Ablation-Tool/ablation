@@ -11,8 +11,10 @@ Supported families:
       (Spartan-6 uses CMD=WCFG + streaming mode: frame words flow without Type2
        wrappers; use heuristic_frame_bytes() / frame_diff() for version comparison)
   - Spartan-3AN (XC3S50AN ABC130): sync word absent, metadata-only fallback
+  - Spartan-2E (XC2S200E/XC2S600E TIM-3C firmware): full packet decode; frame_words=30
+      (FLR register at 0x0B encodes frame_words-1; FAR/FDRI/CMD/CRC same addresses as 7s)
 
-Packet format (same encoding for 7-series and Spartan-6):
+Packet format (same encoding across ALL Xilinx families from Spartan-2 through 7-series):
     Type1: [31:29]=001  [28:27]=op  [26:18]=rsvd  [17:13]=reg(5b)  [12:11]=rsvd  [10:0]=wcount
     Type2: [31:29]=010  [28:27]=op  [26:0]=wcount(27b)
     NOP:   [31:29]=001  [28:27]=00  any lower bits  (wcount must be 0 for valid NOP)
@@ -45,6 +47,18 @@ _REGS_7S: Dict[int, str] = {
     0x08: "LOUT",   0x09: "COR0",   0x0A: "MFWR",   0x0B: "CBC",
     0x0C: "IDCODE", 0x0D: "AXSS",   0x0E: "COR1",   0x10: "WBSTAR",
     0x11: "TIMER",  0x13: "BOOTSTS",0x15: "CTL1",
+}
+
+# Spartan-2/2E register map (5-bit addresses, from XAPP138 / Spartan-2E Config Guide)
+# Addresses 0x00-0x04 identical to 7-series. Key differences:
+#   0x09 = COR  (not COR0)
+#   0x0B = FLR  (Frame Length Register, value = frame_words-1; 7s has CBC here)
+#   0x0E = IDCODE (in Spartan-2E; 7s has IDCODE at 0x0C)
+_REGS_S2E: Dict[int, str] = {
+    0x00: "CRC",   0x01: "FAR",   0x02: "FDRI",  0x03: "FDRO",
+    0x04: "CMD",   0x05: "CTL",   0x06: "MASK",  0x07: "STAT",
+    0x08: "LOUT",  0x09: "COR",   0x0A: "MFWR",  0x0B: "FLR",
+    0x0C: "KEY",   0x0D: "AXSS",  0x0E: "IDCODE",
 }
 
 # Spartan-6 register map (5-bit addresses, from UG380)
@@ -83,6 +97,7 @@ _FRAME_WORDS: Dict[str, int] = {
     "s6":   65,   # Spartan-6: 65 words per frame
     "s3":  208,   # Spartan-3: varies; 208 for XC3S50AN
     "ku":  123,   # Kintex UltraScale+
+    "s2e":  30,   # Spartan-2E: FLR=0x1D (29) → frame_words=30 (XC2S200E/XC2S600E)
 }
 
 # ── Data structures ───────────────────────────────────────────────────────────
@@ -318,6 +333,8 @@ def _detect_family(
     part: str,
 ) -> Tuple[str, Dict[int, str], int]:
     """Return (family_tag, reg_map, frame_words) from the lowercase part name."""
+    if part.startswith("2s"):
+        return "s2e", _REGS_S2E, _FRAME_WORDS["s2e"]
     if part.startswith("6s"):
         return "s6", _REGS_S6, _FRAME_WORDS["s6"]
     if part.startswith("3s"):
