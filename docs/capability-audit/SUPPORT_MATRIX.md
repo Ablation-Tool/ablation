@@ -40,7 +40,7 @@ Columns:
 | **PPC64** | ✓ [¹⁶] | ✓ [¹⁶] | ✓ [¹⁶] | ✓ [¹⁶] | ✓ [¹] | ✓ [²³] | ✓ [²⁴] | ~ [²⁵] |
 | **RISC-V 32** | ✓ | ✓ | ✓ | ✓ | ✓ [¹] | ✓ [²⁶] | ✗ [⁶] | ✗ |
 | **RISC-V 64** | ✓ [¹⁶] | ✓ [¹⁶] | ✓ [¹⁶] | ✓ [¹⁶] | ✓ [¹] | ✓ [²⁶] | ✗ [⁶] | ✗ |
-| **LoongArch64** | ✓ [²⁷] | ✓ | ✓ | ✓ [⁴] | ✓ [¹] | ✓ | ✗ | ~ [²⁸] |
+| **LoongArch64** | ✓ [²⁷] | ✓ | ✓ | ✓ [⁴] | ✓ [¹] | ✓ | ✓ | ~ [²⁸] |
 | **SH-2A** | ✗ [²⁹] | ✗ | ✓ [³⁰] | ✗ [³¹] | ✓ [¹] | ✗ | ✗ | ✗ |
 
 ### Tool-dependent tier
@@ -122,7 +122,7 @@ Columns:
 
 [²⁶] RISC-V taint: `taint_tracker_riscv32.py` (RV32GC, `from_context()`, HiSilicon ext via `ext_decoder`), `taint_tracker_riscv64.py` (RV64GC, `from_context()`), `taint_tracker_riscv.py` (`TaintEngine`, labeled/bounded stream). All require Capstone 5.x+.
 
-[²⁷] `insn_loongarch64.py` has no `Mem` type — load/store ops kept as flat `[Reg, Reg, Imm]`. No text backends (objdump/listing). `loongarch_decoder.py` required.
+[²⁷] `insn_loongarch64.py` has no `Mem` type — load/store ops kept as flat `[Reg, Reg, Imm]`. No text backends (objdump/listing). `loongarch_decoder.py` required. `loongarch_decoder.py` now provides typed `REG`/`IMM` operands via `LoongArchOperand`; `Mem` fusion deferred.
 
 [²⁸] LoongArch64 vuln scanners: `loongarch64_max_not_min_scanner`, `la64_heap_vuln_scanner`.
 
