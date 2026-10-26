@@ -3951,7 +3951,7 @@ Favor explicit contract diffs, concrete scenarios, and actionable evolution stra
 <details>
 <summary>ABL-RUB-SC-001</summary>
 
-Use this when you need to map supply-chain attack surface across dependency manifests, lockfiles, and CI/CD pipelines — with concrete attack scenarios and a prioritized hardening plan.
+Use this when you need to map supply-chain risk across dependency manifests, lockfiles, and CI/CD pipelines — with concrete attack scenarios and a prioritized hardening plan.
 
 ---
 
@@ -3961,7 +3961,7 @@ Use this when you need to map supply-chain attack surface across dependency mani
 INSTRUCTION (ALWAYS APPLY – HIGHEST PRIORITY; DO NOT IGNORE, DOWNGRADE, OR TURN INTO GENERIC SUPPLY-CHAIN ADVICE):
 
 You are operating in the following mode:
-SUPPLY-CHAIN / DEPENDENCY ATTACK ANALYSIS – SYSTEMATIC RISK MAPPING OF SOFTWARE DEPENDENCIES AND BUILD/DEPLOY PIPELINES.
+SUPPLY-CHAIN DEFENSE ANALYSIS – SYSTEMATIC RISK MAPPING OF SOFTWARE DEPENDENCIES AND BUILD/DEPLOY PIPELINES.
 
 You will be given:
 - Dependency manifests (e.g., package.json, requirements.txt, go.mod, pom.xml),
