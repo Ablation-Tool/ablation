@@ -213,3 +213,35 @@ def test_report_string_output() -> None:
     out = scanner.report(findings)
     assert isinstance(out, str)
     assert 'HIGH' in out
+
+
+def test_real_gcm4_dummy_links_rootfs():
+    import gzip
+    import shutil
+
+    image = pathlib.Path(
+        '/media/cowboy/research/CERN/fw/gep/'
+        'petalinux-sdimage_gcm4_dummy_240_links_CERN.wic.gz'
+    )
+    if not image.is_file():
+        pytest.skip('GCM4 dummy-links WIC image not found')
+    work = image.parents[1] / '.analysis-work'
+    work.mkdir(exist_ok=True)
+    raw = work / 'test_dummy_links.wic'
+    try:
+        with gzip.open(image, 'rb') as source, raw.open('wb') as destination:
+            shutil.copyfileobj(source, destination, 1024 * 1024)
+        findings = EmbeddedRootfsScanner.from_image(str(raw)).scan()
+    finally:
+        raw.unlink(missing_ok=True)
+
+    high = [finding for finding in findings if finding.severity == 'HIGH']
+    medium = [finding for finding in findings if finding.severity == 'MEDIUM']
+    assert len(high) == 5
+    assert len(medium) == 1
+    assert any('Empty password' in finding.title for finding in high)
+    assert any('telnet' in finding.title for finding in high)
+    assert any('ftp' in finding.title for finding in high)
+    assert any('tcf-agent' in finding.title for finding in high)
+    shim = next(finding for finding in high if 'IPBus TCP shim' in finding.title)
+    assert all(port in shim.title for port in ('8061', '8062', '8063', '8064'))
