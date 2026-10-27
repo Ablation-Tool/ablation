@@ -4,7 +4,8 @@
 
 Ablation is an AI-assisted reverse engineering (AIARE) framework.
 
-**Compatible AI coding agents:** Claude Code, OpenAI Codex, Gemini CLI, and Kimi Code CLI.
+Compatible AI coding agents: Claude Code, OpenAI Codex, Gemini CLI, and Kimi Code CLI.
+
 ---
 
 ![demo](assets/demos/claude-code-demo.gif)
