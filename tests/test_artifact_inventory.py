@@ -5,7 +5,10 @@ import pytest
 from ablation.analyzers.artifact_inventory import (
     inventory_to_dict,
     markdown_report,
+    nested_inventory_to_dict,
+    nested_markdown_report,
     scan_artifacts,
+    scan_nested_artifacts,
 )
 
 
@@ -89,3 +92,51 @@ def test_deterministic_json_and_invalid_root(tmp_path):
     records.mkdir()
     with pytest.raises(ValueError, match="evidence path is not a directory"):
         scan_artifacts(root, root / "one.txt")
+
+
+def test_nested_archive_member_coverage(tmp_path):
+    import io
+    import tarfile
+    import zipfile
+
+    root = tmp_path / "artifacts"
+    records = tmp_path / "records"
+    root.mkdir()
+    records.mkdir()
+    (records / "target_re.py").write_text("unique.pdi")
+    (records / "cern_nested_coverage.md").write_text("a/foo.bin b/foo.bin")
+    (records / "GOAL_cern_atlas_re.md").write_text("Nested archive coverage")
+
+    with tarfile.open(root / "bundle.tar.gz", "w:gz") as archive:
+        for name, data in (
+            ("unique.pdi", b"pdi"),
+            ("a/foo.bin", b"a"),
+            ("b/foo.bin", b"b"),
+            ("nested", b"n"),
+        ):
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+        link = tarfile.TarInfo("link")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "unique.pdi"
+        archive.addfile(link)
+    with zipfile.ZipFile(root / "design.xsa", "w") as archive:
+        archive.writestr("system/only.txt", "text")
+    (root / "broken.tar.gz").write_bytes(b"not a tar")
+
+    top = scan_artifacts(root, records)
+    assert all(artifact.status == "unreviewed" for artifact in top.artifacts)
+    nested = scan_nested_artifacts(root, records)
+    members = {member.virtual_path: member for member in nested.members}
+
+    assert members["bundle.tar.gz/unique.pdi"].status == "referenced"
+    assert members["bundle.tar.gz/a/foo.bin"].status == "unreviewed"
+    assert members["bundle.tar.gz/b/foo.bin"].status == "unreviewed"
+    assert members["bundle.tar.gz/nested"].status == "unreviewed"
+    assert members["design.xsa/system/only.txt"].status == "unreviewed"
+    assert "bundle.tar.gz/link" not in members
+    assert nested.summary["containers_with_references"] == 1
+    assert nested.summary["errors"] == 1
+    assert nested_inventory_to_dict(nested)["members"][0]["virtual_path"]
+    assert "does not prove that the complete archive" in nested_markdown_report(nested)

@@ -444,6 +444,10 @@ class VersalPdi:
     def partitions(self) -> List[PdiPartitionHeader]:
         return self.result.partitions
 
+    def embedded_elf(self):
+        from .embedded_elf import find_embedded_elf
+        return find_embedded_elf(self._data)
+
     def git_hash(self) -> str:
         """Return 8-char hex git hash from the first image header, or ''."""
         for img in self.result.images:

@@ -201,6 +201,7 @@ from ablation.analyzers.versal_pdi import (
 | `.git_hash()` | `str` | 8-char hex; "" if not found |
 | `.command_payload(cmd)` | `bytes` | Complete payload, including long commands |
 | `.dma_write_segments(section=None)` | `List[DmaWriteSegment]` | Reconstructed destination address and raw load bytes |
+| `.embedded_elf()` | `List[EmbeddedElf]` | Strictly validated embedded ELF payloads; empty if none pass |
 | `.report()` | `str` | Human-readable summary |
 
 **VersalPdiResult fields:**
