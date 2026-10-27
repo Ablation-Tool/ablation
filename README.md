@@ -223,16 +223,6 @@ pip install ablation-tool
 </details>
 
 <details>
-<summary>Compatible Agents</summary>
-<br>
-<p align="center">
-  <strong>Claude Code</strong> · <strong>OpenAI Codex</strong> · <strong>OpenCode</strong><br>
-  <strong>Hermes Agent</strong> · <strong>Gemini</strong> · <strong>Kimi</strong>
-</p>
-
-</details>
-
-<details>
 <summary>Claude Code Configuration</summary>
 
 ### 1. Launch Session
