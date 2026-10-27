@@ -155,6 +155,19 @@ for register, argument in arguments.items():
 
 The API validates direct call sites, defaults to `r5`–`r7`, accepts at most 256 preceding instructions by default, and reports each value's nearest definition address. It intentionally does not propagate across blocks, runtime memory, or intervening calls.
 
+### Direct memory references
+
+`direct_memory_references(recovery, start, end)` collects absolute immediate address candidates only from recovered instructions with `r0` as the base. It excludes branch flow and linear-sweep false positives. `reference_neighbors(references, address)` returns the nearest lower and upper candidate addresses.
+
+```python
+from ablation.analyzers.microblaze_xrefs import direct_memory_references, reference_neighbors
+
+references = direct_memory_references(recovery, 0x1C000, 0x20000)
+print(reference_neighbors(references, 0x1C658))  # lower=..., upper=0x1C683
+```
+
+These are address candidates, not proof of memory accesses, C object types, or allocation boundaries. A referenced interval can constrain layout review, but source-level object sizes require independent confirmation.
+
 ### Bounded jump tables
 
 `resolve_jump_tables()` resolves the common compiler sequence:
@@ -244,6 +257,8 @@ Output is for analysis, not recompilation. Register expressions are not simplifi
 
 For a production Versal `boot.pdi`, two contiguous DMA segments reconstruct 94,080 bytes at `0xF6130000–0xF6146F80`. Linear decoding recognizes 23,393 of 23,520 words; the remaining 127 occur mostly in trailing data tables. This is not a claim of 99.5% code coverage.
 
+An additional 16,384-byte DMA segment covers `0xF612C000–0xF6130000`. Only 37 bytes are nonzero. The callback storage and copy-relevant objects examined below are zero-initialized, but the complete segment is not asserted to be zero-filled. No DMA payload covers external call target `0xF6110000`.
+
 The reset vector targets local `0x20050`; the corresponding loaded entry is `0xF6130050`. A local-to-global delta of `0xF6110000` also maps the two validated jump tables and their targets.
 
 Initial direct-control-flow recovery found 103 functions and 14,008 instructions. Adding the bounded 19-entry and 5-entry tables and validating the no-return loop at `0xF6130080` recovered 124 functions, 21,733 instructions (86,932 bytes), and 3,723 basic blocks. The tables have nine and three unique targets respectively. No-return suppression removed false fall-through and both former overlap diagnostics. The image has 7,148 unclassified bytes, six unresolved indirect calls, and four external call sites to `0xF6110000`. These figures describe this image and entry model, not complete firmware coverage.
@@ -257,7 +272,7 @@ Lifting all 124 recovered functions produces 21,484 lines. Every recovered instr
 | `0xF6130A98`, `0xF6130AC0`, `0xF6130AD8` | Three dynamic callback paths through `r7` in the runtime-list routine |
 | `0xF6130B18` | Sentinel-terminated fini-array dispatch |
 
-The callback root initially points to local `0x1C050`, outside recovered RAM, and no recovered instruction directly writes that root. These targets require runtime initialization evidence or broader interprocedural analysis. Sentinel/empty array contents do not establish callable targets.
+The callback root initially points to local `0x1C050` in the adjacent data segment. Its callback-relevant storage is zero-initialized and no recovered instruction directly writes that root. These targets require runtime initialization evidence or broader interprocedural analysis. Sentinel/empty array contents do not establish callable targets.
 
 The separate function at `0xF613072C` contains 62 instructions in 16 blocks with length-driven 16-byte, 4-byte, and single-byte copy loops. Earlier ownership at `0xF61306EC` was a false post-call path to the no-return loop and was retracted. Three direct callers have constant arguments:
 
@@ -267,7 +282,7 @@ The separate function at `0xF613072C` contains 62 instructions in 16 blocks with
 | `0xF61347A4` | `0x1C4F8` | `0x1C8C4` | 72 |
 | `0xF613D894` | `0x1C658` | `0x36D60` | 43 |
 
-These sites do not show attacker-controlled lengths. Destination object sizes are unverified, so the evidence does not prove a symbol name or buffer safety.
+The next reference after `0x1C4F8` is `0x1C5D0`, a 216-byte referenced interval; both 72-byte copies fit. The next reference after `0x1C658` is `0x1C683`, exactly 43 bytes, matching its copy length. The 72-byte source is zero-initialized, and the 43-byte source is a binary table rather than a string. These sites do not show attacker-controlled lengths, and all three lengths fit the observed layouts. Referenced intervals are not source-level type proof, so this is not a blanket buffer-safety or symbol verdict.
 
 ## Limitations
 
@@ -285,7 +300,7 @@ These sites do not show attacker-controlled lengths. Destination object sizes ar
 
 Synthetic and real-PDI tests cover signed/extended immediates, branches, calls, returns, no-return suppression, delay slots, argument constants and unknown writes, load/store widths, shifts, special registers, invalid/truncated paths, unreachable embedded bytes, overlapping entries, resource limits, bounded jump tables, structural output, unsupported operations, and real PLM invariants.
 
-`FORGE.audit_module()` and the SAFE CODE 10-section review pass with zero findings for the decoder, CFG analyzer, argument analyzer, and lifter. Input, recovery, table, argument, and emission limits are covered by regression tests. Residual analysis limitations are explicit rather than silently ignored failures.
+`FORGE.audit_module()` and the SAFE CODE 10-section review pass with zero findings for the decoder, CFG analyzer, argument analyzer, reference analyzer, and lifter. Input, recovery, table, argument, and emission limits are covered by regression tests. Residual analysis limitations are explicit rather than silently ignored failures.
 
 ## See also
 
