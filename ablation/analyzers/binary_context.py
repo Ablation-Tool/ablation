@@ -649,7 +649,15 @@ class BinaryContext:
             return ctx
 
         try:
-            binary = lief.parse(data)
+            is_mips = (
+                len(data) > 20 and data[:4] == b'\x7fELF'
+                and int.from_bytes(data[18:20], 'big' if data[5] == 2 else 'little') == 8
+            )
+            if is_mips:
+                with lief.logging.level_scope(lief.logging.LEVEL.CRITICAL):
+                    binary = lief.parse(data)
+            else:
+                binary = lief.parse(data)
         except Exception:
             return ctx
         if isinstance(binary, lief.PE.Binary):

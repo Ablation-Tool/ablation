@@ -56,6 +56,9 @@ def cmd_analyze(args):
 
     ctx = BinaryContext.load_or_build(str(_require_binary(args.binary)))
     print(ctx.summary())
+    if ctx.arch in ('mips32', 'mips64'):
+        from ablation.analyzers.mips_elf import describe_mips_elf
+        print(f"  ISA/ABI    : {describe_mips_elf(args.binary)}")
 
     if args.entropy:
         em = EntropyMapper(str(args.binary))
@@ -1095,6 +1098,80 @@ def cmd_loongarch64_decode(args):
             print(f"  {va:#x}")
 
 
+def cmd_junos(args):
+    import json
+    from dataclasses import asdict
+
+    if args.junos_command == 'extract':
+        from ablation.core.junos_package import extract_package
+        result = extract_package(args.package, args.output, extract_iso=not args.no_iso)
+        print(json.dumps(asdict(result), indent=2))
+        return
+
+    if args.junos_command == 'verify':
+        from ablation.core.junos_package import verify_embedded_hashes
+        from ablation.core.junos_signature import verify_package_directory
+        hashes = verify_embedded_hashes(args.root)
+        signatures = verify_package_directory(args.root)
+        report = {
+            'hashes': [asdict(item) for item in hashes],
+            'signatures': [asdict(item) for item in signatures],
+        }
+        text = json.dumps(report, indent=2)
+        if args.json:
+            Path(args.json).write_text(text + '\n')
+        print(text)
+        if args.require_all and (
+            any(not item.valid for item in hashes)
+            or any(not item.valid or item.chain_valid is False for item in signatures)
+        ):
+            raise SystemExit(1)
+        return
+
+    from ablation.analyzers.binary_diff import build_manifest, diff_manifests, manifest_json
+    if args.junos_command == 'inventory':
+        records = build_manifest(args.root)
+        text = manifest_json(records)
+        if args.json:
+            Path(args.json).write_text(text + '\n')
+        print(json.dumps({
+            'entries': len(records),
+            'files': sum(record.kind == 'file' for record in records.values()),
+            'symlinks': sum(record.kind == 'symlink' for record in records.values()),
+            'elf': sum(record.elf for record in records.values()),
+        }, indent=2))
+        return
+
+    old = build_manifest(args.old)
+    new = build_manifest(args.new)
+    report = diff_manifests(old, new)
+    selected = list(args.functions or [])
+    if args.top_k:
+        selected.extend(change['path'] for change in report['ranked'][:args.top_k])
+    selected = list(dict.fromkeys(selected))
+    if selected:
+        from ablation.analyzers.binary_diff import compare_elf, diff_elf_functions
+        deep = {}
+        for relative in selected:
+            old_path = Path(args.old, relative)
+            new_path = Path(args.new, relative)
+            if not old_path.is_file() or not new_path.is_file():
+                raise SystemExit(f'error: diff target must exist in both trees: {relative}')
+            deep[relative] = {
+                'elf': compare_elf(old_path, new_path),
+                'functions': diff_elf_functions(old_path, new_path),
+            }
+        report['deep'] = deep
+    text = json.dumps(report, indent=2)
+    if args.json:
+        Path(args.json).write_text(text + '\n')
+        print(f"Wrote Junos diff to {args.json}")
+    else:
+        print(json.dumps(report['summary'], indent=2))
+        for change in report['ranked'][:20]:
+            print(f"{change['delta']:>10} {change['status']:<8} {change['path']}")
+
+
 def cmd_news(args):
     print(_RECENT_UPDATES)
 
@@ -1135,6 +1212,31 @@ def main():
     p_analyze.add_argument('binary')
     p_analyze.add_argument('--entropy', action='store_true', help='include entropy scan')
     p_analyze.set_defaults(func=cmd_analyze)
+
+    p_junos = sub.add_parser('junos', help='Junos package, signature, inventory, and diff workflows')
+    junos_sub = p_junos.add_subparsers(dest='junos_command', metavar='<command>')
+    junos_sub.required = True
+    p_junos_extract = junos_sub.add_parser('extract', help='extract a signed Junos package')
+    p_junos_extract.add_argument('package')
+    p_junos_extract.add_argument('output')
+    p_junos_extract.add_argument('--no-iso', action='store_true', help='stop after recovering the ISO')
+    p_junos_extract.set_defaults(func=cmd_junos)
+    p_junos_verify = junos_sub.add_parser('verify', help='verify hashes and detached RSA/EC signatures')
+    p_junos_verify.add_argument('root')
+    p_junos_verify.add_argument('--json', help='write JSON report')
+    p_junos_verify.add_argument('--require-all', action='store_true', help='fail if any verification fails')
+    p_junos_verify.set_defaults(func=cmd_junos)
+    p_junos_inventory = junos_sub.add_parser('inventory', help='build a filesystem and ELF manifest')
+    p_junos_inventory.add_argument('root')
+    p_junos_inventory.add_argument('--json', help='write complete manifest JSON')
+    p_junos_inventory.set_defaults(func=cmd_junos)
+    p_junos_diff = junos_sub.add_parser('diff', help='compare two extracted Junos userlands')
+    p_junos_diff.add_argument('old')
+    p_junos_diff.add_argument('new')
+    p_junos_diff.add_argument('--json', help='write complete diff JSON')
+    p_junos_diff.add_argument('--functions', nargs='+', help='relative ELF paths for function-level diff')
+    p_junos_diff.add_argument('--top-k', type=int, default=0, help='deep-diff the K largest changed ELFs')
+    p_junos_diff.set_defaults(func=cmd_junos)
 
     # search
     p_search = sub.add_parser('search', help='semantic function search')

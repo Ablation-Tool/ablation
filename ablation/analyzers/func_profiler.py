@@ -42,6 +42,7 @@ from .binary_context import BinaryContext
 from .reg_annotator import RegAnnotator, CallSite, RegVal, _ARG_REGS
 from .arm32_reg_annotator import ARM32RegAnnotator
 from .arm64_reg_annotator import ARM64RegAnnotator
+from .mips_reg_annotator import MIPSRegAnnotator
 
 # Known dangerous sinks: symbol name -> reason tag
 _DEFAULT_SINKS: Dict[str, str] = {
@@ -173,7 +174,9 @@ class FuncProfiler:
     ):
         self.path = binary_path
         self._ctx = ctx or BinaryContext.load_or_build(binary_path)
-        if self._ctx.arch == 'arm32':
+        if self._ctx.arch == 'mips32':
+            self._ra = MIPSRegAnnotator.from_context(self._ctx)
+        elif self._ctx.arch == 'arm32':
             self._ra = ARM32RegAnnotator.from_context(self._ctx)
         elif self._ctx.arch in ('arm64', 'aarch64'):
             self._ra = ARM64RegAnnotator.from_context(self._ctx)

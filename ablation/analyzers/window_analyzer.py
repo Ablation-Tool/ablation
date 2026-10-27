@@ -57,6 +57,8 @@ def _elf_arch(data: bytes) -> str:
     ei_data = data[5]  # ELFDATA2LSB=1, ELFDATA2MSB=2
     bo = '>' if ei_data == 2 else '<'
     e_machine = struct.unpack_from(bo + 'H', data, 18)[0]
+    if e_machine == 8:     # EM_MIPS
+        return 'mips32' if data[4] == 1 else 'mips64'
     if e_machine == 183:   # EM_AARCH64
         return 'arm64'
     if e_machine == 40:    # EM_ARM
@@ -304,7 +306,9 @@ class WindowAnalyzer:
         self._text_start: int = 0
         self._text_end: int = 0
         self._md: Optional[capstone.Cs] = None
-        if _LIEF_OK and data:
+        if self.arch in ('mips32', 'mips64') and data:
+            self._load_mips()
+        elif _LIEF_OK and data:
             self._load_lief()
 
     @classmethod
@@ -312,6 +316,37 @@ class WindowAnalyzer:
         data = Path(path).read_bytes()
         inst = cls(data, path=path)
         return inst
+
+    def _load_mips(self) -> None:
+        from elftools.elf.elffile import ELFFile
+        from io import BytesIO
+
+        elf = ELFFile(BytesIO(self.data))
+        loads = [segment for segment in elf.iter_segments() if segment.header.p_type == 'PT_LOAD']
+        self.base_va = min((segment.header.p_vaddr for segment in loads), default=0)
+        self._is_pie = elf.header.e_type == 'ET_DYN'
+        self._mips_sections = list(elf.iter_sections())
+        text = elf.get_section_by_name('.text')
+        if text is not None:
+            self._text_start = text.header.sh_addr
+            self._text_end = text.header.sh_addr + text.header.sh_size
+        for section in self._mips_sections:
+            if section.header.sh_type == 'SHT_DYNSYM':
+                for symbol in section.iter_symbols():
+                    if symbol.name and symbol.entry.st_value:
+                        self.plt[symbol.entry.st_value] = symbol.name
+        rodata = elf.get_section_by_name('.rodata')
+        if rodata is not None:
+            contents = rodata.data()
+            start = 0
+            while start < len(contents):
+                end = contents.find(b'\x00', start)
+                if end < 0:
+                    break
+                value = contents[start:end]
+                if len(value) >= 4 and all(0x20 <= byte < 0x7f for byte in value):
+                    self.strings[rodata.header.sh_addr + start] = value.decode('ascii')
+                start = end + 1
 
     def _load_lief(self) -> None:
         # XCOFF: use xcoff_parser directly (LIEF does not support XCOFF)
@@ -748,6 +783,10 @@ class WindowAnalyzer:
                 self._md = capstone.Cs(capstone.CS_ARCH_ARM64, capstone.CS_MODE_ARM)
             elif self.arch == 'x86_32':
                 self._md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
+            elif self.arch in ('mips32', 'mips64'):
+                mode = capstone.CS_MODE_MIPS32 if self.arch == 'mips32' else capstone.CS_MODE_MIPS64
+                endian = capstone.CS_MODE_BIG_ENDIAN if self.data[5] == 2 else capstone.CS_MODE_LITTLE_ENDIAN
+                self._md = capstone.Cs(capstone.CS_ARCH_MIPS, mode | endian)
             elif self.arch == 'ppc64le':
                 self._md = capstone.Cs(capstone.CS_ARCH_PPC,
                                        capstone.CS_MODE_64 | capstone.CS_MODE_LITTLE_ENDIAN)
@@ -760,6 +799,12 @@ class WindowAnalyzer:
         return self._md
 
     def _va_to_offset(self, va: int) -> int:
+        if self.arch in ('mips32', 'mips64'):
+            for section in getattr(self, '_mips_sections', []):
+                start = section.header.sh_addr
+                if start <= va < start + section.header.sh_size:
+                    return section.header.sh_offset + va - start
+            return va if getattr(self, '_is_pie', False) else va - self.base_va
         if not _LIEF_OK or not self.base_va:
             return va
         if not hasattr(self, '_sections'):
@@ -838,6 +883,8 @@ class WindowAnalyzer:
                 call_mnems = {'call'}
             elif self.arch == 'ppc64le':
                 call_mnems = {'bl', 'bctrl'}
+            elif self.arch in ('mips32', 'mips64'):
+                call_mnems = {'jal', 'jalr'}
             else:
                 call_mnems = {'bl', 'blx', 'blr'}
             if mnemonic.lower().split('.')[0] in call_mnems:
