@@ -953,7 +953,31 @@ def main() -> None:
 
     print("[*] Loading sentence transformer (all-MiniLM-L6-v2) ...")
     from sentence_transformers import SentenceTransformer
-    model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
+
+    class _STAdapter:
+        """Expose fastembed-style .embed() alongside sentence-transformers .encode().
+
+        FindingRegistry.build_embeddings() expects a fastembed-like model with
+        .embed(texts) yielding normalized np vectors; this sweep uses
+        sentence-transformers directly for its own scoring.
+        """
+
+        def __init__(self, st_model):
+            self._st = st_model
+
+        def encode(self, *a, **kw):
+            return self._st.encode(*a, **kw)
+
+        def embed(self, texts):
+            vecs = self._st.encode(
+                list(texts), normalize_embeddings=True, show_progress_bar=False
+            )
+            for v in vecs:
+                yield np.asarray(v, dtype=np.float32)
+
+    model = _STAdapter(
+        SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
+    )
     print("[*] Model loaded")
 
     profiles = _build_win_profiles()
