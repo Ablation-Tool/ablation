@@ -165,5 +165,5 @@ Bank-select writes: 6
 ## See also
 
 - [HiSi RV32 Extension](hisi-rv32-ext.md): companion ISA model for HiSilicon RISC-V cores (also in `ablation/analyzers/`)
-- [ARM Symbolic Analysis](arm-symbolic-analysis.md): symbolic execution for ARM binaries; same architectural role for 32-bit targets
+- [ARM Symbolic Analysis](arm-symbolic.md): symbolic execution for ARM binaries; same architectural role for 32-bit targets
 - [Taint Analysis](taint-analysis.md): trace AES key material from SFR reads through the BLE stack

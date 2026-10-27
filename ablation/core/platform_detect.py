@@ -102,7 +102,7 @@ class PlatformDetector:
                     self.info['libc_version'] = version
             elif 'musl' in output:
                 self.info['libc'] = 'musl'
-        except:
+        except (OSError, subprocess.SubprocessError):
             pass
             
         # Check for other libc variants
@@ -125,7 +125,7 @@ class PlatformDetector:
             if os.path.exists('/proc/sys/kernel/yama/ptrace_scope'):
                 with open('/proc/sys/kernel/yama/ptrace_scope') as f:
                     caps['ptrace_scope'] = int(f.read().strip())
-        except:
+        except (OSError, ValueError):
             pass
             
         # Check for common tools
@@ -145,7 +145,7 @@ class PlatformDetector:
                 with open('/proc/sys/kernel/randomize_va_space') as f:
                     aslr_level = int(f.read().strip())
                     sec['aslr'] = {0: 'disabled', 1: 'partial', 2: 'full'}.get(aslr_level, 'unknown')
-            except:
+            except (OSError, ValueError):
                 pass
                 
             # Check if SELinux/AppArmor enabled
@@ -160,7 +160,7 @@ class PlatformDetector:
         try:
             subprocess.run([cmd, '--version'], capture_output=True, timeout=1)
             return True
-        except:
+        except (OSError, subprocess.SubprocessError):
             return False
     
     def report(self):

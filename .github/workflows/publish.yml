@@ -19,6 +19,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install package and test dependencies
+        run: pip install -e ".[full]" pytest-cov
+
+      - name: Run tests and coverage gate
+        run: python -m pytest tests/ --cov --cov-report=term-missing
+
       - name: Build
         run: |
           pip install build

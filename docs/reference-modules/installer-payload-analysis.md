@@ -183,5 +183,5 @@ Extracted to /tmp/rti_extracted/:
 ## See also
 
 - [Binary Format and Platform Identification](binary-format-and-platform-identification.md): identify architecture and format of carved binaries before sweep
-- [Semantic Binary Sweep](semantic-binary-sweep.md): run vulnerability class sweep on extracted PE binaries
+- [Semantic Binary Sweep](semantic-code-search.md): run vulnerability class sweep on extracted PE binaries
 - [Corpus Builder](signature-based-auto-naming.md): build function identity corpus from extracted binaries for cross-version matching

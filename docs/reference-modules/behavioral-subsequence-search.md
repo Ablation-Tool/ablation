@@ -137,6 +137,6 @@ Run `SubsequenceSearcher` after `SemanticSearcher` has identified the top candid
 ## See also
 
 - [Semantic Search](semantic-search.md): name/description similarity; complementary to behavioral subsequence search
-- [FuncProfiler](func-profiler.md): per-function profile with operation-category distribution
-- [DTW Matcher](dtw-matcher.md): underlying DTW engine also used by patch analysis
+- [FuncProfiler](single-function-profiling.md): per-function profile with operation-category distribution
+- [DTW Matcher](dtw-function-homolog-matching.md): underlying DTW engine also used by patch analysis
 - [Taint Analysis](taint-analysis.md): next step after behavioral matches identify candidate sinks

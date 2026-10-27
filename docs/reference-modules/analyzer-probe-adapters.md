@@ -197,5 +197,5 @@ DTW similarity=0.891
 
 - [Hypothesis Engine](hypothesis-engine.md): orchestrates ProbeRecord generation and EvidenceRecord scoring
 - [Taint Analysis](taint-analysis.md): the TaintAdapter's underlying analysis; use directly for arch-specific configuration
-- [Semantic Searching](semantic-searching.md): SemanticSearcher used by SemanticAdapter
-- [Cross-Version Patch Diffing](cross-version-patch-diffing.md): DTWMatcher used by VersionAdapter
+- [Semantic Searching](semantic-code-search.md): SemanticSearcher used by SemanticAdapter
+- [Cross-Version Patch Diffing](matrix-profile-patch-diff.md): DTWMatcher used by VersionAdapter

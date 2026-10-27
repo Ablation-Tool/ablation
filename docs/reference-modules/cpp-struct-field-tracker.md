@@ -136,5 +136,5 @@ Three c_str→assign chains in `RecvFromSocket` (PanGPS 6.3.3-c42), all copying 
 ## See also
 
 - [SinkArgClassifier](sink-arg-classifier.md): classify what kind of argument reaches a shell sink
-- [TaintTracker](taint-tracker.md): full inter-procedural taint from network recv to sink
+- [TaintTracker](taint-analysis.md): full inter-procedural taint from network recv to sink
 - [PathSolver](path-solver.md): confirm a code path is feasible given constraints

@@ -22,7 +22,7 @@ flowchart TD
     B:::primary --> C["Import smoke tests:\n  BinaryContext, XRefGraph, CFGBuilder\n  CorpusBuilder, SemanticSearcher, PatternLibrary\n  ablation.cli.main\n  → 'All imports OK' or ImportError"]:::secondary
     C:::secondary --> D["CLI: ablation --help\n(confirms console_scripts entry point)"]:::tertiary
     D:::tertiary --> E["Integration test on /usr/bin/ls:\n  BinaryContext.load_or_build('/usr/bin/ls')\n  XRefGraph.from_path('/usr/bin/ls')\n  CFGBuilder('/usr/bin/ls').build_function(fva)\n  Asserts: func_starts > 0, stats['functions'] > 0, blocks > 0"]:::tertiary
-    E:::tertiary --> F(["pytest tests/ -x -q\n(|| true · non-blocking if no tests present)\nCoverage measured on TCL3 scope (see coverage-gate.md)"]):::output
+    E:::tertiary --> F(["python -m pytest tests/ --cov --cov-report=term-missing\nAll tests and 85% aggregate TCL3 coverage required"]):::output
 
     G(["GitHub Release published"]):::input --> H(["publish.yml: publish job\nubuntu-latest, Python 3.12\npip install build; python -m build\npypa/gh-action-pypi-publish@release/v1\nOIDC trusted publishing · no API token required\nEnvironment: 'pypi' (required for OIDC)"]):::output
 
@@ -46,8 +46,9 @@ flowchart TD
 
 | Workflow | File | Trigger | Purpose |
 |:---|:---|:---|:---|
-| CI | `ci.yml` | Push/PR to `main` | Import smoke tests, CLI test, /usr/bin/ls integration test, pytest |
-| Publish | `publish.yml` | GitHub Release published | Build sdist/wheel, OIDC-publish to PyPI |
+| CI | `ci.yml` | Push/PR to `main` | Import smoke tests, CLI test, `/usr/bin/ls` integration test, pytest, and coverage |
+| Publish | `publish.yml` | GitHub Release published | Test and coverage gate, build sdist/wheel, OIDC-publish to PyPI |
+| Supply Chain Audit | `supply-chain.yml` | Weekly and manual | Audit pinned dependencies and upload the JSON report |
 | Update checksums | `update-checksums.yml` | Tag push `v*.*.*` | Compute `git archive` SHA-256, commit to Homebrew formula |
 
 ### CI test stages
@@ -57,7 +58,7 @@ flowchart TD
 | Import smoke test | `python -c "from ablation... import ..."` | Yes: any ImportError fails the job |
 | CLI help | `ablation --help` | Yes: confirms entry-point registration |
 | Integration test | Python inline script on `/usr/bin/ls` | Yes: asserts on function/block counts |
-| pytest | `pytest tests/ -x -q` | No (`|| true`): test failures are advisory |
+| pytest and coverage | `python -m pytest tests/ --cov --cov-report=term-missing` | Yes: test failures and coverage below 85% fail the job |
 
 ---
 
@@ -139,7 +140,7 @@ Updated Homebrew formula checksum for v<version>
 
 ## False positives
 
-**`pytest tests/ -x -q || true` in the CI workflow means test failures do not block merge.** This is intentional: the test suite contains integration tests marked with `@pytest.mark.integration` that require binary fixtures not available in the CI environment specific firmware images. Failure of integration tests in CI is expected. Only import failures and integration test assertion errors on `/usr/bin/ls` are blocking.
+**The CI workflow runs the full test suite and coverage gate without `|| true`.** Any test failure or aggregate labeled-taint coverage below 85% blocks the job. Integration tests that require unavailable binary fixtures remain skipped by their existing fixture checks rather than being allowed to fail indiscriminately.
 
 **The `update-checksums.yml` workflow commits to `main` using `contents: write`, this creates an automated commit on `main` after every version tag.** If the Homebrew formula file has conflicting changes in the same merge window as a tag push, the automated commit may fail. Check the `update-checksums.yml` run status after every release tag push.
 

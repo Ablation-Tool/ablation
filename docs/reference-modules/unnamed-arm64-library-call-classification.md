@@ -103,5 +103,5 @@ Run `ARM32IntOverflowScanner` on any ARM32 ELF binary as part of initial triage,
 
 ## See also
 
-- [ARM32 Sink Argument Classification](arm32-sink-arg-classification.md): `SinkArgClassifierARM32` for full 4-verdict sink arg provenance
+- [ARM32 Sink Argument Classification](sink-argument-classifier.md): `SinkArgClassifierARM32` for full 4-verdict sink arg provenance
 - [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md): `TaintTracker` for full ARM32 dataflow

@@ -168,5 +168,5 @@ stream on an AIX 4.3.3 system and open a module gap against XLC-GAP-014.
 ## See also
 
 - [AIX Plain BFF Extraction](aix-plain-bff-extraction.md): `iter_entries()` for plain (type 0x09) archives
-- [XCOFF Analysis](xcoff-analysis.md): parse and analyze XCOFF binaries from extracted archives
+- [XCOFF Analysis](aix-xcoff32-64-analysis.md): parse and analyze XCOFF binaries from extracted archives
 - [Firmware Analysis](firmware-analysis.md): full pipeline when BFF archive is inside a larger firmware image

@@ -103,5 +103,5 @@ Run `DynDSClassifier` after `BinaryContext.load_or_build()` and `SigLibrary` mat
 
 ## See also
 
-- [Function Semantic Search](function-semantic-search.md): `SemanticSearcher` for complementary semantic labeling
+- [Function Semantic Search](semantic-code-search.md): `SemanticSearcher` for complementary semantic labeling
 - [PPC64 ELFv1 Resolution](ppc64-elfv1-resolution.md): `Ppc64ElfV1Resolver` for preprocessing PPC64 ELFv1 targets before classification

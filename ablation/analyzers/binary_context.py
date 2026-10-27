@@ -139,8 +139,8 @@ def _detect_arch(binary) -> str:
         if '386' in m or 'I386' in m:
             return 'x86_32'
     except Exception:
-        pass
-    return 'x86_64'
+        return 'unknown'
+    return 'unknown'
 
 
 def _detect_arch_pe(binary) -> str:
@@ -164,8 +164,8 @@ def _detect_arch_pe(binary) -> str:
         if _v == 0x5064:
             return 'riscv64'
     except Exception:
-        pass
-    return 'x86_64'
+        return 'unknown'
+    return 'unknown'
 
 
 class BinaryContext:

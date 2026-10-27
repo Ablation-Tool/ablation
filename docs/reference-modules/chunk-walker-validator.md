@@ -88,4 +88,4 @@ ChunkWalkerValidator: sctp_parser_x86-64.elf
 
 - [BinaryContext](binary-context.md): load target binary before calling `from_context()`
 - [Single-Function Profiling](single-function-profiling.md): `FuncProfiler` for verifying TLV loop structure around flagged VAs
-- [Semantic Searching](semantic-searching.md): `SemanticSearcher` to identify TLV parser candidates before scanning
+- [Semantic Searching](semantic-code-search.md): `SemanticSearcher` to identify TLV parser candidates before scanning

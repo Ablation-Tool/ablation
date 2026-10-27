@@ -122,4 +122,4 @@ Each `TaintHop`:
 
 - [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md): single-binary TaintTracker that cross-binary extends
 - [Interprocedural Field Writer Discovery](interprocedural-field-writer-discovery.md): `IPRegAnnotator` for N-hop argument tracing
-- [Cross-Library Import/Export Matrix](cross-library-import-export-matrix.md): `LibGraph` that provides import/export resolution
+- [Cross-Library Import/Export Matrix](cross-binary-export-detector.md): `LibGraph` that provides import/export resolution

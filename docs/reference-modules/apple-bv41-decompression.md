@@ -159,6 +159,6 @@ Streamed 298,061,824 bytes to /tmp/layer_decoded.bin
 
 ## See also
 
-- [Firmware Container](firmware-container.md): format dispatch for decoded bv41 payloads Mach-O, DMG, APFS nested
-- [Apple Binary Analysis](apple-binary-analysis.md): Mach-O analysis for binaries extracted from decoded layers
+- [Firmware Container](firmware-containers.md): format dispatch for decoded bv41 payloads Mach-O, DMG, APFS nested
+- [Apple Binary Analysis](macho-analyzer.md): Mach-O analysis for binaries extracted from decoded layers
 - [AppleDouble Resource Forks](appledouble-resource-forks.md): parse AppleDouble wrappers around Mac Classic resource forks

@@ -219,7 +219,19 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 pip install ablation-tool
 ```
 
-**Requirements:** Python >= 3.10 · `capstone>=4,<5` · `numpy` · `lief` · `fastembed` · `sentence-transformers` · `pyelftools`
+**Requirements:** Python >= 3.10 · `capstone>=5.0.1` · `numpy` · `lief` · `fastembed` · `pyelftools`
+
+Optional feature sets:
+
+```bash
+# All optional analyzers
+pip install "ablation-tool[full]"
+
+# CPython .pyc scanning and Apple BV41 decompression
+pip install "ablation-tool[bytecode]"
+```
+
+`sentence-transformers`, Anthropic, and Angr support are optional; the `full` extra includes them together with `xdis` and `lz4`.
 
 </details>
 

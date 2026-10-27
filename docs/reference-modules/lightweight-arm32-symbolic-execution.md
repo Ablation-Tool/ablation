@@ -101,6 +101,6 @@ Run `SinkArgClassifierARM32.classify_all()` on every ARM32 ELF binary before run
 
 ## See also
 
-- [Exec-Class Sink Argument Classification](exec-class-sink-argument-classification.md): `SinkArgClassifier` x86-64 equivalent
+- [Exec-Class Sink Argument Classification](sink-argument-classifier.md): `SinkArgClassifier` x86-64 equivalent
 - [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md): `TaintTracker` that consumes ARM32 pre-filtered sinks
 - [ARM32 Integer Overflow Detection](unnamed-arm64-library-call-classification.md): `ARM32IntOverflowScanner` complementary scan

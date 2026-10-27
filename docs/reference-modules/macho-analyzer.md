@@ -69,5 +69,5 @@ Supports both 32-bit (`MH_MAGIC = 0xfeedface`) and 64-bit (`MH_MAGIC_64 = 0xfeed
 
 ## See also
 
-- [PE Analyzer](pe-analyzer.md): Windows PE equivalent
-- [ELF Parser](elf-parser.md): Linux ELF equivalent
+- [PE Analyzer](binary-format-and-platform-identification.md): Windows PE equivalent
+- [ELF Parser](elf-internals-and-hardening.md): Linux ELF equivalent

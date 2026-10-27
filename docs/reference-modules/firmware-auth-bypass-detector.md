@@ -33,8 +33,10 @@ if result.is_vulnerable:
     print(f"{result.severity}: {result.summary}")
     print(f"  Device imports: {result.firmware_iat}")
 
-# CLI
-python -m ablation.analyzers.firmware_auth_bypass_detector flasher.exe
+```
+
+```bash
+python -m modules.firmware_auth_bypass_detector flasher.exe
 ```
 
 ## Verdict tiers

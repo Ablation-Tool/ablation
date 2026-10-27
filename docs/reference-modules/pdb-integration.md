@@ -117,4 +117,4 @@ After `inject_into_context()`, `ctx.name(va)` returns the PDB symbol name for an
 ## See also
 
 - [Persistent Analysis Context](persistent-analysis-context.md): `BinaryContext` whose `NameRegistry` is populated by `integrate()`
-- [Function Semantic Search](function-semantic-search.md): `SemanticSearcher` that benefits from symbol-named functions
+- [Function Semantic Search](semantic-code-search.md): `SemanticSearcher` that benefits from symbol-named functions

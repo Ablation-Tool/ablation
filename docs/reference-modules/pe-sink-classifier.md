@@ -103,5 +103,5 @@ Binary: /media/cowboy/research/IBM-RE/ISPF-Tools/tasid.exe
 ## See also
 
 - [SinkArgClassifier](sink-arg-classifier.md): x86-64 ELF exec-class argument classifier
-- [SinkArgClassifierX86_32](sink-arg-classifier-x86-32.md): i386 cdecl exec-class argument classifier
+- [SinkArgClassifierX86_32](sink-arg-classifier-i386.md): i386 cdecl exec-class argument classifier
 - [BinaryContext](binary-context.md): loads PE32/PE64 binaries; `ctx.arch` identifies architecture

@@ -61,5 +61,5 @@ Gate: **PASSED** 2026-10-23. No HIGH or CRITICAL issues.
 ## See also
 
 - [TaintTracker](taint-analysis.md): trace filtered input to exec sinks
-- [SemanticSearcher](semantic-searcher.md): find sanitizer candidates by name
+- [SemanticSearcher](semantic-code-search.md): find sanitizer candidates by name
 - [SinkArgClassifier](sink-arg-classifier.md): classify exec sink argument provenance

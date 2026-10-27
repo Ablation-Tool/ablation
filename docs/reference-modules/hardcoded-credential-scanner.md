@@ -75,6 +75,6 @@ Tested on:
 
 ## See also
 
-- [SemanticSearcher](semantic-searcher.md): query-based string and pattern search across the binary
+- [SemanticSearcher](semantic-code-search.md): query-based string and pattern search across the binary
 - [TaintTracker](taint-analysis.md): trace how user input reaches exec sinks
 - [IOCCandidateExtraction](ioc-candidate-extraction.md): extract IPs, domains, hashes from rodata

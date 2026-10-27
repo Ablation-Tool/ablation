@@ -83,5 +83,5 @@ What generates noise and how to eliminate it before manual review. Cover the 2-3
 
 ## See also
 
-- [Related Module](related-module.md): why to use it alongside this one
-- [Another Module](another-module.md): what it adds
+- [Related Module](binary-lifter.md): example destination; replace it when using this template
+- [Another Module](semantic-code-search.md): example destination; replace it when using this template

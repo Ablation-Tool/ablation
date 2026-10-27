@@ -181,7 +181,7 @@ Function breakdown:
 
 ## See also
 
-- [ARM Symbolic Analysis](arm-symbolic-analysis.md): `ARMSymbolicAnalyzer` and `FuncSummary`: the symbolic execution engine used by this module
-- [HiJoy PTT RE](../targets/hijoy-ptt.md): the RE session that confirmed the JNI VAs in `JNI_FUNCTIONS`
-- [PTT Protocol RE](ptt-protocol-re.md): `PTTProtocolAnalyzer` imported but not yet used in the surface analysis phase
+- [ARM Symbolic Analysis](arm-symbolic.md): `ARMSymbolicAnalyzer` and `FuncSummary`: the symbolic execution engine used by this module
+- HiJoy PTT RE: the private RE session that confirmed the JNI VAs in `JNI_FUNCTIONS`
+- PTT Protocol RE: `PTTProtocolAnalyzer` imported but not yet used in the surface analysis phase
 - [Finding Registry](finding-registry.md): register confirmed findings from `SendSignaling` taint analysis

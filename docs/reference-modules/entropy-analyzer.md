@@ -76,5 +76,5 @@ Tested on:
 ## See also
 
 - [BinaryContext](binary-context.md): binary loading and section metadata
-- [SemanticSearcher](semantic-searcher.md): query-based search that requires decompressed code
+- [SemanticSearcher](semantic-code-search.md): query-based search that requires decompressed code
 - [ELFInternalsAndHardening](elf-internals-and-hardening.md): ELF structural anomaly detection

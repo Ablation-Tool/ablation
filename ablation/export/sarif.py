@@ -32,7 +32,7 @@ from urllib.request import pathname2url
 _SCHEMA = "https://json.schemastore.org/sarif-2.1.0.json"
 
 try:
-    _VERSION = importlib.metadata.version("ablation")
+    _VERSION = importlib.metadata.version("ablation-tool")
 except Exception:
     _VERSION = "0.0.0"
 

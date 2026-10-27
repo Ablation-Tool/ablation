@@ -857,7 +857,7 @@ class DisasmEngine:
         if op.startswith('0x'):
             try:
                 return int(op, 16)
-            except:
+            except ValueError:
                 pass
         return None
     

@@ -178,27 +178,20 @@ def _http_get(
     if extra_headers:
         for k, v in extra_headers.items():
             req.add_header(k, v)
-    for verify in (True, False):
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as resp:
+            body = resp.read(65536).decode("utf-8", errors="replace")
+            headers = dict(resp.headers)
+            return resp.status, body, headers
+    except urllib.error.HTTPError as e:
+        body = ""
         try:
-            ctx = _ssl_context(verify)
-            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-                body = resp.read(65536).decode("utf-8", errors="replace")
-                headers = dict(resp.headers)
-                return resp.status, body, headers
-        except urllib.error.HTTPError as e:
-            body = ""
-            try:
-                body = e.read(4096).decode("utf-8", errors="replace")
-            except Exception:
-                pass
-            return e.code, body, {}
-        except ssl.SSLError:
-            if not verify:
-                return -1, "", {}
-            continue
+            body = e.read(4096).decode("utf-8", errors="replace")
         except Exception:
-            return -1, "", {}
-    return -1, "", {}
+            pass
+        return e.code, body, {}
+    except Exception:
+        return -1, "", {}
 
 
 def _http_post(
@@ -216,26 +209,19 @@ def _http_post(
     if extra_headers:
         for k, v in extra_headers.items():
             req.add_header(k, v)
-    for verify in (True, False):
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as resp:
+            body = resp.read(65536).decode("utf-8", errors="replace")
+            return resp.status, body, dict(resp.headers)
+    except urllib.error.HTTPError as e:
+        body = ""
         try:
-            ctx = _ssl_context(verify)
-            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-                body = resp.read(65536).decode("utf-8", errors="replace")
-                return resp.status, body, dict(resp.headers)
-        except urllib.error.HTTPError as e:
-            body = ""
-            try:
-                body = e.read(4096).decode("utf-8", errors="replace")
-            except Exception:
-                pass
-            return e.code, body, {}
-        except ssl.SSLError:
-            if not verify:
-                return -1, "", {}
-            continue
+            body = e.read(4096).decode("utf-8", errors="replace")
         except Exception:
-            return -1, "", {}
-    return -1, "", {}
+            pass
+        return e.code, body, {}
+    except Exception:
+        return -1, "", {}
 
 
 def _base_url(host: str, port: int, https: bool) -> str:

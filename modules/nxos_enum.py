@@ -173,10 +173,8 @@ NXOS_ENUM_COMMANDS = [
 
 
 
-# SSL context that skips cert validation
+# Authenticated API requests verify certificates and hostnames by default.
 _SSL_CTX = ssl.create_default_context()
-_SSL_CTX.check_hostname = False
-_SSL_CTX.verify_mode = ssl.CERT_NONE
 
 
 def classify_by_cert_ou(host: str, port: int = 443, timeout: float = 5.0) -> dict:

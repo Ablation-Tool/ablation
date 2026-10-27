@@ -182,5 +182,5 @@ Batch:
 ## See also
 
 - [Apple bv41 Decompression](apple-bv41-decompression.md): decode bv41-compressed streams before extracting AppleDouble files from them
-- [Mac Classic Binary Analysis](mac-classic-re.md): parse `CODE`/`DATA` resource maps from extracted resource fork bytes
+- [Mac Classic Binary Analysis](pef-binary-analyzer.md): parse `CODE`/`DATA` resource maps from extracted resource fork bytes
 - [Firmware Analysis](firmware-analysis.md): full pipeline when AppleDouble files appear inside firmware images

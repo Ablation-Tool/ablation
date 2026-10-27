@@ -118,5 +118,5 @@ Run `NginxEnumerator.run()` after confirming an Nginx server via the `Server:` h
 ## See also
 
 - [TLS Certificate and Protocol Probing](tls-certificate-and-protocol-probing.md): TLS analysis for the Nginx HTTPS surface
-- [Web Application Probe Helpers](web-app-probe-helpers.md): path enumeration and auth bypass helper functions
+- [Web Application Probe Helpers](analyzer-probe-adapters.md): path enumeration and auth bypass helper functions
 - [Finding Registry](finding-registry.md): record confirmed Nginx findings

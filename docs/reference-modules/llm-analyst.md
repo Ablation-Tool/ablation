@@ -112,5 +112,5 @@ Pre-screens PLT callee names against `_DANGEROUS_IMPORTS` strcpy, memcpy, malloc
 ## See also
 
 - [Taint Analysis](taint-analysis.md): lower-cost automated taint tracking before LLM analysis
-- [Semantic Searcher](semantic-searcher.md): initial candidate identification before LLM analysis
-- [Function Profiler](func-profiler.md): function characterization used alongside naming
+- [Semantic Searcher](semantic-code-search.md): initial candidate identification before LLM analysis
+- [Function Profiler](single-function-profiling.md): function characterization used alongside naming

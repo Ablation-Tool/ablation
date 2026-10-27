@@ -334,5 +334,5 @@ EngineSpeed raw=2000 → 250.0 rpm
 ## See also
 
 - [Calibration Parsers](calibration-parsers.md): A2L/open_damos parsers; cross-reference calibration table names against DBC signal names
-- [CAN DBC XDF Fusion](can-dbc-xdf-fusion.md): combine DBC signal layout with XDF calibration definitions
+- CAN DBC XDF Fusion: combine DBC signal layout with XDF calibration definitions using this module
 - [C166/C167 ECU Decoding](c166-c167-decoding.md): Bosch/Siemens C167 ECU firmware analysis after CAN signal mapping

@@ -59,5 +59,5 @@ else:
 
 ## See also
 
-- [PE Analyzer](pe-analyzer.md): higher-level analysis built on this parser
-- [Kernel Driver Analyzer](kernel-driver-analyzer.md): extends PEParser for Windows kernel drivers
+- [PE Analyzer](binary-format-and-platform-identification.md): higher-level analysis built on this parser
+- [Kernel Driver Analyzer](kernel-drivers.md): extends PEParser for Windows kernel drivers

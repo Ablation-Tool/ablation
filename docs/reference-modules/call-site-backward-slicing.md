@@ -130,6 +130,6 @@ Call `chain.all_sinkssink_names` to get all `func_va, binary, ChainCallSite` tup
 
 ## See also
 
-- [Register Annotation Single Function](register-annotation.md): `RegAnnotator` base for single-function symbolic forward pass
+- [Register Annotation Single Function](call-argument-annotation.md): `RegAnnotator` base for single-function symbolic forward pass
 - [Cross-Binary Taint Analysis](configurable-taint-reporting.md): `CrossBinaryTaintTracker` for labeled taint across library boundaries
 - [CMDB Attack Surface Mapping](finding-corpus-mining.md): `CMDBSurfaceMapper` that identifies callers for IPRegAnnotator analysis

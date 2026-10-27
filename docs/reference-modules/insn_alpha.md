@@ -161,5 +161,5 @@ argument construction (what is passed as the `cmd` argument to `system()`).
 
 ## See also
 
-- [insn_sh4.md](insn_sh4.md): same architecture-gap pattern for SH4 binaries
-- [length_underflow.md](length_underflow.md): template used for this module's structure
+- `insn_sh4.md`: same architecture-gap pattern for SH4 binaries
+- [length_underflow.md](length-underflow.md): template used for this module's structure

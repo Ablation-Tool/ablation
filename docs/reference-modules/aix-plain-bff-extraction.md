@@ -162,5 +162,5 @@ telnetd: 234,568 bytes  ELF_magic=01df
 ## See also
 
 - [AIX Big Archive Extraction](aix-big-archive-extraction.md): `<bigaf>` format for large AIX archives different format, same analysis pipeline
-- [BFF Decompressor](aix-bff-decompressor.md): handles compressed BFF variants LZW/Huffman that this module cannot process
-- [XCOFF Analysis](xcoff-analysis.md): parse and analyze the XCOFF binaries extracted from BFF archives
+- [BFF Decompressor](bff-decompressor.md): handles compressed BFF variants LZW/Huffman that this module cannot process
+- [XCOFF Analysis](aix-xcoff32-64-analysis.md): parse and analyze the XCOFF binaries extracted from BFF archives

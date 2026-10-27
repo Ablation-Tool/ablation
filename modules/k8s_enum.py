@@ -277,6 +277,19 @@ class K8sEnumerator:
     # Source: Production K8s ch10, K8s In Action 2e ch8/11
     # ------------------------------------------------------------------
 
+    def _api_ssl_context(self) -> ssl.SSLContext:
+        ctx = ssl.create_default_context()
+        if self.ca_cert:
+            import tempfile, os as _os
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.crt') as f:
+                f.write(self.ca_cert)
+                cafile = f.name
+            try:
+                ctx.load_verify_locations(cafile)
+            finally:
+                _os.unlink(cafile)
+        return ctx
+
     def _api_get(self, path: str, server: str = None, token: str = None,
                  timeout: int = 8) -> dict | None:
         """GET a K8s API path. Returns parsed JSON or None on failure."""
@@ -285,25 +298,12 @@ class K8sEnumerator:
         url = base.rstrip('/') + path
 
         try:
-            # Build an SSL context that trusts the cluster CA
-            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-            ctx.check_hostname = False
-            if self.ca_cert:
-                import tempfile, os as _os
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.crt') as f:
-                    f.write(self.ca_cert)
-                    cafile = f.name
-                ctx.load_verify_locations(cafile)
-                _os.unlink(cafile)
-            else:
-                ctx.verify_mode = ssl.CERT_NONE
-
             req = urllib.request.Request(url)
             if tok:
                 req.add_header('Authorization', f'Bearer {tok}')
             req.add_header('Accept', 'application/json')
 
-            with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
+            with urllib.request.urlopen(req, context=self._api_ssl_context(), timeout=timeout) as resp:
                 return json.loads(resp.read(4 * 1024 * 1024).decode())
         except Exception:
             return None
@@ -316,18 +316,6 @@ class K8sEnumerator:
         url = base.rstrip('/') + path
 
         try:
-            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-            ctx.check_hostname = False
-            if self.ca_cert:
-                import tempfile, os as _os
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.crt') as f:
-                    f.write(self.ca_cert)
-                    cafile = f.name
-                ctx.load_verify_locations(cafile)
-                _os.unlink(cafile)
-            else:
-                ctx.verify_mode = ssl.CERT_NONE
-
             data = json.dumps(body).encode()
             req = urllib.request.Request(url, data=data, method='POST')
             if tok:
@@ -335,7 +323,7 @@ class K8sEnumerator:
             req.add_header('Content-Type', 'application/json')
             req.add_header('Accept', 'application/json')
 
-            with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
+            with urllib.request.urlopen(req, context=self._api_ssl_context(), timeout=timeout) as resp:
                 return json.loads(resp.read(4 * 1024 * 1024).decode())
         except Exception:
             return None

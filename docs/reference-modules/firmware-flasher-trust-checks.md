@@ -120,4 +120,4 @@ Run firmware flasher trust checks on any PE executable found in a firmware updat
 ## See also
 
 - [Hardware Root Discovery](hardware-root-discovery.md): firmware container partition analysis and entropy classification
-- [BYOVD Detector](byovd-detector.md): kernel driver dangerous capability detection for signed but exploitable drivers
+- [BYOVD Detector](byovd-capability-detection.md): kernel driver dangerous capability detection for signed but exploitable drivers

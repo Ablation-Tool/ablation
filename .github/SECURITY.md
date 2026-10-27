@@ -32,12 +32,12 @@ Acknowledgment within 72 hours. Bugs are remediated as fast as possible. Coordin
 
 ## Security Practices
 
-Ablation meets all mapped requirements from NIST SP 800-218 (SSDF), CISA Secure by Design, and DoD MIL-HDBK-115C. The full compliance matrix is in [`docs/standards-ablation.md`](docs/standards-ablation.md).
+Compliance mappings and supporting evidence are in [`docs/standards-ablation.md`](../docs/standards-ablation.md). Claims are limited to controls with reproducible evidence.
 
-**Supply chain.** Dependencies are pinned with hashes in `requirements/hashed.txt`. `scripts/monitor-supply-chain.sh` runs pip-audit against all dependencies and writes a dated JSON report to `docs/supply-chain-reports/` so new CVEs surface before the next engagement. A software bill of materials is at `docs/sbom/ablation-sbom.json`.
+**Supply chain.** Dependencies are pinned with hashes in `requirements/hashed.txt`. `scripts/monitor-supply-chain.sh` runs pip-audit against the pinned set, and a scheduled GitHub Actions workflow enforces the result. A software bill of materials is at `docs/sbom/ablation-sbom.json`.
 
-**Taint engine.** The six labeled taint tracker modules require 85% statement coverage on every commit. The gate is enforced by `fail_under = 85` in `pyproject.toml` so a regression in taint logic fails the test suite. Known anomalies for each tracker are documented in `docs/reference-anomalies/`.
+**Taint engine.** The six labeled taint tracker modules require 85% aggregate statement coverage. CI enforces the threshold through `fail_under = 85` in `pyproject.toml`; a regression fails the test suite. Known anomalies for each tracker are documented in `docs/reference-anomalies/`.
 
-**Code review.** Every module passes a 10-section FORGE audit before it can be committed. The audit catches correctness gaps, failure modes, and weak test assertions. Results are cached so the gate does not block re-runs on unchanged code.
+**Code review.** The project workflow requires a 10-section FORGE audit for new modules. FORGE caches those results locally; it is not represented as an independent CI security scanner.
 
 **AI provenance.** AI-assisted code is logged in `docs/ai-provenance-log.md` per DoWI 8430.01 §3.6.c.

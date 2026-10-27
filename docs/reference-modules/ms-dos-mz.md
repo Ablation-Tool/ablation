@@ -101,5 +101,5 @@ Run `SinkArgClassifierX86_32.classify_all()` on every x86-32 ELF or PE binary be
 
 ## See also
 
-- [Exec-Class Sink Argument Classification](exec-class-sink-argument-classification.md): `SinkArgClassifier` x86-64 equivalent
+- [Exec-Class Sink Argument Classification](sink-argument-classifier.md): `SinkArgClassifier` x86-64 equivalent
 - [ARM32 Sink Argument Classification](lightweight-arm32-symbolic-execution.md): `SinkArgClassifierARM32` ARM32 AAPCS equivalent

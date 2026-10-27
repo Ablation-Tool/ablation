@@ -184,4 +184,4 @@ print(f"\nHosts with findings: {len(results)}/{len(list(ipaddress.IPv4Network('1
 
 - [Syscall Trace](syscall-trace.md): the module that houses these probe functions; also covers heap spray detection and lateral movement
 - [Lateral Movement](lateral-movement.md): post-exploitation pivot techniques from ICS networks to IT networks
-- [Network Protocol Analysis](network-protocol-analysis.md): passive protocol identification before active probing
+- [Network Protocol Analysis](network-analyze.md): passive protocol identification before active probing

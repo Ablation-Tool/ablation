@@ -116,4 +116,4 @@ The Markdown string can be written to disk with `report_writer.writereport, path
 ## See also
 
 - [JSON and SARIF Export](json-and-sarif-export.md): structured export for CI/CD and Code Scanning upload
-- [Semantic Pattern Sweep](semantic-pattern-sweep.md): `PatternLibrary.sweep()` that feeds `generate_report()`
+- [Semantic Pattern Sweep](semantic-code-search.md): `PatternLibrary.sweep()` that feeds `generate_report()`

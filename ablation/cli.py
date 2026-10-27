@@ -89,13 +89,32 @@ def cmd_search(args):
         print(f"  0x{r.va:x}  {name:<50s}  score={r.score:.3f}")
 
 
+def _elf_endian(path: str, default: str = 'little') -> str:
+    try:
+        with open(path, 'rb') as handle:
+            header = handle.read(6)
+    except OSError:
+        return default
+    if header[:4] != b'\x7fELF' or len(header) < 6:
+        return default
+    if header[5] == 1:
+        return 'little'
+    if header[5] == 2:
+        return 'big'
+    return default
+
+
 def cmd_taint(args):
     from ablation.analyzers.binary_context import BinaryContext
 
     p = str(_require_binary(args.binary))
     ctx = BinaryContext.load_or_build(p)
+    arch = ctx.arch
 
-    if ctx.arch == 'arm32':
+    if getattr(args, 'flow_sensitive', False) and arch != 'x86_64':
+        raise SystemExit(f"--flow-sensitive is supported only for x86-64, not {arch}")
+
+    if arch == 'arm32':
         from ablation.analyzers.taint_tracker_arm32 import ARM32TaintTracker
         tracker = ARM32TaintTracker.from_context(ctx)
         findings = tracker.run_interprocedural()
@@ -104,6 +123,56 @@ def cmd_taint(args):
             return
         print(tracker.report(findings))
         return
+
+    if arch == 'arm64':
+        from ablation.analyzers.taint_tracker_arm64 import ARM64TaintTracker
+        tracker = ARM64TaintTracker.from_context(ctx)
+        if getattr(args, 'interprocedural', False):
+            findings = tracker.run_interprocedural(depth=getattr(args, 'depth', 4))
+        else:
+            findings = tracker.run()
+        if not findings:
+            print("No taint paths found.")
+            return
+        print(tracker.report(findings))
+        return
+
+    if arch == 'x86_32':
+        from ablation.analyzers.taint_tracker_x86_32 import X86_32TaintTracker
+        tracker = X86_32TaintTracker.from_path(p)
+        findings = tracker.run_interprocedural()
+        if not findings:
+            print("No taint paths found.")
+            return
+        for finding in findings:
+            print(finding)
+        return
+
+    delegated = {
+        'mips32': cmd_mips,
+        'mips64': cmd_mips64,
+        'ppc32': cmd_ppc32,
+        'ppc64': cmd_ppc64,
+        'riscv32': cmd_riscv32,
+        'riscv64': cmd_riscv64,
+        'loongarch64': cmd_loongarch64,
+        'arc': cmd_arc,
+    }
+    if arch in delegated:
+        endian = _elf_endian(p)
+        defaults = {
+            'json': None,
+            'full': False,
+            'le': endian == 'little',
+            'be': endian == 'big',
+        }
+        for name, value in defaults.items():
+            if not hasattr(args, name):
+                setattr(args, name, value)
+        return delegated[arch](args)
+
+    if arch != 'x86_64':
+        raise SystemExit(f"Taint analysis is not supported for architecture: {arch}")
 
     from ablation.analyzers.xref_graph import XRefGraph
     from ablation.analyzers.taint_tracker_x86 import TaintTracker
@@ -626,16 +695,20 @@ def cmd_mips(args):
     from ablation.analyzers.taint_tracker_mips import MIPS32TaintTracker
 
     p = str(_require_binary(args.binary))
-    be = not args.le
-    tracker = MIPS32TaintTracker.from_path(p, big_endian=be)
-    findings = tracker.run()
+    endian = 'little' if args.le else 'big'
+    tracker = MIPS32TaintTracker.from_path(p, endian=endian)
+    if args.interprocedural:
+        findings = tracker.run_interprocedural(depth=args.depth)
+    else:
+        findings = tracker.run()
 
     if args.json:
         import json
         data = [
             {
                 'func_va': hex(f.func_va), 'sink_va': hex(f.sink_va),
-                'sink': f.sink, 'severity': f.severity, 'description': f.description,
+                'sink_name': f.sink_name, 'tainted_args': f.tainted_args,
+                'source': f.source_name,
             }
             for f in findings
         ]

@@ -84,15 +84,16 @@ r = SanitizerDetector.coverage(
 After `SinkArgClassifier` returns `ARG_PROPAGATED`:
 
 ```python
-# 1. Find the function called just before the sink (the "validator")
-# 2. Audit its coverage:
+from ablation.analyzers.sanitizer_detector import audit_coverage
+
+# Find the function called just before the sink (the "validator").
 r = audit_coverage(binary, validator_va, arch_cs, mode_cs)
 if r.verdict in ('NO_CHECKS', 'SPACE_ONLY'):
-    # No shell safety — finding is CONFIRMED
+    print('CONFIRMED: no shell safety checks')
 elif r.verdict == 'SHELL_SAFE':
-    # Argument sanitized — eliminate or downgrade the finding
+    print('SAFE: argument is sanitized')
 elif r.verdict == 'PARTIAL':
-    # Check which metachars are missing; finding may still be valid
+    print('REVIEW: check which metacharacters are missing')
 ```
 
 ## Limitations

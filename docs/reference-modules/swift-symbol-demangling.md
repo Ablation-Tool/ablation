@@ -105,4 +105,4 @@ Register results with `ctx.set_name(va, demangled, source='swift_demangle')` aft
 ## See also
 
 - [Persistent Analysis Context](persistent-analysis-context.md): `BinaryContext` that holds the symbol table fed to `swift_demangle`
-- [Semantic Pattern Sweep](semantic-pattern-sweep.md): `SemanticSearcher` that benefits from demangled Swift symbol names
+- [Semantic Pattern Sweep](semantic-code-search.md): `SemanticSearcher` that benefits from demangled Swift symbol names

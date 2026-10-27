@@ -55,10 +55,11 @@ NDFC_AUTH_PATH = "/rest/logon"
 ND_KAFKA_PORT = 9092
 
 
-def _ssl_ctx() -> ssl.SSLContext:
+def _ssl_ctx(verify: bool = True) -> ssl.SSLContext:
     ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    if not verify:
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
     return ctx
 
 

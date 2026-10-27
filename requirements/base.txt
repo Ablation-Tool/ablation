@@ -9,6 +9,10 @@ sentence-transformers>=2.7.0
 # LLM analyst ReAct loop
 anthropic>=0.30.0
 
+# Bytecode and compressed-container analyzers
+xdis>=6.0
+lz4>=4.0
+
 # Optional: angr-based analysis (heavy dependency)
 # angr>=9.2.90
 

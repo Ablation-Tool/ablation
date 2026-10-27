@@ -202,6 +202,6 @@ Each `Block`:
 
 ## See also
 
-- [SH-2A Decoding](sh2a-decoding.md): `EcuSH2aDecoder` that produces the `SH2aInsn` list consumed by `build_cfg`
-- [Dataflow Engine](dataflow-engine.md): `DomTree` and `LoopInfo` that consume `CFG.flow` and `CFG.flow_r()`
+- [SH-2A Decoding](ecu-sh2a-decoder.md): `EcuSH2aDecoder` that produces the `SH2aInsn` list consumed by `build_cfg`
+- [Dataflow Engine](generic-dataflow-worklist.md): `DomTree` and `LoopInfo` that consume `CFG.flow` and `CFG.flow_r()`
 - [Flat ROM Function Discovery](flat-rom-function-discovery.md): function start discovery for SH-2A ROMs before CFG construction

@@ -4,11 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ablation-tool"
-version = "2.87.0"
+version = "2.88.0"
 description = "Semantic function matching for stripped firmware. No symbols. No source. No setup."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { file = "LICENSE" }
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 dependencies = [
     "capstone>=5.0.1",
     "numpy>=1.26.0",
@@ -27,12 +28,15 @@ Source = "https://github.com/Ablation-Tool/ablation"
 llm = ["anthropic>=0.30.0"]
 finetune = ["sentence-transformers>=2.7.0"]
 binary = ["lief>=0.16.0"]
+bytecode = ["xdis>=6.0", "lz4>=4.0"]
 full = [
     "anthropic>=0.30.0",
     "angr>=9.2.90",
     "bitstring<4.0",
     "sentence-transformers>=2.7.0",
     "lief>=0.16.0",
+    "xdis>=6.0",
+    "lz4>=4.0",
 ]
 
 [project.scripts]
@@ -80,4 +84,5 @@ include = ["ablation*", "sweeps*", "modules*"]
 
 [tool.setuptools.package-data]
 "*" = ["py.typed"]
-"ablation.data" = ["*.json"]
+"ablation" = ["profiles/*.yaml", "profiles/*.yml"]
+"ablation.data" = ["*.json", "*.md"]

@@ -101,4 +101,4 @@ Run `ChunkWalkerValidator` on network protocol parser binaries after `SemanticSe
 ## See also
 
 - [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md): `TaintTracker` to confirm the length value is network-sourced
-- [Sink Argument Classification](sink-argument-classification.md): `SinkArgClassifier` for the SCTP/protocol sink calls in the same function
+- [Sink Argument Classification](sink-argument-classifier.md): `SinkArgClassifier` for the SCTP/protocol sink calls in the same function

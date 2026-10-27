@@ -122,4 +122,4 @@ Export runs at the end of a sweep or confirmation session, never during triage. 
 ## See also
 
 - [Markdown Research Reports](markdown-research-reports.md): `generate_report()` for human-readable markdown from sweep results
-- [Semantic Pattern Sweep](semantic-pattern-sweep.md): `PatternLibrary.sweep()` that produces sweep results for export
+- [Semantic Pattern Sweep](semantic-code-search.md): `PatternLibrary.sweep()` that produces sweep results for export

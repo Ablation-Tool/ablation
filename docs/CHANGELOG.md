@@ -2,6 +2,19 @@
 
 ---
 
+## v2.88.0
+
+**Repository audit remediation.**
+
+- CI and release workflows now fail on test failures and enforce the 85% labeled-taint coverage gate.
+- Generic taint analysis dispatches to the correct architecture-specific engine and ELF endianness.
+- Authenticated API clients verify TLS certificates and hostnames without silent downgrade.
+- Updated certifi and filelock, declared bytecode/container dependencies, and included FORGE and vendor-profile resources in wheels.
+- Nested archive extraction now enforces traversal checks and resource budgets.
+- Corrected SARIF distribution lookup, installation requirements, and broken documentation links and examples.
+
+---
+
 ## v2.82.0
 
 **Security: FORGE/SAFE CODE audit of all 62 modules/ analyzers, CWE-770/755/502 fixes.**

@@ -17,7 +17,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-REQUIREMENTS="${REPO_ROOT}/requirements/base.txt"
+REQUIREMENTS="${REPO_ROOT}/requirements/hashed.txt"
 REPORT_DIR="${REPO_ROOT}/docs/supply-chain-reports"
 REPORT="${REPORT_DIR}/supply-chain-audit-$(date +%Y-%m-%d).json"
 CI_MODE="${1:-}"
@@ -36,6 +36,7 @@ echo "[monitor-supply-chain] report: $REPORT"
 
 pip-audit \
     --requirement "$REQUIREMENTS" \
+    --no-deps \
     --format=json \
     --output="$REPORT" \
     --desc on \
@@ -51,9 +52,14 @@ except Exception as e:
     print('?')
 " 2>/dev/null || echo "?")
 
+if [[ "$VULN_COUNT" == "?" ]]; then
+    echo "[monitor-supply-chain] ERROR: audit failed or produced an unreadable report"
+    exit 2
+fi
+
 echo "[monitor-supply-chain] vulnerabilities found: $VULN_COUNT"
 
-if [[ "$VULN_COUNT" != "0" && "$VULN_COUNT" != "?" ]]; then
+if [[ "$VULN_COUNT" != "0" ]]; then
     echo "[monitor-supply-chain] ATTENTION: $VULN_COUNT CVE(s) detected"
     echo "[monitor-supply-chain] Review: $REPORT"
     echo "[monitor-supply-chain] Remediate: bump affected package in requirements/base.txt and re-run audit-deps.sh"

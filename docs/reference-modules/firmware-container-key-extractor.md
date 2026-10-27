@@ -29,9 +29,11 @@ When decryption succeeds for a partition that contains `etc/fgt_512.key`, the re
 All paths in `ExtractionResult` point into a working directory created by `from_path()`. That directory persists until the caller calls `result.cleanup()`. Without the cleanup call the working directory leaks.
 
 ```python
+from ablation.analyzers.firmware_container_key_extractor import FirmwareContainerKeyExtractor
+
 result = FirmwareContainerKeyExtractor.from_path('/path/to/firmware.out')
 try:
-    # use result.datafs_path, result.partitions, etc.
+    print(result.datafs_path)
 finally:
     result.cleanup()
 ```

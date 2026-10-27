@@ -4,7 +4,7 @@
 
 Binary RE toolkit for stripped firmware. No symbols. No source.
 
-**Version:** 2.57.0. Install: `pip install -e ~/ablation/`
+**Version:** 2.88.0. Install: `pip install -e ~/ablation/`
 **GitHub:** `Ablation-Tool/ablation`. All repo ops via `gh` CLI. `mcp__github` is BANNED.
 
 ---

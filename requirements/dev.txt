@@ -1,5 +1,5 @@
 # Development and qualification toolchain
-# Install: pip install -r requirements-dev.txt
+# Install: pip install -r requirements/dev.txt
 #
 # These packages support:
 #   - pytest-cov   ISO-TCL3-COV: 85% coverage gate on ablation/analyzers/

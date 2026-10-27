@@ -65,4 +65,4 @@ Tested on:
 
 - [BinaryContext](binary-context.md): VA lookup for findings
 - [HardcodedCredentialScanner](hardcoded-credential-scanner.md): detect credentials in rodata
-- [SemanticSearcher](semantic-searcher.md): query for crypto-related string patterns
+- [SemanticSearcher](semantic-code-search.md): query for crypto-related string patterns
