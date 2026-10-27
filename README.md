@@ -11,43 +11,50 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 ## Capabilities
 
 <details>
-<summary>40 Decompilers</summary>
+<summary>Decompilers, Disassemblers & Analyzers</summary>
 
 **Native CPUs**
 
-| ISA | Variants |
+| Capability | Coverage |
 |---|---|
-| [**x86**](docs/reference-modules/x86.md) | x86-32 · x86-64 |
-| [**ARM**](docs/reference-modules/binary-lifter.md) | ARM-32 · ARM-64 · Thumb |
-| [**MIPS**](docs/reference-modules/mips.md) | MIPS-32 · [nanoMIPS](docs/reference-modules/nanomips.md) · MIPS-64 |
-| [**PowerPC**](docs/reference-modules/ppc32-taint-tracker.md) | PPC-32 · PPC-64 · [VLE](docs/reference-modules/ecu-vle-decoder.md) · [PPC476 Book E](docs/reference-modules/ppc476-lifter.md) · [XCOFF32 / AIX](docs/reference-modules/xcoff32-decompiler.md) |
-| [**RISC-V**](docs/reference-modules/risc-v.md) | RV32 · RV64 · [HiSilicon ext](docs/reference-modules/hisi-rv32-ext.md) |
-| [**ARC**](docs/reference-modules/binary-lifter.md) | ARC EM · ARC HS |
-| [**LoongArch**](docs/reference-modules/loongarch.md) | LoongArch64 · [KASAN/KCOV V2](docs/reference-modules/loongarch64-v2.md) |
-| [**Alpha AXP**](docs/reference-modules/taint-tracker-alpha.md) | Alpha 21064 · 21164 · 21264 · ECOFF · ELF |
-| [**Intel MCS**](docs/reference-modules/isa-8051.md) | 8051 / MCS-51 · CC254x |
+| [**x86 Decompilation & Taint Analysis**](docs/reference-modules/x86.md) | x86-64 IR pseudo-C and taint · x86-32 structural lifting |
+| [**ARM Binary Lifting**](docs/reference-modules/binary-lifter.md#arm-binary-lifting) | ARM64 register-tracked pseudo-C · ARM32 and Thumb structural lifting |
+| [**MIPS Decompilation & Taint Analysis**](docs/reference-modules/mips.md) | MIPS32/64 structural lifting and taint, big- and little-endian |
+| [**nanoMIPS Decoding & Taint Analysis**](docs/reference-modules/nanomips.md) | Variable-width decoding · structural lifting · conservative fallback |
+| [**PowerPC Decompilation & Taint Analysis**](docs/reference-modules/ppc32-taint-tracker.md) | PPC32/64 structural lifting and taint |
+| [**PowerPC VLE Decoding**](docs/reference-modules/ecu-vle-decoder.md) | NXP 16-/32-bit VLE instructions and function-start recovery |
+| [**IBM PPC476 Pseudo-C Lifting**](docs/reference-modules/ppc476-lifter.md) | PPC32 big-endian linear lifting with call-argument annotations |
+| [**AIX XCOFF32 Decompilation**](docs/reference-modules/xcoff32-decompiler.md) | Function descriptors, TOC resolution, and PPC32 pseudo-C |
+| [**RISC-V Decompilation & Taint Analysis**](docs/reference-modules/risc-v.md) | RV32/64 structural lifting, compressed instructions, and taint |
+| [**HiSilicon RV32 Extension Decoding**](docs/reference-modules/hisi-rv32-ext.md) | HiSilicon HCC instructions and correct instruction boundaries |
+| [**ARC Binary Lifting**](docs/reference-modules/binary-lifter.md#arc-binary-lifting) | ARC EM/HS structural lifting via `arc-elf32-objdump` |
+| [**LoongArch64 Decompilation & Taint Analysis**](docs/reference-modules/loongarch.md) | Structural lifting and LP64 taint analysis |
+| [**LoongArch64 KASAN/KCOV Filtering**](docs/reference-modules/loongarch64-v2.md) | Sanitizer call and shadow-preamble tagging and removal |
+| [**Alpha AXP Decompilation & Taint Analysis**](docs/reference-modules/taint-tracker-alpha.md) | Alpha ECOFF CFG/IR pseudo-C and CFG-fixpoint taint |
+| [**Intel MCS-51 / CC254x Decoding**](docs/reference-modules/isa-8051.md) | Enhanced 8051 instructions, Intel HEX, and bank mapping |
 
 **Automotive ECUs**
 
-| ISA | Variants |
+| Capability | Coverage |
 |---|---|
-| [**V850 / RH850**](docs/reference-modules/v850-rh850.md) | V850-32 · RH850 |
-| [**Renesas SH**](docs/reference-modules/binary-lifter-sh2a.md) | SH-2A |
-| [**Motorola**](docs/reference-modules/ecu-m68k-decoder.md) | M68K / CPU32 · [MC88100](docs/reference-modules/m88k-decoder.md) |
-| [**Infineon**](docs/reference-modules/tricore-taint-tracker.md) | TriCore TC1.6x |
-| [**TI DSP**](docs/reference-modules/ecu-c28x-decoder.md) | TMS320C28x |
-| [**Infineon C166**](docs/reference-modules/c166-c167-decoding.md) | C166 · C167 |
+| [**Renesas V850 / RH850 Lifting & Taint Analysis**](docs/reference-modules/v850-rh850.md) | Structural lifting via `v850-elf-objdump` and EABI-aware taint |
+| [**Renesas SH-2A Flat-ROM Lifting**](docs/reference-modules/binary-lifter-sh2a.md) | Flat-ROM structural pseudo-C with delay-slot handling |
+| [**Motorola M68K / CPU32 Decoding**](docs/reference-modules/ecu-m68k-decoder.md) | Disassembly and flat-ROM function-start recovery |
+| [**Motorola MC88100 COFF Disassembly**](docs/reference-modules/m88k-decoder.md) | BCS COFF parsing and partial MC88100 disassembly |
+| [**Infineon TriCore Taint Analysis**](docs/reference-modules/tricore-taint-tracker.md) | TC1.6x EABI-aware taint; no pseudo-C backend |
+| [**TI TMS320C28x Decoding**](docs/reference-modules/ecu-c28x-decoder.md) | Word-addressed control-flow instructions and call targets |
+| [**Infineon C166 / C167 ROM Decoding**](docs/reference-modules/c166-c167-decoding.md) | Partial instruction decoding, IVT parsing, and call-target recovery |
 
 **VMs & Runtimes**
 
-| ISA | Variants |
+| Capability | Coverage |
 |---|---|
-| [**DEX**](docs/reference-modules/dex.md) | Dalvik · ART |
-| [**ARK**](docs/reference-modules/harmonyos.md) | ArkTS |
-| [**MicroPython**](docs/reference-modules/micropython.md) | .mpy v6 |
-| [**BEAM**](docs/reference-modules/beam.md) | Erlang BEAM bytecode |
-| [**Java**](docs/reference-modules/java-class-jar-parsing.md) | .class · JAR |
-| [**Python**](docs/reference-modules/python-pyc-scanning.md) | .pyc (3.8–3.12) |
+| [**Android DEX Disassembly, Lifting & Scanning**](docs/reference-modules/dex.md) | Smali-style disassembly, pseudo-Java, and APK scanning; no OAT/VDEX |
+| [**HarmonyOS Ark Bytecode Decompilation**](docs/reference-modules/harmonyos.md) | ABC parsing, ARK disassembly, and JavaScript-like pseudocode |
+| [**MicroPython .mpy v6 Lifting**](docs/reference-modules/micropython.md) | Bytecode pseudo-Python and import analysis; native/Viper excluded |
+| [**Erlang BEAM Analysis & Lifting**](docs/reference-modules/beam.md) | Module metadata, release sweeps, and partial function pseudo-IR |
+| [**Java Class / JAR Security Analysis**](docs/reference-modules/java-class-jar-parsing.md) | Class metadata, constants, dependencies, and security patterns |
+| [**CPython .pyc Security Scanning**](docs/reference-modules/python-pyc-scanning.md) | Cross-version code-object scanning via `xdis`; no source decompilation |
 
 </details>
 
