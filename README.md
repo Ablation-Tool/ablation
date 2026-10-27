@@ -11,13 +11,6 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 ## Capabilities
 
 <details>
-<summary>Compatible Agents</summary>
-
-Claude Code | OpenAI Codex | OpenCode | Hermes Agent | Gemini | Kimi
-
-</details>
-
-<details>
 <summary>40 Decompilers</summary>
 
 **Native CPUs**
@@ -226,6 +219,13 @@ pip install ablation-tool
 ```
 
 **Requirements:** Python >= 3.10 · `capstone>=4,<5` · `numpy` · `lief` · `fastembed` · `sentence-transformers` · `pyelftools`
+
+</details>
+
+<details>
+<summary>Compatible Agents</summary>
+
+Claude Code | OpenAI Codex | OpenCode | Hermes Agent | Gemini | Kimi
 
 </details>
 
