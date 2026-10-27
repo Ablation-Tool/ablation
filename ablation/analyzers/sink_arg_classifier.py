@@ -1049,6 +1049,15 @@ class SinkArgClassifier:
         it runs for every function before _classify_function() disassembles it.
         """
         off = self._va_to_file_offset(func_va)
+        # Early exit: if func_va is already at a prologue, no backward search needed.
+        # Without this guard, the window [off-search:off+1] only contains the FIRST byte
+        # of any ENDBR64 at off, so rfind can never match it and falls back to the
+        # previous function's prologue — causing _classify_function to disassemble across
+        # a function boundary and attribute the downstream call site to the wrong func_va.
+        if self._data[off:off + 4] == self._ENDBR64:
+            return func_va
+        if off < len(self._data) and self._data[off:off + 1] == self._PUSH_RBP:
+            return func_va
         search = min(off, self._ALIGN_SEARCH_BACK)
         if search < 4:
             return func_va
