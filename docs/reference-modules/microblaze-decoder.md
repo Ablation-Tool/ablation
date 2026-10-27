@@ -111,4 +111,5 @@ On the CERN `GCI_GCM415_boot-v0.159.38-35A2CC3.pdi` image, two contiguous DMA se
 ## See also
 
 - [VersalPdi](versal-pdi.md) for CDO validation and `DmaWrite` load-segment extraction
+- [MicroBlaze recursive CFG recovery](microblaze-cfg.md) and [structural lifting](microblaze-lifter.md)
 - [Control-flow graph construction](control-flow-graph-construction.md) for downstream CFG concepts

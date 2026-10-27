@@ -102,5 +102,6 @@ Synthetic and real-PDI tests cover branches, calls, returns, delay slots, `IMM`,
 ## See also
 
 - [MicroBlazeDecoder](microblaze-decoder.md)
+- [MicroBlaze structural lifter](microblaze-lifter.md)
 - [VersalPdi](versal-pdi.md)
 - [Control-flow graph construction](control-flow-graph-construction.md)

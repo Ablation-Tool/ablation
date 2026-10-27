@@ -179,6 +179,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "nanoMIPS: walk frame boundaries" | `NanoMIPSDecoder(endian='little').decode_framesdata, base_addr` |
 | "Disassemble Xilinx MicroBlaze / Versal PLM firmware" | `MicroBlazeDecoder(data, base_va=..., byte_order='little').disassemble()`; extract PDI load bytes first with `VersalPdi.dma_write_segments()` |
 | "Recover MicroBlaze CFG / separate reachable code" | `recover_cfg(decoder, entries=[...])`; validate bounded indirect tables with `resolve_jump_tables()`; see `docs/reference-modules/microblaze-cfg.md` |
+| "Lift MicroBlaze CFG to structural pseudo-C" | `MicroBlazeLifter(recovery).lift_function(entry)`; unresolved indirect targets stay explicit; see `docs/reference-modules/microblaze-lifter.md` |
 | "Decode Renesas SH-2A ECU firmware" | `EcuSH2aDecoder(rom, base_va=0x400000).disassemblestart, end` |
 | "Decode TMS320C28x firmware" | `EcuC28xDecoder(data, base_va=0).disassemblestart, end` |
 | "Parse Go pclntab and enumerate functions" | `GoBinaryRE.parse_pclntab()` |
