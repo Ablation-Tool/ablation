@@ -508,8 +508,8 @@ While the 68HC12/HCS12 is often associated with General Motors (E67/E92), two ot
 ```python
 from ablation.analyzers.ecu_arch_detector import EcuArchDetector
 from ablation.analyzers.ecu_rom_layout_analyzer import EcuROMLayoutAnalyzer
-from ablation.analyzers.ecu_m68k_decoder import EcuM68KDecoder
-from ablation.analyzers.semantic_searcher import SemanticSearcher
+from ablation.analyzers.ecu_m68k_decoder import EcuM68kDecoder
+from ablation.analyzers.semantic_search import SemanticSearcher
 
 firmware_path = '/media/research/Automotive/GM/E67_PCM_12640429.bin'
 
@@ -523,18 +523,10 @@ layout = EcuROMLayoutAnalyzer(firmware_path, arch).analyze()
 for r in layout.code_regions:
     print(f"  CODE: {r.start_pa:#08x}–{r.end_pa:#08x}")
 
-# Step 3: decoder and semantic search
-decoder = EcuM68KDecoder(firmware_path, arch, layout)
-searcher = SemanticSearcher.from_m68k_decoder(decoder)
-
-sa_hits = searcher.query('UDS security access seed key SeedKey function')
-diag_hits = searcher.query('KWP2000 service diagnostic byte handler')
-
-# Step 4: lift and review candidate SA functions
-for h in sa_hits[:3]:
-    print(f"\n=== Candidate at {h.va:#010x} (score={h.score:.2f}) ===")
-    pseudo_c = decoder.lift_function(h.va)
-    print(pseudo_c[:1500])
+# Step 3: decode candidate regions for manual review
+decoder = EcuM68kDecoder.from_path(firmware_path)
+for insn in decoder.disassemble(start_pa=0, end_pa=0x100):
+    print(insn)
 
 # Step 5: byte verify the candidate with highest score
 best = sa_hits[0]

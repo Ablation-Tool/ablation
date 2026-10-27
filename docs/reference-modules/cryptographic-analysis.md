@@ -1,4 +1,5 @@
-# HashAlgoDiscriminator / XorSolver / CryptoAudit
+<a id="hashalgodiscriminator--xorsolver--cryptoaudit"></a>
+# Cryptographic Analysis
 
   - [What is cryptographic binary analysis?](#what-is-cryptographic-binary-analysis)
   - [Why this exists](#why-this-exists)

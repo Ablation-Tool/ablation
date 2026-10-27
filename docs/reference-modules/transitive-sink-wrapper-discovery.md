@@ -1,4 +1,5 @@
-# SinkPropagator
+<a id="sinkpropagator"></a>
+# Input Validation & Call Wrappers
 
 Compute the transitive closure of passthrough wrappers around known exec sinks: finding all wrapper functions at any depth that propagate their argument to `system`/`popen`/`execve`, so that `TaintTracker` can use the expanded sink list to find injection paths hidden behind multi-level custom wrappers.
 
@@ -61,6 +62,24 @@ for w in wrappers:
 # Now classify all sinks including wrappers
 results = clf.classify_all()
 ```
+
+### Check sanitization coverage
+
+`SanitizerDetector` identifies likely validation and normalization routines, while `coverage()` checks whether calls to those routines appear near a selected function's sinks.
+
+```python
+from ablation.analyzers.sanitizer_detector import SanitizerDetector
+
+sanitizers = SanitizerDetector.from_context(ctx)
+profiles = sanitizers.detect()
+print(sanitizers.report(profiles))
+
+for profile in profiles:
+    if profile.score >= 3:
+        print(hex(profile.func_va), profile.fmt())
+```
+
+A sanitizer profile is evidence about a function's behavior, not proof that it makes every input safe. Wrapper propagation likewise shows argument flow, not whether a wrapper preserves dangerous content. Inspect transformations and validation semantics before downgrading a finding.
 
 ---
 

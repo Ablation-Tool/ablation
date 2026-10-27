@@ -1,4 +1,5 @@
-# Entropy Mapper
+<a id="entropy-mapper"></a>
+# Packed & Encrypted Region Detection
 
 **File:** `ablation/analyzers/entropy_mapper.py`
 

@@ -1,4 +1,5 @@
-# RegAnnotator
+<a id="regannotator"></a>
+# Register & Argument Tracking
 
   - [What is symbolic register analysis?](#what-is-symbolic-register-analysis)
   - [Why this exists](#why-this-exists)
@@ -82,7 +83,7 @@ from ablation.analyzers.reg_annotator import RegAnnotator
 
 **Constructor**
 
-```python
+```text
 RegAnnotator.from_path(binary_path: str) -> RegAnnotator
 ```
 
@@ -90,7 +91,7 @@ Loads the binary at `binary_path` for x86-64 (default) or PPC64LE analysis. Reso
 
 **Methods**
 
-```python
+```text
 annotator.annotate_calls(
     func_va: int,
     func_end_va: int = 0,
@@ -111,14 +112,14 @@ from ablation.analyzers.arm32_reg_annotator import ARM32RegAnnotator
 
 **Constructors**
 
-```python
+```text
 ARM32RegAnnotator.from_path(
     path: str,
     thumb_funcs: Optional[Set[int]] = None,
 ) -> ARM32RegAnnotator
 ```
 
-```python
+```text
 ARM32RegAnnotator.from_context(ctx) -> ARM32RegAnnotator
 ```
 
@@ -126,10 +127,12 @@ ARM32RegAnnotator.from_context(ctx) -> ARM32RegAnnotator
 
 **Methods**
 
-```python
+```text
 annotator.annotate_calls(
-    func_va: int,
-    func_end_va: int,
+    va: int,
+    end_va: int,
+    window: int = 2048,
+    seed_args: bool = True,
 ) -> AnnotationResult
 ```
 
@@ -148,13 +151,13 @@ Same interface as `RegAnnotator.annotate_calls()`. Uses AAPCS32 argument registe
 
 **Methods**
 
-```python
+```text
 result.fmt(arg_regs=None) -> str
 ```
 
 Returns a formatted multi-line string showing each call site with its argument register values.
 
-```python
+```text
 result.call_at(va: int) -> Optional[CallSite]
 ```
 

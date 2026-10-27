@@ -1,4 +1,5 @@
-# Hypothesis Engine
+<a id="hypothesis-engine"></a>
+# Vulnerability Hypothesis Tracking
 
 Coordinate the analysis session lifecycle for a single binary: accepting typed hypotheses about call targets, taint flows, or vulnerability classes; recording evidence from Ablation analyzers with `EvidenceRelation` weights; ranking probes by expected information gain; updating confidence scores after each evidence addition; and persisting the full session to JSON for reproducibility.
 
@@ -10,7 +11,7 @@ Coordinate the analysis session lifecycle for a single binary: accepting typed h
 
 2. **The probe ranker reduces wasted analysis time by ranking which probe to run next based on expected information gain against surviving hypotheses.** For a binary with 15 competing hypotheses about indirect call targets, running all 15 probes sequentially ignores that some probes resolve multiple hypotheses simultaneously. `ProbeRanker.top_probe()` calculates which probe kind: `cfg`, `taint`, `semantic`, `lifter`: maximally reduces uncertainty across surviving non-CONFIRMED, non-REJECTED hypotheses. `plan()` returns a dry-run ranked list without executing anything.
 
-3. **The three-milestone architecture separates plan-and-report Milestones 1/2 from auto-execution Milestone 3: allowing the engine to be used as a reasoning aid before probe execution is wired up.** In Milestones 1/2, `step(approved=False)` records the probe for analyst review; the analyst executes it manually and calls `add_evidence()`. In Milestone 3, `stepapproved=True, ctx=BinaryContext` executes the probe via `probe_adapters.execute_probe()` and feeds the result back into the confidence scorer automatically.
+3. **The three-milestone architecture separates plan-and-report Milestones 1/2 from auto-execution Milestone 3: allowing the engine to be used as a reasoning aid before probe execution is wired up.** In Milestones 1/2, `step(approved=False)` records the probe for analyst review; the analyst executes it manually and calls `add_evidence()`. With a `BinaryContext` attached, `step(approved=True)` executes the probe via `probe_adapters.execute_probe()` and feeds the result back into the confidence scorer automatically.
 
 ---
 
@@ -182,6 +183,5 @@ report() excerpt:
 
 ## See also <sup>[↑](#hypothesis-engine)</sup>
 
-- [Analyzer Probe Adapters](analyzer-probe-adapters.md): concrete adapters that execute probes against BinaryContext Milestone 3
-- [Evidence Scorer](evidence-scorer.md): Bayesian scoring model that maps evidence strength × reliability → confidence update
-- [Probe Ranker](probe-ranker.md): probe catalog and information-gain ranking algorithm
+- [Evidence Scoring & Validation](evidence-scoring-and-probe-ranking.md): probe selection, information-gain ranking, and approved adapters
+- [Analyzer Probe Adapters](analyzer-probe-adapters.md): concrete adapters that execute probes against `BinaryContext`

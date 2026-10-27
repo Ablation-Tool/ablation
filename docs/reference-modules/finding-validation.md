@@ -1,4 +1,5 @@
-# PathSolver / FindingRegistry
+<a id="pathsolver--findingregistry"></a>
+# Exploit Path Validation
 
   - [What is symbolic path solving?](#what-is-symbolic-path-solving)
   - [Why this exists](#why-this-exists)

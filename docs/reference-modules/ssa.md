@@ -1,4 +1,5 @@
-# SSABuilder
+<a id="ssabuilder"></a>
+# Static Single Assignment
 
   - [What is Static Single Assignment form?](#what-is-static-single-assignment-form)
   - [Why this exists](#why-this-exists)
@@ -37,7 +38,7 @@ Ablation uses `SSABuilder` because linear-scan taint trackers (the `TaintTracker
 
 ## Constructor <sup>[↑](#ssabuilder)</sup>
 
-```python
+```text
 SSABuilder(cfg: CFG, arch: ArchConfig)
 ```
 
@@ -71,24 +72,24 @@ Runs three phases (Cytron et al. 1991):
 
 ## `SSAForm` methods <sup>[↑](#ssabuilder)</sup>
 
-```python
+```text
 ssa.reaching_def(reg: str, use_va: int) -> Optional[SSAName]
 ```
 Returns the SSA name of `reg` at the point just before the instruction at
 `use_va`. This is the correct replacement for `trace_arg()` for cross-block
 queries.
 
-```python
+```text
 ssa.defs_of(name: SSAName) -> List[int]
 ```
 Returns all instruction VAs (and phi-node block VAs) that define `name`.
 
-```python
+```text
 ssa.uses_of(name: SSAName) -> List[int]
 ```
 Returns all instruction VAs where `name` is in scope as a potential use.
 
-```python
+```text
 ssa.report() -> str
 ```
 Human-readable phi summary: block VA, phi result, incoming (pred_va, SSA_name)

@@ -1,4 +1,5 @@
-# Apache Module Analysis
+<a id="apache-module-analysis"></a>
+# Web & Fortinet Attack Surfaces
 
 Analyze Apache 2.x C module binaries (`.so`) for authentication bypass surfaces: reconstructing the `ap_hook_handler` call graph, tracing APR table access patterns Cookie/Authorization header reads, identifying session skip flag accessors, and emitting `AUTH_BYPASS_SURFACE` when a single handler function reads an auth header, decrypts a session, and checks a skip flag.
 
@@ -78,7 +79,7 @@ analyzer = ApacheModuleAnalyzer.from_context(ctx)
 findings = analyzer.analyze()
 
 # Filter by severity
-from modules.apache_module_analyzer import ApacheModuleAnalyzer
+from ablation.analyzers.apache_module_analyzer import ApacheModuleAnalyzer
 critical = [f for f in findings if f.severity == 'CRITICAL']
 high     = [f for f in findings if f.severity == 'HIGH']
 
@@ -128,6 +129,25 @@ for f in findings:
   register_hooks at 0x1100 calls ap_hook_handler(handler=0x1234, predecessor=NULL,
   successor=NULL, APR_HOOK_MIDDLE). Handler will receive every matching HTTP request.
 ```
+
+---
+
+## Fortinet CMDB execution mapping <sup>[↑](#apache-module-analysis)</sup>
+
+`CMDBSurfaceMapper` reconstructs Fortinet CMDB table names and maps configuration-driven operations to shell or binary-execution sinks.
+
+```python
+from ablation.analyzers.cmdb_surface_mapper import CMDBSurfaceMapper
+
+mapper = CMDBSurfaceMapper.from_path('/path/to/fortinet-binary')
+surface = mapper.map()
+print(mapper.report(surface))
+
+for va, entry in surface.items():
+    print(hex(va), entry.name)
+```
+
+Use `extra_tables={address: 'table_name'}` for known tables not recovered automatically and `extra_sinks={'vendor_exec'}` for target-specific execution wrappers. A CMDB-to-sink mapping identifies an injection surface; confirm which configuration fields an attacker can control and whether authorization and validation block the path.
 
 ---
 

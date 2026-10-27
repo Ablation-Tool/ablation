@@ -1,9 +1,10 @@
-# SemanticSearcher
+<a id="semanticsearcher"></a>
+# Semantic Code Search
 
   - [What is semantic code search?](#what-is-semantic-code-search)
   - [Why this exists](#why-this-exists)
   - [How it works](#how-it-works)
-  - [SemanticSearcher](#semanticsearcher-1)
+  - [SemanticSearcher](#semanticsearcher)
   - [Usage](#usage)
   - [Example output](#example-output)
   - [False positives](#false-positives)
@@ -19,9 +20,9 @@
 
 Semantic code search finds functions in a stripped binary by matching a natural-language description of behavior to function embeddings computed from disassembly. Instead of searching by symbol name (unavailable in stripped binaries) or by byte patterns (only matches known functions), it searches by meaning: "HTTP request parser," "AES key schedule," or "command injection sink that calls system()."
 
-The approach uses dense vector embeddings trained on pairs of (natural-language description, disassembled code). A query like "allocates memory proportional to a user-supplied length" is encoded by the same embedding model as the binary's disassembled functions, and cosine similarity ranks candidates. Functions semantically similar to the description score high regardless of whether the compiler renamed, inlined, or recompiled them.
+`SemanticSearcher` builds text descriptions from normalized opcode categories, call targets, strings, names, and roles, then encodes those descriptions and the natural-language query with the same general-purpose text-embedding model. Dot-product similarity ranks the candidates. This is behavioral text retrieval, not a model trained specifically on disassembly/query pairs and not proof of functional equivalence across compilers or architectures.
 
-`SemanticSearcher` uses BAAI/bge-small-en-v1.5 at 384 dimensions via `fastembed`. The model was chosen for its balance between accuracy and speed: it scores an 885-function binary in approximately 35 seconds on CPU without GPU acceleration. The corpus is built once by `CorpusBuilder` and cached; subsequent queries against the same binary complete in milliseconds. The CLAUDE.md workflow directive is explicit: run `SemanticSearcher.query()` across all vulnerability classes before touching any disassembly.
+The implementation uses `BAAI/bge-small-en-v1.5` at 384 dimensions through `fastembed`, with PCA whitening fitted to the corpus. Corpus embeddings are cached so later queries can reuse them; first-build and query latency depend on corpus size, model initialization, and hardware.
 
 ## Why this exists <sup>[↑](#semanticsearcher)</sup>
 
@@ -209,7 +210,7 @@ searcher.invalidate_cache()
 
 **Protobuf and template stubs with zero callers.** Generated serialization stubs are structurally repetitive (many `DATA_TRANSFER_OP` + `COMPARISON_OP` sequences) and embed well on queries for data handling functions. The `live_addrs` filter in `from_context()` excludes functions not confirmed in this binary's analysis, eliminating most template stubs that were registered from other binaries. If false positives persist, tighten the score threshold from 0.78 to 0.85.
 
-**Score saturation on short functions.** Functions shorter than 5 instructions encode into very similar vectors because there is little behavioral content to distinguish them. Prologues, PLT stubs, and forwarding functions all score high on almost any query. Filter these by checking `ctx.func_size(r.va) < 50` and excluding matches below that threshold.
+**Score saturation on short functions.** Short stubs and forwarding functions contain little behavioral text, so their scores can be unstable or surprisingly high. Review their instruction count and call targets and deprioritize trivial wrappers before deeper analysis.
 
 **Cache staleness.** If new function names have been added to the names registry (`ctx.set_name()`) since the last corpus build, queries will not find the newly named functions until the cache is invalidated. Call `searcher.invalidate_cache()` then re-run the query.
 
@@ -242,5 +243,5 @@ searcher.invalidate_cache()
 - [Binary Context](binary-context.md): corpus ingest source; run `from_context()` first
 - [Function Profiler](function-profiler.md): deep behavioral analysis for candidates found by semantic search
 - [Pattern Library](pattern-library.md): replay confirmed patterns instead of text queries when patterns exist
-- [RAG Retriever](rag-retriever.md): augments SQL callee-overlap results with vector similarity from this module
-- [Version Delta](version-delta.md): uses semantic embeddings for cross-version function matching
+- [AI-Guided Analysis](llm-analyst-loop.md): retrieves prior database records to add context to targeted LLM analysis
+- [Binary Diffing & Patch Tracking](../workflows/cross-version.md): uses semantic similarity for cross-version function matching

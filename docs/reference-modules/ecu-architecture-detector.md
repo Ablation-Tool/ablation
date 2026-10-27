@@ -1,4 +1,5 @@
-# ECU Architecture Detector
+<a id="ecu-architecture-detector"></a>
+# ECU Architecture Detection
 
 Fingerprint the ISA of flat ECU ROM images: scoring ARM Cortex-M, Infineon TriCore AURIX, M68K/CPU32, PowerPC 32-bit Book E, PowerPC VLE, Renesas SH-2A, M32R, and Infineon/Siemens C166/C167 candidates using reset vectors, opcode density statistics, and pointer address-range analysis without requiring an ELF header.
 

@@ -1,4 +1,6 @@
-# JavaREAnalyzer
+<a id="javareanalyzer"></a>
+<a id="javaReanalyzer"></a>
+# Java & Spring Analysis
 
   - [What is the Java Virtual Machine and .class format?](#what-is-the-java-virtual-machine-and-class-format)
     - [The .class file structure](#the-class-file-structure)
@@ -316,7 +318,7 @@ for finding in synthesize_findings([result]):
 
 # 4. Deserialization gadget chain confirmation
 if result.has_deserialization_sink:
-    from modules.java_re import detect_java_deserialization_exploitation
+    from modules.java_decompiler import detect_java_deserialization_exploitation
     chains = detect_java_deserialization_exploitation(result)
     if chains:
         print(f"\n*** CONFIRMED GADGET CHAIN: {chains[0]['chain_name']}")

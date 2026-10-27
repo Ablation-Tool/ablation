@@ -1,4 +1,5 @@
-# Streaming and Windowed Disassembly
+<a id="streaming-and-windowed-disassembly"></a>
+# Disassembly & Code Profiling
 
 Dump a configurable-size disassembly window centered on any target VA: annotating PLT call targets and `.rodata` string references inline: for LLM-native bulk disassembly analysis that avoids the round-trip overhead of per-instruction calls.
 

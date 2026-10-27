@@ -1,4 +1,5 @@
-# YARA, JSON & SARIF Export
+<a id="yara-json--sarif-export"></a>
+# Finding Export & Reporting
 
 Ablation produces three output formats from the same confirmed findings or sweep results. `YARARule` generates pattern-matching detection rules that replay against new firmware. SARIF 2.1.0 exports results directly to GitHub Code Scanning and VS Code. Flat JSON covers programmatic consumption and dashboards. All three consume `PatternLibrary.sweep()` or `FindingRegistry.list_findings()` output so no re-analysis is required to produce any format.
 

@@ -1,130 +1,110 @@
-# ARM64 Symbolic Slicing
+<a id="arm64-symbolic-slicing"></a>
+# ARM64 Data-Flow Slicing
 
-Path-insensitive, flow-sensitive dataflow analysis over an AArch64 CFG: propagating `TaintState` from user-controlled sources through instruction-level transfer functions across all CFG paths, producing findings at dangerous sink sites with the complete register state at the point of the finding.
+Trace ARM64 store addresses backward through structured symbolic expressions (SSE) to find writes to a selected global address, global object, or structure field.
 
----
-
-## Why this exists <sup>[↑](#arm64-symbolic-slicing)</sup>
-
-1. **ARM64 is the dominant architecture for modern network appliance firmware: Fortinet ARM64 builds, Cisco IOS-XE ARM64, and ARM-based firewall appliances all run on AArch64.** `analyze_cfg()` from `analysis_arm64.py` provides the flow-sensitive dataflow backbone for the ARM64 taint pipeline. Unlike `taint_tracker_arm64.py`'s intraprocedural linear scan, `analyze_cfg()` propagates taint state across basic-block boundaries using CFG DFS, tracking join-point state merges correctly.
-
-2. **"Symbolic slicing" on ARM64 means following `TaintState` across the full CFG, including through loop back-edges and conditional branches, while maintaining the register state at every basic-block boundary.** `CFGResult.final_state` gives the taint state at function exit; intermediate states at each block boundary can be read from the CFG's `dfs()` traversal. This enables backward slicing from a finding back to its origin: given a finding at a specific `BLR` call site, the taint state at that point identifies exactly which registers carry user-controlled data and which instructions produced their current values.
-
-3. `analyze_cfg()` implements the same API as the RISC-V and MIPS labeled-taint `analyze_cfg()` variants: the `insns, initial_state` → `CFGResult` signature is consistent across ISAs, allowing the same driver code to analyze ARM64, RISC-V, and MIPS targets by swapping only the `TaintState` import and `from_listing()` decoder.
+**Files:** `modules/sse_slicer.py` · `modules/arm64_global_tracker.py`
 
 ---
 
-## How it works <sup>[↑](#arm64-symbolic-slicing)</sup>
+## When to use this
 
-```mermaid
-flowchart TD
-    A(["analyze_cfg(insns: List[Insn], initial: TaintState) → CFGResult"]):::input --> B["build_cfg(insns) → CFG\n  ARM64-specific:\n    cbz/cbnz conditional zero branches\n    tbz/tbnz bit-test branches\n    b.cond all condition codes\n    bl/blr (call · push fall-through)\n    ret (stop block)"]:::primary
-    B:::primary --> C["DFS from entry block\n  Initialize: entry_state = initial\n  propagate state through each instruction in block:\n    TaintState transfer functions:\n    MOV/LDR/STR/ADD/SUB/AND/ORR/LSL/LSR/EOR\n    ADRP+ADD constant propagation\n    BL call: set x0=Ret(sym), clear x0-x18 (caller-saved)\n    BL source (recv/read): taint x0, x1 (return + length)"]:::secondary
-    C:::secondary --> D["At join points (multiple predecessors):\n  TaintState.join(other) → merged state\n  Tainted in any predecessor → tainted in merged state\n  (conservative: over-taint at joins)"]:::tertiary
-    D:::tertiary --> E["At sink calls (system, exec, etc.):\n  Check argument registers (x0-x7):\n  If tainted → emit Finding(sink_va, sink_name, tainted_regs, sources)"]:::tertiary
-    E:::tertiary --> F(["CFGResult:\n  findings: List[Finding]\n  final_state: TaintState  (register state at function exit)"]):::output
-    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
-    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
-    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
-    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
-    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
-    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
-    linkStyle 0 stroke:#bf360c,stroke-width:2px
-    linkStyle 1 stroke:#00695c,stroke-width:2px
-    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
-    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
-    linkStyle 4 stroke:#2e7d32,stroke-width:3px
-```
+Use these scanners when you know a global address or GOT-backed object and need to answer **which instructions write to it?** They are useful for reconstructing global state initialization, configuration structures, and writes through pointers recovered from the GOT.
 
----
+These are backward address-provenance scanners, not CFG taint trackers. They do not determine whether attacker-controlled input reaches a sink and do not replace `ARM64TaintTracker` or `PathSolver`.
 
-## Usage <sup>[↑](#arm64-symbolic-slicing)</sup>
+## Inputs and prerequisites
+
+- A little-endian AArch64 binary.
+- The file offset and size of the `.text` region to scan.
+- For `sse_slicer.scan()`, the target virtual address and object size in bytes.
+- For `arm64_global_tracker.scan()`, GOT entries in that module's `GOT_CATALOGUE` describing the globals to resolve.
+
+The scanners interpret `text_start` as a file offset. Addresses printed for instructions and SSE expressions use the same address space as the supplied binary mapping; confirm this mapping for binaries whose `.text` file offset differs from its virtual address. Both scanners reject files larger than 256 MiB.
+
+## How it works
+
+`backward_sse()` walks backward from a store's base register and builds an expression for its origin:
+
+| Expression | Meaning |
+|:---|:---|
+| `Const(value)` | A constant or page address resolved from an immediate or `ADRP`. |
+| `Add(base, offset)` / `Sub(base, offset)` | Constant pointer arithmetic. |
+| `Mem(base, offset)` | A pointer load that requires a memory value to resolve. |
+| `Global(name, delta)` / `GlobAdd(...)` | A GOT-backed global recognized by the global tracker. |
+| `Unknown(register, pc)` | The origin could not be resolved within the supported instruction set or depth limit. |
+
+The slicer recognizes a bounded subset of ARM64 address-construction instructions, including `ADRP`, immediate arithmetic, selected loads/stores, and register moves. Calls invalidate unresolved caller-saved registers. The global tracker also recognizes configured GOT slots.
+
+`sse_slicer.scan()` examines `STR` and `STP` stores and returns two lists:
+
+- **exact writers:** the effective address evaluates inside the requested target range;
+- **possible writers:** the expression contains an unresolved memory load, so the destination remains uncertain.
+
+`arm64_global_tracker.scan()` examines `STR`, `STUR`, and `STP` stores and returns `WriteRecord` objects for destinations resolved to configured globals. Each record includes the instruction address and text, symbol, field offset, write size, and base SSE.
+
+## Python usage
 
 ```python
-from ablation.analyzers.analysis_arm64 import analyze_cfg
-from ablation.analyzers.taint_tracker_arm64 import TaintState
-from ablation.analyzers.insn_arm64 import from_listing
-from ablation.analyzers.binary_context import BinaryContext
+from pathlib import Path
+from modules.sse_slicer import scan as scan_target
 
-ctx = BinaryContext.load_or_build('/path/to/arm64_firmware.elf')
+exact, possible = scan_target(
+    binary=Path('/path/to/arm64-binary.so'),
+    target=0x3D4648,
+    target_size=72,
+    text_start=0xDD130,  # .text file offset
+    text_size=0x2DE650,
+    verbose=True,
+)
 
-# Seed taint at network input
-init = TaintState()
-init.taint_reg("x0", "user")   # x0 = recv() return value
-
-# Get instructions via insn_arm64 from raw binary bytes
-import lief
-binary = lief.parse('/path/to/arm64_firmware.elf')
-text_sec = binary.get_section('.text')
-text_data = bytes(text_sec.content)
-text_va = text_sec.virtual_address
-func_va = 0x12340
-func_data = text_data[func_va - text_va: func_va - text_va + 4096]
-from ablation.analyzers.insn_arm64 import from_capstone
-insns = list(from_capstone(func_data, base=func_va))
-
-# Run flow-sensitive analysis
-result = analyze_cfg(insns, initial=init)
-
-# Print findings
-for f in result.findings:
-    print(f)
-
-# Inspect exit state
-for reg in ['x0', 'x1', 'x2']:
-    taint = result.final_state.get(reg)
-    print(f"  {reg}: tainted={taint is not None}")
+for pc, source_reg, base_reg, offset, address, expression in exact:
+    print(f'0x{pc:x}: writes 0x{address:x}; base={expression!r}')
 ```
 
----
+To scan configured GOT-backed globals:
 
-## Example output <sup>[↑](#arm64-symbolic-slicing)</sup>
+```python
+from pathlib import Path
+from modules.arm64_global_tracker import report, scan
 
-The following illustrates the finding output format. Actual addresses and registers are binary-specific.
+records = scan(
+    binary=Path('/path/to/arm64-binary.so'),
+    text_start=0xDD130,
+    text_size=0x2DE650,
+)
+report(records)
 
+for record in records:
+    print(record.symbol, hex(record.field_off), hex(record.pc))
 ```
-Finding at <va>:
-  sink: system
-  tainted args: x0
-  sources: ['user']
-  taint path: x0←x19←x0(recv)
+
+## Command-line usage
+
+```bash
+python modules/sse_slicer.py \
+  --binary /path/to/arm64-binary.so \
+  --target 0x3d4648 --size 72 \
+  --text-start 0xdd130 --text-size 0x2de650 \
+  --verbose
 ```
 
----
+```bash
+python modules/arm64_global_tracker.py \
+  --binary /path/to/arm64-binary.so \
+  --text-start 0xdd130 --text-size 0x2de650
+```
 
-## False positives <sup>[↑](#arm64-symbolic-slicing)</sup>
+## Limitations
 
-**`analyze_cfg()` is path-insensitive: taint merged at join points is conservative.** A finding may fire on a path where sanitization occurs on the other branch. Confirm with manual CFG inspection whether there exists a path from the taint source to the sink without traversing a sanitizing branch. Use `SanitizerDetector` to identify likely sanitizing functions on the path.
+- This is a bounded, linear backward slice, not a whole-program alias analysis. Unsupported instructions, indirect pointers, interprocedural values, and unresolved memory loads can prevent an exact result.
+- An exact address match identifies a write destination; it does not establish runtime reachability, attacker control, or exploitability.
+- A possible writer is only a review candidate. Inspect the memory expression and calling context before treating it as a write to the target.
+- The global tracker only resolves globals represented in its GOT catalogue. It does not discover arbitrary symbols or every global in a binary.
+- Confirm file-offset/virtual-address mapping and store width during manual review, especially for packed or unusually linked binaries.
 
-**`TaintState.join()` is additive: once a register is tainted in any predecessor path, it remains tainted at the join.** This is correct for reachability-based taint analysis but can produce false positives for analyses where only one specific path is exploitable. For high-precision confirmation, use `SCCPAnalysis` to identify executable edges before running `analyze_cfg()`.
+## Related tools
 
----
-
-## Pipeline position <sup>[↑](#arm64-symbolic-slicing)</sup>
-
-Run `analyze_cfg()` after `SemanticSearcher` identifies handler candidates and before `PathSolver` confirms feasibility. The `findings` output feeds `FindingRegistry` and the `final_state` enables call-chain seeding: the exit state from function A becomes the initial state for the function that calls A.
-
----
-
-## Reading findings <sup>[↑](#arm64-symbolic-slicing)</sup>
-
-`ARM64TaintTracker.from_path(path).run()` returns `List[TaintFindingARM64]`:
-
-| Attribute | Content |
-|:---|:---|
-| `func_va` | VA of the function containing the sink call |
-| `func_name` | Name of the function (from `ctx`) |
-| `sink_va` | VA of the sink call instruction |
-| `sink_name` | Sink function name for example `system`, `popen`, `execv` |
-| `tainted_args` | List of tainted argument registers at the call for example `['x0']` |
-| `source_name` | Taint source label that propagated to the sink |
-| `severity` | `'HIGH'` (default) |
-
----
-
-## See also <sup>[↑](#arm64-symbolic-slicing)</sup>
-
-- [RISC-V](risc-v.md): same `analyze_cfg()` API for RISC-V 32/64 targets
-- [MIPS](mips.md): MIPS-32/64 labeled-taint with delay-slot awareness
-- [CFG Fixpoint Dataflow](cfg-fixpoint-dataflow.md): fixpoint-based CP/RDA as a complement to flow-sensitive DFS
-- [ARM64 Virtual Call Resolution](arm64-virtual-call-resolution.md): resolves BLR sites before `analyze_cfg()` follows them
+- [Data-Flow Taint Analysis](taint-analysis.md): tracks attacker-controlled values to security-sensitive operations.
+- [Register & Argument Tracking](call-argument-annotation.md): annotates call arguments with symbolic provenance.
+- [Control & Data-Flow Analysis](control-flow-graph-construction.md): provides CFG-based constant propagation and reaching definitions.

@@ -1,6 +1,9 @@
-# Nginx Fingerprinting and Exposure
+<a id="nginx-fingerprinting-and-exposure"></a>
+# Nginx Security Testing
 
 Fingerprint nginx version from the `Server` response header and error-page body; probe all six `stub_status` paths for unprotected metrics; assess CVEs for the detected version CVE-2013-4547, CVE-2014-0133, CVE-2014-3556, CVE-2019-20372, CVE-2021-23017; and enumerate Cisco NX-API endpoints, alias path traversal, SSRF via `proxy_pass`, Host header virtual host confusion, TE.CL HTTP request smuggling, and `autoindex`-enabled directory listing.
+
+**Authorized testing only:** traversal, SSRF, and request-smuggling probes can access unintended services or desynchronize shared proxies. Use an isolated deployment and avoid running these checks against production or third-party infrastructure.
 
 ---
 

@@ -1,4 +1,5 @@
-# Windows PE Security Analysis
+<a id="windows-pe-security-analysis"></a>
+# Windows Binary Analysis
 
 Seven security analyzers in one pass over a Windows PE binary. Covers CFG, SafeSEH, ETW, RPC, COM, kernel pool overflows, and BYOVD capabilities.
 

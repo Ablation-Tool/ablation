@@ -497,41 +497,25 @@ The HTTP management interface is the primary taint source. CGI scripts read para
 ## Complete analysis workflow: HiSilicon IP camera <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 ```python
+from pathlib import Path
 from ablation.analyzers.binary_context import BinaryContext
-from ablation.analyzers.semantic_searcher import SemanticSearcher
-from ablation.analyzers.hisi_rv32_ext import HiSiRV32Ext
-from ablation.analyzers.taint_tracker_riscv import RISCVTaintTracker
+from ablation.analyzers.semantic_search import SemanticSearcher
+from ablation.analyzers.hisi_rv32_ext import HiSiliconRV32ExtDecoder
 
-# 1. Build context for the management plane binary
-ctx = BinaryContext.load_or_build('/firmware/extract/usr/bin/hi_httpd')
-print(ctx.summary())
-# Expected: RISC-V RV32IMAC, little-endian, 245 functions
-
-# 2. Semantic sweep for auth/crypto patterns
-searcher = SemanticSearcher(ctx)
+path = '/firmware/extract/usr/bin/hi_httpd'
+ctx = BinaryContext.load_or_build(path)
+searcher = SemanticSearcher.from_context(ctx)
 auth_hits = searcher.query('authentication token verification', top_k=10)
 crypto_hits = searcher.query('SM4 block cipher key schedule', top_k=5)
 
-# 3. Scan for HiSilicon custom instructions
-ext = HiSiRV32Ext(ctx)
-custom0 = ext.scan_custom0()
-custom3 = ext.scan_custom3()
+code = Path(path).read_bytes()
+decoder = HiSiliconRV32ExtDecoder(conservative=True)
+custom = decoder.scan_all_custom(code, base_va=0)
 
-print(f"Custom-0 crypto instructions: {len(custom0)}")
-for insn in custom0[:5]:
-    print(f"  {insn.address:#010x}: {insn.mnemonic} {insn.op_str}")
-
-# 4. Find SM4 key load: rs2 at the first hisi.sm4round is the key register
-if custom0:
-    first_sm4 = custom0[0]
-    # trace rs2 back to its source: that's the key loading VA
-    tracker = RISCVTaintTracker.from_context(ctx)
-    findings = tracker.trace_arg(first_sm4.address, first_sm4.rs2)
-    for f in findings:
-        print(f"  Key source: {f}")
-
-# 5. Standard taint for HTTP input -> system() path
-sink_findings = tracker.run_interprocedural()
+print(f'Custom instructions: {len(custom)}')
+for insn in custom[:10]:
+    print(f'  0x{insn.address:x}: {insn.mnemonic} {insn.op_str}')
+    print(f'    sources={insn.taint_sources()} dest={insn.taint_dest()}')
 ```
 
 ---

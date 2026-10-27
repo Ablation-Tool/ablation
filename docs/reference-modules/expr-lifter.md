@@ -1,4 +1,5 @@
-# ExprLifter
+<a id="exprlifter"></a>
+# Expression Analysis
 
 Arch-neutral expression simplification, value numbering, and rule-based IR lifting. Converts machine instructions into typed `ExprNode` trees, collapses compiler-generated synonyms via per-opcode simplification rules, identifies common subexpressions through hash-congruence value numbering, and provides a greedy rule-engine for pattern-based instruction-to-IR lifting.
 

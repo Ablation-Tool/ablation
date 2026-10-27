@@ -1,4 +1,5 @@
-# SscanfSinkClassifier / DeprecatedFuncScanner
+<a id="sscanfsinkclassifier--deprecatedfuncscanner"></a>
+# Unsafe Input & Function Checks
 
   - [What is scanf overflow and deprecated-function analysis?](#what-is-scanf-overflow-and-deprecated-function-analysis)
   - [Why this exists](#why-this-exists)

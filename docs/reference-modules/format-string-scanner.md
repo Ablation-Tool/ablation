@@ -1,9 +1,10 @@
-# FormatStringScanner
+<a id="formatstringscanner"></a>
+# Format-String Vulnerabilities
 
   - [What is format string analysis?](#what-is-format-string-analysis)
   - [Why this exists](#why-this-exists)
   - [How it works](#how-it-works)
-  - [FormatStringScanner](#formatstringscanner-1)
+  - [FormatStringScanner](#formatstringscanner)
     - [Covered format functions](#covered-format-functions)
   - [Usage](#usage)
   - [Example output](#example-output)

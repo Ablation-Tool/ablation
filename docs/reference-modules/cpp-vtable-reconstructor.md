@@ -1,4 +1,5 @@
-# C++ Vtable Reconstructor
+<a id="c-vtable-reconstructor"></a>
+# C++ Call Recovery
 
 Standalone three-layer pipeline for reconstructing C++ virtual dispatch from any ELF
 binary. No IDA license. No relocation requirement. Runs at sweep scale.

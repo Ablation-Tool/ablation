@@ -1,4 +1,5 @@
-# Single Function Profiling
+<a id="single-function-profiling"></a>
+# Function Prioritization
 
 Produce a complete analysis report for one function in a single call: combining string cross-references, callee annotation, sink detection, and register argument values from `BinaryContext`, `RegAnnotator`, and the sink catalog: replacing the four-call manual sequence `callees_of()` + `dump_text()` + `annotate_calls()` + string lookup.
 
@@ -52,10 +53,10 @@ fp = FuncProfiler.from_context(ctx)
 profile = fp.profile(va=0x1000, end_va=0x1200)
 print(profile.fmt())
 
-# With custom sinks
+# With custom sinks: symbol name -> reason tag
 fp2 = FuncProfiler.from_path(
     '/path/to/target.elf',
-    custom_sinks={'exec_handler': [2], 'fad_csystem': [0]}
+    custom_sinks={'exec_handler': 'cmd-exec', 'fad_csystem': 'cmd-exec'}
 )
 profile2 = fp2.profile(va=0x1000, end_va=0x1200)
 
@@ -72,6 +73,23 @@ for p in profiles:
 # Quick sink scan over a large region
 sinks = fp.sinks_in_region(va=0x401000, end_va=0x420000, window=4096)
 ```
+
+### Filter findings by runtime reachability
+
+`FuncReachabilityAnalyzer` complements profiling by rejecting findings in functions with no known callers or runtime pointer references. It checks `BinaryContext.call_edges` first, then scans for the function address in executable or initialized-data sections.
+
+```python
+from ablation.analyzers.func_reachability import FuncReachabilityAnalyzer
+
+reachability = FuncReachabilityAnalyzer.from_context(ctx)
+result = reachability.check(0x1000)
+print(result.verdict, result.reason)
+
+# Each finding must expose a func_va attribute.
+actionable_findings = reachability.filter_unreachable(findings)
+```
+
+The verdicts are `REACHABLE`, `REACHABLE_VIA_PTR`, `UNREACHABLE_DEBUG`, and `UNREACHABLE_NOREF`. This is static reachability evidence, not proof that an attacker can invoke the function: indirect calls and missing call-graph edges require manual review.
 
 ---
 

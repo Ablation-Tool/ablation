@@ -445,11 +445,11 @@ Security-critical encodings for sink confirmation:
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
-from ablation.analyzers.sink_arg_classifier import SinkArgClassifierPPC32
+from ablation.analyzers.sink_arg_classifier_ppc32 import SinkArgClassifierPPC32BE
 from ablation.analyzers.taint_tracker_ppc32 import PPC32TaintTracker
 
 ctx = BinaryContext.load_or_build('/firmware/ios_c7200.bin', arch='ppc32be')
-classifier = SinkArgClassifierPPC32.from_context(ctx)
+classifier = SinkArgClassifierPPC32BE.from_context(ctx)
 work = [s for s in classifier.classify_all()
         if s.classification in ('ARG_PROPAGATED', 'UNKNOWN')]
 findings = PPC32TaintTracker.from_context(ctx).scan(sink_sites=work)

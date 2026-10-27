@@ -1,142 +1,126 @@
-# KASAN-Oracle Workflow
+<a id="kasan-oracle-workflow"></a>
+# KASAN Finding Validation
 
-Scan a KASAN debug kernel build first to identify candidate functions, then verify
-each candidate in the stripped production build.
+Use a KASAN-instrumented debug kernel build to generate candidates, then independently verify each candidate in the corresponding stripped production build.
 
-**Why this works:** `CONFIG_KASAN=y` lowers the compiler's optimization threshold.
-Result registers stay live longer, stack slots don't get folded, and data flows that
-the production optimizer collapses into a single inline remain as explicit call sequences.
-The scanner finds more true positives in the debug build. These are not KASAN artifacts
--- they are real code paths the optimizer hid in production.
-
-**Discovered during:** TencentOS 6.6.119 LoongArch64 kernel module analysis.
-14 `LA64MaxNotMinScanner` hits in KASAN build; 11 confirmed in production (3 ELIMINATED
-due to KASAN-specific codegen divergence).
+**Reference result:** during TencentOS 6.6.119 LoongArch64 kernel-module analysis, 14 `LA64MaxNotMinScanner` candidates in the KASAN build produced 11 production confirmations. Three candidates were eliminated because code generation differed between builds.
 
 ---
+
+## Why use two builds?
+
+KASAN changes instrumentation, register allocation, inlining, and surrounding control flow. Patterns that are difficult to see in an optimized production binary may be easier to isolate in a debug build. The same differences also mean a debug hit is **not automatically a production finding**: only production instructions and reachability can confirm that result.
 
 ## Prerequisites
 
-Two builds of the same kernel tree:
+Two builds from the same source tree and configuration baseline:
 
-| Build | Path | Has symbols | KASAN |
-|---|---|---|---|
-| KASAN debug | `vmlinuz.elf` or debug `.ko` | yes System.map | yes |
-| Production stripped | production `.ko` | no | no |
+| Build | Typical input | Symbols | KASAN |
+|:---|:---|:---|:---|
+| Debug | `vmlinuz.elf` or debug `.ko` | System.map or debug symbols | Enabled |
+| Production | Production `vmlinuz` or `.ko` | Possibly stripped | Disabled |
 
-Both builds must come from the same source tree. Version mismatch causes function
-layout divergence that breaks verification.
+A version or configuration mismatch can invalidate function matching and produce misleading confirmations or eliminations.
 
----
+## 1. Identify KASAN instrumentation
 
-## Step 1: Suppress KASAN ghost calls debug build
-
-Before scanning the debug build, suppress KASAN/KCOV instrumentation calls.
-Without this, every function has a `bl __asan_load8` ghost call that produces
-thousands of false scanner hits.
+Use `LoongArchDecoderV2.from_system_map()` to collect `__asan_*` and `__kcov_*` addresses from the debug kernel's System.map:
 
 ```python
 from ablation.analyzers.loongarch_decoder_v2 import LoongArchDecoderV2
 
-# Extract KASAN/KCOV VAs from System.map
-dec = LoongArchDecoderV2.from_system_map("/boot/System.map-6.6.119+debug")
-# dec now tags all __asan_* / __kcov_* BL calls as is_instrumentation=True
+decoder = LoongArchDecoderV2.from_system_map(
+    '/boot/System.map-6.6.119+debug'
+)
 ```
 
-The `from_system_map()` method parses the System.map format (`<hex_va> <type> <name>`)
-and builds the instrumentation VA set automatically. No manual enumeration needed.
+The decoder marks calls to those addresses as instrumentation, allowing analysis to distinguish sanitizer and coverage scaffolding from target logic. For an individual module, use symbols and addresses relocated into that module's context; do not assume unrelocated addresses from another image are directly interchangeable.
 
-For individual `.ko` modules, pass the module's own System.map if available, or
-pre-load the KASAN symbol set from the full kernel System.map.
+## 2. Scan the debug build
 
----
-
-## Step 2: Scan the KASAN debug build
+Load the scanner with `from_path()` and inject the KASAN-aware decoder:
 
 ```python
-from ablation.analyzers.la64_max_not_min_scanner import LA64MaxNotMinScanner
+from ablation.analyzers.loongarch64_max_not_min_scanner import LA64MaxNotMinScanner
 
-# For .ko modules (ET_REL): scanner uses section-relative VAs automatically
-scanner = LA64MaxNotMinScanner(ko_path_debug)
-scanner.decoder = dec           # inject KASAN-aware decoder
-hits = scanner.scan()
-print(scanner.report(hits))
-
-# For vmlinux: inject System.map symbols for PLT-less call resolution
-from ablation.analyzers.taint_tracker_loongarch64 import LoongArch64TaintTracker
-tt = LoongArch64TaintTracker.from_system_map(vmlinux_debug_path, system_map_path)
-findings = tt.run_interprocedural()
+scanner = LA64MaxNotMinScanner.from_path('/path/to/debug-module.ko')
+scanner.decoder = decoder
+candidates = scanner.scan()
+print(scanner.report(candidates))
 ```
 
-Record all hit function names and their file offsets. These are the candidates.
+For a symbolized `vmlinux` taint workflow, the LoongArch64 tracker also provides a System.map constructor:
 
----
+```python
+from ablation.analyzers.taint_tracker_loongarch64 import LoongArch64TaintTracker
 
-## Step 3: Verify each candidate in the stripped production build
+tracker = LoongArch64TaintTracker.from_system_map(
+    '/path/to/debug-vmlinux',
+    '/path/to/debug-System.map',
+)
+findings = tracker.run_interprocedural()
+```
 
-For each candidate function name from Step 2:
+Record each candidate's function address, pattern address, sink, and instruction context. Keep candidates with an empty or low-confidence classification separate from confirmed production findings.
 
-1. Locate the corresponding function in the production binary by name (System.map or
- exported symbol) or by structural similarity if stripped.
-2. Scan or trace the production function manually.
-3. Classify each hit against the KASAN-build hit:
+## 3. Match functions into production
+
+For each debug candidate:
+
+1. Find the corresponding production function using trusted symbols where available, or structural/semantic matching when stripped.
+2. Verify that the matched functions implement the same logic; similar control flow alone is insufficient.
+3. Inspect the production comparison, arithmetic, and sink argument flow.
+4. Record one of the outcomes below.
 
 | Outcome | Meaning |
-|---|---|
-| Production hit: same pattern | **CONFIRMED**: real finding |
-| Production hit: different pattern | Verify independently; may be a distinct issue |
-| Production: pattern absent | **ELIMINATED**: KASAN codegen artifact |
-| Production: function absent | Module not included in production kernel |
+|:---|:---|
+| Same pattern and data flow in production | **CONFIRMED** after byte-level and reachability review. |
+| Related but different production pattern | Verify independently as a potentially different issue. |
+| Pattern absent in production | **ELIMINATED** as a debug-only code-generation candidate. |
+| Function absent in production | Exclude it from the production result and record the configuration difference. |
+
+Rescan the production image and filter results for the matched function address:
 
 ```python
-# Quick production-build rescan for a specific function VA
-scanner_prod = LA64MaxNotMinScanner(ko_path_production)
-hits_prod = scanner_prod.scan_function(func_va=production_va)
+production = LA64MaxNotMinScanner.from_path('/path/to/production-module.ko')
+production_hits = production.scan()
+matched_hits = [f for f in production_hits if f.func_va == production_va]
+print(production.report(matched_hits))
 ```
 
----
+`LA64MaxNotMinScanner` exposes whole-image `scan()` rather than a public `scan_function()` method. A zero `func_va` means the enclosing function was not resolved and requires manual attribution.
 
-## Step 4: Record the KASAN/production split
+## 4. Record the verification split
 
-Document which hits survived verification and which did not. The split is informative:
-a high elimination rate (>50%) signals KASAN-only optimization behavior, not scanner noise.
+Preserve both confirmed and eliminated candidates so later reviews can understand the result:
 
+```text
+KASAN build:  14 candidates across 13 modules
+Production:   11 confirmed, 3 eliminated
+Eliminated:   mlxsw_i2c, iwlwifi, rpcrdma
+Elimination rate: 21%
 ```
-KASAN build:       14 hits across 13 modules
-Production:        11 confirmed, 3 ELIMINATED
-  ELIMINATED:      mlxsw_i2c (data-path diff), iwlwifi (ACPI path), rpcrdma (codegen diff)
-  Elimination rate: 21%
-```
 
----
+A high elimination rate is a reason to scrutinize build differences and matching quality; it is not by itself a scanner-quality metric.
 
-## When to use this workflow
+## Debug-only patterns to review carefully
 
-- Kernel module analysis where the production `.ko` is stripped and short < 200 functions
-- Any target where a debug build with KASAN is available alongside the production build
-- When a production-only scan yields zero hits despite known-buggy code patterns (KASAN
- build can confirm whether optimizer folded the sequence)
+| Pattern | Likely cause | Verification action |
+|:---|:---|:---|
+| Shadow-address arithmetic around memory accesses | KASAN shadow mapping | Exclude instrumentation arithmetic from the target data-flow explanation. |
+| Calls to `__asan_load*` / `__asan_store*` | Sanitizer bounds checks | Identify through the instrumentation VA set; do not report as target sinks. |
+| `__kcov_trace_pc` at function entry | KCOV coverage tracing | Exclude from call-graph and function-role conclusions. |
+| Function present only in debug | Configuration or dead-code difference | Check production configuration and linked module membership. |
 
-Do not use this workflow when only one build is available. In that case, scan the available
-build directly and note the optimization level in the finding.
+## Limitations
 
----
-
-## KASAN codegen patterns to recognize and discard
-
-These appear in KASAN builds but are not real findings:
-
-| Pattern | Cause | Action |
-|---|---|---|
-| `lu12i.w + slti` before every load | KASAN shadow address computation (`ptr >> 3 + offset`) | Discard; mark as `kasan_shadow` via LoongArchDecoderV2 |
-| `bl 0x<asan_load8_va>` everywhere | KASAN bounds check before every 8-byte load | Ghost call; is_instrumentation=True |
-| `bl 0x<kcov_trace_pc_va>` at function entry | KCOV coverage tracing | Ghost call; is_instrumentation=True |
-| Function appears only in KASAN module | Module compiled only for debug tree | Check production kernel config |
-
----
+- KASAN is an analysis aid, not an exploitability oracle.
+- Production confirmation requires real instructions and a feasible runtime path, not only a matching function name.
+- Stripped-function matching can be uncertain after heavy optimization or refactoring; record the matching evidence.
+- When only one build exists, analyze that build directly and document its instrumentation and optimization context instead of simulating a two-build comparison.
 
 ## Related
 
-- `docs/reference-modules/loongarch64.md`: LoongArchDecoderV2 KASAN ghost-call suppression
-- `docs/reference-modules/loongarch64.md`: LA64MaxNotMinScanner, including ET_REL mode and Vec-growth FP class
-- `docs/reference-modules/kernel-drivers.md`: ET_REL `.ko` analysis, `.rela.text` relocations
+- [LoongArch & nanoMIPS Analysis](../reference-modules/loongarch64-2.md): architecture decoding and KASAN-aware analysis.
+- [Compiler & VxWorks Analysis](../reference-modules/compiler-defects.md): the max-not-min scanner and related compiler-defect checks.
+- [Windows Driver Vulnerabilities](../reference-modules/kernel-drivers.md): kernel-module analysis and driver attack surfaces.

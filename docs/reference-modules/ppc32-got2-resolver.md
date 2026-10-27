@@ -1,258 +1,82 @@
-# PPC32GOT2Resolver
+<a id="ppc32got2resolver"></a>
+# PowerPC Call Recovery
 
-**File:** `modules/ppc32_got2_resolver.py`
+Resolve PowerPC indirect calls and PLT references, and identify vector-heavy functions through AltiVec/VMX instruction density.
 
-Resolves PPC32 indirect calls (`BCTRL` through CTR) to concrete function
-addresses in stripped binaries that use the GOT2 position-independent calling
-model. Turns 15,000+ question-mark call sites into named function addresses.
-
-Tested: Huawei S6720EI bootload V200R012C00, Freescale e500mc PPC32 BE.
-**15120 / 15339 indirect calls resolved (98.6%). Zero unknowns.**
+**Files:** `modules/ppc32_got2_resolver.py` · `ablation/analyzers/ppc32_plt_tracer.py` · `ablation/analyzers/ppc64_vmx_density.py`
 
 ---
 
-## Usage
+## PPC32 GOT2 indirect-call resolution
+
+Position-independent PPC32 code can load a GOT2-relative target into a register and branch through CTR with `BCTRL`. A linear call scanner sees the branch but not its destination. `PPC32GOT2Resolver` traces the register setup and resolves supported targets into concrete names and addresses.
+
+Use `from_path()` for an ELF binary:
 
 ```python
 from modules.ppc32_got2_resolver import PPC32GOT2Resolver
 
-# Auto-parse section layout via lief
-resolver = PPC32GOT2Resolver.from_path('/path/to/bootload')
+resolver = PPC32GOT2Resolver.from_path('/path/to/ppc32-binary')
 result = resolver.resolve()
 print(result.report())
+print(result.stats())
 
-# Feed named symbols into BinaryContext
-for r in result.resolved:
-    if r.name:
-        ctx.set_name(r.target, r.name, source="dynsym")
-
-# Look up a specific BCTRL site
-target = result.targets_for(0x10023884)  # → 0x10022ee0
-
-# All callers of a target
-callers = result.by_target()[0x10022ee0]  # list of GOT2ResolvedCall
+for call in result.resolved:
+    print(hex(call.bctrl_va), call.kind, call.name, hex(call.target))
 ```
 
-If lief is unavailable, use `from_sections()` to supply section layout directly:
+`resolve()` accepts an optional function-start list to constrain analysis. `resolve_data_load()` and `resolve_data_loads()` recover data references for annotation. `export_jsonl(result, path)` writes machine-readable results.
+
+### Result interpretation
+
+- `GOT2ResolvedCall` includes `bctrl_va`, `kind`, `target`, `name`, `r30`, `disp`, and `entry_va`.
+- `GOT2UnresolvedCall` includes `bctrl_va` and a `reason` such as dynamic dispatch or missing register setup.
+- `targets_for(bctrl_va)` returns targets for one site; `by_target()` groups results by destination.
+
+Dynamic or computed branches are genuine indirect dispatch sites, not parser failures. Resolve them with runtime evidence or broader control-flow analysis rather than assigning a guessed target.
+
+## PPC32 PLT tracing
+
+`PPC32PLTTracer` maps imported functions to their callers and helps reconstruct PLT stubs and cross-references:
 
 ```python
-resolver = PPC32GOT2Resolver.from_sections(
-    data=open('bootload', 'rb').read(),
-    text_va=0x10000000, text_size=0x13a578, text_file_off=0x0,
-    data_va=0x1014b000, data_size=0x1ffa0, data_file_off=0x13b000,
-    dynsym_va=0x10000564, dynsym_size=0x830,
-    dynstr_va=0x10000d94, dynstr_size=0x505,
-    got2_va=0x1013b000,  got2_size=0x2000,   # enables Fix 2 range check
-)
-result = resolver.resolve()
+from ablation.analyzers.ppc32_plt_tracer import PPC32PLTTracer
+
+tracer = PPC32PLTTracer.from_path('/path/to/ppc32-binary')
+for symbol in tracer.elf().dangerous_imports():
+    sites = tracer.find_callers(symbol)
+    print(tracer.report(sites, symbol))
 ```
 
-### Hardening options
+`PPC32ELF` also exposes all imports, exports, sections, 32-bit reads, disassembly, direct callers, `BCTRL` sites, and PLT slot lookup. Confirm relocations and stub layout for the specific linker output before merging recovered names into another context.
 
-Two optional parameters improve precision in stripped binaries:
+## AltiVec/VMX density profiling
 
-**`fn_starts` Fix 1: per-function r30 floor:**
-
-Pass a sorted list of function entry VAs (e.g. from `lief.parse(p).exported_functions`).
-When provided, a BCL setup site that precedes the current function's entry VA is
-rejected instead of inherited. Useful when a small leaf function has no BCL preamble
-of its own and sits immediately after a function from a different CU with a different r30.
+`VMXDensityScanner` estimates the proportion of VMX instructions per function on big-endian PPC32/PPC64 code. It is useful for prioritizing math, media, physics, rendering, and signal-processing routines without relying on symbols.
 
 ```python
-import lief
-elf = lief.parse(path)
-fn_starts = sorted(f.address for f in elf.exported_functions if f.address)
-result = resolver.resolve(fn_starts=fn_starts)
+from ablation.analyzers.ppc64_vmx_density import VMXDensityScanner
+
+scanner = VMXDensityScanner.from_context(ctx)
+results = scanner.scan(threshold=5)
+print(scanner.report(results))
+
+for result in results:
+    if result.density >= 0.15:
+        print(hex(result.va), result.label, result.fmt(ctx.name))
 ```
 
-**`got2_va` / `got2_size` Fix 2: GOT2 range validation:**
+Density is `vmx_count / total_insns`. Labels range from `vector_trace` through `vector_light`, `vector_math`, and `vector_heavy`. High density is a heuristic, not proof of function role: short functions and unrelated vectorized code can produce misleading labels.
 
-Supplied to `__init__` / `from_path` / `from_sections`. When present, any computed
-`entry_va = r30 + disp` that falls outside `[got2_va, got2_va + got2_size)` is
-rejected with reason `entry_va_outside_got2`. `from_path` extracts `.got2`
-automatically via lief.
+## Limitations
 
-**Fix 3: generalised r30 setup detection automatic:**
-
-`_find_r30_setups` now uses a sliding-window scan: up to 16 instructions after the BCL
-for `MFLR r30`, up to 6 more for `ADDIS r30,r30,hi`, up to 6 more for `ADDI r30,r30,lo`.
-Any instruction that writes to r30 other than the three target instructions aborts the
-search. This handles a third compiler variant found in Huawei CE6810 e500mc `.so` files
-where up to 8 frame spill instructions appear between BCL and MFLR r30. No parameters
-needed; this is always-on.
-
-## Error conditions
-
-- `from_path()` raises `ValueError` if the file exceeds `_MAX_BINARY_BYTES` (256 MB) or if
-  `lief.parse()` returns `None` corrupt or unsupported ELF. The `None` case is checked
- explicitly after the parse call to prevent `AttributeError` in callers.
-
----
-
-## How it works
-
-### Step 1: r30 assignment compilation unit boundaries
-
-PPC32 PIC code establishes the GOT2 base register once per compilation unit:
-
-```
-BCL  20,31,+4        # LR ← next-PC (= bcl_va + 4)
-MFLR r30             # r30 ← LR
-ADDIS r30, r30, hi   # r30 += hi16(const)
-ADDI  r30, r30, lo   # r30 += lo16(const)
-```
-
-The linker computes `hi`/`lo` so that `r30 = GOT2_section_address + bias`.
-The resolver captures the computed value directly from the instruction stream,
-so no knowledge of the bias offset is required.
-
-The resolver finds 2242 such setup sites in the S6720EI bootload and builds a
-sorted lookup. For any BCTRL VA, the live r30 = the setup with the largest
-`bcl_va ≤ bctrl_va`.
-
-### Step 2: BCTRL source classification
-
-For each BCTRL, the resolver scans backward from the MTCTR max 20 insns to
-identify the source register, then backward from the MTCTR max 25 insns to
-classify the load:
-
-| Pattern | Kind | Resolution |
-|---|---|---|
-| `LWZ/LWZU rx, d(r30)` | `got2` | `target = u32(r30 + d)` |
-| `ADDIS rx,0,hi + ADDI rx,rx,lo` | `direct` | inline constant |
-| `LWZ/LWZU rx, d(ry≠r30)` | `dynamic` | runtime only |
-| `LWZX rx, ra, rb` | `dynamic` | runtime only |
-
-### Step 3: Resolution
-
-- **got2:** `entry_va = r30 + disp`; `target = u32entry_va` from binary image.
-- **direct:** target is the inline constant from the ADDIS/ADDI pair.
-- **dynamic:** logged as unresolved with a reason string; not counted in stats.
-
----
-
-## Output types
-
-### `GOT2ResolvedCall`
-
-| Field | Type | Description |
-|---|---|---|
-| `bctrl_va` | `int` | VA of the BCTRL instruction |
-| `kind` | `str` | `"got2"` or `"direct"` |
-| `target` | `int` | Resolved callee VA |
-| `name` | `Optional[str]` | Symbol name from.dynsym, if matched |
-| `in_text` | `bool` | Whether target is within.text |
-| `r30_source` | `Optional[int]` | VA of the BCL that established r30 |
-| `r30` | `Optional[int]` | r30 value at call site |
-| `disp` | `Optional[int]` | Signed GOT2 displacement |
-| `entry_va` | `Optional[int]` | GOT2 entry address r30 + disp |
-
-### `GOT2UnresolvedCall`
-
-| Field | Type | Description |
-|---|---|---|
-| `bctrl_va` | `int` | VA of the BCTRL instruction |
-| `reason` | `str` | Why it could not be resolved |
-
-### `GOT2ResolveResult`
-
-- `.resolved`: `List[GOT2ResolvedCall]`
-- `.unresolved`: `List[GOT2UnresolvedCall]`
-- `.stats`: dict: total_bctrl, resolved, got2, direct, unresolved, dynamic
-- `.targets_for(va)`: look up callee for a BCTRL VA
-- `.by_target()`: dict mapping callee VA → list of callers
-- `.report()`: one-line summary string
-- `resolver.export_jsonlresult, out_path`: write resolved calls as JSONL
-
----
-
-## Assumptions and failure modes
-
-**Assumption: r30 is the GOT2 register.** Standard SysV ABI PPC32 convention.
-Non-standard toolchains using r29 or another register will not be resolved.
-
-**Assumption: GOT2 entries are final addresses.** This resolver is for statically
-built binaries or dynamically linked binaries where relocation is already applied.
-It does not support runtime ASLR unless the caller supplies the loaded base.
-
-**Assumption: enclosing CU = nearest preceding BCL.** Correct per PPC32 ABI.
-Functions without their own BCL setup small leaf functions are common inherit
-the previous CU's r30; this is the intended behavior.
-
-**Scan window limit.** MTCTR lookback is 20 instructions; load lookback is 25.
-Complex register sequences across basic-block boundaries require CFG analysis.
-In practice this is not observed in the tested binary.
-
-**Dynamic dispatch 219 calls in S6720EI.** LWZX indexed dispatch and non-r30
-LWZ/LWZU loads struct field access, function pointer arrays are runtime-only.
-These are correctly labeled `dynamic` and excluded from the resolution count.
-
----
-
-## Validation
-
-Confirmed against two manual RE entries from `targets/huawei/s6720_switch_re.py`:
-
-| BCTRL VA | Expected target | Result |
-|---|---|---|
-| `0x10023884` | `0x10022ee0` check_version_compat | ✓ |
-| `0x100238e8` | `0x100230ac` flash_compat | ✓ |
-
-## FORGE audit
-
-Gate: **PASSED**. No HIGH or CRITICAL findings. `from_path()` reads the ELF directly: `_MAX_BINARY_BYTES=256MB`; `Path.stat().st_size` guard before `read_bytes()`; `lief.parse()` in `try/except Exception` + explicit `elf is None` check. `from_sections()` accepts pre-loaded bytes, size is the caller's responsibility.
-
----
-
-## Why this exists
-
-Prior to this module, ppc32got2resolver required manual work outside the Ablation pipeline. This module integrates the capability directly so findings feed the shared `PatternLibrary` and `FindingRegistry` without a separate toolchain.
-
----
-
-## Example output
-
-```
-# PPC32GOT2Resolver.resolve().report():
-PPC32 GOT2 resolver: 38/42 resolved (90%)
-  GOT2: 31  direct: 7  dynamic (runtime-only): 3  other unresolved: 1
-```
-
----
-
-## False positives
-
-**Dynamic runtime-only calls.** PPC32 binaries that use `bctr` branch to CTR after loading the address from a computed expression rather than GOT2 are reported as `dynamic runtime-only`: they cannot be resolved statically. These are genuine indirect dispatch sites that require dynamic tracing to resolve.
-
----
-
-## Pipeline position
-
-**Before this module:** Run `PPC32TaintTracker.scan()` and identify functions with `BCTRL` sink candidates.
-
-**After this module:** Merge the resolved `{bctrl_va: target_name}` dict into `ctx.plt` so that downstream `PPC32TaintTracker` runs classify previously-unresolved `BCTRL` sinks correctly.
-
----
-
-## Reading output
-
-`PPC32GOT2Resolver.from_context(ctx).resolve()` returns a `GOT2ResolveResult`:
-
-| Attribute | Content |
-|:---|:---|
-| `resolved` | `List[GOT2ResolvedCall]`: BCTRL sites where the target was resolved |
-| `unresolved` | `List[GOT2UnresolvedCall]`: BCTRL sites that could not be resolved |
-
-Each `GOT2ResolvedCall` has: `bctrl_va`, `kind` (`'got2'` or `'direct'`), `target`, `name`, `r30`, `disp`, `entry_va`.
-
-Each `GOT2UnresolvedCall` has: `bctrl_va`, `reason` for example `'dynamic_dispatch'`, `'no_r30_setup_precedes'`.
-
-`GOT2ResolveResult.stats` returns a summary dict with `total_bctrl`, `resolved`, `got2`, `direct`, `unresolved`, `dynamic` counts.
-
----
+- GOT2 resolution depends on supported register-setup patterns and valid ELF section/symbol information. Obfuscation and nonstandard loaders require manual work.
+- `BCTR`, computed `BCTRL`, vtables, and callbacks may remain unresolved even when the binary is valid.
+- PLT layouts differ across linkers and hardening modes; verify recovered stubs against relocation entries.
+- VMX detection uses instruction encodings and density, not algorithm identification or vulnerability evidence.
 
 ## See also
 
-- [BinaryContext](binary-context.md): session state and function/import index
-- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary
+- [Data-Flow Taint Analysis](taint-analysis.md): confirms attacker-controlled flow after call recovery.
+- [Analysis Context & Caching](on-demand-analysis.md): stores recovered names and cross-references.
+- [Semantic Code Search](semantic-code-search.md): prioritizes functions for deeper review.

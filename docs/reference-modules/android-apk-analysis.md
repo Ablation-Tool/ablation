@@ -1,4 +1,5 @@
-# Android / APK Analysis
+<a id="android--apk-analysis"></a>
+# Android App Analysis
 
 Parse APK containers, decode Android binary XML manifests (AXML), iterate DEX class/method tables, enumerate `ACC_NATIVE` methods and bundled native libraries, then scan all DEX string pools and method reference tables for hardcoded secrets, dangerous API usage, weak cryptography, cleartext traffic, and unprotected exported components: with no external dependencies.
 

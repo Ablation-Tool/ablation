@@ -1,4 +1,5 @@
-# Motorola 88000 / BCS COFF Analysis
+<a id="motorola-88000--bcs-coff-analysis"></a>
+# Legacy Binary Formats
 
 Decode Motorola 88000 (M88K) binaries: identifying `RISC.88000` architecture COFF containers, disassembling M88K instructions, and providing function start discovery for taint analysis of legacy Motorola 88000 firmware targets including NeXT workstations, early Motorola embedded platforms, and HP-UX systems that used the M88K processor.
 

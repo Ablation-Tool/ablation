@@ -1,111 +1,85 @@
-# LoongArch64 Compiler Bug Detection
+<a id="loongarch64-compiler-bug-detection"></a>
+# LoongArch & nanoMIPS Analysis
 
-Detect the GCC 12.3.1.7 LoongArch64 `min`-to-`max` code generation bug: identifying the four-instruction branchless sequence where swapped `masknez`/`maskeqz` order produces the maximum of two values instead of the minimum, and determine whether the wrong (maximum) value flows into a memory sink on the same taint path.
+Decode LoongArch64 and variable-width nanoMIPS instructions, then classify dangerous-call arguments with LoongArch64-specific calling conventions.
 
----
-
-## Why this exists
-
-1. **GCC 12.3.1.7-1.tl4 for LoongArch64 emits `maxa, b` when the source calls `mina, b`.** The branchless min/max pattern uses `masknez`/`maskeqz` to select one of two values; correct `min` requires `maskeqz` to select `Ra` when `Ra < Rb` and `masknez` to select `Rb` otherwise. GCC 12.3.1.7 emits the inverted order, producing `max`. This bug appears in TencentOS 4.6 kernel 6.6.119-52.9.tl4 and any other LoongArch64 target compiled with this GCC version.
-
-2. A second variant uses immediate-compare instructions (`sltui`/`slti`) with a constant: `minx, CONSTANT` where the bug produces `maxx, CONSTANT`. This is the higher-severity variant: when `CONSTANT` is a buffer size or allocation limit, the wrong (larger) value passed to a memory sink produces a heap overflow. `LA64MaxNotMinScanner.scan()` detects both the register-compare and immediate-compare variants.
-
-3. `LA64MaxNotMinScanner.from_pe32plus()` supports PE32+ (Windows on LoongArch): enabling analysis of LoongArch64 Windows kernel drivers compiled with the same buggy GCC toolchain. This covers LoongArch64 IoT and industrial targets that ship Windows-based firmware.
+**Files:** `ablation/analyzers/loongarch_decoder.py` · `ablation/analyzers/nanomips_decoder.py` · `ablation/analyzers/sink_arg_classifier_loongarch64.py`
 
 ---
 
-## How it works
+## LoongArch64 decoding
 
-```mermaid
-flowchart TD
-    A(["LA64MaxNotMinScanner.from_path(path)\n  or .from_pe32plus(data, image_base)"]):::input --> B["scan() → List[LA64MaxNotMinFinding]\n  Pattern 1: register-compare variant\n    sltu  Rcond, Ra, Rb\n    masknez Rtmp1, Rb, Rcond   ← wrong order → max\n    maskeqz Rtmp2, Ra, Rcond\n    or Rout, Rtmp2, Rtmp1\n    (correct min would swap masknez/maskeqz)\n  Pattern 2: immediate-compare variant\n    sltui/slti Rcond, Ra, N\n    masknez Rtmp1, Rconst, Rcond\n    maskeqz Rtmp2, Ra, Rcond\n    or Rout, Rtmp2, Rtmp1\n  For each match: check if Rout flows to memory sink\n    → LA64MaxNotMinFinding"]:::primary
-    B:::primary --> C["LA64MaxNotMinFinding:\n  func_va: int\n  pattern_va: int  (VA of slt/sltu)\n  result_name: str  (ABI reg name)\n  sink_va: int\n  sink_name: str  (PLT symbol)\n  sink_arg: str\n  fp_class: str  ('' | 'vec_growth' | 'copy_limit')\n  compare_op: str  ('sltu' | 'slt')"]:::secondary
-    C:::secondary --> D(["report(findings) → str"]):::output
-    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
-    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
-    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
-    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
-    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
-    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
-    linkStyle 0 stroke:#bf360c,stroke-width:2px
-    linkStyle 1 stroke:#00695c,stroke-width:2px
-    linkStyle 2 stroke:#2e7d32,stroke-width:3px
-```
-
----
-
-## Usage
+LoongArch64 instructions are fixed-width 32-bit little-endian words. `LoongArchDecoder` provides typed operands and frame-level control-flow information for binaries that Capstone does not handle.
 
 ```python
-from ablation.analyzers.loongarch64_max_not_min_scanner import LA64MaxNotMinScanner
+from ablation.analyzers.loongarch_decoder import LoongArchDecoder
 
-scanner = LA64MaxNotMinScanner.from_path('/path/to/tencentos_kernel.elf')
-findings = scanner.scan()
+decoder = LoongArchDecoder()
+frames = decoder.decode_frames(text_bytes, base_addr=0x400000)
 
-for f in findings:
-    print(f"  {f.pattern_va:#x}  {f.result_name} → {f.sink_name} @ {f.sink_va:#x}")
-    if f.fp_class:
-        print(f"    ELIMINATED: {f.fp_class}")
-    else:
-        print(f"    REAL: {f.compare_op} integer truncation → {f.sink_name}({f.sink_arg})")
-
-print(scanner.report(findings))
+for frame in frames:
+    if frame.is_call:
+        print(f'call 0x{frame.va:x} -> 0x{frame.target:x}')
+    elif frame.is_ret:
+        print(f'return 0x{frame.va:x}')
 ```
 
----
+`decode_one(data, va)` decodes one word. `decode_frames()` returns `LoongArchFrame` records with the address, mnemonic, operands, and control-flow metadata. `LoongArchOperand.reg_name` translates register indices into lp64 ABI names such as `$a0`, `$sp`, and `$fp`.
 
-## Example output
+Use `LoongArchDisasm` when a disassembler-compatible frame interface is needed. Confirm that the input buffer begins on a four-byte instruction boundary; unsupported encodings and data embedded in `.text` require review rather than guessed semantics.
 
-The following illustrates the LoongArch64 compiler bug detection output format. Actual addresses are binary-specific.
+## nanoMIPS frame and instruction decoding
 
+nanoMIPS instructions can be 16, 32, or 48 bits. The first halfword determines frame width, so the decoder must preserve variable-width boundaries instead of stepping through fixed 32-bit words.
+
+```python
+from ablation.analyzers.nanomips_decoder import NanoMIPSDecoder
+
+decoder = NanoMIPSDecoder(endian='little')
+frames = decoder.decode_frames(code_bytes, base_addr=0x80000000)
+
+for frame in frames:
+    print(
+        f'0x{frame.va:x} [{frame.width * 8}-bit] '
+        f'{frame.mnemonic} {frame.op_str}'
+    )
 ```
-LA64MaxNotMinScanner: tencentos_kernel.elf
 
-Findings: <N>
+When the installed Capstone provides `CS_MODE_NANOMIPS`, `has_full_decode()` reports full instruction support. Without it, the module still recovers frame widths and selected branch/call/return patterns, but unknown mnemonics are shown as `???`.
 
-LA64_MAX_NOT_MIN  pattern@<pattern_va>  a0 -> memcpy(count)@<sink_va>  [sltu...]
-  REAL: sltu integer truncation → memcpy(count) — max used as copy length
+`NanoMIPSDisasm.stream()` provides a streaming interface, `find_function_starts()` proposes function boundaries, and `report_frames()` formats decoded frames. Endianness must match the target; incorrect endianness invalidates width and opcode decisions.
 
-LA64_MAX_NOT_MIN  pattern@<pattern_va>  a1 -> kmalloc(size)@<sink_va>
-  [vec_growth]: ELIMINATED
+## LoongArch64 dangerous-call classification
+
+`SinkArgClassifierLA64` classifies arguments at registered execution sinks using LoongArch64 register conventions:
+
+```python
+from ablation.analyzers.sink_arg_classifier_loongarch64 import SinkArgClassifierLA64
+
+classifier = SinkArgClassifierLA64.from_path('/path/to/loongarch64-binary')
+classifier.add_sink('vendor_exec', arg_pos=0)
+results = classifier.classify_all()
+print(classifier.report(results))
 ```
 
----
+Use `from_context(ctx)` to reuse an existing binary context. Review `ARG_PROPAGATED` and `UNKNOWN` sites with taint analysis and manual disassembly. `RODATA_CONST` and fixed-format results reduce triage only when the recovered address and formatting behavior are correct.
 
-## False positives
+## KASAN and compiler-defect analysis
 
-**The four-instruction pattern may appear in code that legitimately computes `max()`**: a correct `maxa, b` implementation uses exactly this pattern with the correct `masknez`/`maskeqz` order. `LA64MaxNotMinScanner` detects the `max` pattern as a potential bug only when the source context function name containing `min`, `clamp`, `limit`, or `bound` suggests `min` was intended. Validate with source code review if available.
+For debug kernel builds, `LoongArchDecoderV2.from_system_map()` identifies KASAN/KCOV instrumentation addresses. For the GCC max-not-min pattern, use `LA64MaxNotMinScanner` and validate candidates in the production build rather than treating a debug hit as proof.
 
-**`from_pe32plus()` requires a valid image base**: providing an incorrect `image_base` will produce incorrect VAs in findings. Verify the image base from the PE's `Optional Header.ImageBase` field before calling.
+- [KASAN Finding Validation](../workflows/kasan-oracle.md)
+- [Compiler Defects & Hardening](compiler-defects.md)
 
----
+## Limitations
 
-## Pipeline position
-
-Run `LA64MaxNotMinScanner` on any LoongArch64 ELF or PE binary. Prioritize `CRITICAL` findings flows to sink for immediate taint verification. The `LoongArch64TaintTracker` can confirm the path from the `max` result to the sink.
-
----
-
-## Reading findings
-
-`LA64MaxNotMinScanner.scan()` returns `List[LA64MaxNotMinFinding]`:
-
-| Attribute | Type | Content |
-|:---|:---|:---|
-| `func_va` | `int` | VA of the enclosing function 0 if unknown |
-| `pattern_va` | `int` | VA of the `slt`/`sltu` instruction starting the 4-insn sequence |
-| `result_reg` | `int` | Register number of the incorrect result |
-| `result_name` | `str` | ABI name of `result_reg` for example `a0` |
-| `sink_va` | `int` | VA of the `bl` to the sink function |
-| `sink_name` | `str` | PLT symbol name of the sink for example `memcpy` |
-| `sink_arg` | `str` | Argument label showing which argument receives the wrong value |
-| `context` | `str` | Disassembly snippet empty string if not available |
-| `fp_class` | `str` | `""` = real finding; `"vec_growth"` = eliminated; `"copy_limit"` = plausible-low |
-| `compare_op` | `str` | `"sltu"` unsigned or `"slt"` (signed) |
-
----
+- Frame decoding is not complete semantic emulation. Unsupported instructions, self-modifying code, and data in text regions can reduce coverage.
+- nanoMIPS fallback mode does not claim full mnemonic semantics when full Capstone support is absent.
+- Sink verdicts are provenance heuristics, not proof of attacker control, runtime reachability, or exploitability.
+- Architecture and ABI selection must match the actual target. Do not run the LoongArch64 classifier against nanoMIPS or another ISA.
 
 ## See also
 
-- [LoongArch64 Taint Analysis](taint-analysis-2.md): `TaintTrackerLA64` for full dataflow verification of scanner findings
-- [LoongArch64 KASAN-Aware Decoding](hisilicon-risc-v-extensions.md): `LoongArchDecoderV2` for debug kernel analysis
+- [Dangerous Call Classification](sink-arg-classifier.md): shared sink-verdict concepts and other architecture variants.
+- [Function Discovery](stripped-function-discovery.md): recovers candidate functions before detailed analysis.
+- [Data-Flow Taint Analysis](taint-analysis.md): confirms source-to-sink data flow.

@@ -1,4 +1,5 @@
-# IOS/IOS-XE Appliance Enumeration
+<a id="iosios-xe-appliance-enumeration"></a>
+# Cisco Infrastructure Assessment
 
 Enumerate Cisco IOS and IOS-XE appliances via HTTP/RESTCONF API, SNMP CDP neighbor table, running-config OID, Telnet banner, TFTP configuration pull, and Type 7 password decoding: detecting AAA configuration, enabled services, and management interface exposure: via `modules/ios_enum.py`.
 
@@ -39,18 +40,29 @@ flowchart TD
 ## Usage
 
 ```python
-from modules.ios_enum import decode_type7, probe_ios
+from modules.ios_enum import IOSEnumerator, decode_type7
 
-# Decode a Type 7 password from config
+# Decode a Type 7 password already present in an authorized config export
 enc = '070C285F4D06'
 print(f"Type 7 decode: {decode_type7(enc)}")
 
-# Full appliance enumeration
-results = probe_ios(host='192.168.1.1', timeout=8)
-print(f"SNMP community: {results.get('snmp_community')}")
-print(f"Neighbors: {results.get('cdp_neighbors')}")
-print(f"Config lines: {len(results.get('config', '').splitlines())}")
+# Enumerate an authorized lab appliance with a test account
+enumerator = IOSEnumerator(
+    host='192.0.2.10',
+    username='audit',
+    password='test-password',
+)
+results = enumerator.run()
+print(enumerator.report())
+
+# NX-OS/ACI enumeration uses the corresponding target inventory.
+from modules.nxos_enum import NXOSEnumerator
+fabric = NXOSEnumerator(['192.0.2.20'])
+fabric_results = fabric.run()
+print(fabric.report())
 ```
+
+Use read-only test accounts and lab appliances for API, SNMP, TFTP, Telnet, and fabric enumeration. Do not run community or credential brute-force helpers against production systems. Treat decoded Type 7 strings and SNMP communities as secrets, and store configuration exports with restricted access.
 
 ---
 

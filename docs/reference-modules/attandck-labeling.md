@@ -1,4 +1,5 @@
-# ATT&CK Labeling
+<a id="attck-labeling"></a>
+# Threat Classification
 
 Automatically annotate Ablation findings with MITRE ATT&CK technique IDs and tactic labels by matching the finding's type and description text against a curated keyword-to-technique map ordered by the ATT&CK kill chain.
 

@@ -1,4 +1,5 @@
-# NetworkSinkFinder
+<a id="networksinkfinder"></a>
+# Network Attack-Surface Detection
 
 Finds every network-reachable dangerous exec sink in a binary by cross-referencing BFS callgraph reachability with SinkArgClassifier results.
 
@@ -131,4 +132,4 @@ NetworkSinkFinder: 7 network-reachable dangerous sinks
 
 - [Sink Arg Classifier](sink-arg-classifier.md): provides the ARG_PROPAGATED results NetworkSinkFinder filters
 - [Window Analyzer](window-analyzer.md): use after NetworkSinkFinder to confirm the argument chain
-- [TaintTracker PPC32](taint-tracker-ppc32.md): interprocedural taint for confirmed candidates
+- [Data-Flow Taint Analysis](taint-analysis.md): confirm source-to-sink data flow for reachable candidates

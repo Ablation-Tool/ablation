@@ -1,4 +1,5 @@
-# Compiler Defect Detection
+<a id="compiler-defect-detection"></a>
+# Compiler Defects & Hardening
 
 Finds security vulnerabilities the compiler introduced through miscompilation. The primary target is GCC 12.3.1.7 for LoongArch64, which miscompiles `std::max()` and `std::min()` comparisons in a way that selects the wrong operand and produces heap overflow conditions.
 

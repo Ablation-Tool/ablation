@@ -386,7 +386,7 @@ The `.mpy` file format stores QSTRs as length-prefixed byte sequences (not as in
 
 **MicroPython version detection:**
 ```python
-from ablation.analyzers.mpy_lifter import MpyLifter
+from modules.mpy_lifter import MpyLifter
 
 with open('module.mpy', 'rb') as f:
     data = f.read()
@@ -435,7 +435,7 @@ MicroPython bytecode is a compact, variable-length encoding. Instructions range 
 ## Usage: full MicroPython firmware scan <sup>[↑](#mpylifter)</sup>
 
 ```python
-from ablation.analyzers.mpy_lifter import MpyLifter
+from modules.mpy_lifter import MpyLifter
 import os
 
 # Scan all .mpy files extracted from firmware filesystem

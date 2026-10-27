@@ -1,4 +1,5 @@
-# Protocol FSM Extractor
+<a id="protocol-fsm-extractor"></a>
+# Protocol & Steganography Analysis
 
 **File:** `modules/proto_fsm.py`
 
@@ -104,6 +105,24 @@ python3 proto_fsm.py --so /path/to/target.so --seed 0x111f98 --seed 0x305020 --h
 | `trigger_pc` | VA of the BL instruction that triggers the transition |
 | `trigger_fn` | VA of the called function |
 | `state_var` | BSS address of the state variable this transition reads/writes |
+
+---
+
+## Bitmap LSB key extraction
+
+`BmpKeyExtractor` reads least-significant-bit data from a BMP using a target-specific seed, extracts coordinate pairs, and reconstructs key components with exact rational arithmetic.
+
+```python
+from ablation.analyzers.lsb_stego_extractor import BmpKeyExtractor
+
+extractor = BmpKeyExtractor('/path/to/embedded.bmp')
+result = extractor.extract(seed='target-specific-seed', n_primes=8)
+print(result.fmt())
+for component in result.components:
+    print(component)
+```
+
+For lower-level access, `LSBStegoReader(pixel_data).extract_coords(seed)` returns coordinates and `LagrangeKeyExtractor.extract(coords, n_pts)` performs reconstruction. This is a target-specific encoding, not general steganography detection. Ordinary BMP data can produce meaningless coordinates; validate recovered material against the consuming implementation without exposing secrets in logs or reports.
 
 ---
 

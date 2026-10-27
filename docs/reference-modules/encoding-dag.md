@@ -1,4 +1,5 @@
-# EncodingDAG
+<a id="encodingdag"></a>
+# Architecture Definition Language
 
   - [What is a DAG Adapter Language?](#what-is-a-dag-adapter-language)
   - [Why this exists](#why-this-exists)
@@ -605,7 +606,7 @@ rv32_int = ISASpec(
     name="rv32i",
     templates={"ADD_rv32": add_tmpl},
     bindings=[add_binding],
-    reg_table={"x0": 0, "x1": 1, "x2": 2, ..., "x31": 31},
+    reg_table={f"x{i}": i for i in range(32)},
     opcode_field="opcode",
 )
 

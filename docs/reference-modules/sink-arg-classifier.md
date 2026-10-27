@@ -1,4 +1,5 @@
-# SinkArgClassifier
+<a id="sinkargclassifier"></a>
+# Dangerous Call Classification
 
   - [What is sink argument classification?](#what-is-sink-argument-classification)
   - [Why this exists](#why-this-exists)
@@ -187,6 +188,27 @@ Total: 47  RODATA_CONST: 31  ARG_PROPAGATED: 8  SNPRINTF_RODATA: 5  UNKNOWN: 3
 **`SNPRINTF_RODATA` with controllable `%s` arguments.** `SNPRINTF_RODATA` means the format string itself is a `.rodata` literal, but a `%s` slot in that format string can still receive attacker input. `snprintf(cmd, sz, '/bin/tool %s', user_param)` classifies as `SNPRINTF_RODATA` correctly, but injection still works through `user_param`. Treat `SNPRINTF_RODATA` as medium risk, not safe.
 
 **`ARG_PROPAGATED` on already-validated entry arguments.** An entry argument can be attacker-controlled or can be an internal pointer validated before the function was called. `ARG_PROPAGATED` is a necessary but not sufficient condition for exploitability. Confirm with `TaintTracker` and `PathSolver`.
+
+---
+
+## Architecture variants <sup>[↑](#sinkargclassifier)</sup>
+
+Use the implementation matching the target rather than forcing every binary through the x86-64 classifier:
+
+```python
+from ablation.analyzers.sink_arg_classifier_arm32 import SinkArgClassifierARM32
+from ablation.analyzers.sink_arg_classifier_loongarch64 import SinkArgClassifierLA64
+
+arm32 = SinkArgClassifierARM32.from_context(ctx)
+arm32_results = arm32.classify_all()
+print(arm32.report(arm32_results))
+
+la64 = SinkArgClassifierLA64.from_path('/path/to/loongarch64-binary')
+la64_results = la64.classify_all()
+print(la64.report(la64_results))
+```
+
+The variants share verdict concepts but use architecture-specific instruction decoding, calling conventions, and function-boundary recovery. Their coverage is not interchangeable; review `UNKNOWN` results with the corresponding architecture's disassembly.
 
 ---
 

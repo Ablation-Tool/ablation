@@ -1,4 +1,5 @@
-# Source Dangerous Sink Detection
+<a id="source-dangerous-sink-detection"></a>
+# Source Code Security Analysis
 
 Find dangerous code patterns across a source repository: detecting `eval`/`vm.runInContext` code execution, `subprocess`/`exec` command injection, SSRF-prone `fetch`/`axios` calls, path traversal in `fs.readFile`, and unguarded internal endpoints: with guard-condition detection that narrows findings to unguarded sinks and maps each to a CWE and severity.
 
@@ -51,6 +52,32 @@ critical = [f for f in findings if f.severity == 'CRITICAL' and not f.gated]
 for f in critical:
     print(f"  {f.file}:{f.line}  {f.sink_def.name}  CWE-{f.cwe}")
 ```
+
+### Trace sources and prioritize repository review
+
+`SourceTaintTracker` builds a repository call graph and traces selected sink hits back toward request-input sources:
+
+```python
+from ablation.analyzers.source_taint_tracker import SourceTaintTracker
+
+tracker = SourceTaintTracker.from_context(ctx)
+tracker.build()
+paths = tracker.trace_all(findings)
+print(tracker.report(paths, ctx))
+```
+
+`SourceAuditCompressor` groups files with similar security profiles so reviewers can prioritize representative files and spot-check batches instead of reading every file first:
+
+```python
+from ablation.analyzers.source_audit_compressor import SourceAuditCompressor
+
+compressor = SourceAuditCompressor.from_context(ctx)
+buckets = compressor.compress()
+print(compressor.report(buckets, show_files=True))
+print(compressor.priority_reads(buckets))
+```
+
+A taint path shows syntactic source-to-sink connectivity; it does not prove route exposure, missing authorization, or exploitability. Compression is a review-ordering aid and must not be used to discard unaudited security-relevant files.
 
 ---
 

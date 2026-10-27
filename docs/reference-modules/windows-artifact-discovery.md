@@ -1,4 +1,5 @@
-# Windows Artifact Discovery
+<a id="windows-artifact-discovery"></a>
+# Forensics & Malware Analysis
 
 Scan the Windows filesystem for $MFT timeline anomalies, LNK file targets recent documents, persistence shortcuts, Prefetch execution records, EVTX log gaps, mutex name artifacts from known malware families, and clipboard monitor patterns: providing a host-activity timeline from a mounted Windows volume: via `modules/forensics_enum.py`.
 
@@ -53,6 +54,27 @@ data = open('sample.exe', 'rb').read()
 for m in detect_mutex_artifacts(data):
     print(f"  [{m['severity']}] {m['title']}: {m['detail'][:80]}")
 ```
+
+### Recover ELF files from physical memory
+
+`PhysmemVFS` indexes embedded ELF64 x86-64 images in a physical-memory dump and maps dump offsets to physical addresses. Use a lawfully obtained crash dump or VM memory image; memory can contain credentials, keys, and private data.
+
+```python
+from modules.physmem_elf_vfs import PhysmemVFS
+
+with PhysmemVFS('/path/to/memory.dump') as vfs:
+    count = vfs.build_index()
+    print(f'ELF candidates: {count}')
+    vfs.save_index('/tmp/memory-elf-index.json')
+
+    # Review candidates before selecting one for extraction.
+    if vfs._index:
+        candidate = vfs._index[0]
+        print(candidate.to_dict())
+        vfs.extract_binary(candidate, '/tmp/recovered-binary.elf')
+```
+
+`load_index()` reuses a saved index. `find_proc_maps()` and owner-mapping helpers associate images with processes when supporting evidence is available. An ELF magic match is only a candidate: validate segments and ownership before using the recovered file for analysis.
 
 ---
 

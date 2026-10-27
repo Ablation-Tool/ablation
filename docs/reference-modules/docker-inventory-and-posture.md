@@ -1,4 +1,5 @@
-# Docker Inventory and Posture
+<a id="docker-inventory-and-posture"></a>
+# Container & Kubernetes Security
 
 Enumerate running Docker containers, images, volumes, and network configurations, and assess container isolation posture socket exposure, privileged flags, capability grants, image security: from a compromised host with Docker socket access, via `modules/docker_enum.py`.
 
@@ -43,8 +44,8 @@ from modules.docker_enum import DockerEnumerator, check_container_isolation
 
 # Enumerate from host or compromised container with socket
 enumerator = DockerEnumerator()
-containers = enumerator.enumerate_containers()
-images = enumerator.enumerate_images()
+containers = enumerator.get_containers()
+images = enumerator.get_images()
 
 print(f"Containers: {len(containers)}  Images: {len(images)}")
 for c in containers:
@@ -55,6 +56,20 @@ findings = check_container_isolation('localhost')
 for f in findings:
     print(f"  [{f['severity']}] {f['title']}: {f['detail'][:80]}")
 ```
+
+### Kubernetes posture
+
+`K8sEnumerator` uses the current pod or administrator context to inspect service accounts, RBAC, secrets, network policies, privileged pods, hostPath mounts, admission controls, and escape conditions.
+
+```python
+from modules.k8s_enum import K8sEnumerator
+
+cluster = K8sEnumerator()
+cluster_results = cluster.enumerate_all()
+print(cluster.report())
+```
+
+Docker sockets, Kubernetes tokens, etcd, and cloud metadata are highly sensitive. Run inventory only in an authorized environment, avoid printing secret values into shared logs, and do not use these checks to create workloads, change RBAC, or escape isolation.
 
 ---
 

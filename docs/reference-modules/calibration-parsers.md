@@ -1,4 +1,5 @@
-# Calibration Parsers
+<a id="calibration-parsers"></a>
+# Calibration & CAN Analysis
 
 Parse ECU calibration definition files: ASAM/ASAP2 A2L industry standard for Bosch EDC16/EDC17, Continental, Delphi and `open_damos.json` fingerprint-relocated format for PSA/Bosch ECU variant families: producing `CalibrationTable` objects and label maps for injection into `BinaryContext`, enabling calibration variable names to appear in disassembly alongside security-relevant code.
 
@@ -66,6 +67,32 @@ for table in od_parser.calibration_tables():
     if table.name in locations:
         ctx.set_name(locations[table.name], table.name, source='open_damos')
 ```
+
+---
+
+## CAN DBC decoding
+
+`CanDbcParser` reads Vector/PEAK DBC files and extracts standard and extended CAN messages, signal bit layouts, scaling, units, comments, and value tables.
+
+```python
+from modules.can_dbc_parser import CanDbcParser
+
+dbc = CanDbcParser.from_file('/path/to/vehicle.dbc')
+print(dbc.summary())
+
+for message in dbc.messages():
+    print(message.name, hex(message.msg_id), message.dlc)
+    for signal in message.signals:
+        print(f'  {signal.name}: raw * {signal.factor} + {signal.offset} {signal.unit}')
+
+speed = dbc.message(0x100)
+if speed is not None:
+    signal = speed.signal('VehicleSpeed')
+    if signal is not None:
+        physical_value = signal.decode(raw_int=1234)
+```
+
+`message(can_id)` uses the canonical ID with the extended-frame marker stripped. `find_signals(text)` performs a case-insensitive substring search. DBC parsing supplies decoding metadata only; captured-frame extraction and bus timestamping must come from the CAN capture source.
 
 ---
 

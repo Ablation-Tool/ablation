@@ -1,4 +1,5 @@
-# DTW & Matrix Profile Similarity
+<a id="dtw--matrix-profile-similarity"></a>
+# Sequence-Based Function Matching
 
 `DTWMatcher` scores similarity between opcode category sequences across two firmware versions to determine whether two functions are homologs. `MatrixProfileDiff` then localizes exactly which instruction window changed within a confirmed homolog pair. Running both in sequence answers two questions: is this the same function, and what specifically was patched.
 
@@ -94,17 +95,21 @@ ctx_v2 = BinaryContext.load_or_build('/firmware/v2/libfoo.so')
 # Step 1: find homologs with DTW
 matcher = DTWMatcher.from_context(ctx_v1, ctx_v2)
 
-matches = matcher.find_homologs(va_v1=0x4000, ctx_v1=ctx_v1, top_k=5)
+matches = matcher.find_homologs(va_v1=0x4000, ctx_v2=ctx_v2, top_k=5)
 for m in matches:
     print(m)
 # HomologMatch(va_v1=0x4000, va_v2=0x41800, similarity=0.914, confidence='HIGH', delta_insn=6)
 
-# Batch scoring: are two function lists from the same era?
-report = matcher.score_functions([0x4000, 0x4200, 0x4500], [0x5000, 0x5200, 0x5500])
-print(report.fmt())
+# Score specific pairs
+report = matcher.compare_all([(0x4000, 0x5000), (0x4200, 0x5200)])
+for match in report:
+    print(match)
 
 # Step 2: localize the patch within a confirmed homolog pair
-diff = MatrixProfileDiff.from_context(ctx_v1, ctx_v2)
+diff = MatrixProfileDiff.from_paths(
+    '/firmware/v1/libfoo.so',
+    '/firmware/v2/libfoo.so',
+)
 
 result = diff.diff_functions(
     va_v1=0x4000, end_va_v1=0x4143f,
@@ -121,7 +126,12 @@ if result.is_likely_patched(threshold=15.0):
 # Automated triage across many versions
 for v in firmware_versions:
     diff = MatrixProfileDiff.from_paths(baseline_path, v.path)
-    result = diff.diff_functions(target_va_v1, end_va_v1, v.target_va, v.end_va)
+    result = diff.diff_functions(
+        va_v1=target_va_v1,
+        va_v2=v.target_va,
+        end_va_v1=end_va_v1,
+        end_va_v2=v.end_va,
+    )
     print(f"  {v.label}: {result.change_pct():.1f}% changed, patched={result.is_likely_patched()}")
 ```
 

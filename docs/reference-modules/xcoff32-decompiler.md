@@ -247,11 +247,11 @@ bctrl                           ; indirect call
 ## AIX binary analysis workflow <sup>[↑](#xcoff32decompiler)</sup>
 
 ```python
-from ablation.analyzers.xcoff32_decompiler import XCoff32Decompiler
+from ablation.analyzers.xcoff32_decompiler import Xcoff32Decompiler
 from ablation.analyzers.binary_context import BinaryContext
 
-# For XCOFF32 binaries, use XCoff32Decompiler to parse structure first
-decompiler = XCoff32Decompiler.from_path('/firmware/aix/usr/sbin/inetd')
+ctx = BinaryContext.load_or_build('/firmware/aix/usr/sbin/inetd')
+decompiler = Xcoff32Decompiler.from_context(ctx)
 
 # Inspect sections
 for section in decompiler.sections:
@@ -466,33 +466,19 @@ For POWER-only binaries, unknown instructions are emitted as `/* POWER-insn: {wo
 ## Complete usage example: AIX XCOFF32 binary analysis <sup>[↑](#xcoff32decompiler)</sup>
 
 ```python
-from ablation.analyzers.xcoff32_decompiler import XCOFF32Decompiler
+from ablation.analyzers.xcoff32_decompiler import Xcoff32Decompiler
 from ablation.analyzers.binary_context import BinaryContext
-from ablation.analyzers.semantic_searcher import SemanticSearcher
+from ablation.analyzers.semantic_search import SemanticSearcher
 from ablation.analyzers.finding_registry import FindingRegistry
 
-binary_path = '/media/research/IBM/AIX/usr/lib/libnetwork.a'  # XCOFF32 archive
-
-# For .a archives: XCOFF32Decompiler extracts member objects
-decompiler = XCOFF32Decompiler(binary_path)
-print(f"XCOFF32 archive members: {decompiler.list_members()}")
-
-# Analyze specific member
-member = decompiler.get_member('libnetwork.so')
-# Or for a standalone XCOFF32:
-# decompiler = XCOFF32Decompiler('/usr/lib/libnetwork.so')
-
-# List exported symbols
-for sym in decompiler.exports[:10]:
-    print(f"  {sym.name}: va={sym.va:#010x} section={sym.section}")
-
-# Semantic search
-ctx = BinaryContext.load_or_build_from_xcoff(binary_path)
-searcher = SemanticSearcher(ctx)
+binary_path = '/media/research/IBM/AIX/usr/lib/libnetwork.so'
+ctx = BinaryContext.load_or_build(binary_path)
+decompiler = Xcoff32Decompiler.from_context(ctx)
+searcher = SemanticSearcher.from_context(ctx)
 exec_hits = searcher.query('system exec command shell fork invoke execve')
-for h in exec_hits[:3]:
-    print(f"\n=== Exec candidate at {h.va:#010x} ({h.name or '?'}) ===")
-    print(decompiler.decompile_function(h.va)[:1500])
+for hit in exec_hits[:3]:
+    print(f"\n=== Exec candidate at {hit.va:#010x} ({hit.name or '?'}) ===")
+    print(decompiler.decompile(hit.va)[:1500])
 
 # Byte-verify a finding
 import struct

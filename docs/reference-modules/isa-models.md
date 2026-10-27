@@ -1,98 +1,134 @@
-# ISA and ABI Models
+<a id="isa-and-abi-models"></a>
+# Architecture & ABI Models
 
-Per-architecture ISA constant tables and ABI models used internally by instruction parsers, taint trackers, and CFG builders. Four modules: `isa_arc.py`, `isa_arm32.py`, `isa_arm64.py`, `isa_ppc.py`.
+Normalize x86 instruction listings and provide shared x86/x86-64 register, calling-convention, and Linux syscall models for analysis tools.
 
----
-
-## Why this exists <sup>[↑](#isa-and-abi-models)</sup>
-
-1. **Every taint tracker and CFG builder needs the same ABI facts.** Register names, argument registers, return registers, stack pointer, frame pointer, and calling convention conventions differ by architecture and by mode within an architecture. Duplicating these tables across 14 arch-specific modules would make them drift. The ISA model files are the single source of truth.
-
-2. **`canon_reg()` is the shared contract.** Across all arch ISA files, the central function is `canon_reg(name) -> canonical_name`. Callers that receive a register from a disassembler in any variant form such as `w5`, `x5`, `r5d`, and `r5` get back the canonical name that the taint tracker uses as its key. Without this contract, each tool would independently parse register aliases and they would diverge.
-
-3. **Mode-aware facts avoid silent wrong behavior.** ARM32 has A32 and Thumb modes; PPC has 32/64 with ELFv1/ELFv2 ABIs; ARC has EM and HS cores. Width-specific facts `bits`, `ptr_bytes`, and `arg_regs` are gated by an explicit `Mode` query so callers cannot accidentally apply 64-bit facts to 32-bit binaries.
+**Files:** `ablation/analyzers/insn_x86.py` · `ablation/analyzers/isa_x86.py`
 
 ---
 
-## Modules <sup>[↑](#isa-and-abi-models)</sup>
+## What these modules do
 
-| Module | Arch | Modes | ABI |
-|:---|:---|:---|:---|
-| `isa_arc.py` | Synopsys DesignWare ARC EM / ARC HS | `Mode.EM`, `Mode.HS` | ARC GNU 32-bit |
-| `isa_arm32.py` | ARM A32 + Thumb-2 (T32) | `Mode.ARM`, `Mode.THUMB` | AAPCS32 |
-| `isa_arm64.py` | AArch64 |: | AAPCS64 |
-| `isa_ppc.py` | PowerPC 32-bit + 64-bit | `Mode.PPC32`, `Mode.PPC64` | SysV32, ELFv1, ELFv2 |
+`insn_x86.py` turns Capstone instructions or objdump-style text into a common `Insn` representation with typed operands. `isa_x86.py` supplies architecture facts that would otherwise be duplicated across instruction parsers, taint trackers, and control-flow analysis.
 
----
+Together they let downstream code ask consistent questions such as:
 
-## Common interface <sup>[↑](#isa-and-abi-models)</sup>
+- Is this operand a register, immediate, memory reference, or symbol?
+- Which register family does `eax`, `ax`, or `al` belong to?
+- Which registers carry arguments under System V AMD64, Microsoft x64, or i386 cdecl?
+- Which registers does a call clobber, and which syscall number and argument registers apply in this mode?
 
-Every ISA module provides at minimum:
+## Supported modes and ABIs
+
+| Mode | ABI | Argument passing |
+|:---|:---|:---|
+| `Mode.X64` | `Abi.SYSV64` | Integer arguments in `rdi`, `rsi`, `rdx`, `rcx`, `r8`, `r9`; floating-point arguments in XMM registers. |
+| `Mode.X64` | `Abi.WIN64` | Integer arguments in `rcx`, `rdx`, `r8`, `r9`; 32 bytes of shadow space. |
+| `Mode.X86` | `Abi.CDECL32` | Arguments on the stack; integer return values in `eax`/`edx`. |
+
+`Abi.default_for(mode)` selects System V for x86-64 and cdecl for 32-bit x86. Select `Abi.WIN64` explicitly for Microsoft x64 code.
+
+## Instruction parsing
+
+Use `from_capstone()` when raw instruction bytes are available:
 
 ```python
-canon_reg(name: str) -> Optional[str | Tuple[str, int]]
+from ablation.analyzers.insn_x86 import from_capstone
+from ablation.analyzers.isa_x86 import Mode
+
+code = bytes.fromhex('4889d8')  # mov rax, rbx
+insns = from_capstone(code, mode=Mode.X64, base=0x1000)
+
+for insn in insns:
+    print(hex(insn.address), insn.mnemonic, insn.op_str)
+    print('next instruction:', hex(insn.next_ip()))
 ```
 
-Returns the canonical register name and access width for AArch64. Returns `None` for unknown names. Used by taint trackers to normalize Capstone output.
+Use `from_objdump()` or `from_listing()` for textual disassembly:
 
 ```python
-ARG_REGS: Tuple[str, ...]   # argument registers in calling-convention order
-RET_REG: str                # primary return value register
-SP: str                     # stack pointer canonical name
+from ablation.analyzers.insn_x86 import from_objdump
+from ablation.analyzers.isa_x86 import Mode
+
+listing = '1000: 48 89 d8    mov %rbx,%rax'
+insns = from_objdump(listing, mode=Mode.X64)
 ```
 
----
+`att_to_intel()` and `looks_like_att()` help normalize AT&T operands. `rip_relative_target()` resolves a RIP-relative memory operand to its target address.
 
-## Usage <sup>[↑](#isa-and-abi-models)</sup>
+### Operand types
 
-These modules are not called directly from user code. They are imported by:
-
-- **Taint trackers**: `taint_tracker_arc_labeled.py`, `taint_tracker_arm64.py`, `taint_tracker_x86.py`, etc.
-- **Instruction parsers**: `insn_arc.py`, `insn_x86.py`, `insn_arm32.py`, etc.
-- **CFG builders**: `cfg_arc.py`, `cfg_builder.py`, etc.
-- **Analysis engines**: `analysis_arc.py`, `analysis_x86.py`, `analysis_ppc.py`
-
-```python
-# Example: ARC ISA model used by taint tracker
-from ablation.analyzers.isa_arc import Mode, canon_reg, ARG_REGS
-mode = Mode.HS
-print(ARG_REGS)     # ('r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7')
-print(canon_reg("blink"))  # 'r31'
-
-# Example: AArch64 ISA model
-from ablation.analyzers.isa_arm64 import canon_reg as arm64_canon
-print(arm64_canon("w5"))   # ('x5', 32) — W-form, zero-extends
-print(arm64_canon("lr"))   # ('x30', 64)
-```
-
----
-
-## ARM32 `Mode.pc_value()` <sup>[↑](#isa-and-abi-models)</sup>
-
-ARM32 has a non-trivial PC-relative behavior that affects literal pool loads and `adr`:
-
-```
-ARM state (A32): PC reads as instruction_address + 8 (ARM ARM A2.3.1)
-Thumb state (T32): PC reads as instruction_address + 4; literal loads use Align(PC, 4)
-```
-
-`Mode.pc_valueaddress, size, align` encodes this so instruction parsers and taint trackers compute the correct target address without duplicating the ARM ARM rule.
-
----
-
-## Sources <sup>[↑](#isa-and-abi-models)</sup>
-
-| Module | Primary source |
+| Type | Meaning |
 |:---|:---|
-| `isa_arc.py` | ARCv2 ISA Programmer's Reference Manual; ARC GNU/Linux ABI |
-| `isa_arm32.py` | ARM Architecture Reference Manual ARMv7-A/R; AAPCS32 |
-| `isa_arm64.py` | Arm Architecture Reference Manual A-profile; AAPCS64 |
-| `isa_ppc.py` | Power ISA v2.07/v3.0; 32-bit SysV PPC supplement; 64-bit ELFv1/ELFv2 ABI |
+| `Reg` | A register name, including SIMD and segment registers recognized by the model. |
+| `Imm` | An immediate integer. |
+| `Mem` | A memory expression with base, index, scale, displacement, and optional size. |
+| `Sym` | A symbolic target such as a function or label. |
 
----
+Use `insn.reg(i)`, `insn.imm(i)`, or `insn.mem(i)` when a typed operand is required; these accessors return `None` when the operand has another type.
 
-## See also <sup>[↑](#isa-and-abi-models)</sup>
+## Register aliases and widths
 
-- [Insn Models](insn-models.md): instruction representation layer that imports these ISA models
-- [Analysis Engine](analysis-engine.md): CFG dataflow engine that uses these ABI constants
-- [Taint Analysis](taint-analysis.md): taint trackers built on top of these models
+`reg_info()` returns a `RegInfo` record containing the spelling used, register family, lowest bit, and width:
+
+```python
+from ablation.analyzers.isa_x86 import Mode, is_reg, reg_info
+
+for name in ('rax', 'eax', 'ax', 'al'):
+    info = reg_info(name, Mode.X64)
+    print(name, info.family, info.low, info.width, hex(info.mask))
+
+assert is_reg('xmm0', Mode.X64)
+assert not is_reg('not_a_register', Mode.X64)
+```
+
+In x86-64 mode, all four examples above belong to the `rax` family, but they represent different widths. This distinction matters: a 32-bit write zero-extends, while 8-bit and 16-bit writes preserve other bits. SIMD aliases such as `ymm0` and `zmm0` belong to the `xmm0` family with different widths.
+
+## Calling-convention queries
+
+```python
+from ablation.analyzers.isa_x86 import Abi, abi_for
+
+sysv = abi_for(Abi.SYSV64)
+print(sysv.arg_regs)
+print(sysv.caller_saved)
+print(sysv.callee_saved)
+
+win64 = abi_for(Abi.WIN64)
+assert win64.shadow_space == 32
+```
+
+An `AbiModel` also exposes floating-point argument and return registers, return registers, and whether stack arguments are used.
+
+## Linux syscall models
+
+```python
+from ablation.analyzers.isa_x86 import INPUT_SYSCALLS, Mode, syscall_model
+
+model = syscall_model(Mode.X64)
+print(model.nr_reg)       # rax
+print(model.arg_regs)     # rdi, rsi, rdx, r10, r8, r9
+print(model.numbers[0])   # read
+assert 'read' in INPUT_SYSCALLS
+```
+
+The x86 and x86-64 models have different syscall registers and number tables. `INPUT_SYSCALLS` is a shared set of syscall names commonly treated as input sources; it is not a complete list of every possible attacker-controlled source.
+
+## Mnemonic normalization
+
+`normalize_mnemonic()` returns `(prefixes, canonical_mnemonic)`. It separates prefixes such as `lock` and `rep`, normalizes common AT&T spellings and operand-size suffixes, and folds condition-code aliases for jumps, conditional moves, and byte-set instructions.
+
+`imm_bound_after_and()` computes a conservative upper bound after a non-negative immediate `AND`; it returns `None` when the sign-extended mask does not justify that bound.
+
+## Limitations
+
+- These modules model x86 and x86-64 only. Other architecture-specific ISA modules provide their own interfaces.
+- A parsed `Insn` is a syntactic representation, not proof that bytes are reachable instructions or that a calculated path is feasible.
+- The syscall tables cover common Linux entries rather than every syscall on every platform. Windows and other operating systems require separate models.
+- Calling-convention models describe defaults. Compiler optimizations, hand-written assembly, variadic functions, and custom conventions require manual review.
+
+## See also
+
+- [Control & Data-Flow Analysis](control-flow-graph-construction.md): uses architecture models when building CFGs and data-flow analyses.
+- [Data-Flow Taint Analysis](taint-analysis.md): relies on register and calling-convention semantics.
+- [Register & Argument Tracking](call-argument-annotation.md): applies argument provenance at call sites.

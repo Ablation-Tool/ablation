@@ -1,4 +1,5 @@
-# ABCDecompiler
+<a id="abcdecompiler"></a>
+# HarmonyOS App Analysis
 
 Zero-dependency parser, disassembler, and decompiler for HarmonyOS Ark Bytecode (ABC) files and HAP application packages. Covers ABC versions v9 through v13+, including the v12.0.6.0 literal-array header boundary. Three classes form the stack: `ABCParser` (binary format), `ARKDisasm` (instruction decode), `ABCDecompiler` (pseudocode lift).
 

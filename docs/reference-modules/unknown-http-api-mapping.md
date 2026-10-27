@@ -1,6 +1,9 @@
-# Unknown HTTP API Mapping
+<a id="unknown-http-api-mapping"></a>
+# API Security Testing
 
 Autonomously reverse-engineer an unknown HTTP API from a base URL: detecting framework, harvesting OpenAPI specs, fuzzing paths and methods, probing injection surfaces path traversal, SQLi, SSTI, SSRF, XXE, prototype pollution, JWT attack surface alg=none, weak secret, kid injection, jku SSRF, BOLA/IDOR, GraphQL introspection, OAuth2/OIDC metadata, gRPC reflection, SOAP/WSDL discovery, JSON-RPC enumeration, and webhook SSRF: producing a structured `APIMap` with discovered endpoints, parameters, vulnerability signals, and findings.
+
+**Authorized testing only:** discovery and security probes generate requests and can change application state or reach internal services through SSRF. Use a staging environment with test accounts and data, explicit scope, controlled request rates, and no production credentials.
 
 ---
 

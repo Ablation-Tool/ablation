@@ -1,4 +1,5 @@
-# Local Network Inventory
+<a id="local-network-inventory"></a>
+# Network & Industrial Protocols
 
 Enumerate network interfaces, active connections, listening ports, firewall rules, routing tables, and ARP observations on a compromised host: providing the complete local network topology needed to plan lateral movement: via `modules/network_analyze.py` `NetworkAnalyzer`.
 
@@ -41,9 +42,8 @@ flowchart TD
 ```python
 from modules.network_analyze import NetworkAnalyzer
 
-# NetworkAnalyzer.analyze() returns {interfaces, connections, listening, firewall}
 analyzer = NetworkAnalyzer()
-analysis = analyzer.analyze()
+analysis = analyzer.enumerate_all()
 
 print(f"Interfaces: {[i['name'] for i in analysis['interfaces']]}")
 
@@ -57,6 +57,20 @@ for conn in analysis['connections']:
         print(f"  {conn['local_ip']}:{conn['local_port']} → "
               f"{conn['remote_ip']}:{conn['remote_port']}")
 ```
+
+### PCAP and live discovery
+
+`PCAPAnalyzer` parses a saved capture and extracts credentials, DNS, and HTTP artifacts. `RawSniffer` and the mDNS/SSDP helpers perform live discovery; raw capture generally requires elevated privileges and should only run on an authorized interface.
+
+```python
+from modules.network_analyze import PCAPAnalyzer
+
+pcap = PCAPAnalyzer('/path/to/capture.pcap')
+result = pcap.run_all()
+print(result)
+```
+
+PCAPs and live traffic can contain reusable credentials and private communications. Use test captures where possible, restrict output access, and never sniff a network you do not control or have explicit permission to monitor. Modbus, MQTT, CoAP, SNMP, BACnet, and EtherNet/IP probes must be limited to approved lab or assessment targets.
 
 ---
 

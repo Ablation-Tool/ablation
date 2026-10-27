@@ -308,8 +308,8 @@ The tracker models `SW $a0, 0($sp)` as a stack write of the value in `$a0`, and 
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
-from ablation.analyzers.semantic_searcher import SemanticSearcher
-from ablation.analyzers.sink_arg_classifier import SinkArgClassifierMIPS
+from ablation.analyzers.semantic_search import SemanticSearcher
+from ablation.analyzers.sink_arg_classifier_mips import SinkArgClassifierMIPS
 from ablation.analyzers.taint_tracker_mips import MIPS32TaintTracker
 from ablation.analyzers.finding_registry import FindingRegistry
 

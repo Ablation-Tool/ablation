@@ -1,4 +1,5 @@
-# SBOM & Supply-Chain Tooling
+<a id="sbom--supply-chain-tooling"></a>
+# Software Composition & Supply Chain
 
 Extract a software bill of materials from a stripped firmware binary. Identifies embedded open-source library versions, build toolchain strings, and dynamic linker dependencies without source code or debug symbols.
 
@@ -18,7 +19,7 @@ The toolchain string from the `.comment` section carries separate value. A binar
 
 SBOMExtractor improves the ablation pipeline in two concrete ways. First, it prioritizes which functions are worth tracing because a confirmed OpenSSL 1.1.1k presence means the `d2i_PublicKey` path exists and is a taint target, and without the SBOM that selection requires manual version confirmation. Second, it attaches the SPDX license identifier to each component so the output feeds a compliance tool without a separate lookup step.
 
-CycloneDX and SPDX are the two standard machine-readable SBOM formats. CycloneDX is designed for security use cases and carries explicit vulnerability reference fields. SPDX is designed for license compliance and is the format the Linux kernel project uses. `SBOMComponent` fields map to both so downstream tooling consumes either format without post-processing.
+CycloneDX and SPDX are standard machine-readable SBOM formats with different security and compliance conventions. `SBOMComponent` provides SBOM-ready component names, versions, evidence, and license identifiers where recovered, but this module emits component objects and a text report—not a serialized CycloneDX or SPDX document. Convert and validate those objects with your downstream SBOM tooling before using them for compliance or vulnerability management.
 
 ---
 

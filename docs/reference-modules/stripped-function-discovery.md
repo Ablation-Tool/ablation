@@ -1,4 +1,5 @@
-# Stripped Function Discovery
+<a id="stripped-function-discovery"></a>
+# Function Discovery
 
 Recover function entry points in stripped ARM32 ELF binaries: where `.eh_frame`, symbol tables, and debug information are absent: by scanning the `.text` section for architecture-specific PUSH prologue patterns in ARM32, Thumb-2, and Thumb-1 instruction encodings.
 
@@ -170,5 +171,5 @@ Injection: added 312 new function starts to BinaryContext
 - [Binary Context](binary-context.md): provides baseline `func_starts`; inject results here
 - [Stripped Go x86-64 Boundaries](stripped-go-x86-64-boundaries.md): equivalent for stripped Go x86-64 binaries pclntab recovery
 - [Flat-ROM Function Discovery](flat-rom-function-discovery.md): bare-metal ROM with no ELF headers
-- [ARM32 Taint Analysis](arm32-taint-analysis.md): downstream consumer of the expanded `func_starts` list
+- [Data-Flow Taint Analysis](taint-analysis.md): downstream analysis that benefits from complete function boundaries
 - [Interprocedural Argument Provenance](interprocedural-argument-provenance.md): uses ARM32 register annotator with full function coverage

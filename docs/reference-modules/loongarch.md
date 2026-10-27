@@ -164,10 +164,10 @@ lifter = BinaryLifter.from_path('/path/to/la64.elf', arch='la64')
 print(lifter.lift_function(0x10430))
 
 # Syscall labeling
-from ablation.analyzers.syscall_loongarch64 import label_syscall, dangerous_syscalls
-name = label_syscall(220)    # → 'execve'
-risky = label_syscall(56)    # → 'openat'
-is_dangerous = 220 in dangerous_syscalls  # → True
+from ablation.analyzers.syscall_loongarch64 import syscall_label, SYSCALL_SINKS
+name = syscall_label(220)    # → 'execve'
+risky = syscall_label(56)    # → 'openat'
+is_dangerous = 220 in SYSCALL_SINKS  # → True
 ```
 
 ---
@@ -439,8 +439,8 @@ The taint tracker does not taint `$a0` from this sequence: the GOT value comes f
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
-from ablation.analyzers.sink_arg_classifier import SinkArgClassifierLA64
-from ablation.analyzers.taint_tracker_loongarch import LoongArch64TaintTracker
+from ablation.analyzers.sink_arg_classifier_loongarch64 import SinkArgClassifierLA64
+from ablation.analyzers.taint_tracker_loongarch64 import LoongArch64TaintTracker
 from ablation.analyzers.finding_registry import FindingRegistry
 
 # LoongArch64 little-endian
@@ -451,7 +451,7 @@ classifier = SinkArgClassifierLA64.from_context(ctx)
 work = [s for s in classifier.classify_all()
         if s.classification in ('ARG_PROPAGATED', 'UNKNOWN')]
 
-findings = LoongArch64TaintTracker.from_context(ctx).scan(sink_sites=work)
+findings = LoongArch64TaintTracker.from_context(ctx).run_interprocedural()
 
 # Byte-verify: BL (opcode 0x15, bits[31:26]) or JIRL (opcode 0x13)
 data = open(ctx.binary_path, 'rb').read()
@@ -490,7 +490,7 @@ LoongArch firmware often embeds platform metadata strings that help identify the
 
 **Identifying Loongson chip generation:**
 ```python
-from ablation.analyzers.semantic_searcher import SemanticSearcher
+from ablation.analyzers.semantic_search import SemanticSearcher
 from ablation.analyzers.binary_context import BinaryContext
 
 ctx = BinaryContext.load_or_build('/firmware/binary')

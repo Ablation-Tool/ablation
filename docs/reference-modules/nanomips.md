@@ -235,9 +235,9 @@ findings = tracker.run_interprocedural()
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
-from ablation.analyzers.semantic_searcher import SemanticSearcher
+from ablation.analyzers.semantic_search import SemanticSearcher
 from ablation.analyzers.sink_arg_classifier import SinkArgClassifier
-from ablation.analyzers.nanomips_taint_tracker import NanoMIPSTaintTracker
+from ablation.analyzers.taint_tracker_nanomips import NanoMIPSTaintTracker
 
 # Step 1: build context for a router management binary
 ctx = BinaryContext.load_or_build('/firmware/extract/usr/sbin/uhttpd')
@@ -245,7 +245,7 @@ print(ctx.summary())
 # Expected: nanoMIPS RV32IMAC (MediaTek), little-endian, 412 functions (stripped)
 
 # Step 2: semantic sweep: find CGI/HTTP handling functions
-searcher = SemanticSearcher(ctx)
+searcher = SemanticSearcher.from_context(ctx)
 cgi_hits = searcher.query('HTTP CGI query string parameter parsing', top_k=10)
 config_hits = searcher.query('system command execution nvram configuration', top_k=10)
 for h in cgi_hits[:3]:

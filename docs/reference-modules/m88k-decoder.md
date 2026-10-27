@@ -311,7 +311,8 @@ The primary 88k RE targets in the ablation collection are Siemens SINIX (Unix) b
 
 **Taint analysis approach for SINIX service binaries:**
 ```python
-from ablation.analyzers.m88k_decoder import M88kDecoder, M88kCoffBinary
+from ablation.analyzers.insn_m88k import M88kDecoder
+from ablation.core.coff_m88k_parser import M88kCoffBinary
 
 binary = M88kCoffBinary('/media/research/IBM/SINIX/usr/bin/rlogin')
 decoder = M88kDecoder(binary)
@@ -459,8 +460,8 @@ if opcd == 0x01:
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
-from ablation.analyzers.m88k_decoder import M88KDecoder
-from ablation.analyzers.semantic_searcher import SemanticSearcher
+from ablation.analyzers.insn_m88k import M88kDecoder
+from ablation.analyzers.semantic_search import SemanticSearcher
 from ablation.analyzers.finding_registry import FindingRegistry
 
 binary_path = '/media/research/IBM/SINIX/usr/lib/libnetwork.so'
@@ -471,7 +472,7 @@ print(ctx.summary())
 # Imports: ctx.imports gives external symbol table; most libc functions available
 
 # Step 2: semantic sweep
-searcher = SemanticSearcher(ctx)
+searcher = SemanticSearcher.from_context(ctx)
 exec_hits = searcher.query('system exec format command shell invoke')
 parse_hits = searcher.query('parse input buffer copy string format')
 

@@ -1,6 +1,26 @@
-# EcuC166Decoder
+<a id="ecuc166decoder"></a>
+# Embedded Architecture Decoding
 
-Decode Infineon/Siemens C166/C167 ECU firmware in pure Python. Parses 2/4-byte variable-length instructions, identifies function starts via the Interrupt Vector Table and `CALLS` prologue patterns, and recovers stack-frame allocations. Covers BMW MS43, Bosch KW1, Motronic M3.x, and Daimler/VW ECU targets; Capstone has no C166 support.
+Decode Infineon/Siemens C166/C167 and Texas Instruments C28x ECU firmware in pure Python, with instruction decoding and function-start recovery for stripped ROM images.
+
+---
+
+## C28x decoding
+
+`EcuC28xDecoder` provides the corresponding TI C28x path. It accepts a file path or raw bytes and supports single-instruction decoding, range disassembly, and function-start discovery.
+
+```python
+from ablation.analyzers.ecu_c28x_decoder import EcuC28xDecoder
+
+decoder = EcuC28xDecoder.from_path('/path/to/c28x-rom.bin', base_va=0)
+for insn in decoder.disassemble(start=0, end=0x100):
+    print(insn)
+
+starts = decoder.function_starts()
+print([hex(va) for va in starts])
+```
+
+C166/C167 and C28x have different instruction widths, address models, and function-boundary heuristics. Use the architecture detector or a known target profile rather than decoding the same ROM with both backends.
 
 ---
 

@@ -1,4 +1,5 @@
-# FORGE
+<a id="forge"></a>
+# Module Security Quality Gate
 
 FORGE is the production gate for every Python module in Ablation. Before any new or changed `.py` file gets a `git add`, FORGE checks a cache for a prior SAFE CODE audit result. On a cache miss it raises `ForgeAuditRequired`, which tells you to read the file and do the 10-section review inline in your Claude Code session. On a cache hit it returns the cached `ForgeReport` instantly. It blocks the commit if the report contains a HIGH or CRITICAL finding.
 

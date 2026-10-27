@@ -244,7 +244,7 @@ from ablation.analyzers.ecu_arch_detector import EcuArchDetector
 from ablation.analyzers.ecu_rom_layout_analyzer import EcuROMLayoutAnalyzer
 from ablation.analyzers.ecu_c28x_decoder import EcuC28xDecoder
 from ablation.analyzers.binary_context import BinaryContext
-from ablation.analyzers.semantic_searcher import SemanticSearcher
+from ablation.analyzers.semantic_search import SemanticSearcher
 
 firmware_path = '/media/research/Automotive/Honda/CAN_GW_controller.bin'
 

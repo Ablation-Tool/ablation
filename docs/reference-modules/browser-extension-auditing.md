@@ -1,4 +1,5 @@
-# Browser Extension Auditing
+<a id="browser-extension-auditing"></a>
+# Browser Extension Security
 
 Chrome/Edge/Firefox extension security auditor: scanning manifest.json and JavaScript sources for externally-reachable message handlers, overly-broad `externally_connectable` grants, native messaging without allowlists, and confused-deputy attack surfaces.
 

@@ -1,4 +1,5 @@
-# Shellcode Templates
+<a id="shellcode-templates"></a>
+# Exploit Development & Scoring
 
 Generate position-independent shellcode for x86, x86-64, and ARM64 targets: reverse TCP shell, bind TCP shell, staged loader, x86 execve with JMP/CALL/POP string embedding: plus ROP gadget scanner, minimal execve ROP chain constructor, bad byte detector, and XOR rolling encoder for delivery constraint compliance.
 
@@ -164,6 +165,22 @@ d823f10000007f00003b00000000000010e1a31a00007f000000000000000000
 **Before this module:** Identify the target architecture via `BinaryContext.arch` or `detect_platform()`. Confirm code execution by reaching `rip`/`pc` control: use `PathSolver` to verify the execution path to the overflow.
 
 **After this module:** Verify the generated shellcode against the delivery constraint with `detect_bad_bytes()` before use. For encoders: confirm the decoder stub does not itself contain bad bytes: call `detect_bad_bytesstub + encoded_payload, bad_set` on the combined buffer. Run the shellcode in a controlled VM matching the target kernel version; do not test against production systems.
+
+---
+
+## BARE module ranking
+
+The optional BARE adapter converts reviewed findings into BARE's JSON input and ranks matching Metasploit modules. It requires a `bare` executable on `PATH` or at `~/.local/bin/bare`; it is not bundled by this documentation.
+
+```python
+from modules.bare_adapter import format_bare_output, rank_modules
+
+ranked = rank_modules(analysis_results, binary_path='/path/to/target')
+if ranked is not None:
+    print(format_bare_output(ranked, min_score=0.3))
+```
+
+Only results with non-empty `vuln_notes` are submitted. A module score indicates similarity to the supplied finding, not exploit reliability or authorization to use it. Validate module compatibility and payload behavior in an isolated, authorized test environment.
 
 ---
 

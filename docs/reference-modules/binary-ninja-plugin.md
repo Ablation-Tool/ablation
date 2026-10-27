@@ -1,3 +1,4 @@
+<a id="binary-ninja-plugin"></a>
 # Binary Ninja Plugin
 
 The Binary Ninja plugin reads the ablation session cache and applies function names, sweep hits, and semantic search results to the disassembly view. Names set with `ctx.set_name()` appear in the function list immediately because Binary Ninja re-renders on rename.

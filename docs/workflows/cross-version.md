@@ -1,193 +1,147 @@
-# Cross-Version Diffing Workflow
+<a id="cross-version-diffing-workflow"></a>
+# Binary Diffing & Patch Tracking
 
-Track a confirmed vulnerable function across firmware patch releases. Verify the patch is real, find the new VA, port the name overlay, and detect regressions in subsequent releases.
+Find the corresponding function across binary releases, inspect normalized instruction changes, and carry reviewed names forward only when the match is credible.
 
----
-
-## When to use this workflow
-
-- A vendor releases a security advisory. You need to find the patched function and verify the fix is real, not cosmetic.
-- You have confirmed findings in firmware v1.0 and want to check whether they were silently fixed in v1.1 without a CVE assignment.
-- You are building a delta report for a vendor advisory: which exact instructions changed between the vulnerable and fixed version.
+**File:** `ablation/analyzers/version_delta.py`
 
 ---
 
-## How VersionDelta finds the homolog
+## When to use this
 
-The three-stage pipeline works without symbol names or stable VAs:
+- Locate a vulnerable function after a vendor update changes its address.
+- Check whether a patch changes the relevant comparison, allocation, call, or validation logic.
+- Compare one function across several registered releases.
+- Diff two disassembly snippets directly without loading a full binary project.
 
-```mermaid
-flowchart TD
-    IN(["func_va_v1"]):::input
+A homolog match is a candidate correspondence, not proof that two functions are identical or that a patch closes a vulnerability.
 
-    S1["Stage 1 · Structural pre-filter\nbasic_block_count ±2  ·  edge_count ±30%\nReduces N=thousands to N~tens\nNo instruction decode · CFG header only"]:::stage1
+## Matching pipeline
 
-    S2["Stage 2 · Mnemonic 4-gram Jaccard\nStrip addresses · normalize immediates\nBuild 4-gram sets from mnemonic sequence\nJaccard(A,B) = |A ∩ B| / |A ∪ B|\nKeep top-10 candidates"]:::stage2
+`VersionTracker` applies several evidence layers:
 
-    TIE{"Top-2 scores\nwithin 0.05?"}:::decision
+1. **Optional era anchors:** `structural_anchor_scan()` searches for configured byte patterns before loading a CFG. `era_only=True` can stop after an anchor identifies a release family.
+2. **Structural candidates:** `FuncMatcher` compares function size and CFG features to reduce the candidate set.
+3. **Mnemonic 4-gram Jaccard:** normalized instruction sequences rank the remaining candidates.
+4. **Semantic tiebreaking:** close candidates can be scored with the same semantic infrastructure used elsewhere in Ablation. The standard semantic-search model uses 384-dimensional embeddings.
 
-    S3["Stage 3 · BERT semantic tiebreaker\nSemanticSearcher encoding for both functions\nCosine similarity in 768-dim space"]:::stage3
+`DeltaReport.match` contains a `HomologMatch` or `None`. A match includes the target address and name, Jaccard and semantic scores, a `HIGH`/`MEDIUM`/`LOW` confidence category, a `PatchDelta`, and added/removed callees.
 
-    OUT(["result.va_v2  ·  result.confidence  ·  result.stage"]):::output
+## Prerequisites
 
-    IN  --> S1
-    S1  -->|"N~tens candidates"| S2
-    S2  --> TIE
-    TIE -->|"yes · tie"| S3
-    TIE -->|"no · clear winner"| OUT
-    S3  --> OUT
+Full binary tracking uses `angr` and Capstone through the full analysis dependencies:
 
-    classDef input    fill:#0d47a1,stroke:#1565c0,color:#fff
-    classDef stage1   fill:#e65100,stroke:#bf360c,color:#fff
-    classDef stage2   fill:#004d40,stroke:#00695c,color:#fff
-    classDef decision fill:#37474f,stroke:#546e7a,color:#fff
-    classDef stage3   fill:#4a148c,stroke:#6a1b9a,color:#fff
-    classDef output   fill:#1b5e20,stroke:#2e7d32,color:#fff
-
-    linkStyle 0 stroke:#e65100,stroke-width:2px
-    linkStyle 1 stroke:#004d40,stroke-width:2px
-    linkStyle 2 stroke:#546e7a,stroke-width:2px
-    linkStyle 3 stroke:#6a1b9a,stroke-width:2px,stroke-dasharray:6 3
-    linkStyle 4 stroke:#2e7d32,stroke-width:3px
-    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+```bash
+pip install 'ablation-tool[full]'
 ```
 
----
+Install only in the environment used for offline analysis. Large CFG builds can be expensive; register only the versions needed and reuse one tracker so its CFG cache is shared.
 
-## Step 1: Identify the function in v1
+## Track a function across releases
 
-Start from your confirmed finding. You need the function VA in v1 and the binary path.
+```python
+from ablation.analyzers.version_delta import VersionTracker
+
+tracker = VersionTracker(
+    binaries={
+        '1.0': '/path/to/firmware-v1.0.so',
+        '1.1': '/path/to/firmware-v1.1.so',
+        '1.2': '/path/to/firmware-v1.2.so',
+    }
+)
+
+reports = tracker.track(
+    seed_binary='1.0',
+    seed_va=0x1000,
+    seed_name='parse_request',
+)
+
+for report in reports:
+    print(report.summary())
+    if report.match is not None:
+        match = report.match
+        print(match.confidence, match.jaccard, match.semantic_score)
+        print(match.delta.unified_diff(
+            report.seed_binary,
+            report.target_version,
+        ))
+        print('new callees:', match.new_callees)
+        print('removed callees:', match.removed_callees)
+```
+
+The seed version is not included in the returned reports. Other versions appear in registration order. `skip_versions=['1.2']` excludes selected releases. If the seed function cannot be found, `track()` raises `ValueError`.
+
+## Inspect patch evidence
+
+`PatchDelta` contains:
+
+| Field | Meaning |
+|:---|:---|
+| `added` | Normalized instructions added in the target. |
+| `removed` | Normalized instructions removed from the seed. |
+| `context` | Unchanged surrounding instructions. |
+| `ratio` | `SequenceMatcher` similarity from 0.0 to 1.0. |
+| `is_patched` | Whether any added or removed instructions exist. |
+
+`callee_changed` on a `HomologMatch` reports whether external calls changed. These signals localize review; they do not determine whether the security issue is fixed. Recheck source control, reachability, validation, and sink behavior on the production target.
+
+## Diff two disassembly snippets directly
+
+`diff_functions()` does not require angr:
+
+```python
+from ablation.analyzers.version_delta import diff_functions
+
+old_asm = [
+    'mov rdx, rcx',
+    'call memcpy',
+]
+new_asm = [
+    'cmp rcx, 0x100',
+    'ja error_path',
+    'mov rdx, rcx',
+    'call memcpy',
+]
+
+delta = diff_functions(
+    old_asm,
+    'parse_request_v1',
+    new_asm,
+    'parse_request_v2',
+    callees_a=['memcpy'],
+    callees_b=['memcpy'],
+    version_a='1.0',
+    version_b='1.1',
+)
+
+print(delta.unified_diff('1.0', '1.1'))
+```
+
+For a numeric mnemonic-sequence comparison, `jaccard_similarity(old_asm, new_asm)` returns the 4-gram Jaccard score.
+
+## Port names cautiously
+
+After manually confirming a homolog:
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
 
-ctx_v1 = BinaryContext.load_or_build('/path/to/firmware_v1.so')
-print(ctx_v1.names_table())   # confirm the function is named in the overlay
+ctx_v2 = BinaryContext.load_or_build('/path/to/firmware-v1.1.so')
+ctx_v2.set_name(match.va, 'parse_request', source='confirmed')
 ```
 
----
+Do not port names automatically from low-confidence matches. Keep the matching evidence with the session record so later releases can reassess the correspondence.
 
-## Step 2: Track it in v2
+## Limitations
 
-```python
-from ablation.analyzers.version_delta import VersionDelta
+- Heavy optimization, inlining, function splitting, and refactoring can prevent a reliable match.
+- Structural and semantic similarity does not establish vulnerability presence, absence, or exploitability.
+- An instruction diff shows change, not intent. Added bounds checks may be incomplete or applied to a different value.
+- Era anchors identify configured families only; an anchor miss is inconclusive, not evidence that a version is unrelated.
+- Full tracking requires valid function recovery in every analyzed build. Incorrect CFG recovery propagates into matching results.
 
-vd = VersionDelta(
-    binary_v1='/path/to/firmware_v1.so',
-    binary_v2='/path/to/firmware_v2.so',
-)
+## See also
 
-result = vd.track(func_va_v1=0x1000)
-
-print(f"Homolog VA in v2: 0x{result.va_v2:x}")
-print(f"Confidence: {result.confidence:.2f}")
-print(f"Stage resolved at: {result.stage}")   # structural / 4gram / bert
-```
-
-| Confidence | Meaning |
-|---|---|
-| >= 0.90 | Near-certain match |
-| 0.70 - 0.90 | Likely match: verify with strings_in_func |
-| 0.50 - 0.70 | Possible match: verify manually |
-| < 0.50 | Ambiguous: function may have been split, merged, or removed |
-
----
-
-## Step 3: Inspect the patch diff
-
-```python
-print(result.patch_diff)
-```
-
-Output is a normalized instruction diff. Addresses and RIP-relative immediates are stripped so the logic change is visible without address noise:
-
-```diff
-  movzx  eax, word ptr [rcx + 0x4]
-  bswap  eax
-  shr    eax, 0x10
-+ cmp    eax, 0x8          # PATCH: minimum header size check added
-+ jb     <error_path>      # PATCH: jump to error if too small
-  add    rcx, rax
-  cmp    rcx, rbx
-  jb     <loop_top>
-```
-
-This diff is disclosure-quality evidence that the patch addressed the specific root cause.
-
-For long insertions or deletions for example an entire authentication block added, use `MatrixProfileDiff` instead. The STOMP algorithm finds the most-changed subsequence across the two function bodies:
-
-```python
-from ablation.analyzers.matrix_profile_diff import MatrixProfileDiff
-
-diff = MatrixProfileDiff()
-result = diff.compare_functions(
-    insns_v1=v1_insns,
-    insns_v2=v2_insns,
-)
-print(result.anomaly_region)   # (start_idx, end_idx)
-print(result.change_score)     # 0.0 = identical, 1.0 = completely different
-```
-
----
-
-## Step 4: Port the name overlay to v2
-
-```python
-ctx_v2 = BinaryContext.load_or_build('/path/to/firmware_v2.so')
-ctx_v2.set_name(result.va_v2, 'proto_parse_message', source='confirmed')
-print(ctx_v2.names_table())
-```
-
----
-
-## Step 5: Check for regression in v3+
-
-Once you have the v2 homolog VA, run VersionDelta again from v2 to v3. If the function diverges significantly confidence below 0.70, the vendor may have refactored the parsing logic. That refactor can introduce new bugs adjacent to the fix.
-
-```python
-vd_23 = VersionDelta(
-    binary_v1='/path/to/firmware_v2.so',
-    binary_v2='/path/to/firmware_v3.so',
-)
-result_23 = vd_23.track(func_va_v1=result.va_v2)
-print(result_23.patch_diff)   # empty if no further changes
-```
-
----
-
-## Batch delta: all changed functions
-
-Get a ranked list of every function that changed between two firmware versions. Useful for advisory analysis when you need to triage all moved functions at once:
-
-```python
-changed = vd.changed_functions(top_n=50)
-for fn in changed:
-    print(f"0x{fn.va_v1:x} -> 0x{fn.va_v2:x}  "
-          f"change_score={fn.change_score:.3f}  "
-          f"{ctx_v1.name(fn.va_v1)}")
-```
-
-Functions with `change_score >= 0.20` had meaningful code changes. Combine with semantic sweep results to prioritize which changed functions deserve manual inspection.
-
----
-
-## Cross-vendor similarity with StructuralSim
-
-For fine-grained comparison of two specific functions across vendors not just across versions, use StructuralSim directly. A composite score >= 0.70 across two vendors means the functions share a common ancestor: the same open-source library or standard protocol implementation.
-
-```python
-from modules.structural_sim import StructuralSim
-
-sim = StructuralSim(
-    binary_a='/path/to/vendor_a.so',
-    binary_b='/path/to/vendor_b.so',
-)
-
-score = sim.compare(func_va_a=0x1000, func_va_b=0x2000)
-print(f"Composite: {score.composite:.3f}")
-print(f"  opcode_hist  = {score.opcode_hist:.3f}")
-print(f"  imm_jaccard  = {score.imm_jaccard:.3f}")
-print(f"  plt_overlap  = {score.plt_overlap:.3f}")
-```
-
-When one vendor's version has a confirmed vulnerability and the composite score predicts a shared ancestor, run the same taint analysis on the second vendor's binary to confirm whether the flaw is present there too.
+- [Sequence-Based Function Matching](../reference-modules/dtw-matrix-profile-similarity.md): DTW matching and localized matrix-profile differences.
+- [Structural Function Matching](../reference-modules/structural.md): weighted structural fingerprints and structural-orphan discovery.
+- [AI-Guided Analysis](../reference-modules/llm-analyst-loop.md): reviews two verified disassembly versions for a patch hypothesis.

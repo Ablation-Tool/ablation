@@ -1,4 +1,5 @@
-# Evidence Scoring and Probe Ranking
+<a id="evidence-scoring-and-probe-ranking"></a>
+# Evidence Scoring & Validation
 
 Rank candidate analysis probes by expected value against a set of surviving vulnerability hypotheses: computing `predicted_disagreement × observability × analyzer_reliability / estimated_cost` to select the probe most likely to resolve hypothesis uncertainty and eliminate false positives with minimum analyst effort.
 

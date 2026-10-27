@@ -1,4 +1,5 @@
-# SIP Service and Extension Discovery
+<a id="sip-service-and-extension-discovery"></a>
+# VoIP Security Assessment
 
 Fingerprint SIP servers, enumerate valid extensions, probe unauthenticated registration surfaces, and detect weak media-security posture: using the `SIPEnumerator` class and its companion standalone probe functions.
 
@@ -100,6 +101,10 @@ flowchart TD
 | `MEDIA_PORT_RANGE_OPEN` | HIGH | `check_rtp_port_range` | 3+ UDP ports in range respond to RTP probe |
 
 ---
+
+## Authorized testing
+
+SIP enumeration, registration probes, RTP injection checks, and extension scans generate live traffic and can disrupt calls or trigger rate limits. Use an isolated PBX with test extensions and explicit permission. Never use these probes against production or third-party VoIP services.
 
 ## Usage
 

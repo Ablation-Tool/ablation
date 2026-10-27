@@ -1,4 +1,5 @@
-# BeamContext
+<a id="beamcontext"></a>
+# Erlang & MicroPython Analysis
 
 Extracts the attack surface from compiled Erlang `.beam` files and OTP release directories. Maps BEAM structure to ELF-equivalent concepts: exports to exported symbols, imports to PLT entries, atoms to the string table, literals to `.rodata`. Detects dangerous import patterns (`os:cmd`, `erlang:open_port`, `erl_eval:exprs`, `code:load_binary`) and obfuscation indicators across single modules or full release sweeps.
 
@@ -15,7 +16,7 @@ Extracts the attack surface from compiled Erlang `.beam` files and OTP release d
   - [`BeamContext`](#beamcontext-class)
   - [`BeamImport`](#beamimport)
   - [`BeamExport`](#beamexport)
-  - [`BeamAstFunction`](#beastfunction)
+  - [`BeamAstFunction`](#beamastfunction)
   - [Severity constants](#severity-constants)
   - [Dangerous import table](#dangerous-import-table)
 - [Usage](#usage)
@@ -520,6 +521,26 @@ The `BEAMContext.dangerous_imports` list includes Elixir module-function pairs a
 
 ---
 
+## MicroPython `.mpy` analysis <sup>[↑](#beamcontext)</sup>
+
+`MpyLifter` parses MicroPython `.mpy` bytecode and lifts code objects for review. `dangerous_calls()` identifies operations such as dynamic execution and controlled hardware or network access.
+
+```python
+from modules.mpy_lifter import MpyLifter
+
+lifter = MpyLifter.from_path('/path/to/module.mpy')
+module = lifter.lift_module()
+print(module)
+print(lifter.imports())
+
+findings = lifter.dangerous_calls()
+print(lifter.report(findings))
+```
+
+The lifted representation helps locate relevant code objects; it is not a guarantee of source-equivalent Python. Check the `.mpy` version and flags for controlled peripheral or network access before drawing a security conclusion.
+
+---
+
 ## See also <sup>[↑](#beamcontext)</sup>
 
 - [BinaryContext](binary-context.md): native binary context for NIF `.so` libraries loaded via `erlang:load_nif/2`
@@ -537,7 +558,7 @@ The `BEAMContext.dangerous_imports` list includes Elixir module-function pairs a
 ## Complete example: Erlang/Elixir firmware scan <sup>[↑](#beamcontext)</sup>
 
 ```python
-from ablation.analyzers.beam_context import BEAMContext
+from ablation.analyzers.beam_context import BeamContext
 import os
 
 # Scan all .beam files in an OTP release directory

@@ -1,4 +1,5 @@
-# KnowledgeGraph
+<a id="knowledgegraph"></a>
+# AI Knowledge-Graph Analysis
 
   - [What is Agentic GraphRAG?](#what-is-agentic-graphrag)
   - [Why this exists](#why-this-exists)

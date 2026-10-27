@@ -1,4 +1,5 @@
-# SAX Approximate Indexing
+<a id="sax-approximate-indexing"></a>
+# Approximate Function Matching
 
 Fast approximate nearest-neighbor function lookup using SAX (Symbolic Aggregate approXimation) encoding of operation-category sequences: a pre-filter for `SemanticSearcher` that narrows candidates in microseconds without running embedding inference on every function.
 

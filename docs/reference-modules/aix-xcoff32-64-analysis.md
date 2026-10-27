@@ -1,4 +1,5 @@
-# AIX XCOFF32/64 Analysis
+<a id="aix-xcoff3264-analysis"></a>
+# IBM AIX Binary Analysis
 
 Parse IBM AIX PowerPC executables in XCOFF32 magic `0x01DF`, PPC32 or XCOFF64 magic `0x01F7`/`0x01EF`, PPC64 format: extracting all sections, importing the `.loader` section's complete import/export symbol table with library attribution, resolving function-descriptor VAs to code VAs, and recovering internal function names from the symbol table when the loader section is absent or incomplete.
 

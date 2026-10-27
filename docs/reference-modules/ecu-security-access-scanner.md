@@ -1,4 +1,5 @@
-# EcuSecurityAccessScanner
+<a id="ecusecurityaccessscanner"></a>
+# ECU Security Analysis
 
 **File:** `ablation/analyzers/ecu_security_access_scanner.py`
 
@@ -89,7 +90,7 @@ followed by: (word >> 26) == 38     (stb)
 
 ## API
 
-```python
+```text
 class EcuSecurityAccessScanner:
     def __init__(path_or_data, window=256)
     @classmethod from_path(path, window=256) -> EcuSecurityAccessScanner
@@ -150,7 +151,8 @@ class SecurityAccessFinding:
     evidence: bytes # raw bytes from trigger site to end of window
     note: str       # human-readable description
 
-    def __str__(self) -> str
+    def __str__(self) -> str:
+        ...
 ```
 
 ---
@@ -205,28 +207,21 @@ via SRAM variable 0x3FFFE98E; see `auto_ecu_corpus_re.py` for the full state mac
 
 ---
 
-## How it works
+## TriCore taint tracking
 
-Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns UDS handler tables, seed/key routines, calibration write paths are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
+`TriCoreTaintTracker` is a separate analysis for diagnostic input and other labeled sources on Infineon TriCore firmware. It supports function-level scanning and bounded interprocedural tracing.
 
----
+```python
+from ablation.analyzers.taint_tracker_tricore import TriCoreTaintTracker
 
-## Example output
-
-```
-[CRITICAL] WEAK_SEED   UDS 0x27 0x01 at ROM:0x8004A0
-  detail: seed is timestamp-derived (LSB of timer register)
-  algorithm: linear congruential; key derivable in < 2^16 guesses
-
-[HIGH] UNPROTECTED_WRITE   calibration region at ROM:0x810000
-  detail: no write-protect fuse check before accepting 0x34 WriteDataByIdentifier
+tracker = TriCoreTaintTracker.from_path('/path/to/tricore-rom.bin')
+findings = tracker.run_interprocedural(depth=3)
+print(tracker.report(findings))
 ```
 
+For a known function range, `scan_function(func_va, func_end, init_labels={'diagnostic'})` limits analysis to that function. Review source labels, sink reachability, and memory-write semantics before treating a finding as exploitable. This tracker does not detect the M68K/PPC32 static-seed byte pattern above; the two capabilities are complementary.
+
 ---
-
-## False positives
-
-Calibration data regions contain byte sequences that decode as valid instructions in some ISAs. Confirm candidate function VAs against the ROM layout from `ECURomLayoutAnalyzer` before treating them as code. Security Access sequences in boot ROM are expected and not findings unless the seed/key algorithm is cryptographically weak.
 
 ---
 

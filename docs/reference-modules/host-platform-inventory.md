@@ -1,4 +1,5 @@
-# Host Platform Inventory
+<a id="host-platform-inventory"></a>
+# Host & Privilege Assessment
 
 Detect OS family, kernel version, CPU architecture, libc variant, and security capability settings ASLR, NX bit, SELinux/AppArmor status, seccomp on a live host: providing the platform baseline needed to select the correct exploit primitives: via `ablation/core/platform_detect.py` `PlatformDetector`.
 
@@ -55,6 +56,25 @@ sec = info.get('security', {})
 print(f"ASLR: {sec.get('aslr', 'unknown')}")
 print(f"SELinux: {sec.get('selinux', False)}  AppArmor: {sec.get('apparmor', False)}")
 ```
+
+### Process and privilege-escalation review
+
+`ProcessEnumerator` inventories running processes, memory maps, loaded modules, executable regions, open files, and selected injection indicators. `PrivescEnumerator` checks SUID files, writable paths, sudo configuration, capabilities, cron, Docker access, and related privilege-escalation conditions.
+
+```python
+from modules.process_enum import ProcessEnumerator
+from modules.privesc_enum import PrivescEnumerator
+
+processes = ProcessEnumerator()
+print(processes.list_all_processes())
+print(processes.find_writable_executable())
+
+privesc = PrivescEnumerator()
+findings = privesc.enumerate_all()
+print(privesc.report())
+```
+
+Run live-host inspection only on systems you administer or are authorized to assess. Process memory and environment data can contain secrets, and some checks require elevated privileges. Do not run privilege-escalation exploits as part of inventory.
 
 ---
 

@@ -513,63 +513,31 @@ The SH-2A software stack is pointed to by R15 (SP) and grows downward (toward lo
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
-from ablation.analyzers.binary_lifter import BinaryLifter, SH2ALifterConfig
-from ablation.analyzers.semantic_searcher import SemanticSearcher
-from ablation.analyzers.sink_arg_classifier import SinkArgClassifier
-from ablation.analyzers.taint_tracker_sh2a import SH2ATaintTracker
+from ablation.analyzers.binary_lifter import BinaryLifter
+from ablation.analyzers.semantic_search import SemanticSearcher
 
 firmware_path = '/media/research/Automotive/Toyota/Denso_89660-0C030.bin'
-
-# Step 1: build BinaryContext
-# SH-2A binaries: raw flat binary (no ELF), big-endian
-ctx = BinaryContext.load_or_build(firmware_path, arch='sh2a', big_endian=True)
+ctx = BinaryContext.load_or_build(firmware_path)
 print(ctx.summary())
 
-# Step 2: semantic sweep before disassembly
-searcher = SemanticSearcher(ctx)
+searcher = SemanticSearcher.from_context(ctx)
 sa_hits = searcher.query('security access seed key UDS diagnostic', top_k=10)
 can_hits = searcher.query('CAN receive frame DLC data buffer copy', top_k=8)
 print(f"SA candidates: {len(sa_hits)}, CAN candidates: {len(can_hits)}")
 
-# Step 3: lift top SA candidate to pseudo-C
-lifter = BinaryLifter.from_context(ctx, config=SH2ALifterConfig())
-for h in sa_hits[:3]:
-    print(f"\n=== SA candidate at {h.va:#010x} (score={h.score:.2f}) ===")
-    print(lifter.lift_function(h.va)[:1500])
+# SH-2A uses the structural lifting backend.
+lifter = BinaryLifter.from_context(ctx, arch='sh2a')
+for hit in sa_hits[:3]:
+    print(f"\n=== SA candidate at {hit.va:#010x} (score={hit.score:.2f}) ===")
+    print(lifter.lift_function(hit.va)[:1500])
 
-# Step 4: classify call sites for taint analysis
-classifier = SinkArgClassifier.from_context(ctx)
-sinks = classifier.classify_all()
-actionable = [s for s in sinks if s.classification in ('ARG_PROPAGATED', 'UNKNOWN')]
-print(f"Actionable sinks: {len(actionable)}")
-
-# Step 5: taint from CAN receive
-tracker = SH2ATaintTracker.from_context(ctx)
-if can_hits:
-    tracker.add_source(can_hits[0].va, registers=['R4', 'R5'], label='CAN_RECV')
-
-findings = tracker.run_interprocedural()
-for f in findings:
-    print(f"[{f.severity}] {f.sink_name}(R4={f.tainted_args}) at {f.sink_va:#010x}")
-
-# Step 6: byte-verify a finding
-import struct
+# Review branch and delay-slot instructions before forming a finding.
 with open(firmware_path, 'rb') as f:
     data = f.read()
-
-for f in findings[:2]:
-    off = f.sink_va - ctx.base_address
-    # SH-2A: 16-bit instruction (big-endian), delay slot variant check
-    insn_word = struct.unpack('>H', data[off:off+2])[0]
-    # JSR @Rn: opcode pattern 0x4n0B (no delay) or check bit[1] for delay slot
-    opcode_bits = insn_word >> 8
-    rn = (insn_word >> 4) & 0xF
-    print(f"  {f.sink_va:#010x}: word={insn_word:#06x} opcode={opcode_bits:#04x} Rn=R{rn}")
-    # Check for delay slot: if opcode is 0x4?2B (JSR/Rn with delay slot)
-    has_delay = (insn_word & 0xFF) == 0x2B
-    if has_delay:
-        delay_word = struct.unpack('>H', data[off+2:off+4])[0]
-        print(f"  Delay slot: {delay_word:#06x}")
+for hit in sa_hits[:2]:
+    off = hit.va
+    insn_word = int.from_bytes(data[off:off + 2], 'big')
+    print(f"  0x{hit.va:x}: instruction=0x{insn_word:04x}")
 ```
 
 ---

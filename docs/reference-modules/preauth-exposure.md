@@ -1,4 +1,6 @@
-# PreAuthRouteAuditor
+<a id="preauthrouteauditor"></a>
+<a id="preauthroute-auditor"></a>
+# Unauthenticated Attack Surface
 
 Traverses the control flow graph from the network entry point and identifies every code path that reaches a security-sensitive operation before an authentication gate. Produces a reachability map so manual review starts at the authentication boundary, not before it.
 
@@ -108,28 +110,11 @@ Each result in `results.routes` has:
 
 ---
 
-## PocGenerator <sup>[↑](#preauthroute-auditor)</sup>
+## Validate exposure safely
 
-Once pre-auth routes are confirmed, `PocGenerator` produces minimal curl commands that reproduce each finding at the protocol level.
+Use `results.preauth_with_sinks()` to select routes with dangerous sinks for manual review. There is no built-in `PocGenerator`; construct protocol requests only after confirming the route, method, parameters, and deployment context from the binary and configuration.
 
-```python
-from ablation.analyzers.poc_generator import PocGenerator
-
-poc = PocGenerator.generate_all(results.pre_auth_routes())
-for item in poc:
-    print(item.curl_command)
-    print(f"  Expected response delta: {item.expected_delta}")
-    print(f"  CWE: {item.cwe}")
-```
-
-Each PoC includes:
-
-- Minimal curl command with the auth bypass path
-- Expected response difference between authenticated and unauthenticated calls confirms the bypass without guessing
-- CWE classification for the PSIRT submission
-- Severity scoring based on the sinks reachable from the handler
-
-The PoC output is paste-ready for a disclosure report. The curl command reproduces the bypass and the expected delta documents why the response confirms pre-auth access rather than just a 401 with a different body.
+Compare unauthenticated and authenticated responses in an isolated test instance, preserving status, body differences, and side-effect evidence. Do not replay a candidate against production or assume that a route marked pre-auth is externally reachable.
 
 ---
 

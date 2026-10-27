@@ -1,117 +1,115 @@
-# LSB Steganographic Key Recovery
+<a id="lsb-steganographic-key-recovery"></a>
+# Firmware Extraction & Triage
 
-Extract key material hidden in BMP pixel LSBs using a Shamir-style Lagrange polynomial secret-sharing scheme: recovering multi-component keys encoded as coordinate pairs in the LSB channel of firmware or APK embedded BMP images, using multi-prime CRT for exact rational reconstruction.
+Scan raw firmware for embedded filesystems, compression formats, security-relevant strings, and entropy transitions, then extract partitions from supported fixed-record firmware containers.
 
----
-
-## Why this exists
-
-1. **Certain firmware and APK distributions embed key material in BMP pixel LSBs using a Shamir-style Lagrange polynomial scheme over rational arithmetic.** This encoding is not detectable by string scanning, entropy analysis, or conventional secret-scanning tools: the key bits are distributed across pixel LSBs in a mathematically structured way. `LSBStegoReader` implements the full pipeline: seed hash → pixel offset → coordinate pair extraction → Lagrange interpolation → CRT reconstruction.
-
-2. **The Lagrange scheme distributes each key component as `n_groups // type_count` coordinate pairs across `type_count` components.** Reconstruction requires exact rational arithmetic not floating point, which `LSBStegoReader` performs using the `imath` library for arbitrary-precision integer math. A floating-point interpolation would produce wrong results due to rounding in large polynomial coefficients.
-
-3. **The output format applies a non-standard reverse two's-complement transformation to negative polynomial values**, this matches the byte order expected by the consuming library in the firmware. Without this transformation, the recovered key bytes are in the wrong order and the key is unusable for verification. `StegoKeyResult.fmt()` outputs the key in the format the consuming library expects.
+**Files:** `ablation/core/firmware_analyzer.py` · `ablation/analyzers/firmware_container.py`
 
 ---
 
-## How it works
+## What these modules do
 
-```mermaid
-flowchart TD
-    A(["LSBStegoReader(bmp_data: bytes, seed: str)"]):::input --> B["seed_offset(seed) → pixel_offset\n  Hash seed string → deterministic pixel index"]:::primary
-    B:::primary --> C["read_bytes(offset, n_bytes) → bytes\n  Read n_bytes from LSB channel starting at pixel_offset\n  Each pixel contributes 1 bit (R LSB)"]:::secondary
-    C:::secondary --> D["extract_coords() → List[CoordPair]\n  Read: type_count, n_groups from first LSB bytes\n  For each of (type_count * n_groups) pairs:\n    Read x, y as LSB-encoded hex fields\n  → List[CoordPair(x, y)]"]:::tertiary
-    D:::tertiary --> E["StegoKeyResult.recover() → List[str]\n  For each of type_count components:\n    Select n_pts = n_groups // type_count coordinate pairs\n    Lagrange interpolation at x=0 over imath rationals\n    Multi-prime CRT for exact integer reconstruction\n    Apply reverse-TC transform to negative values\n  → List[str]  (one hex string per component)"]:::tertiary
-    E:::tertiary --> F(["StegoKeyResult:\n  components: List[str]  (hex-encoded key components)\n  seed: str\n  fmt() → str  (combined key in consuming-library format)"]):::output
-    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
-    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
-    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
-    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
-    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
-    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
-    linkStyle 0 stroke:#bf360c,stroke-width:2px
-    linkStyle 1 stroke:#00695c,stroke-width:2px
-    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
-    linkStyle 3 stroke:#6a1b9a,stroke-width:2px
-    linkStyle 4 stroke:#2e7d32,stroke-width:3px
-```
+`firmware_analyzer.py` provides static, standard-library triage for an arbitrary byte image. It identifies likely extraction targets and security-review leads without executing firmware.
 
----
+`firmware_container.py` parses one specific container layout: an 8-byte magic, firmware/vendor/product metadata, and 296-byte partition records beginning at file offset `0x54`. It is not a universal firmware unpacker and does not decrypt or decompress partition payloads.
 
-## Usage
+## Signature scanning
+
+`scan_firmware_signatures(data)` checks each byte offset against the registered magic table and returns at most 100 hits:
 
 ```python
-from ablation.analyzers.lsb_stego_extractor import LSBStegoReader
+from ablation.core.firmware_analyzer import scan_firmware_signatures
 
-with open('/path/to/embedded.bmp', 'rb') as f:
-    bmp_data = f.read()
+with open('/path/to/firmware.bin', 'rb') as f:
+    data = f.read()
 
-# Attempt recovery with known seed string
-reader = LSBStegoReader(bmp_data, seed='firmware_key_seed')
-
-# Extract coordinates
-coords = reader.extract_coords()
-print(f"type_count={coords.type_count}  n_groups={coords.n_groups}")
-
-# Recover key components
-result = coords.recover()
-print(result.fmt())
-for i, component in enumerate(result.components):
-    print(f"  component[{i}]: {component}")
+for hit in scan_firmware_signatures(data):
+    print(hex(hit['offset']), hit['type'], hit['severity'])
 ```
 
----
+Recognized families include SquashFS, JFFS2, UBI, CPIO, ZIP/APK, gzip, bzip2, xz, LZMA, LZ4, zstd, ELF, U-Boot, device-tree blobs, and Android boot images. `HIGH` marks a filesystem category considered extractable by this scanner; it does not mean a vulnerability.
 
-## Example output
+A magic match identifies a possible embedded region, not a validated filesystem. Confirm the surrounding header and partition layout before extraction.
 
-The following illustrates the key recovery output format. Actual coordinate counts and key values are image-specific.
+## String and credential triage
 
-```
-LSBStegoReader: embedded.bmp  (seed='firmware_key_seed')
+`extract_firmware_strings(data, min_length=8)` extracts printable strings and returns these categories:
 
-type_count: <T>  n_groups: <G>
-Coordinate pairs extracted: <T*G>
-
-Lagrange recovery (CRT, imath):
-  component[0]: <hex-component-0>
-  component[1]: <hex-component-1>
-
-Combined key (consuming-library format): <hex-key>
-```
-
----
-
-## False positives
-
-**BMP files without LSB steganography produce garbage coordinate pairs**: `extract_coords()` reads raw bit patterns from any BMP regardless of whether they encode meaningful data. The `type_count` and `n_groups` values will be nonsensical for non-steganographic BMPs, and `recover()` will produce meaningless output. Confirm that a BMP is a likely steganographic carrier discovered in firmware alongside known-encrypted data before running recovery.
-
-**The Lagrange scheme requires the correct seed string**: using the wrong seed produces a different `seed_offset` and extracts the wrong pixel region. If recovery produces invalid key material for example fails key verification in the consuming library, try alternative seed strings from observed firmware string constants.
-
----
-
-## Pipeline position
-
-Run `LSBStegoReader` when a BMP file is found embedded in firmware or APK content alongside encrypted data that cannot be decrypted by other means. Pair with `EntropyMapper` to confirm the encrypted region exists, then use `LSBStegoReader` to attempt key recovery from nearby BMP resources.
-
----
-
-## Reading output
-
-`LSBStegoReaderpixel_data, seed.extract()` returns a `StegoKeyResult`:
-
-| Attribute | Content |
+| Field | Content |
 |:---|:---|
-| `seed` | Seed string used for coordinate generation |
-| `type_count` | Number of polynomial components in the key |
-| `n_groups` | Total number of coordinate groups encoded |
-| `n_pts` | Points per component used in Lagrange interpolation |
-| `components` | `List[str]`: hex string per recovered polynomial component |
-| `raw_key_hex` | All components concatenated as a single hex string |
+| `passwords` | Text matching password-assignment patterns. |
+| `private_keys` | PEM private-key markers and their offsets. |
+| `api_tokens` | Token-like strings near key, secret, or API text. |
+| `ips` / `urls` | IPv4 addresses and HTTP(S) URLs. |
+| `passwd_entries` | Unix passwd-format entries. |
+| `supply_chain` | BusyBox, OpenSSL, and Linux kernel version strings. |
+| `debug_strings` | Telnet, bind-shell, backdoor, and netcat references. |
 
----
+These are review leads, not verified credentials, vulnerable dependency versions, or backdoor proof. Handle any recovered secret as sensitive material and validate it only on systems you are authorized to test.
+
+## Entropy transitions
+
+`analyze_firmware_entropy(data, block_size=1024)` computes Shannon entropy per block and returns the first block, the last block, and blocks whose entropy differs from the previous block by more than `1.0`.
+
+```python
+from ablation.core.firmware_analyzer import analyze_firmware_entropy
+
+for section in analyze_firmware_entropy(data):
+    print(hex(section['offset']), section['entropy'], section['type'])
+```
+
+Types are `compressed/encrypted` above 7.0, `data` from 5.0 through 7.0, and `code/text` below 5.0. These thresholds are heuristics: compressed, encrypted, random, and densely encoded data can overlap. Entropy alone cannot establish encryption or locate a key.
+
+## Complete file triage
+
+`scan_firmware_file(path)` runs all three analyses and consolidates findings:
+
+```python
+from ablation.core.firmware_analyzer import scan_firmware_file
+
+result = scan_firmware_file('/path/to/firmware.bin')
+print(result['size'])
+for finding in result['findings']:
+    print(finding['severity'], finding['category'], finding['detail'])
+```
+
+The returned dictionary also contains `signatures`, `strings`, and `entropy_sections`. Consolidated findings include private-key markers, password assignments, extractable filesystems, non-root UID-0 passwd entries, component version strings, and debug indicators. Severity is a triage convention, not a CVSS score or confirmed exploit result.
+
+For JSON output:
+
+```bash
+python ablation/core/firmware_analyzer.py /path/to/firmware.bin --json
+```
+
+## Parse and extract a supported container
+
+```python
+from ablation.analyzers.firmware_container import FirmwareContainer
+
+firmware = FirmwareContainer.from_path('/path/to/firmware.BIN')
+firmware.dump_partitions()
+
+for partition in firmware.partitions:
+    print(partition.name, hex(partition.offset), partition.size, partition.payload_type)
+
+firmware.extract('bin', '/tmp/bin-partition.bin')
+firmware.extract_all('/tmp/firmware-partitions')
+```
+
+`read_partition(name)` returns payload bytes and raises `KeyError` for an unknown name. `extract()` writes one partition; `extract_all()` writes numbered `.bin` files and returns their paths.
+
+Payload detection recognizes gzip, xz, zstd, LZ4, LZO, CPIO, ELF, PE, and ext2/3/4 signatures. The payload remains in its original form after extraction; decompression, decryption, filesystem mounting, and safe path handling belong to subsequent tools.
+
+## Limitations
+
+- The signature scanner can report magic bytes inside unrelated data. Validate candidates structurally.
+- String patterns produce false positives in documentation, test data, and compressed content. Do not treat a version string as proof of a CVE.
+- The container parser accepts only the documented fixed-record layout. A zero-partition result can mean an unsupported format rather than an empty image.
+- Container extraction does not validate payload contents or make them safe to mount, execute, or parse.
+- Large images are processed in memory. Use an environment with adequate memory and avoid running untrusted extracted content.
 
 ## See also
 
-- [Firmware Extraction](firmware-extraction.md): outer layer extraction pipeline
-- [Compressed BFF Detection / Entropy Mapping](compressed-bff-detection-and-lzw-attempt.md): entropy analysis to locate encrypted regions before key recovery
-- [Credential/Token/Key Discovery](credential-token-key-discovery.md): live host credential enumeration complements static firmware triage
+- [Fortinet Firmware Analysis](firmware-extraction.md): FortiOS-specific key recovery and partition extraction.
+- [Packed & Encrypted Region Detection](entropy-mapper.md): windowed entropy maps and region classification.
+- [Binary Parsing & Hardening](binary-format-and-platform-identification.md): identify executable partitions after extraction.

@@ -1,9 +1,10 @@
-# LengthUnderflowScanner
+<a id="lengthunderflowscanner"></a>
+# Parser Length & Bounds Checks
 
   - [What is header-subtraction integer underflow?](#what-is-header-subtraction-integer-underflow)
   - [Why this exists](#why-this-exists)
   - [How it works](#how-it-works)
-  - [LengthUnderflowScanner](#lengthunderflowscanner-1)
+  - [LengthUnderflowScanner](#lengthunderflowscanner)
   - [Usage](#usage)
   - [Example output](#example-output)
   - [False positives](#false-positives)

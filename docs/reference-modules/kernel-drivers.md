@@ -1,4 +1,5 @@
-# Windows Kernel Driver Analysis
+<a id="windows-kernel-driver-analysis"></a>
+# Windows Driver Vulnerabilities
 
 Two cooperating modules for Windows kernel driver RE: `KernelDriverAnalyzer` for
 attack surface mapping and `ByovdDetector` for identifying drivers with exploitable

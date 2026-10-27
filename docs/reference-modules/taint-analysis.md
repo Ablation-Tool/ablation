@@ -1,9 +1,10 @@
-# TaintTracker
+<a id="tainttracker"></a>
+# Data-Flow Taint Analysis
 
   - [What is taint analysis?](#what-is-taint-analysis)
   - [Why this exists](#why-this-exists)
   - [How it works](#how-it-works)
-  - [TaintTracker](#tainttracker-1)
+  - [TaintTracker](#tainttracker)
   - [Usage](#usage)
   - [Example output](#example-output)
   - [False positives](#false-positives)
@@ -21,7 +22,7 @@ Taint analysis is a form of information flow tracking that marks data as "tainte
 
 The key insight is that taint analysis answers a different question than static pattern matching. A scanner that flags every call to `system()` produces false positives for calls with hardcoded strings. A scanner that flags every `memcpy` with a length argument produces false positives when the length comes from a compile-time constant. Taint analysis narrows the question: does attacker-supplied data actually flow to this argument? Only findings where the data flow is confirmed get reported.
 
-Ablation implements two taint tracker variants. `TaintTracker` in `taint_tracker.py` handles x86-64 intraprocedural and interprocedural flows: it traces within a function and follows `CALL` targets to trace across function boundaries. `ARM64TaintTracker` in `taint_tracker_arm64.py` applies the same logic to AArch64 binaries. Both use `TaintState.join()` at merge points in the CFG to model paths through conditional branches conservatively.
+Ablation exposes different analysis depths for these architectures. `TaintTracker` in `taint_tracker.py` performs a bounded forward scan within an x86-64 function. `ARM64TaintTracker` supports both intraprocedural analysis and `run_interprocedural(depth=...)` for following flows across AArch64 call boundaries. ARM64's `TaintState.join()` conservatively merges state at CFG joins; the x86-64 scanner is path-insensitive and does not perform that CFG fixpoint.
 
 ## Why this exists <sup>[↑](#tainttracker)</sup>
 
@@ -255,7 +256,7 @@ for sink in sinks:
 
 **Large functions with loops.** The `max_insns` limit default 800 prevents runaway disassembly on pathological functions, but it means a function with a long loop prologue may not reach all sinks. If the function is of interest, increase `max_insns` or increase `max_func_size`.
 
-**Memory taint.** The tracker does not model memory taint: only register and stack-slot taint. If tainted data is stored to memory and later reloaded into a register, the reload is treated as untainted. This is a fundamental limitation of the intra-function, register-only model; full memory taint requires a different analysis tier.
+**Memory contents.** The x86-64 scanner tracks register values and tainted registers used inside memory-address expressions, but it does not retain the contents of arbitrary memory writes for later loads. A value stored and subsequently reloaded can therefore lose taint. Treat this as a source of false negatives and use a memory-aware analysis or manual review for those flows.
 
 ---
 

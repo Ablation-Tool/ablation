@@ -138,7 +138,8 @@ flowchart TD
 ## Usage <sup>[↑](#riscvtainttracker)</sup>
 
 ```python
-from ablation.analyzers.taint_tracker_riscv import TaintEngine, Width
+from ablation.analyzers.taint_tracker_riscv import TaintEngine
+from ablation.analyzers.isa_riscv import Width
 
 # RISCVTaintTracker
 from ablation.analyzers.insn_riscv import from_listing
@@ -157,8 +158,8 @@ init.taint_reg("a0", "user")
 result = analyze_cfg(insns, Width.RV64, initial=init)
 
 # RISCVTaintTracker
-from ablation.analyzers.taint_tracker_riscv64 import RV64TaintTracker
-tracker = RV64TaintTracker.from_path('/path/to/riscv64.elf')
+from ablation.analyzers.taint_tracker_riscv64 import RISCV64TaintTracker
+tracker = RISCV64TaintTracker.from_path('/path/to/riscv64.elf')
 findings = tracker.run()
 
 # RISCVTaintTracker
@@ -392,18 +393,13 @@ RISC-V is a new ISA (2010) and most currently deployed firmware using RISC-V is 
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
-from ablation.analyzers.sink_arg_classifier import SinkArgClassifierRISCV
-from ablation.analyzers.taint_tracker_riscv import RISCVTaintTracker
+from ablation.analyzers.taint_tracker_riscv64 import RISCV64TaintTracker
 
-# RV64GC little-endian (standard Linux RISC-V)
 ctx = BinaryContext.load_or_build('/firmware/extract/usr/sbin/httpd')
-print(ctx.summary())   # should show arch='rv64gc' or 'rv32imc'
+print(ctx.summary())
 
-classifier = SinkArgClassifierRISCV.from_context(ctx)
-work = [s for s in classifier.classify_all()
-        if s.classification in ('ARG_PROPAGATED', 'UNKNOWN')]
-
-findings = RISCVTaintTracker.from_context(ctx).scan(sink_sites=work)
+# Review candidate functions directly; no dedicated RISC-V SinkArgClassifier exists.
+findings = RISCV64TaintTracker.from_path(ctx.path).run()
 
 # Byte-verify: JAL ra (opcode=0x6F, rd=x1) or JALR ra (opcode=0x67, rd=x1)
 data = open(ctx.binary_path, 'rb').read()

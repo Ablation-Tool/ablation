@@ -237,7 +237,7 @@ The most common false positive is taint surviving a zero-clear instruction `xor 
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
-from ablation.analyzers.semantic_searcher import SemanticSearcher
+from ablation.analyzers.semantic_search import SemanticSearcher
 from ablation.analyzers.sink_arg_classifier import SinkArgClassifier
 from ablation.analyzers.taint_tracker_tricore import TriCoreTaintTracker
 from ablation.analyzers.finding_registry import FindingRegistry
@@ -548,7 +548,7 @@ from ablation.analyzers.taint_tracker_tricore import TriCoreTaintTracker
 tracker = TriCoreTaintTracker.from_path('/firmware/edc17_tc1767.bin')
 # Label CAN receive buffer as taint source
 # Identify ring buffer read VA via semantic search first:
-from ablation.analyzers.semantic_searcher import SemanticSearcher
+from ablation.analyzers.semantic_search import SemanticSearcher
 from ablation.analyzers.binary_context import BinaryContext
 
 ctx = BinaryContext.load_or_build('/firmware/edc17_tc1767.bin')

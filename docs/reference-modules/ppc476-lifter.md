@@ -408,8 +408,8 @@ Multiple ablation modules handle PPC32 targets. `PPC476Lifter` specifically targ
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
-from ablation.analyzers.semantic_searcher import SemanticSearcher
-from ablation.analyzers.ppc476_lifter import PPC476Lifter
+from ablation.analyzers.semantic_search import SemanticSearcher
+from ablation.analyzers.ppc476_lifter import Ppc476Lifter
 from ablation.analyzers.sink_arg_classifier import SinkArgClassifier
 from ablation.analyzers.taint_tracker_ppc32 import PPC32TaintTracker
 
@@ -419,7 +419,7 @@ print(ctx.summary())
 # Expected: PowerPC Book E (big-endian), 32-bit, 1847 functions (stripped)
 
 # Step 2: semantic sweep for command injection candidates
-searcher = SemanticSearcher(ctx)
+searcher = SemanticSearcher.from_context(ctx)
 hits = searcher.query('system command execution shell process', top_k=15)
 print("Top candidates:")
 for h in hits:
@@ -434,7 +434,7 @@ for r in results:
         print(f"  {r.va:#010x}: {r.sink_name}({r.arg_idx}) = {r.classification}")
 
 # Step 4: lift promising candidate to pseudo-C for manual review
-lifter = PPC476Lifter(ctx)
+lifter = Ppc476Lifter.from_context(ctx)
 # Use VA of the most interesting sink with ARG_PROPAGATED classification
 candidate_func_va = hits[0].va
 pseudo_c = lifter.lift(candidate_func_va)

@@ -1,16 +1,17 @@
-# Debug Metadata Recovery
+<a id="debug-metadata-recovery"></a>
+# Debug Metadata & Symbol Recovery
 
-Recover function boundaries, names, and type information from `.eh_frame` CFI records, DWARF `.debug_info`, and Linux BTF `.BTF`/`.BTF.ext` sections in ELF binaries: providing precise `start, end` function intervals and names even when `.symtab` is stripped, for LoongArch64 and all other ELF targets.
+Recover function addresses and names from `.eh_frame` unwind records, DWARF `.debug_info`, and Linux BTF `.BTF`/`.BTF.ext` sections in ELF binaries. The i386 scanner additionally recovers absolute string cross-references that RIP-relative x86-64 analysis does not encounter.
 
 ---
 
 ## Why this exists <sup>[↑](#debug-metadata-recovery)</sup>
 
-1. **Stripped ELF binaries drop `.symtab` but typically retain `.eh_frame` CFI records emitted by GCC/Clang for C++ exception unwinding, these records contain precise function start VAs as FDE Frame Description Entry entries.** `extract_eh_frame_starts(path)` extracts all FDE start addresses, providing function boundaries without the noise of prologue-scan heuristics. On a typical stripped firmware binary, `.eh_frame` yields function start accuracy of 99%+ versus prologue scan's ~85%.
+1. **Unwind metadata can survive symbol stripping.** `extract_eh_frame_starts(path)` reads Frame Description Entries from `.eh_frame` and returns their `pc_begin` addresses. These addresses provide function-start candidates without relying only on prologue-pattern heuristics; review overlapping or exceptional entries before treating every candidate as a function.
 
-2. `.debug_info` sections (present in `-g` builds) provide `name, low_pc, high_pc` triples via `DW_TAG_subprogram`: `high_pc` eliminates the "next-function-start" approximation that `.eh_frame` alone requires. When `.debug_info` is present common in development firmware images or partial debug builds, `extract_debug_funcs(path)` yields precise function end addresses, enabling accurate function-size calculations and loop detection.
+2. **DWARF supplies precise intervals when debug information is available.** `extract_debug_funcs(path)` reads `DW_TAG_subprogram` entries and maps each `low_pc` to its recovered name and `high_pc`, avoiding the need to infer a function's end from the next candidate start.
 
-3. Linux kernel modules stripped of `.symtab` often retain `.BTF` and `.BTF.ext` sections: BTF maps section offsets to function names even without symbol tables, enabling name recovery for kernel modules and eBPF programs where DWARF is absent. `extract_btf_funcs(path)` parses the BTF string and type sections without external dependencies pure struct parsing, no libbpf required.
+3. **BTF can recover kernel function names without DWARF.** `extract_btf_funcs(path)` parses `.BTF` type records and `.BTF.ext` function-information records with Python's standard binary-unpacking support, without libbpf.
 
 ---
 
@@ -127,18 +128,9 @@ Run debug metadata recovery immediately after `BinaryContext.load_or_build()` on
 
 `extract_btf_funcs(path)` returns `Dict[int, str]`: maps VA → function name from `.BTF`/`.BTF.ext` sections. Returns `{}` if BTF is absent.
 
-`ARM32FunctionScanner.inject_into_context(ctx)` modifies `ctx.func_starts` in place and returns:
+`I386AbsoluteXrefScanner.scan_full()` returns an `XrefResult` containing the recovered references and scanner statistics; `result.report()` formats that result for review.
 
-| Field | Content |
-|:---|:---|
-| `added` | Count of new function starts added to `ctx` |
-| `existing` | Count of function starts already in `ctx` from symbols or prior analysis |
-
-`I386AbsoluteXrefScanner.inject_into_context(ctx)` modifies `ctx.xrefs` in place and returns:
-
-| Field | Content |
-|:---|:---|
-| `xrefs_added` | Count of new cross-references added |
+`I386AbsoluteXrefScanner.inject(ctx)` adds the recovered references to the supplied `BinaryContext` and returns the integer count of newly added cross-references.
 
 ---
 

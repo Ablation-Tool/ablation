@@ -1,4 +1,5 @@
-# Firmware Extraction
+<a id="firmware-extraction"></a>
+# Fortinet Firmware Analysis
 
 Extract FortiOS hardware firmware images using a two-stage pipeline: outer 64-byte XOR key recovery via IC + frequency analysis, followed by inner partition encryption key recovery via RC4 known-plaintext attack and PKCS#1 v1.5 block scanning: making inner ELF and filesystem partitions available for static analysis.
 

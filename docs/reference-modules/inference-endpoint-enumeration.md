@@ -1,6 +1,9 @@
-# Inference Endpoint Enumeration
+<a id="inference-endpoint-enumeration"></a>
+# AI & Agent Security
 
 Enumerate unauthenticated LLM inference platform surfaces: Ollama, LM Studio, LocalAI, HuggingFace Text Generation Inference (TGI), and OpenAI-compatible APIs: alongside extended server-level management surfaces for vLLM, NVIDIA Triton Inference Server, TorchServe, MLflow model registry, and vector store administrative interfaces including Qdrant, Weaviate, Chroma, Pinecone local, and pgvector via PostgREST, identifying unprotected model listings, unauthenticated inference execution, operational metrics exposure, snapshot creation, and training artifact disclosure without credentials.
+
+**Authorized testing only:** endpoint enumeration can invoke models, consume compute, expose sensitive documents, or trigger agent tools. Use test deployments and synthetic data, and do not enable state-changing or live-agent probes against production systems.
 
 ---
 
@@ -220,6 +223,22 @@ The following illustrates the `evidence` field format for representative finding
   HTTP 200 GET /api/2.0/mlflow/registered-models/list
   body={"registered_models":[{"name":"<model>","latest_versions":[{"run_id":"<id>","artifact_uri":"s3://<bucket>/..."}]}]}
 ```
+
+---
+
+## Static MCP tool-taint analysis
+
+`MCPToolTaintScanner` reviews local MCP server source without connecting to an endpoint. It traces untrusted tool arguments into dangerous operations such as command execution, filesystem access, and outbound requests.
+
+```python
+from ablation.analyzers.mcp_tool_taint_scanner import MCPToolTaintScanner
+
+scanner = MCPToolTaintScanner.from_path('/path/to/mcp-server-source')
+findings = scanner.scan()
+print(scanner.report(findings))
+```
+
+Review each finding's source-to-sink path, tool registration, and authorization checks. A dangerous sink is not automatically exploitable, and a clean regex scan does not prove that validation exists elsewhere.
 
 ---
 

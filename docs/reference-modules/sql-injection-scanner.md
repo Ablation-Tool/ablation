@@ -1,4 +1,5 @@
-# SqlSinkScanner
+<a id="sqlsinkscanner"></a>
+# SQL & Lua Injection Analysis
 
 Detect raw SQL injection in x86-64 ELF binaries that call the MySQL C API `mysql_query`, `mysql_real_query` or SQLite3 `sqlite3_exec`, `sqlite3_prepare_v2`, `sqlite3_prepare` directly: tracing the SQL string argument backward from each call site to classify its provenance as `INJECTABLE`, `INJECTABLE_LITERAL`, `RODATA_CONST`, `SAFE_NUMERIC`, `ARG_PROPAGATED`, or `UNKNOWN`.
 
@@ -90,6 +91,23 @@ findings2 = scanner2.scan()
 # python3 -m ablation.analyzers.sql_sink_scanner /path/to/binary
 ```
 
+### Trace Python input into Lua evaluation
+
+`LuaInjectionAnalyzer` scans a source tree rather than a native binary. It follows request-controlled values through Python CGI-style handlers into Lua evaluation calls.
+
+```python
+from ablation.analyzers.lua_injection_analyzer import LuaInjectionAnalyzer
+
+analyzer = LuaInjectionAnalyzer.from_path('/path/to/source-tree')
+lua_findings = analyzer.scan()
+print(analyzer.report(lua_findings))
+
+for finding in lua_findings:
+    print(finding.as_dict())
+```
+
+Review the reported source path and intervening transformations. A syntactic path from request input to evaluation is a candidate for manual confirmation, not proof that the deployed route is reachable or lacks validation elsewhere.
+
 ---
 
 ## Example output <sup>[↑](#sqlsinkscanner)</sup>
@@ -151,4 +169,4 @@ SqlSinkScanner: /path/webapp_binary
 
 - [Sink Arg Classifier](sink-arg-classifier.md): classify all call sites not just SQL as RODATA_CONST/ARG_PROPAGATED/UNKNOWN before running this scanner
 - [Taint Analysis](taint-analysis.md): trace ARG_PROPAGATED findings from user input to the SQL sink
-- [Format String Analysis](format-string-analysis.md): format string detection for non-SQL output sinks
+- [Format-String Vulnerabilities](format-string-scanner.md): format string detection for non-SQL output sinks

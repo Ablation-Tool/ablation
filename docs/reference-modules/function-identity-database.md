@@ -1,4 +1,5 @@
-# Function Identity Database
+<a id="function-identity-database"></a>
+# Function Identification & Naming
 
 Persistent SQLite store of confirmed and inferred function records, prior RE findings, and semantic embeddings: the central shared state for `SemanticSearcher`, `CorpusBuilder`, `SigLibrary`, `RAGRetriever`, and `FindingRegistry` across all targets and engagements.
 

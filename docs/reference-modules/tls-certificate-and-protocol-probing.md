@@ -1,6 +1,9 @@
-# TLS Certificate and Protocol Probing
+<a id="tls-certificate-and-protocol-probing"></a>
+# TLS Security Analysis
 
 Inspect TLS certificate chains, key strength, legacy protocol version support TLS 1.0/1.1, SSLv3, weak cipher suites RC4, 3DES, NULL, EXPORT, anonymous DH, and DH parameter properties: by directly establishing TLS connections and exchanging raw ClientHello records: via `ablation/core/tls_analyzer.py` and `modules/tls_enum.py`.
+
+**Authorized testing only:** these modules make network connections and attempt protocol variations. Run them only against systems you own or have explicit permission to test, and prefer an isolated endpoint when checking downgrade or legacy behavior.
 
 ---
 

@@ -1,4 +1,5 @@
-# Binary Format and Platform Identification
+<a id="binary-format-and-platform-identification"></a>
+# Binary Parsing & Hardening
 
 Identify a binary's format ELF, PE, Mach-O, architecture 32/64-bit, endianness, and entry point from raw magic bytes and header fields: without external dependencies: before any analysis begins.
 
@@ -93,6 +94,23 @@ info = parser.parse()
 
 print(parser.report())
 ```
+
+### ELF metadata and hardening
+
+`ELFParser` provides deeper ELF inspection, including architecture, dependencies, sections, program headers, and security properties. Call `parse()` before requesting derived results.
+
+```python
+from ablation.core.elf_parser import ELFParser
+
+elf = ELFParser('/path/to/target.elf')
+elf.parse()
+
+print(elf.machine())
+print(elf.needed_libs())
+print(elf.detect_security())
+```
+
+`detect_security()` returns `pie`, `nx_stack`, `relro`, `stack_canary`, `stripped`, and `fortify`. RELRO is reported as `full`, `partial`, or `none`. When `PT_GNU_STACK` is absent, `nx_stack` assumes a modern kernel default and includes `nx_stack_note`; treat that result as an assumption rather than direct binary evidence.
 
 ---
 

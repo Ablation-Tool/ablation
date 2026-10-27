@@ -1,4 +1,5 @@
-# BinaryContext
+<a id="binarycontext"></a>
+# Analysis Context & Caching
 
   - [What is BinaryContext?](#what-is-binarycontext)
   - [Why this exists](#why-this-exists)

@@ -1,4 +1,5 @@
-# CFGBuilder
+<a id="cfgbuilder"></a>
+# Control & Data-Flow Analysis
 
   - [What is a control-flow graph?](#what-is-a-control-flow-graph)
   - [Why this exists](#why-this-exists)
@@ -166,7 +167,7 @@ Build CFGs after `XRefGraph` provides function boundaries and PLT mapping. `CFGB
 
 ## See also <sup>[↑](#cfgbuilder)</sup>
 
-- [XRefGraph](xref-graph.md): provides function starts and PLT map; required for `CFGBuilder`
+- [Analysis Context & Caching](on-demand-analysis.md): provides `BinaryContext` and `XRefGraph` call and reference data
 - [Taint Analysis](taint-analysis.md): `analyze_function_flow_sensitive()` uses CFG basic blocks
 - [Dominator and Loop Analysis](dominators-and-loop-analysis.md): reads `CFG.dominator_tree()` for structured recovery
 - [Behavioral Subsequence Search](behavioral-subsequence-search.md): uses op-category sequences from CFG instruction lists

@@ -1,4 +1,5 @@
-# PycBytecodeScanner
+<a id="pycbytecodescanner"></a>
+# Python, Perl & Electron Analysis
 
   - [What is Python bytecode?](#what-is-python-bytecode)
     - [The .pyc file format](#the-pyc-file-format)
@@ -384,112 +385,63 @@ is a classic CGI command injection. The backtick operator executes a shell comma
 ```python
 from ablation.analyzers.perl_taint_scanner import PerlTaintScanner
 
-scanner = PerlTaintScanner()
+scanner = PerlTaintScanner.from_path('/path/to/cgi-bin')
+hits = scanner.scan()
+print(scanner.report(hits))
 
-# Scan a single Perl file
-result = scanner.scan_file('/path/to/script.pl')
-for f in result.findings:
-    print(f.fmt())
-
-# Scan a directory tree
-results = scanner.scan_dir('/mnt/firmware/var/www/cgi-bin/')
-print(scanner.report(results))
+for hit in hits:
+    print(hit.fmt())
 ```
 
-### Findings <sup>[↑](#pycbytecodescanner)</sup>
-
-| Field | Content |
-|---|---|
-| `source` | Taint origin: `'CGI'`, `'STDIN'`, `'ENV'`, `'SOCKET'` |
-| `sink` | Dangerous operation: `'backtick'`, `'system'`, `'exec'`, `'open_pipe'`, `'eval'` |
-| `line` | Source file line number |
-| `snippet` | The tainted expression at the sink |
-| `severity` | `'HIGH'` for direct execution, `'MEDIUM'` for eval |
+`from_path()` collects Perl source below a file or directory. `from_files([...])` scans an explicit file list. Each `SinkHit` includes the taint source, sink, file/line, snippet, and severity; validate reachability and any transformations before reporting injection.
 
 ---
 
-## ElectronIPC <sup>[↑](#pycbytecodescanner)</sup>
+## Electron Security Scanner <sup>[↑](#pycbytecodescanner)</sup>
 
-**File:** `ablation/analyzers/electron_ipc_inspector.py`
+**File:** `ablation/analyzers/electron_security_scanner.py`
 
-Electron applications package a Chromium browser and a Node.js runtime together. The management web UIs of several enterprise security products (some Fortinet, Palo Alto, and SonicWall tools) ship as Electron applications. Electron has a two-process architecture: the Renderer process (web content) and the Main process (Node.js). They communicate via Inter-Process Communication (IPC): `ipcRenderer.send()` in the renderer triggers `ipcMain.on()` handlers in the main process.
-
-### What is Electron IPC injection? <sup>[↑](#pycbytecodescanner)</sup>
-
-When the Main process IPC handler passes data received from the Renderer directly to a Node.js API that executes shell commands or reads/writes files, the application is vulnerable to IPC injection. A compromised renderer (via XSS in the web content) can call `ipcRenderer.send('exec', 'malicious command')` and, if the Main process passes that argument to `require('child_process').exec()` without validation, achieve OS command execution.
-
-The classic vulnerable pattern in Electron main process code:
-
-```javascript
-const { ipcMain } = require('electron')
-const { exec } = require('child_process')
-
-ipcMain.on('run-command', (event, cmd) => {
-  exec(cmd, (err, stdout) => {   // cmd is attacker-controlled
-    event.reply('output', stdout)
-  })
-})
-```
-
-This is structurally identical to a CGI command injection, but in a desktop application that runs with elevated OS permissions (since Electron apps are typically installed as native apps with full user-level access, not in a browser sandbox).
+Electron applications combine Chromium renderer content with a Node.js main process. Unsafe window preferences, missing sender checks, unvalidated URLs, and exposed IPC handlers can turn renderer or web content compromise into access to Node.js capabilities and sensitive data.
 
 ### Usage <sup>[↑](#pycbytecodescanner)</sup>
 
+Extract an `app.asar` into a review directory, then scan its JavaScript:
+
 ```python
-from ablation.analyzers.electron_ipc_inspector import ElectronIPCInspector
+from ablation.analyzers.electron_security_scanner import ElectronSecurityScanner
 
-inspector = ElectronIPCInspector()
+findings = ElectronSecurityScanner.from_path('/path/to/app.asar.unpacked').scan()
+print(ElectronSecurityScanner.report(findings))
 
-# Scan unpacked Electron app directory
-results = inspector.scan_dir('/path/to/app.asar.extracted/')
-for r in results:
-    if r.has_findings():
-        print(r.fmt())
+main_findings = ElectronSecurityScanner.scan_file('/path/to/app.asar.unpacked/main.js')
+for finding in main_findings:
+    print(finding.fmt())
 ```
 
-The inspector reads `.js` files (bundled JavaScript), identifies `ipcMain.on()` handler registration sites, and traces the event argument (`event.args`, `args[0]`, etc.) through assignments and function calls to `exec()`, `execSync()`, `spawn()`, `fs.readFile()`, `fs.writeFile()`, and other sensitive Node.js APIs.
-
-### Findings <sup>[↑](#pycbytecodescanner)</sup>
-
-| Field | Content |
-|---|---|
-| `handler_name` | IPC channel name passed to `ipcMain.on('name', ...)` |
-| `sink` | Node.js API called with tainted arg: `'exec'`, `'execSync'`, `'spawn'`, `'readFile'`, `'writeFile'` |
-| `file` | Source file path |
-| `line` | Line number of the sink call |
-| `severity` | `'HIGH'` for command execution sinks; `'MEDIUM'` for file system sinks |
+The scanner checks for insecure `nodeIntegration` and `contextIsolation` combinations, IPC handlers without sender verification, server-controlled URLs loaded into privileged windows, production developer tools, unsafe deep links, TLS bypasses, and missing context bridges. Findings include file, line, class, CWE, severity, explanation, and source snippet. Confirm actual runtime settings and sender reachability; regex matches alone do not prove exploitability.
 
 ---
 
 ## Integrated scan workflow <sup>[↑](#pycbytecodescanner)</sup>
 
-For firmware that contains a Python management plane and embedded web content:
-
 ```python
 from ablation.analyzers.pyc_bytecode_scanner import PycBytecodeScanner
 from ablation.analyzers.perl_taint_scanner import PerlTaintScanner
-from ablation.analyzers.electron_ipc_inspector import ElectronIPCInspector
+from ablation.analyzers.electron_security_scanner import ElectronSecurityScanner
 
-# 1. Scan Python bytecode
 pyc_scanner = PycBytecodeScanner()
 pyc_results = pyc_scanner.scan_dir('/firmware/extract/usr/lib/python/')
 
-# 2. Scan Perl CGI scripts
-perl_scanner = PerlTaintScanner()
-perl_results = perl_scanner.scan_dir('/firmware/extract/var/www/cgi-bin/')
+perl_scanner = PerlTaintScanner.from_path('/firmware/extract/var/www/cgi-bin/')
+perl_hits = perl_scanner.scan()
 
-# 3. Scan Electron IPC (management UI)
-if_inspector = ElectronIPCInspector()
-ipc_results = if_inspector.scan_dir('/firmware/extract/usr/share/gui/')
+electron_findings = ElectronSecurityScanner.from_path(
+    '/firmware/extract/usr/share/gui/'
+).scan()
 
-# Combined report
-print("=== Python .pyc ===")
 print(pyc_scanner.report(pyc_results))
-print("=== Perl CGI ===")
-print(perl_scanner.report(perl_results))
-print("=== Electron IPC ===")
-for r in ipc_results:
-    if r.has_findings(): print(r.fmt())
+print(perl_scanner.report(perl_hits))
+print(ElectronSecurityScanner.report(electron_findings))
 ```
 
 ---
