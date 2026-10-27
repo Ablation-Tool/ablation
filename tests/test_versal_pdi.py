@@ -1041,3 +1041,63 @@ def test_real_long_plm_command_has_no_embedded_commands():
     following = next(c for c in section.commands if c.offset > command.offset)
     assert following.offset == 0x1349C0
     assert all(s.header_checksum_valid for s in vp.cdo_sections())
+
+
+def _assert_complete_boot_sections(vp):
+    sections = vp.cdo_sections()
+    assert vp.result.pdi_type == "boot"
+    assert len(sections) == 5
+    assert all(section.header_checksum_valid for section in sections)
+    assert all(not section.parse_error for section in sections)
+    assert all(section.consumed_words == section.length_words for section in sections)
+    assert all(not section.end_detected for section in sections)
+    commands = [command for section in sections for command in section.commands]
+    assert not any(command.xilpm_node_class == XPM_NODECLASS_PROTECTION for command in commands)
+    return commands
+
+
+@pytest.mark.skipif(not _have(f"{_GEP_DIR}/LARPP_JET1_GCM3_boot-v0.159.29-FDDA9E0.pdi"), reason="LARPP boot PDI not found")
+def test_real_larpp_boot_sections_and_dma():
+    vp = VersalPdi.from_path(f"{_GEP_DIR}/LARPP_JET1_GCM3_boot-v0.159.29-FDDA9E0.pdi")
+    commands = _assert_complete_boot_sections(vp)
+    assert len(commands) == 30342
+    assert len(vp.dma_write_segments()) == 154
+
+
+@pytest.mark.parametrize("index", range(1, 10))
+def test_real_transceiver_boot_sections(index):
+    suffix = f"_{index}" if index > 1 else ""
+    path = f"{_GEP_DIR}/transceiver_versal_interlaken_exdes_vio{suffix}.pdi"
+    if not _have(path):
+        pytest.skip("transceiver PDI not found")
+    vp = VersalPdi.from_path(path)
+    _assert_complete_boot_sections(vp)
+    assert not any(
+        0xF6130000 <= segment.address < 0xF6140000
+        for segment in vp.dma_write_segments()
+    )
+
+
+def test_real_transceiver_variants_three_and_four_share_payload_and_npi_map():
+    paths = [
+        f"{_GEP_DIR}/transceiver_versal_interlaken_exdes_vio_3.pdi",
+        f"{_GEP_DIR}/transceiver_versal_interlaken_exdes_vio_4.pdi",
+    ]
+    if not all(_have(path) for path in paths):
+        pytest.skip("transceiver comparison PDIs not found")
+    pdis = [VersalPdi.from_path(path) for path in paths]
+    dma = [
+        [(segment.address, segment.data) for segment in vp.dma_write_segments()]
+        for vp in pdis
+    ]
+    npi = [
+        sorted(
+            (command.npi_addr, command.npi_data)
+            for section in vp.cdo_sections()
+            for command in section.commands
+            if command.npi_addr is not None
+        )
+        for vp in pdis
+    ]
+    assert dma[0] == dma[1]
+    assert npi[0] == npi[1]

@@ -188,3 +188,39 @@ def test_real_gep_plm_recursive_recovery():
     assert sum(len(function.instructions) for function in recovery.functions.values()) == len(recovery.code)
     assert sum(end - start for start, end in recovery.code_ranges) == 4 * len(recovery.code)
     assert sum(end - start for start, end in recovery.unclassified_ranges) == len(image) - 4 * len(recovery.code)
+
+
+@pytest.mark.skipif(not os.path.isfile(_GCI_BOOT), reason="GEP boot PDI not found")
+def test_larpp_and_gep_recovered_code_is_identical():
+    larpp_path = "/media/cowboy/research/CERN/fw/gep/LARPP_JET1_GCM3_boot-v0.159.29-FDDA9E0.pdi"
+    if not os.path.isfile(larpp_path):
+        pytest.skip("LARPP boot PDI not found")
+
+    def recover(path):
+        pdi = VersalPdi.from_path(path)
+        segments = sorted(
+            (s for s in pdi.dma_write_segments() if 0xF6130000 <= s.address < 0xF6140000),
+            key=lambda segment: segment.address,
+        )
+        decoder = MicroBlazeDecoder(
+            b"".join(segment.data for segment in segments), 0xF6130000, byte_order="little"
+        )
+        initial = recover_cfg(decoder, [0xF6130050])
+        targets = resolve_jump_tables(decoder, initial, {
+            0xF61311E8: JumpTableSpec(0xF6146DA4, 19, 0xF6110000),
+            0xF613C664: JumpTableSpec(0xF6146DF4, 5, 0xF6110000),
+        })
+        with_fallthrough = recover_cfg(decoder, [0xF6130050], jump_table_targets=targets)
+        return recover_cfg(
+            decoder,
+            [0xF6130050],
+            jump_table_targets=targets,
+            no_return=no_return_addresses(with_fallthrough),
+        )
+
+    larpp = recover(larpp_path)
+    gep = recover(_GCI_BOOT)
+    assert len(larpp.code) == 21733
+    assert set(larpp.code) == set(gep.code)
+    assert all(larpp.code[address].word == gep.code[address].word for address in larpp.code)
+    assert len(larpp.functions) == len(gep.functions) == 124
