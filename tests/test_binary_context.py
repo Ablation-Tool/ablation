@@ -36,6 +36,65 @@ def test_has_plt_entries():
     assert len(ctx.plt) > 0
 
 
+def test_arm64_plt_stubs_resolve_to_dynamic_symbols():
+    import struct
+    from types import SimpleNamespace
+    from ablation.analyzers.binary_context import BinaryContext
+
+    symbols = [
+        SimpleNamespace(name='_ZNSo3putEc@GLIBCXX_3.4'),
+        SimpleNamespace(name='socket@GLIBC_2.17'),
+    ]
+    rela_plt = b''.join(
+        struct.pack('<QQq', got_va, index << 32, 0)
+        for index, got_va in enumerate((0x1fd70, 0x1fd78))
+    )
+    plt = bytes(32) + bytes.fromhex(
+        'f00000d011ba46f910c2359120021fd6'
+        'f00000d011be46f910e2359120021fd6'
+    )
+    sections = {
+        '.rela.plt': SimpleNamespace(content=rela_plt),
+        '.plt': SimpleNamespace(content=plt, virtual_address=0x1e40),
+    }
+    binary = SimpleNamespace(
+        dynamic_symbols=symbols,
+        get_section=lambda name: sections.get(name),
+    )
+    ctx = BinaryContext()
+    ctx.arch = 'arm64'
+
+    ctx._extract_plt(binary)
+
+    assert ctx.plt == {0x1e60: '_ZNSo3putEc', 0x1e70: 'socket'}
+
+
+def test_arm64_plt_supports_register_variants_and_ldr_only_stubs():
+    import struct
+    from types import SimpleNamespace
+    from ablation.analyzers.binary_context import BinaryContext
+
+    rela_plt = struct.pack('<QQq', 0x1fd70, 0, 0)
+    plt_sec = bytes.fromhex(
+        'f10000d031ba46f931c2359120021fd6'
+        'f10000d031ba46f91f2003d520021fd6'
+    )
+    sections = {
+        '.rela.plt': SimpleNamespace(content=rela_plt),
+        '.plt.sec': SimpleNamespace(content=plt_sec, virtual_address=0x1e60),
+    }
+    binary = SimpleNamespace(
+        dynamic_symbols=[SimpleNamespace(name='_ZNSo3putEc@GLIBCXX_3.4')],
+        get_section=lambda name: sections.get(name),
+    )
+    ctx = BinaryContext()
+    ctx.arch = 'arm64'
+
+    ctx._extract_plt(binary)
+
+    assert ctx.plt == {0x1e60: '_ZNSo3putEc', 0x1e70: '_ZNSo3putEc'}
+
+
 def test_summary_returns_string():
     from ablation.analyzers.binary_context import BinaryContext
     ctx = BinaryContext.load_or_build(BINARY)
@@ -80,6 +139,34 @@ def test_cache_hit_is_fast(tmp_path):
     t2 = time.perf_counter()
     # Second call should not be significantly slower than first (cache hit)
     assert (t2 - t1) <= (t1 - t0) + 1.0  # generous bound -- just not hanging
+
+
+def test_version_two_cache_is_rebuilt(tmp_path, monkeypatch):
+    import json
+    from ablation.analyzers import binary_context as module
+    from ablation.analyzers.binary_context import BinaryContext
+
+    binary = tmp_path / 'arm64-sample'
+    data = b'not-an-elf'
+    binary.write_bytes(data)
+    sha = module._sha256(data)
+    monkeypatch.setattr(module, '_CACHE_DIR', tmp_path)
+    cache_file = module._cache_path(sha, str(binary))
+    cache_file.write_text(json.dumps({'cache_version': 2, 'sha256': sha}))
+
+    rebuilt = BinaryContext()
+    rebuilt.path = str(binary)
+    rebuilt.sha256 = sha
+    monkeypatch.setattr(
+        BinaryContext,
+        '_build',
+        classmethod(lambda cls, data, path, sha: rebuilt),
+    )
+
+    result = BinaryContext.load_or_build(str(binary))
+
+    assert result is rebuilt
+    assert json.loads(cache_file.read_text())['cache_version'] == 3
 
 
 def test_bff_magic_issues_warning(tmp_path):

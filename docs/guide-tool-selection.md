@@ -21,7 +21,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Find function prologue before a call site stripped binary, no symbols" | `WindowAnalyzer.from_path(elf).align_to_func_start(call_site_va, search_back=512)` → VA of nearest ENDBR64 or push-rbp; fallback = call_site_va - search_back |
 | "Find functions matching vulnerability pattern" | `SemanticSearcher.querydescription` ALWAYS first on new binary |
 | "Binary not in func_id.db (SemanticSearcher slow/global fallback)" | `SemanticSearcher.ingest_binary(ctx)`: auto-called by `from_context` on miss; or call manually with `product=`, `arch=`, `version=` metadata |
-| "What values are passed to this sink?" | `FuncProfiler.profile(va).fmt()` |
+| "What values are passed to this sink?" | `FuncProfiler.profile(va).fmt()` — native x86-64, ARM32, and ARM64 argument annotation; ARM64 uses `ARM64RegAnnotator` |
 | "Filter SAC results to network-reachable sinks (networked daemon)" | `NetworkSinkFinder.from_context(ctx).find(depth=3)` — run after SAC, before TaintTracker; skip for local-only binaries |
 | "Trace taint from network recv to sink" | `TaintTracker.run_interprocedural()` |
 

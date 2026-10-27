@@ -724,6 +724,10 @@ class BinaryContext:
         except Exception:
             pass
 
+        if self.arch == 'arm64':
+            self._extract_plt_arm64(binary, got_to_sym)
+            return
+
         if not got_to_sym:
             # Fallback: LIEF imported_functions
             try:
@@ -777,6 +781,70 @@ class BinaryContext:
                     got_va = stub_va + start + 6 + disp
                     if got_va in got_to_sym:
                         self.plt[stub_va] = got_to_sym[got_va]
+
+    def _extract_plt_arm64(self, binary, got_to_sym: Dict[int, str]) -> None:
+        """Resolve AArch64 ADRP-based PLT stubs to their dynamic symbols."""
+        import capstone
+        from capstone import arm64 as C_ARM64
+
+        arm64_arch = (
+            getattr(capstone, 'CS_ARCH_AARCH64', None)
+            or getattr(capstone, 'CS_ARCH_ARM64', None)
+        )
+        if arm64_arch is None or not got_to_sym:
+            return
+        md = capstone.Cs(arm64_arch, capstone.CS_MODE_ARM)
+        md.detail = True
+
+        for section_name in ('.plt', '.plt.sec', '.plt.got'):
+            try:
+                plt_sec = binary.get_section(section_name)
+            except Exception:
+                plt_sec = None
+            if not plt_sec:
+                continue
+            plt_data = bytes(plt_sec.content)
+            plt_base = int(plt_sec.virtual_address)
+            for offset in range(0, len(plt_data) - 15, 16):
+                stub_va = plt_base + offset
+                chunk = plt_data[offset:offset + 16]
+                page = None
+                page_reg = None
+                got_off = None
+                for insn in md.disasm(chunk, stub_va):
+                    mnemonic = insn.mnemonic.lower()
+                    operands = insn.operands
+                    if (
+                        mnemonic == 'adrp'
+                        and len(operands) == 2
+                        and operands[0].type == C_ARM64.ARM64_OP_REG
+                        and operands[1].type == C_ARM64.ARM64_OP_IMM
+                    ):
+                        page = operands[1].imm
+                        page_reg = operands[0].reg
+                    elif (
+                        mnemonic == 'add'
+                        and len(operands) >= 3
+                        and operands[0].type == C_ARM64.ARM64_OP_REG
+                        and operands[1].type == C_ARM64.ARM64_OP_REG
+                        and operands[2].type == C_ARM64.ARM64_OP_IMM
+                        and operands[0].reg == page_reg
+                        and operands[1].reg == page_reg
+                    ):
+                        got_off = operands[2].imm
+                    elif (
+                        mnemonic == 'ldr'
+                        and len(operands) >= 2
+                        and operands[1].type == C_ARM64.ARM64_OP_MEM
+                        and operands[1].mem.base == page_reg
+                        and got_off is None
+                    ):
+                        got_off = operands[1].mem.disp
+                if page is None or got_off is None:
+                    continue
+                name = got_to_sym.get(page + got_off)
+                if name:
+                    self.plt[stub_va] = name.split('@')[0]
 
     def _extract_plt_x86_32(self, binary) -> None:
         """i386 ELF PLT extraction.
@@ -3453,7 +3521,7 @@ class BinaryContext:
 
     def _save_json(self, path: Path) -> None:
         payload = {
-            "cache_version": 2,
+            "cache_version": 3,
             "path": self.path,
             "sha256": self.sha256,
             "base_va": self.base_va,
@@ -3472,8 +3540,8 @@ class BinaryContext:
     @classmethod
     def _load_json(cls, path: Path, orig_path: str) -> "BinaryContext":
         payload = json.loads(path.read_text())
-        if payload.get("cache_version", 1) < 2:
-            raise ValueError("stale cache: cache_version < 2 (pre-multi-r2); rebuild required")
+        if payload.get("cache_version", 1) < 3:
+            raise ValueError("stale cache: cache_version < 3; rebuild required")
         ctx = cls()
         ctx.path = orig_path or payload.get("path", "")
         ctx.sha256 = payload["sha256"]

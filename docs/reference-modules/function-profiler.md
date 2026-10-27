@@ -137,7 +137,7 @@ for p in profiles:
 
 **Unknown argument kind.** When the register annotation cannot trace an argument within its look-back window, it shows `unknown`. This occurs when the argument was computed in a prior function call and stored in a callee-saved register. Treat `unknown` at a sink argument as MEDIUM risk: confirm safety with a manual trace.
 
-**ARM32 profiling.** On ARM32 binaries, `FuncProfiler` automatically uses `ARM32RegAnnotator` instead of the x86-64 `RegAnnotator`. Argument registers follow the ARM32 AAPCS: `r0`–`r3` serve as the first four arguments. The profile output uses ARM register names.
+**ARM32 and ARM64 profiling.** On ARM32 binaries, `FuncProfiler` uses `ARM32RegAnnotator`; on ARM64/AArch64 binaries, it uses `ARM64RegAnnotator`. Argument registers follow the respective AAPCS: `r0`–`r3` on ARM32 and `x0`–`x7` on ARM64. The profile output uses native register names. ARM64 direct and constant-target indirect calls are annotated; unresolved indirect calls remain explicit. See [ARM64 Call Argument Annotation](arm64-call-argument-annotation.md) for supported propagation and limitations. For CFG/loop analysis and interprocedural taint feasibility, continue to `CFGBuilder` and `ARM64TaintTracker` rather than treating a linear profile as proof of safety.
 
 ---
 

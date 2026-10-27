@@ -11,6 +11,7 @@ from .taint_tracker_arm32 import ARM32TaintTracker, TaintFinding32, TaintState32
 from .intoverflow_scanner_arm32 import ARM32IntOverflowScanner, IntOverflowFinding32
 from .arm32_reg_annotator import ARM32RegAnnotator
 from .arm32_function_scanner import ARM32FunctionScanner
+from .arm64_reg_annotator import ARM64RegAnnotator
 from .taint_tracker_arm64 import ARM64TaintTracker, TaintFindingARM64
 from .arm64_fgets_fd_discriminator import ARM64FgetsFdDiscriminator, FgetsClassifiedFinding
 from .version_delta import VersionTracker, diff_functions
@@ -154,6 +155,7 @@ __all__ = [
     "ARM32IntOverflowScanner", "IntOverflowFinding32",
     "ARM32RegAnnotator",
     "ARM32FunctionScanner",
+    "ARM64RegAnnotator",
     "ARM64TaintTracker", "TaintFindingARM64",
     "ARM64FgetsFdDiscriminator", "FgetsClassifiedFinding",
     "VersionTracker", "diff_functions",
