@@ -26,7 +26,7 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 | [**LoongArch**](docs/reference-modules/loongarch.md) | LoongArch64 · [KASAN/KCOV V2](docs/reference-modules/loongarch64-v2.md) |
 | [**Alpha AXP**](docs/reference-modules/taint-tracker-alpha.md) | Alpha 21064 · 21164 · 21264 · ECOFF · ELF |
 | [**Intel MCS**](docs/reference-modules/isa-8051.md) | 8051 / MCS-51 · CC254x |
-| [**Xilinx**](docs/reference-modules/microblaze-decoder.md) | MicroBlaze · [Versal PDI/CDO](docs/reference-modules/versal-pdi.md) |
+| [**Xilinx**](docs/reference-modules/microblaze-decoder.md) | MicroBlaze · [CFG recovery](docs/reference-modules/microblaze-cfg.md) · [structural pseudo-C](docs/reference-modules/microblaze-lifter.md) · [Versal PDI/CDO](docs/reference-modules/versal-pdi.md) |
 
 **Automotive ECUs**
 
