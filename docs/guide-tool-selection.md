@@ -177,6 +177,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | Task | First reach |
 |---|---|
 | "nanoMIPS: walk frame boundaries" | `NanoMIPSDecoder(endian='little').decode_framesdata, base_addr` |
+| "Disassemble Xilinx MicroBlaze / Versal PLM firmware" | `MicroBlazeDecoder(data, base_va=..., byte_order='little').disassemble()`; extract PDI load bytes first with `VersalPdi.dma_write_segments()` |
 | "Decode Renesas SH-2A ECU firmware" | `EcuSH2aDecoder(rom, base_va=0x400000).disassemblestart, end` |
 | "Decode TMS320C28x firmware" | `EcuC28xDecoder(data, base_va=0).disassemblestart, end` |
 | "Parse Go pclntab and enumerate functions" | `GoBinaryRE.parse_pclntab()` |

@@ -39,10 +39,10 @@ PDI_IHT_IDENT   = 0x584C4E58  # "XLNX" as LE uint32
 
 # CDO section magic
 CDO_MAGIC = b"CDO\x00"
-CDO_HEADER_WORDS = 4  # magic, version, length, checksum
-
-# Partition data payload has a 4-byte prefix word before CDO magic
+CDO_HEADER_WORDS = 4  # magic, version, length, checksum; prefix is external
 CDO_PAYLOAD_PREFIX_BYTES = 4
+CDO_SHORT_LEN_EXTENDED = 0xFF
+CDO_CMD_END_WORD = 0x000001FF
 
 # ---------------------------------------------------------------------------
 # Partition attribute constants  (PrtnAttrb bits)
@@ -127,6 +127,15 @@ CDO_CMD_OT_CHECK         = 0x1E   # OTCheck
 # Module LOADER (0x07) command IDs
 CDO_CMD_LOADER_SET_IMAGE_INFO = 0x04   # SetImageInfo: img_id, uid, parent_uid, func_id
 
+# Module XILPM (0x02) command IDs used by topology and domain CDO sections
+CDO_CMD_XILPM_SET_CURRENT_SUBSYSTEM = 0x36
+CDO_CMD_XILPM_INIT = 0x38
+CDO_CMD_XILPM_ADD_NODE = 0x39
+CDO_CMD_XILPM_ADD_NODE_PARENT = 0x3A
+CDO_CMD_XILPM_ADD_NODE_NAME = 0x3B
+CDO_CMD_XILPM_INIT_NODE = 0x3E
+CDO_CMD_XILPM_SET_NODE_ACCESS = 0x42
+
 CDO_CMD_NAMES_GENERIC: Dict[int, str] = {
     CDO_CMD_FEATURES:         "Features",
     CDO_CMD_MASK_POLL:        "MaskPoll",
@@ -150,6 +159,18 @@ CDO_CMD_NAMES_GENERIC: Dict[int, str] = {
     CDO_CMD_OT_CHECK:         "OTCheck",
 }
 
+CDO_CMD_NAMES_XILPM: Dict[int, str] = {
+    CDO_CMD_XILPM_SET_CURRENT_SUBSYSTEM: "SetCurrentSubsystem",
+    CDO_CMD_XILPM_INIT: "Init",
+    CDO_CMD_XILPM_ADD_NODE: "AddNode",
+    CDO_CMD_XILPM_ADD_NODE_PARENT: "AddNodeParent",
+    CDO_CMD_XILPM_ADD_NODE_NAME: "AddNodeName",
+    CDO_CMD_XILPM_INIT_NODE: "InitNode",
+    CDO_CMD_XILPM_SET_NODE_ACCESS: "SetNodeAccess",
+}
+
+XPM_NODECLASS_PROTECTION = 0x09
+
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -163,6 +184,9 @@ class CdoCommand:
     module_id: int
     cmd_id: int
     payload: Tuple[int, ...]  # raw LE u32 words (up to 8 stored for RE use)
+    payload_offset: int = 0   # byte offset of full payload in file
+    payload_length: int = 0   # full payload length in words, excluding long-header extension
+    is_long: bool = False
 
     # ---- derived fields populated by post-processing ----
     string_payload: str = ""  # extracted ASCII if payload encodes a string
@@ -177,9 +201,34 @@ class CdoCommand:
     def cmd_name(self) -> str:
         if self.module_id == CDO_MOD_GENERIC:
             return CDO_CMD_NAMES_GENERIC.get(self.cmd_id, f"cmd{self.cmd_id:#04x}")
+        if self.module_id == CDO_MOD_XILPM:
+            return CDO_CMD_NAMES_XILPM.get(self.cmd_id, f"cmd{self.cmd_id:#04x}")
         if self.module_id == CDO_MOD_LOADER and self.cmd_id == CDO_CMD_LOADER_SET_IMAGE_INFO:
             return "SetImageInfo"
         return f"cmd{self.cmd_id:#04x}"
+
+    @property
+    def xilpm_node_id(self) -> Optional[int]:
+        if self.module_id != CDO_MOD_XILPM or not self.payload:
+            return None
+        if self.cmd_id in (CDO_CMD_XILPM_ADD_NODE, CDO_CMD_XILPM_ADD_NODE_PARENT,
+                           CDO_CMD_XILPM_ADD_NODE_NAME, CDO_CMD_XILPM_INIT_NODE):
+            return self.payload[0]
+        return None
+
+    @property
+    def xilpm_function(self) -> Optional[int]:
+        if (self.module_id == CDO_MOD_XILPM and
+                self.cmd_id == CDO_CMD_XILPM_INIT_NODE and len(self.payload) > 1):
+            return self.payload[1]
+        return None
+
+    @property
+    def xilpm_node_class(self) -> Optional[int]:
+        node_id = self.xilpm_node_id
+        if node_id is None:
+            return None
+        return (node_id >> 26) & 0x3F
 
 
 @dataclass
@@ -192,6 +241,9 @@ class CdoSection:
     checksum: int
     commands: List[CdoCommand] = field(default_factory=list)
     parse_error: str = ""     # set if command parsing was truncated
+    header_checksum_valid: Optional[bool] = None
+    end_detected: bool = False
+    consumed_words: int = 0
 
     @property
     def payload_bytes(self) -> int:
@@ -203,6 +255,20 @@ class CdoSection:
         major = (self.version >> 8) & 0xFF
         minor = self.version & 0xFF
         return f"{major}.{minor}"
+
+
+@dataclass(frozen=True)
+class DmaWriteSegment:
+    """One memory load described by a GENERIC DmaWrite command."""
+
+    address: int
+    data: bytes
+    command_offset: int
+    section_offset: int
+
+    @property
+    def end_address(self) -> int:
+        return self.address + len(self.data)
 
 
 @dataclass
@@ -335,8 +401,11 @@ class VersalPdi:
     """
 
     MAX_CDO_COMMANDS = 50_000  # safety cap per CDO section
+    MAX_PDI_BYTES = 512 * 1024 * 1024
 
     def __init__(self, data: bytes, label: str = "") -> None:
+        if len(data) > self.MAX_PDI_BYTES:
+            raise ValueError(f"PDI exceeds {self.MAX_PDI_BYTES} bytes")
         self._data = data
         self._label = label
         self._result: Optional[VersalPdiResult] = None
@@ -347,9 +416,10 @@ class VersalPdi:
 
     @classmethod
     def from_path(cls, path: str) -> "VersalPdi":
-        with open(path, "rb") as fh:
-            data = fh.read()
-        return cls(data, Path(path).name)
+        source = Path(path)
+        if source.stat().st_size > cls.MAX_PDI_BYTES:
+            raise ValueError(f"PDI exceeds {cls.MAX_PDI_BYTES} bytes: {source}")
+        return cls(source.read_bytes(), source.name)
 
     @classmethod
     def from_bytes(cls, data: bytes, label: str = "<bytes>") -> "VersalPdi":
@@ -470,7 +540,8 @@ class VersalPdi:
         for ph in result.partitions:
             if ph.is_pl and ph.data_size_bytes > 0:
                 cdo_off = ph.cdo_byte_offset
-                if cdo_off + 16 <= len(self._data):
+                if (cdo_off + 16 <= len(self._data)
+                        and self._data[cdo_off:cdo_off + 4] == CDO_MAGIC):
                     r = self._u32le
                     version  = r(cdo_off + 4)
                     length_w = r(cdo_off + 8)
@@ -673,13 +744,7 @@ class VersalPdi:
         warnings: List[str],
         exclude_ranges: Optional[List[Tuple[int, int]]] = None,
     ) -> List[CdoSection]:
-        """Find all CDO\x00 patterns in the file and parse each.
-
-        exclude_ranges: byte ranges to skip during the blind scan.  Used to
-        exclude CFICDR (PL bitstream) partition data, which is parsed via
-        direct offset instead to avoid false-positive CDO magic matches in
-        raw PL frame bytes.
-        """
+        """Find checksum-valid CDO sections outside excluded byte ranges."""
         data = self._data
         sections: List[CdoSection] = []
         excluded = exclude_ranges or []
@@ -688,10 +753,9 @@ class VersalPdi:
             pos = data.find(CDO_MAGIC, pos)
             if pos < 0:
                 break
-            if pos + 16 > len(data):
+            if pos < 4 or pos + 16 > len(data):
                 pos += 1
                 continue
-            # Skip positions inside CFICDR partition data ranges
             if any(start <= pos < end for start, end in excluded):
                 pos += 1
                 continue
@@ -699,8 +763,12 @@ class VersalPdi:
             version = r(pos + 4)
             length_w = r(pos + 8)
             checksum = r(pos + 12)
-            # Sanity check: version should be 0x0002xxxx or similar; length=0 is valid
-            if not (0 <= length_w < 8_000_000 and (version >> 16) <= 10):
+            declared_end = pos + 16 + length_w * 4
+            if length_w >= 8_000_000 or (version >> 16) > 10 or declared_end > len(data):
+                pos += 1
+                continue
+            checksum_valid = self._cdo_header_checksum_valid(pos)
+            if not checksum_valid:
                 pos += 1
                 continue
             section = CdoSection(
@@ -708,71 +776,130 @@ class VersalPdi:
                 version=version,
                 length_words=length_w,
                 checksum=checksum,
+                header_checksum_valid=True,
             )
             self._parse_cdo_commands(section, warnings)
             sections.append(section)
-            # Advance past the entire CDO payload — prevents re-scanning
-            # DmaWriteKeyHole payloads (which contain raw PL bitstream bytes)
-            # that otherwise produce false CDO hits with garbage module IDs.
-            pos = pos + CDO_HEADER_WORDS * 4 + length_w * 4
+            pos = declared_end
         return sections
+
+    def _cdo_header_checksum_valid(self, offset: int) -> bool:
+        if offset < 4 or offset + 16 > len(self._data):
+            return False
+        words = struct.unpack_from("<4I", self._data, offset - 4)
+        calculated = (~sum(words)) & 0xFFFFFFFF
+        return calculated == self._u32le(offset + 12)
 
     def _parse_cdo_commands(self, section: CdoSection, warnings: List[str]) -> None:
         data = self._data
         base = section.offset + CDO_HEADER_WORDS * 4
-        end = min(section.offset + CDO_HEADER_WORDS * 4 + section.length_words * 4,
-                  len(data))
+        declared_end = base + section.length_words * 4
+        end = min(declared_end, len(data))
+        section.header_checksum_valid = self._cdo_header_checksum_valid(section.offset)
         r = self._u32le
         count = 0
         i = base
-        while i + 4 <= end and count < self.MAX_CDO_COMMANDS:
+        if declared_end > len(data):
+            section.parse_error = f"truncated section at {end:#x}: declared end is {declared_end:#x}"
+            warnings.append(section.parse_error)
+
+        while i < end and count < self.MAX_CDO_COMMANDS and not section.parse_error:
+            if i + 4 > end:
+                section.parse_error = f"truncated command header at {i:#x}"
+                warnings.append(section.parse_error)
+                break
             cmd_word = r(i)
-            payload_len = (cmd_word >> 16) & 0xFFF
+            if cmd_word == CDO_CMD_END_WORD:
+                section.end_detected = True
+                i += 4
+                break
+
+            payload_len = (cmd_word >> 16) & 0xFF
+            is_long = payload_len == CDO_SHORT_LEN_EXTENDED
+            payload_offset = i + (8 if is_long else 4)
+            if is_long:
+                if i + 8 > end:
+                    section.parse_error = f"truncated long-command header at {i:#x}"
+                    warnings.append(section.parse_error)
+                    break
+                payload_len = r(i + 4)
+            next_cmd = payload_offset + payload_len * 4
+            if next_cmd > end:
+                section.parse_error = (
+                    f"truncated command at {i:#x}: {payload_len} payload words "
+                    f"exceed section end {end:#x}"
+                )
+                warnings.append(section.parse_error)
+                break
+
+            store_n = min(payload_len, 8)
+            payload = tuple(r(payload_offset + j * 4) for j in range(store_n))
             module_id = (cmd_word >> 8) & 0xFF
             cmd_id = cmd_word & 0xFF
-
-            # read up to 8 payload words for storage
-            store_n = min(payload_len, 8)
-            payload: List[int] = []
-            for j in range(store_n):
-                pw = i + 4 + j * 4
-                if pw + 4 <= len(data):
-                    payload.append(r(pw))
-
             cmd = CdoCommand(
                 offset=i,
                 module_id=module_id,
                 cmd_id=cmd_id,
-                payload=tuple(payload),
+                payload=payload,
+                payload_offset=payload_offset,
+                payload_length=payload_len,
+                is_long=is_long,
             )
 
-            # -- post-process: extract string from MARKER / LogString payloads --
             if module_id == CDO_MOD_GENERIC and cmd_id in (CDO_CMD_MARKER,
                                                             CDO_CMD_LOG_STRING):
-                # Payload word 0 is often a type/id; words 1+ are ASCII text
-                raw = b""
-                for w in payload[1:]:
-                    raw += struct.pack("<I", w)
+                raw = b"".join(struct.pack("<I", w) for w in payload[1:])
                 txt = raw.split(b"\x00")[0].decode("ascii", errors="replace")
                 if txt:
                     cmd.string_payload = txt
 
-            # -- post-process: NPI address if Write / Write64 to 0xF0000000+ (NPI/NoC space) --
             if module_id == CDO_MOD_GENERIC and cmd_id in (CDO_CMD_WRITE, CDO_CMD_WRITE64):
-                if payload:
-                    addr = payload[0]
-                    # NPI address space: 0xF1xxxxxx (PMC/NPI) or 0xF0xxxxxx
-                    if addr >= 0xF0000000:
-                        cmd.npi_addr = addr
-                        cmd.npi_data = payload[1] if len(payload) > 1 else None
+                addr: Optional[int] = None
+                value: Optional[int] = None
+                if cmd_id == CDO_CMD_WRITE and len(payload) >= 2:
+                    addr, value = payload[0], payload[1]
+                elif cmd_id == CDO_CMD_WRITE64 and len(payload) >= 3:
+                    addr = (payload[0] << 32) | payload[1]
+                    value = payload[2]
+                if addr is not None and addr >= 0xF0000000:
+                    cmd.npi_addr = addr
+                    cmd.npi_data = value
 
             section.commands.append(cmd)
-            i += 4 + payload_len * 4
+            i = next_cmd
             count += 1
 
-        if i < end and count >= self.MAX_CDO_COMMANDS:
+        section.consumed_words = (i - base) // 4
+        if i < end and count >= self.MAX_CDO_COMMANDS and not section.parse_error:
             section.parse_error = f"truncated at {i:#x}: reached MAX_CDO_COMMANDS"
             warnings.append(section.parse_error)
+
+    def command_payload(self, command: CdoCommand) -> bytes:
+        """Return the complete command payload, including payloads over eight words."""
+        end = command.payload_offset + command.payload_length * 4
+        if command.payload_offset < 0 or end > len(self._data):
+            raise ValueError(f"command payload at {command.payload_offset:#x} is out of bounds")
+        return self._data[command.payload_offset:end]
+
+    def dma_write_segments(self, section: Optional[CdoSection] = None) -> List[DmaWriteSegment]:
+        """Reconstruct memory loads from GENERIC DmaWrite commands."""
+        sections = [section] if section is not None else self.result.cdo_sections
+        segments: List[DmaWriteSegment] = []
+        for sec in sections:
+            for cmd in sec.commands:
+                if cmd.module_id != CDO_MOD_GENERIC or cmd.cmd_id != CDO_CMD_DMA_WRITE:
+                    continue
+                if cmd.payload_length < 2:
+                    continue
+                payload = self.command_payload(cmd)
+                high, low = struct.unpack_from("<2I", payload)
+                segments.append(DmaWriteSegment(
+                    address=(high << 32) | low,
+                    data=payload[8:],
+                    command_offset=cmd.offset,
+                    section_offset=sec.offset,
+                ))
+        return segments
 
     # ------------------------------------------------------------------
     # Reporting
@@ -819,8 +946,11 @@ class VersalPdi:
             lines.append(f"  CDO sections ({len(res.cdo_sections)}):")
             for cdo in res.cdo_sections:
                 cmds_summary = self._summarize_cdo(cdo)
+                checksum = "ok" if cdo.header_checksum_valid else "INVALID"
+                stream = "error" if cdo.parse_error else "complete"
                 lines.append(f"    @{cdo.offset:#010x}  v{cdo.version_str}  "
                              f"len={cdo.length_words}w ({cdo.payload_bytes//1024}KB)  "
+                             f"checksum={checksum}  stream={stream}  "
                              f"cmds={len(cdo.commands)}  [{cmds_summary}]")
 
         if res.parse_warnings:

@@ -30,11 +30,18 @@ from ablation.analyzers.versal_pdi import (
     PRTN_TYPE_CDO,
     PRTN_TYPE_NAMES,
     CDO_MOD_GENERIC,
+    CDO_MOD_XILPM,
     CDO_MOD_LOADER,
     CDO_CMD_WRITE,
+    CDO_CMD_WRITE64,
+    CDO_CMD_DMA_WRITE,
     CDO_CMD_NOP,
+    CDO_CMD_END_WORD,
     CDO_CMD_LOADER_SET_IMAGE_INFO,
+    CDO_CMD_XILPM_ADD_NODE,
+    CDO_CMD_XILPM_INIT_NODE,
     CDO_PAYLOAD_PREFIX_BYTES,
+    XPM_NODECLASS_PROTECTION,
 )
 
 # ---------------------------------------------------------------------------
@@ -85,12 +92,10 @@ def _boot_sync() -> bytes:
     )
 
 
-def _make_cdo(payload_words: list) -> bytes:
-    """Build a valid CDO section with given 32-bit payload words."""
+def _make_cdo(payload_words: list, prefix: int = 0) -> bytes:
+    """Build a CDO section whose five-word header checksum is valid."""
     length_w = len(payload_words)
-    checksum = 0
-    for w in payload_words:
-        checksum ^= w
+    checksum = (~(prefix + struct.unpack("<I", CDO_MAGIC)[0] + 0x200 + length_w)) & 0xFFFFFFFF
     header = (
         CDO_MAGIC +
         _u32le(0x00000200) +   # version 0.2
@@ -551,6 +556,32 @@ class TestCdoCommands:
         vp = VersalPdi.from_bytes(b"\x00" * 4 + cdo + b"\x00" * 4)
         assert vp.git_hash() == "035a2cc3"
 
+    def test_xilpm_init_node(self):
+        cmd_word = (0x0002 << 16) | (CDO_MOD_XILPM << 8) | CDO_CMD_XILPM_INIT_NODE
+        section = self._parse_cdo([cmd_word, 0x04210002, 0x00000001])
+        cmd = section.commands[0]
+        assert cmd.cmd_name == "InitNode"
+        assert cmd.xilpm_node_id == 0x04210002
+        assert cmd.xilpm_function == 1
+        assert cmd.xilpm_node_class == 1
+
+    def test_xilpm_add_node_protection_class(self):
+        cmd_word = (0x0004 << 16) | (CDO_MOD_XILPM << 8) | CDO_CMD_XILPM_ADD_NODE
+        section = self._parse_cdo([cmd_word, 0x24000001, 0xFF990000, 0, 0])
+        cmd = section.commands[0]
+        assert cmd.cmd_name == "AddNode"
+        assert cmd.xilpm_node_id == 0x24000001
+        assert cmd.xilpm_function is None
+        assert cmd.xilpm_node_class == XPM_NODECLASS_PROTECTION
+
+    def test_xilpm_accessors_ignore_other_modules(self):
+        cmd_word = (0x0002 << 16) | (CDO_MOD_GENERIC << 8) | CDO_CMD_XILPM_INIT_NODE
+        section = self._parse_cdo([cmd_word, 0x04210002, 0x00000001])
+        cmd = section.commands[0]
+        assert cmd.xilpm_node_id is None
+        assert cmd.xilpm_function is None
+        assert cmd.xilpm_node_class is None
+
     def test_command_payload_capped_at_8_words(self):
         # Build a command with 20-word payload
         cmd_word = (0x0014 << 16) | (CDO_MOD_GENERIC << 8) | 0x0E  # DMA_WRITE, len=20
@@ -920,3 +951,93 @@ class TestRealFelixBoot:
 
     def test_cdo_sections_present(self, vp):
         assert len(vp.cdo_sections()) >= 1
+
+
+class TestCdoValidationAndExtraction:
+
+    def test_header_checksum_required_for_blind_scan(self):
+        cdo = bytearray(_make_cdo(_make_nop_cmd(1)))
+        cdo[12:16] = _u32le(0xDEADBEEF)
+        vp = VersalPdi.from_bytes(b"\x00" * 4 + cdo)
+        assert vp.cdo_sections() == []
+
+    def test_valid_header_checksum_exposed(self):
+        vp = VersalPdi.from_bytes(b"\x00" * 4 + _make_cdo(_make_nop_cmd(1)))
+        assert vp.cdo_sections()[0].header_checksum_valid is True
+
+    def test_long_dma_write_skips_payload_and_extracts_bytes(self):
+        header = (0xFF << 16) | (CDO_MOD_GENERIC << 8) | CDO_CMD_DMA_WRITE
+        payload = [0, 0xF6130050, 0xB0000001, 0x31A0C148, 0x80000000, 0xB60F0008]
+        words = [header, len(payload)] + payload + _make_nop_cmd(1)
+        vp = VersalPdi.from_bytes(b"\x00" * 4 + _make_cdo(words))
+        section = vp.cdo_sections()[0]
+        assert len(section.commands) == 2
+        command = section.commands[0]
+        assert command.is_long
+        assert command.payload_length == len(payload)
+        assert command.payload_offset == command.offset + 8
+        assert section.commands[1].offset == command.offset + 8 + len(payload) * 4
+        segments = vp.dma_write_segments()
+        assert len(segments) == 1
+        assert segments[0].address == 0xF6130050
+        assert segments[0].data == b"".join(_u32le(w) for w in payload[2:])
+
+    def test_truncated_long_command_is_an_error(self):
+        header = (0xFF << 16) | (CDO_MOD_GENERIC << 8) | CDO_CMD_DMA_WRITE
+        words = [header, 10, 0, 0xF6130050]
+        vp = VersalPdi.from_bytes(b"\x00" * 4 + _make_cdo(words))
+        section = vp.cdo_sections()[0]
+        assert section.commands == []
+        assert "truncated command" in section.parse_error
+
+    def test_end_command_stops_parsing(self):
+        words = _make_nop_cmd(1) + [CDO_CMD_END_WORD] + _make_nop_cmd(3)
+        vp = VersalPdi.from_bytes(b"\x00" * 4 + _make_cdo(words))
+        section = vp.cdo_sections()[0]
+        assert section.end_detected
+        assert len(section.commands) == 1
+        assert section.consumed_words == 2
+
+    def test_write64_uses_full_address_and_third_payload_word(self):
+        header = (3 << 16) | (CDO_MOD_GENERIC << 8) | CDO_CMD_WRITE64
+        words = [header, 1, 0xF1234568, 0xA5A5A5A5]
+        vp = VersalPdi.from_bytes(b"\x00" * 4 + _make_cdo(words))
+        command = vp.cdo_sections()[0].commands[0]
+        assert command.npi_addr == 0x1F1234568
+        assert command.npi_data == 0xA5A5A5A5
+
+    def test_reserved_header_bits_do_not_extend_command_length(self):
+        header = (0xF << 28) | (2 << 16) | (CDO_MOD_GENERIC << 8) | CDO_CMD_WRITE
+        words = [header, 0xF1000000, 0x1234] + _make_nop_cmd(1)
+        vp = VersalPdi.from_bytes(b"\x00" * 4 + _make_cdo(words))
+        section = vp.cdo_sections()[0]
+        assert len(section.commands) == 2
+        assert section.commands[0].payload_length == 2
+        assert section.commands[1].cmd_id == CDO_CMD_NOP
+
+    def test_pdi_size_limit_for_buffer_and_path(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(VersalPdi, "MAX_PDI_BYTES", 4)
+        with pytest.raises(ValueError, match="exceeds 4 bytes"):
+            VersalPdi.from_bytes(b"\x00" * 5)
+        image = tmp_path / "oversize.pdi"
+        image.write_bytes(b"\x00" * 5)
+        with pytest.raises(ValueError, match="exceeds 4 bytes"):
+            VersalPdi.from_path(str(image))
+
+    def test_cficdr_direct_parse_requires_cdo_magic(self):
+        data = bytearray(TestCficdrFalsePositiveSuppression()._build_cficdr_pdi_with_false_cdo())
+        data[0x104:0x108] = b"BAD!"
+        vp = VersalPdi.from_bytes(bytes(data))
+        assert vp.cdo_sections() == []
+
+
+@pytest.mark.skipif(not _have(_GCI_BOOT), reason="GCI boot PDI not found")
+def test_real_long_plm_command_has_no_embedded_commands():
+    vp = VersalPdi.from_path(_GCI_BOOT)
+    section = next(s for s in vp.cdo_sections() if s.offset == 0xC71E4)
+    command = next(c for c in section.commands if c.offset == 0x11DA80)
+    assert command.is_long
+    assert command.payload_length == 0x5BCE
+    following = next(c for c in section.commands if c.offset > command.offset)
+    assert following.offset == 0x1349C0
+    assert all(s.header_checksum_valid for s in vp.cdo_sections())
