@@ -8,6 +8,7 @@ from ablation.analyzers.microblaze_cfg import (
     MicroBlazeBlock,
     MicroBlazeFunction,
     MicroBlazeRecovery,
+    no_return_addresses,
     recover_cfg,
     resolve_jump_tables,
 )
@@ -108,7 +109,13 @@ def test_real_gep_plm_structural_lift():
         0xF61311E8: JumpTableSpec(0xF6146DA4, 19, 0xF6110000),
         0xF613C664: JumpTableSpec(0xF6146DF4, 5, 0xF6110000),
     })
-    recovery = recover_cfg(decoder, [0xF6130050], jump_table_targets=targets)
+    with_fallthrough = recover_cfg(decoder, [0xF6130050], jump_table_targets=targets)
+    recovery = recover_cfg(
+        decoder,
+        [0xF6130050],
+        jump_table_targets=targets,
+        no_return=no_return_addresses(with_fallthrough),
+    )
     lifter = MicroBlazeLifter(recovery)
 
     startup = lifter.lift_function(0xF6130050)

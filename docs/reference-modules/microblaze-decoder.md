@@ -112,7 +112,7 @@ Entries are global addresses in the decoder's address space. `entries=None` uses
 
 ### Recovery model
 
-- Direct calls create new function-recovery entries and retain a post-call edge in the caller.
+- Direct calls create new function-recovery entries and retain a post-call edge unless their target is a validated no-return address.
 - Conditional branches produce target and fall-through edges after any delay slot.
 - Direct jumps follow only their targets; returns and traps have no fall-through.
 - Indirect calls retain their fall-through and report an unresolved issue.
@@ -121,7 +121,39 @@ Entries are global addresses in the decoder's address space. `entries=None` uses
 - `code` maps each reachable instruction address to its decoded instruction and owning function.
 - `code_ranges` merges adjacent reachable words. `unclassified_ranges` is their complement within the image.
 
-The defaults are 4,096 functions and 1,000,000 recovered instructions. `max_functions` and `max_instructions` provide smaller limits. Exceeding either raises `ValueError` instead of returning silently truncated results. Caller-supplied entry and table collections are also bounded, and unclassified ranges are computed without allocating an entry for every image word.
+The defaults are 4,096 functions and 1,000,000 recovered instructions. `max_functions` and `max_instructions` provide smaller limits. Exceeding either raises `ValueError` instead of returning silently truncated results. Caller-supplied entry, table, and no-return collections are also bounded, and unclassified ranges are computed without allocating an entry for every image word.
+
+### No-return calls
+
+`no_return_addresses(recovery)` identifies direct unconditional self-loops only when every block in the containing function can reach the loop and no return instruction exists. Pass validated addresses back to recovery to suppress false post-call paths:
+
+```python
+from ablation.analyzers.microblaze_cfg import no_return_addresses, recover_cfg
+
+initial = recover_cfg(decoder, [0xF6130050], jump_table_targets=targets)
+recovery = recover_cfg(
+    decoder,
+    [0xF6130050],
+    jump_table_targets=targets,
+    no_return=no_return_addresses(initial),
+)
+```
+
+Missing returns, traps, and indirect calls are not no-return evidence. A validated loop already owned by another function is not reported again as an overlapping entry. `no_return_functions()` is available for standalone self-loop function entries; address-level detection is required when a loop is embedded in a larger function.
+
+### Call argument recovery
+
+`call_arguments(function, call_site)` performs bounded forward constant propagation within the caller's basic block. It handles `IMM`-extended `addi/addik`, `add/addk` register moves and arithmetic, and `ori`/`or`, including instructions in the call delay slot. Unknown writes produce an unknown value rather than a guessed constant.
+
+```python
+from ablation.analyzers.microblaze_args import call_arguments
+
+arguments = call_arguments(function, 0xF61326D8, registers=(5, 6, 7))
+for register, argument in arguments.items():
+    print(register, argument.value, argument.definition)
+```
+
+The API validates direct call sites, defaults to `r5`–`r7`, accepts at most 256 preceding instructions by default, and reports each value's nearest definition address. It intentionally does not propagate across blocks, runtime memory, or intervening calls.
 
 ### Bounded jump tables
 
@@ -214,9 +246,9 @@ For a production Versal `boot.pdi`, two contiguous DMA segments reconstruct 94,0
 
 The reset vector targets local `0x20050`; the corresponding loaded entry is `0xF6130050`. A local-to-global delta of `0xF6110000` also maps the two validated jump tables and their targets.
 
-Initial direct-control-flow recovery found 103 functions and 14,008 instructions. Adding the bounded 19-entry and 5-entry tables recovered 123 functions, 21,733 instructions (86,932 bytes), and 3,723 basic blocks. The tables have nine and three unique targets respectively. The image has 7,148 unclassified bytes, six unresolved indirect calls, four external call sites to `0xF6110000`, and two direct-call entries overlapping already recovered functions. These figures describe this image and entry model, not complete firmware coverage.
+Initial direct-control-flow recovery found 103 functions and 14,008 instructions. Adding the bounded 19-entry and 5-entry tables and validating the no-return loop at `0xF6130080` recovered 124 functions, 21,733 instructions (86,932 bytes), and 3,723 basic blocks. The tables have nine and three unique targets respectively. No-return suppression removed false fall-through and both former overlap diagnostics. The image has 7,148 unclassified bytes, six unresolved indirect calls, and four external call sites to `0xF6110000`. These figures describe this image and entry model, not complete firmware coverage.
 
-Lifting all 123 recovered functions produces 21,479 lines. Every recovered instruction has an emitted statement or an intentional no-op/`IMM` omission; there are no `unlifted` operations in this image. Output includes six indirect-call operations and two resolved jump-table operations.
+Lifting all 124 recovered functions produces 21,484 lines. Every recovered instruction has an emitted statement or an intentional no-op/`IMM` omission; there are no `unlifted` operations in this image. Output includes six indirect-call operations and two resolved jump-table operations.
 
 | Indirect-call site | Structural role |
 |---|---|
@@ -227,7 +259,15 @@ Lifting all 123 recovered functions produces 21,479 lines. Every recovered instr
 
 The callback root initially points to local `0x1C050`, outside recovered RAM, and no recovered instruction directly writes that root. These targets require runtime initialization evidence or broader interprocedural analysis. Sentinel/empty array contents do not establish callable targets.
 
-The routine at `0xF61306EC` contains length-driven 16-byte, 4-byte, and single-byte copy loops after its callback. This supports a memory-copy structural role, but does not prove a symbol name, caller-supplied length safety, or a vulnerability.
+The separate function at `0xF613072C` contains 62 instructions in 16 blocks with length-driven 16-byte, 4-byte, and single-byte copy loops. Earlier ownership at `0xF61306EC` was a false post-call path to the no-return loop and was retracted. Three direct callers have constant arguments:
+
+| Call site | Destination | Source | Length |
+|---|---|---|---|
+| `0xF61326D8` | `0x1C4F8` | `0x1C8C4` | 72 |
+| `0xF61347A4` | `0x1C4F8` | `0x1C8C4` | 72 |
+| `0xF613D894` | `0x1C658` | `0x36D60` | 43 |
+
+These sites do not show attacker-controlled lengths. Destination object sizes are unverified, so the evidence does not prove a symbol name or buffer safety.
 
 ## Limitations
 
@@ -243,9 +283,9 @@ The routine at `0xF61306EC` contains length-driven 16-byte, 4-byte, and single-b
 
 ## Validation and FORGE
 
-Synthetic and real-PDI tests cover signed/extended immediates, branches, calls, returns, delay slots, load/store widths, shifts, special registers, invalid/truncated paths, unreachable embedded bytes, overlapping entries, resource limits, bounded jump tables, structural output, unsupported operations, and real GEP invariants.
+Synthetic and real-PDI tests cover signed/extended immediates, branches, calls, returns, no-return suppression, delay slots, argument constants and unknown writes, load/store widths, shifts, special registers, invalid/truncated paths, unreachable embedded bytes, overlapping entries, resource limits, bounded jump tables, structural output, unsupported operations, and real PLM invariants.
 
-`FORGE.audit_module()` and the SAFE CODE 10-section review pass with zero findings for the decoder, CFG analyzer, and lifter. Input, recovery, table, and emission limits are covered by regression tests. Residual analysis limitations are explicit rather than silently ignored failures.
+`FORGE.audit_module()` and the SAFE CODE 10-section review pass with zero findings for the decoder, CFG analyzer, argument analyzer, and lifter. Input, recovery, table, argument, and emission limits are covered by regression tests. Residual analysis limitations are explicit rather than silently ignored failures.
 
 ## See also
 

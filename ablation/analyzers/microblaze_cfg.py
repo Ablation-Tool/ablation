@@ -157,12 +157,18 @@ class MicroBlazeCFGBuilder:
         decoder: MicroBlazeDecoder,
         *,
         jump_table_targets: Optional[dict[int, Iterable[int]]] = None,
+        no_return: Optional[Iterable[int]] = None,
         max_functions: int = MAX_FUNCTIONS,
         max_instructions: int = MAX_INSTRUCTIONS,
     ) -> None:
         if max_functions < 1 or max_instructions < 1:
             raise ValueError("recovery limits must be positive")
         self.decoder = decoder
+        self.no_return: set[int] = set()
+        for address in no_return or ():
+            if len(self.no_return) >= max_functions:
+                raise ValueError("too many no-return addresses")
+            self.no_return.add(address)
         supplied_tables = jump_table_targets or {}
         if len(supplied_tables) > 4096:
             raise ValueError("too many jump-table targets")
@@ -197,7 +203,7 @@ class MicroBlazeCFGBuilder:
             entry, caller = pending.popleft()
             owner = self.owners.get(entry)
             if owner is not None:
-                if owner != entry:
+                if owner != entry and entry not in self.no_return:
                     self.issues.append(ControlFlowIssue(caller, entry, "entry overlaps another function"))
                 continue
             if not self._contains(entry):
@@ -289,7 +295,8 @@ class MicroBlazeCFGBuilder:
                     calls[address] = insn.target
                 else:
                     issue(address, "unresolved indirect call")
-                work.append((post, None))
+                if insn.target not in self.no_return:
+                    work.append((post, None))
             elif insn.flow == "conditional":
                 if not targets:
                     issue(address, "unresolved conditional branch")
@@ -304,7 +311,7 @@ class MicroBlazeCFGBuilder:
             elif insn.flow not in ("return", "trap"):
                 issue(address, f"unsupported control flow: {insn.flow}")
 
-        blocks = self._build_blocks(entry, local, delay_slots, branches, issues)
+        blocks = self._build_blocks(entry, local, delay_slots, branches, self.no_return, issues)
         self.issues.extend(issues)
         for address, insn in local.items():
             self.code[address] = insn
@@ -317,6 +324,7 @@ class MicroBlazeCFGBuilder:
         local: dict[int, MicroBlazeInsn],
         delay_slots: dict[int, int],
         branches: dict[int, tuple[int, ...]],
+        no_return: set[int],
         issues: list[ControlFlowIssue],
     ) -> dict[int, MicroBlazeBlock]:
         leaders = {entry}
@@ -362,7 +370,10 @@ class MicroBlazeCFGBuilder:
             if term.flow in ("jump", "conditional"):
                 block.succs.extend(target for target in branches.get(term.address, ()) if target in blocks)
             post = term.address + 8 if term.delay_slot else term.address + 4
-            if term.flow in ("conditional", "call") and post in blocks:
+            if (
+                term.flow == "conditional"
+                or (term.flow == "call" and term.target not in no_return)
+            ) and post in blocks:
                 block.succs.append(post)
         for block in blocks.values():
             for successor in block.succs:
@@ -370,15 +381,57 @@ class MicroBlazeCFGBuilder:
         return blocks
 
 
+def _self_loop_addresses(function: MicroBlazeFunction) -> set[int]:
+    if any(insn.flow == "return" for insn in function.instructions):
+        return set()
+    result: set[int] = set()
+    loops = [
+        block for block in function
+        if block.succs == [block.start]
+        and block.terminator is not None
+        and block.terminator.flow == "jump"
+        and block.terminator.target == block.terminator.address
+    ]
+    for loop in loops:
+        reachable = {loop.start}
+        pending = [loop.start]
+        while pending:
+            current = pending.pop()
+            for predecessor in function.blocks[current].preds:
+                if predecessor not in reachable:
+                    reachable.add(predecessor)
+                    pending.append(predecessor)
+        if reachable == set(function.blocks):
+            result.add(loop.terminator.address)
+    return result
+
+
+def no_return_addresses(recovery: MicroBlazeRecovery) -> set[int]:
+    """Return direct self-loop addresses proven to have no returning path."""
+    result: set[int] = set()
+    for function in recovery.functions.values():
+        result.update(_self_loop_addresses(function))
+    return result
+
+
+def no_return_functions(recovery: MicroBlazeRecovery) -> set[int]:
+    """Return entries of standalone functions containing only a proven infinite loop."""
+    return {
+        entry for entry, function in recovery.functions.items()
+        if entry in _self_loop_addresses(function)
+    }
+
+
 def recover_cfg(
     decoder: MicroBlazeDecoder,
     entries: Optional[Iterable[int]] = None,
     *,
     jump_table_targets: Optional[dict[int, Iterable[int]]] = None,
+    no_return: Optional[Iterable[int]] = None,
     max_functions: int = MAX_FUNCTIONS,
     max_instructions: int = MAX_INSTRUCTIONS,
 ) -> MicroBlazeRecovery:
     return MicroBlazeCFGBuilder(
-        decoder, jump_table_targets=jump_table_targets,
+        decoder, jump_table_targets=jump_table_targets, no_return=no_return,
         max_functions=max_functions, max_instructions=max_instructions,
     ).recover(entries)

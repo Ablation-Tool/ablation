@@ -3,7 +3,13 @@ import struct
 
 import pytest
 
-from ablation.analyzers.microblaze_cfg import JumpTableSpec, recover_cfg, resolve_jump_tables
+from ablation.analyzers.microblaze_cfg import (
+    JumpTableSpec,
+    no_return_addresses,
+    no_return_functions,
+    recover_cfg,
+    resolve_jump_tables,
+)
 from ablation.analyzers.microblaze_decoder import MicroBlazeDecoder
 from ablation.analyzers.versal_pdi import VersalPdi
 
@@ -61,6 +67,23 @@ def test_indirect_call_has_fallthrough_and_unresolved_issue():
     assert [(issue.address, issue.reason) for issue in function.issues] == [
         (0x1000, "unresolved indirect call")
     ]
+
+
+def test_no_return_self_loop_suppresses_false_fallthrough():
+    decoder = decoder_for(
+        0xB9F40010, 0x00000000, 0xB60F0008, 0x00000000,
+        0xB8000000, 0xB60F0008, 0x00000000,
+    )
+    initial = recover_cfg(decoder)
+    assert no_return_functions(initial) == {0x1010}
+    assert no_return_addresses(initial) == {0x1010}
+
+    recovery = recover_cfg(decoder, no_return=no_return_addresses(initial))
+    assert 0x1008 not in recovery.code
+    assert 0x100C not in recovery.code
+    assert set(recovery.code) == {0x1000, 0x1004, 0x1010}
+    assert recovery.functions[0x1000].blocks[0x1000].succs == []
+    assert recovery.functions[0x1010].blocks[0x1010].succs == [0x1010]
 
 
 def test_invalid_and_truncated_paths_do_not_linear_sweep():
@@ -143,8 +166,18 @@ def test_real_gep_plm_recursive_recovery():
         0xF61311E8: JumpTableSpec(0xF6146DA4, 19, 0xF6110000),
         0xF613C664: JumpTableSpec(0xF6146DF4, 5, 0xF6110000),
     })
-    recovery = recover_cfg(decoder, [0xF6130050], jump_table_targets=targets)
+    with_fallthrough = recover_cfg(decoder, [0xF6130050], jump_table_targets=targets)
+    no_return = no_return_addresses(with_fallthrough)
+    recovery = recover_cfg(
+        decoder, [0xF6130050], jump_table_targets=targets, no_return=no_return,
+    )
 
+    assert no_return == {0xF6130080}
+    assert 0xF613072C in recovery.functions
+    assert 0xF613072C not in {
+        insn.address for insn in recovery.functions[0xF61306EC].instructions
+    }
+    assert not any(issue.reason == "entry overlaps another function" for issue in recovery.issues)
     assert len(initial.code) > 10000
     assert len(recovery.code) > len(initial.code)
     assert len(recovery.functions) > 50
