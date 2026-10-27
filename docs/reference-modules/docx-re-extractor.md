@@ -76,7 +76,7 @@ ext = DocxReExtractor.from_path('/path/to/spec.docx')
 from ablation.analyzers.docx_re_extractor import DocxReExtractor
 
 ext = DocxReExtractor.from_path(
-    '/media/cowboy/research/CERN/asic/hcc/HCC_Specification_V1.3.1_Oct_3.docx'
+    '/media/cowboy/research/facility/asic/hcc/HCC_Specification_V1.3.1_Oct_3.docx'
 )
 for tbl in ext.register_tables():
     print(f"--- {tbl.preceding_heading} ---")

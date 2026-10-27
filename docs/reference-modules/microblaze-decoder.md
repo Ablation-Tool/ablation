@@ -1,18 +1,16 @@
-# MicroBlazeDecoder
+# MicroBlaze Decoder, CFG Recovery & Structural Lifter
 
-**File:** `ablation/analyzers/microblaze_decoder.py`
+**Files:** `ablation/analyzers/microblaze_decoder.py`, `ablation/analyzers/microblaze_cfg.py`, `ablation/analyzers/microblaze_lifter.py`
 
 ## Why this exists
 
 1. **Capstone does not support Xilinx MicroBlaze.** Versal PLM firmware recovered from CDO `DmaWrite` commands cannot be decoded by Ablation's normal Capstone path. `MicroBlazeDecoder` provides a dependency-free instruction decoder for these raw load segments.
-
 2. **MicroBlaze `IMM` prefixes change the following instruction.** Treating each word independently produces incorrect 32-bit constants and branch destinations. The decoder carries the upper 16 bits to exactly one successor and records whether the operand was extended.
+3. **CDO word order differs from ordinary instruction-byte order.** Normal MicroBlaze instruction bytes are big-endian, while recovered CDO DMA words use little-endian byte storage. The explicit `byte_order` option supports both without mutating source bytes.
+4. **Linear sweep cannot establish code coverage.** Recursive CFG recovery separates reachable code from unclassified bytes, handles delay slots and direct callees, and supports analyst-validated jump tables.
+5. **Recovered CFGs need a readable review form.** `MicroBlazeLifter` emits address-tagged structural pseudo-C while preserving unresolved indirect control flow. It is not a full SSA/type-recovered decompiler.
 
-3. **CDO word order differs from ordinary instruction-byte order.** Normal MicroBlaze instruction bytes are big-endian, while the recovered CDO DMA words use little-endian byte storage. The explicit `byte_order` option supports both without mutating the source bytes.
-
-4. **Control-flow metadata is needed for firmware analysis.** Direct branches, calls, conditional branches, returns, and delay slots are exposed as structured fields. Candidate call targets and compiler-prologue function starts can seed further analysis without presenting linear sweep as a complete CFG.
-
-## Usage
+## Disassembly
 
 ```python
 from ablation.analyzers.microblaze_decoder import MicroBlazeDecoder
@@ -39,9 +37,9 @@ python -m ablation.analyzers.microblaze_decoder plm.bin \
   --base 0xF6130000 --byte-order little --end 0x400
 ```
 
-`start` and `end` are byte offsets within the input buffer. `base_va` is the virtual address associated with byte offset zero. File and buffer inputs are capped at 256 MiB to avoid uncontrolled allocation.
+`start` and `end` are byte offsets within the input buffer. `base_va` is the virtual address associated with byte offset zero. `image_size` exposes the bounded input length. File and buffer inputs are capped at 256 MiB.
 
-## Versal PDI integration
+### Versal PDI integration
 
 `VersalPdi.dma_write_segments()` recovers linked load bytes, not necessarily an ELF container. Merge only segments known to be contiguous and use the first segment's address as `base_va`:
 
@@ -58,7 +56,7 @@ image = b"".join(s.data for s in plm)
 decoder = MicroBlazeDecoder(image, plm[0].address, byte_order="little")
 ```
 
-## Instruction model
+### Instruction model
 
 `MicroBlazeInsn` provides:
 
@@ -78,7 +76,7 @@ decoder = MicroBlazeDecoder(image, plm[0].address, byte_order="little")
 
 The decoder covers core integer arithmetic, logical operations, multiply/divide, immediate and register branches, returns, loads/stores, shifts and bit insertion, compare operations, `IMM`, `mbar`, FSL `get`/`put`, and special-register operations. Optional floating-point and less common instructions are not claimed as complete.
 
-## Control-flow behavior
+### Decoder control-flow behavior
 
 - `bri`, `brid`, `brlid`, and immediate conditional branches use PC-relative destinations.
 - `brai`, `braid`, `bralid`, and `brki` use absolute destinations.
@@ -89,27 +87,167 @@ The decoder covers core integer arithmetic, logical operations, multiply/divide,
 
 Candidate addresses are analysis seeds, not confirmed function boundaries. Calls into other memory regions may be valid, while instruction-like data can create false candidates.
 
-## Validation
+## Recursive CFG recovery
 
-Synthetic tests cover signed and extended immediates, relative and absolute calls, conditional branches, returns, loads/stores, shifts, special registers, invalid words, and candidate function starts.
+`recover_cfg()` follows control flow from explicit entries, carries `IMM` state along each path, keeps delay slots with their control transfers, and discovers direct callees without sweeping through unreachable regions.
 
-On the CERN `GCI_GCM415_boot-v0.159.38-35A2CC3.pdi` image, two contiguous DMA segments reconstruct 94,080 bytes at `0xF6130000–0xF6146F80`. Linear decoding recognizes 23,393 of 23,520 words. The remaining 127 words occur mostly in trailing data tables; this is not a claim of 99.5% code coverage.
+The analyzer separates **reachable code** from **unclassified bytes**. Unclassified bytes are not automatically data: they may include functions reached only through unresolved indirect calls, exception entries, or external reset-vector mappings.
+
+```python
+from ablation.analyzers.microblaze_cfg import recover_cfg
+
+recovery = recover_cfg(decoder, entries=[0xF6130050])
+for entry, function in sorted(recovery.functions.items()):
+    print(hex(entry), len(function.blocks), len(function.calls))
+    for block in function:
+        print(f"  {block.start:#x} -> {[hex(s) for s in block.succs]}")
+
+print(recovery.code_ranges)
+print(recovery.unclassified_ranges)
+for issue in recovery.issues:
+    print(issue)
+```
+
+Entries are global addresses in the decoder's address space. `entries=None` uses `base_va`. A reset vector targeting another address space is not mapped automatically; establish the mapping and supply the corresponding loaded entry explicitly.
+
+### Recovery model
+
+- Direct calls create new function-recovery entries and retain a post-call edge in the caller.
+- Conditional branches produce target and fall-through edges after any delay slot.
+- Direct jumps follow only their targets; returns and traps have no fall-through.
+- Indirect calls retain their fall-through and report an unresolved issue.
+- Unresolved indirect jumps stop that path and report an issue.
+- Invalid, truncated, out-of-image, conflicting-`IMM`, and cross-function ownership cases stop the affected path and produce diagnostics.
+- `code` maps each reachable instruction address to its decoded instruction and owning function.
+- `code_ranges` merges adjacent reachable words. `unclassified_ranges` is their complement within the image.
+
+The defaults are 4,096 functions and 1,000,000 recovered instructions. `max_functions` and `max_instructions` provide smaller limits. Exceeding either raises `ValueError` instead of returning silently truncated results. Caller-supplied entry and table collections are also bounded, and unclassified ranges are computed without allocating an entry for every image word.
+
+### Bounded jump tables
+
+`resolve_jump_tables()` resolves the common compiler sequence:
+
+```text
+bslli  rTarget, rIndex, 2
+imm    upper
+addik  rTarget, rTarget, table
+lwi    rTarget, rTarget, 0
+bra    rTarget
+```
+
+The shift may write a different register from its index input. The caller must establish the table address, entry count from surrounding bounds checks, and any local-to-global target delta. The resolver rejects unknown site patterns, invalid table bounds, and out-of-image targets. Tables and specification collections are capped at 4,096 entries.
+
+```python
+from ablation.analyzers.microblaze_cfg import JumpTableSpec, recover_cfg, resolve_jump_tables
+
+initial = recover_cfg(decoder, [0xF6130050])
+targets = resolve_jump_tables(decoder, initial, {
+    0xF61311E8: JumpTableSpec(0xF6146DA4, 19, 0xF6110000),
+    0xF613C664: JumpTableSpec(0xF6146DF4, 5, 0xF6110000),
+})
+recovery = recover_cfg(decoder, [0xF6130050], jump_table_targets=targets)
+```
+
+Run recovery once to identify unresolved indirect jumps, validate each table manually, then recover again with the resolved targets. Table entries become edges in the containing function, not separate function entries. Direct calls discovered from newly reached case blocks are recovered normally.
+
+### CFG result types
+
+| Type | Important fields |
+|---|---|
+| `MicroBlazeRecovery` | `functions`, `code`, `issues`, `code_ranges`, `unclassified_ranges` |
+| `MicroBlazeFunction` | `entry`, `blocks`, `calls`, `issues`, `instructions` |
+| `MicroBlazeBlock` | `start`, `end`, `insns`, `succs`, `preds`, `terminator` |
+| `ControlFlowIssue` | `function`, `address`, `reason`, optional `target` |
+| `JumpTableSpec` | `table_address`, `entry_count`, optional `target_delta` |
+
+## Structural pseudo-C lifting
+
+`MicroBlazeLifter` turns a recovered CFG into address-tagged, C-like statements for manual review. This is **structural pseudo-C**, not a full decompiler: it does not perform SSA construction, high-level control structuring, type recovery, or symbol recovery.
+
+```python
+from ablation.analyzers.microblaze_lifter import MicroBlazeLifter
+
+lifter = MicroBlazeLifter(recovery)
+print(lifter.lift_function(0xF61306EC))
+
+# Lift every recovered function, subject to configured total limits.
+all_pseudo_c = lifter.lift_recovery()
+```
+
+Optional analyst-supplied names replace generated `sub_XXXXXXXX` labels:
+
+```python
+lifter = MicroBlazeLifter(recovery, function_names={0xF6130050: "plm_entry"})
+```
+
+Defaults permit 4,096 blocks and 100,000 instructions per requested function or whole-recovery report. `max_blocks` and `max_instructions` can lower those limits. Unknown entries and exceeded limits raise `ValueError`.
+
+### Output model and coverage
+
+- Each block has a `loc_XXXXXXXX` label; statements retain instruction addresses.
+- Delay-slot instructions are emitted before the control transfer takes effect.
+- Direct calls use recovered or analyst-supplied names with `r5`–`r10` arguments.
+- Indirect calls and unresolved jumps remain explicit helper operations.
+- Resolved jump tables list CFG successor labels with `jump_table(...)`.
+- Conditional branches test the branch register against zero, with signed comparisons where required.
+- Returns use `r3`; traps remain explicit.
+- Loads and stores preserve byte, halfword, and word widths.
+- Unsupported valid operations become `/* unlifted: ... */`, never silent omissions.
+
+The header records ABI register roles: `r1` stack pointer, `r3` return value, `r5`–`r10` arguments, `r15` link register, and `r0` zero. These annotations do not assert a recovered function prototype. Calls use uniform six-argument notation.
+
+```c
+loc_f6130710:
+  /* f6130710 */ r3 = *(uint32_t *)(r5 + 40);
+  /* f6130714 */ if (r3 == 0) goto loc_f6130720; else goto loc_f6130718;
+loc_f6130718:
+  /* f6130718 */ r3 = indirect_call_r3(r5, r6, r7, r8, r9, r10);
+```
+
+The lifter handles core add/reverse-subtract and carry forms, logical operations, multiply/divide, comparisons, immediate and register memory operations, shifts, bit insertion, unary operations, FSL transfers, special registers, barriers, direct and indirect control flow, returns, and traps. Carry and uncommon operations use named helper expressions where C operators alone would hide machine semantics.
+
+Output is for analysis, not recompilation. Register expressions are not simplified into claimed source-level variables, and arithmetic is not a formal model of every MicroBlaze flag or overflow corner case.
+
+## Versal PLM validation
+
+For a production Versal `boot.pdi`, two contiguous DMA segments reconstruct 94,080 bytes at `0xF6130000–0xF6146F80`. Linear decoding recognizes 23,393 of 23,520 words; the remaining 127 occur mostly in trailing data tables. This is not a claim of 99.5% code coverage.
+
+The reset vector targets local `0x20050`; the corresponding loaded entry is `0xF6130050`. A local-to-global delta of `0xF6110000` also maps the two validated jump tables and their targets.
+
+Initial direct-control-flow recovery found 103 functions and 14,008 instructions. Adding the bounded 19-entry and 5-entry tables recovered 123 functions, 21,733 instructions (86,932 bytes), and 3,723 basic blocks. The tables have nine and three unique targets respectively. The image has 7,148 unclassified bytes, six unresolved indirect calls, four external call sites to `0xF6110000`, and two direct-call entries overlapping already recovered functions. These figures describe this image and entry model, not complete firmware coverage.
+
+Lifting all 123 recovered functions produces 21,479 lines. Every recovered instruction has an emitted statement or an intentional no-op/`IMM` omission; there are no `unlifted` operations in this image. Output includes six indirect-call operations and two resolved jump-table operations.
+
+| Indirect-call site | Structural role |
+|---|---|
+| `0xF61300E8` | Init-array dispatch through a table pointer |
+| `0xF6130718` | Callback at offset `+0x28` from the runtime structure rooted at local `0x36DA0` |
+| `0xF6130A98`, `0xF6130AC0`, `0xF6130AD8` | Three dynamic callback paths through `r7` in the runtime-list routine |
+| `0xF6130B18` | Sentinel-terminated fini-array dispatch |
+
+The callback root initially points to local `0x1C050`, outside recovered RAM, and no recovered instruction directly writes that root. These targets require runtime initialization evidence or broader interprocedural analysis. Sentinel/empty array contents do not establish callable targets.
+
+The routine at `0xF61306EC` contains length-driven 16-byte, 4-byte, and single-byte copy loops after its callback. This supports a memory-copy structural role, but does not prove a symbol name, caller-supplied length safety, or a vulnerability.
 
 ## Limitations
 
-- This is a disassembler, not a decompiler, SSA lifter, or emulator. Use `microblaze_cfg.recover_cfg()` for recursive-descent CFG recovery.
-- Linear sweep does not separate code from embedded data and does not account for branch delay-slot reachability when choosing regions.
-- `IMM` state follows linear input order. Starting in the middle of an `IMM` pair cannot recover the missing upper half.
+- Linear sweep does not separate code from embedded data and follows `IMM` state only in linear input order. Starting in the middle of an `IMM` pair cannot recover the missing upper half.
 - Incorrect `base_va` or `byte_order` values invalidate addresses and decoded operands.
 - Function-start and call-target lists require code-region validation before downstream security analysis.
-- Unrecognized words remain explicit `.word` entries; they are never silently treated as valid instructions.
+- No general reset-vector, MMU, address-alias, runtime callback, or external-memory inference is performed.
+- Table sizes and address mappings are not guessed from table contents.
+- Unclassified ranges may contain data, unreachable code, exception handlers, or indirectly reached functions.
+- Reachability does not prove function semantics, memory safety, or the absence of malicious behavior.
+- The lifter has no SSA, phi nodes, expression propagation, high-level structuring, or automatic type/symbol recovery.
+- The toolchain is not an emulator or formally verified decompiler. Unrecognized decoder words remain explicit `.word` entries.
 
-## FORGE audit
+## Validation and FORGE
 
-`FORGE.audit_module()` and the SAFE CODE 10-section review pass with zero open findings. Pre-audit hardening added the 256 MiB input limit and removed a duplicate path read. Regression tests cover the limit and real GEP PLM decoding. The residual risks above are explicit analysis limitations, not silently ignored parser failures.
+Synthetic and real-PDI tests cover signed/extended immediates, branches, calls, returns, delay slots, load/store widths, shifts, special registers, invalid/truncated paths, unreachable embedded bytes, overlapping entries, resource limits, bounded jump tables, structural output, unsupported operations, and real GEP invariants.
+
+`FORGE.audit_module()` and the SAFE CODE 10-section review pass with zero findings for the decoder, CFG analyzer, and lifter. Input, recovery, table, and emission limits are covered by regression tests. Residual analysis limitations are explicit rather than silently ignored failures.
 
 ## See also
 
 - [VersalPdi](versal-pdi.md) for CDO validation and `DmaWrite` load-segment extraction
-- [MicroBlaze recursive CFG recovery](microblaze-cfg.md) and [structural lifting](microblaze-lifter.md)
 - [Control-flow graph construction](control-flow-graph-construction.md) for downstream CFG concepts

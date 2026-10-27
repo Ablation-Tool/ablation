@@ -18,7 +18,7 @@
 
 2. **The HTML format is uniform but not self-evident.** Each source file produces a frameset `.htm` + `ContentFrame0.htm` (source code) + `ContentFrame1.htm` (diagram canvas, always empty) + `ToolbarFrame*.htm` (navigation). Only `ContentFrame0.htm` contains source code, wrapped in a `<pre>` block with `<span class=K/C/T/S>` syntax coloring. Knowing which file to read and which tags to strip is the whole problem.
 
-3. **The affected collection spans six hardware blocks.** LCB downlink (10 source files), STAR FLINK readout (5), Atlys ITSDAQ (17), HSIO (29), OCB (10), readout130 (7) — all stored as HDL Designer HTML exports at `/media/cowboy/research/CERN/docs/htmlexport/`. Extracting these by hand for each RE pass was the pattern before this module existed.
+3. **The affected collection spans six hardware blocks.** LCB downlink (10 source files), STAR FLINK readout (5), Atlys ITSDAQ (17), HSIO (29), OCB (10), readout130 (7) — all stored as HDL Designer HTML exports at `/media/cowboy/research/facility/docs/htmlexport/`. Extracting these by hand for each RE pass was the pattern before this module existed.
 
 ---
 
@@ -69,7 +69,7 @@ ext = HdlHtmlExtractor.from_directory(htm_dir)
 from ablation.analyzers.hdl_html_extractor import HdlHtmlExtractor
 
 ext = HdlHtmlExtractor.from_directory(
-    '/media/cowboy/research/CERN/sims/lcb/downlink/'
+    '/media/cowboy/research/facility/sims/lcb/downlink/'
 )
 vs = ext.to_semantic()
 print(vs.constants())        # MAP_6B_8B, MAP_K_8B, WORDWIDTH, ...
@@ -94,7 +94,7 @@ with tempfile.TemporaryDirectory() as v1_dir, \
 **Read a specific file's clean text:**
 
 ```python
-ext = HdlHtmlExtractor.from_directory('/media/cowboy/research/CERN/sims/star_flink/readout130/')
+ext = HdlHtmlExtractor.from_directory('/media/cowboy/research/facility/sims/star_flink/readout130/')
 print(ext.text('pkg_star_flink.vhd'))
 ```
 
@@ -103,7 +103,7 @@ print(ext.text('pkg_star_flink.vhd'))
 ## Example output <sup>[↑](#hdlhtmlextractor)</sup>
 
 ```
-HdlHtmlExtractor: /media/cowboy/research/CERN/sims/lcb/downlink/
+HdlHtmlExtractor: /media/cowboy/research/facility/sims/lcb/downlink/
   source files found : 12
     lcb_ddr_dec.vhd                             53 lines
     lcb_decoder.vhd                            511 lines
@@ -111,7 +111,7 @@ HdlHtmlExtractor: /media/cowboy/research/CERN/sims/lcb/downlink/
     lcb_pkg_globals.vhd                        288 lines
     ...
 
-VerilogSemantic: /media/cowboy/research/CERN/sims/lcb/downlink/
+VerilogSemantic: /media/cowboy/research/facility/sims/lcb/downlink/
   modules/entities : 9
   constants/defines: 88
   FSM states       : 5

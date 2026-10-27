@@ -178,8 +178,8 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 |---|---|
 | "nanoMIPS: walk frame boundaries" | `NanoMIPSDecoder(endian='little').decode_framesdata, base_addr` |
 | "Disassemble Xilinx MicroBlaze / Versal PLM firmware" | `MicroBlazeDecoder(data, base_va=..., byte_order='little').disassemble()`; extract PDI load bytes first with `VersalPdi.dma_write_segments()` |
-| "Recover MicroBlaze CFG / separate reachable code" | `recover_cfg(decoder, entries=[...])`; validate bounded indirect tables with `resolve_jump_tables()`; see `docs/reference-modules/microblaze-cfg.md` |
-| "Lift MicroBlaze CFG to structural pseudo-C" | `MicroBlazeLifter(recovery).lift_function(entry)`; unresolved indirect targets stay explicit; see `docs/reference-modules/microblaze-lifter.md` |
+| "Recover MicroBlaze CFG / separate reachable code" | `recover_cfg(decoder, entries=[...])`; validate bounded indirect tables with `resolve_jump_tables()`; see `docs/reference-modules/microblaze-decoder.md#recursive-cfg-recovery` |
+| "Lift MicroBlaze CFG to structural pseudo-C" | `MicroBlazeLifter(recovery).lift_function(entry)`; unresolved indirect targets stay explicit; see `docs/reference-modules/microblaze-decoder.md#structural-pseudo-c-lifting` |
 | "Decode Renesas SH-2A ECU firmware" | `EcuSH2aDecoder(rom, base_va=0x400000).disassemblestart, end` |
 | "Decode TMS320C28x firmware" | `EcuC28xDecoder(data, base_va=0).disassemblestart, end` |
 | "Parse Go pclntab and enumerate functions" | `GoBinaryRE.parse_pclntab()` |
@@ -232,7 +232,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 |---|---|
 | "Parse raw WIC/img disk image, navigate filesystem without mounting (ext4/FAT)" | `DiskImageExtractor.from_path(image, partition_index=1).read_path('/etc/shadow')`: wraps Sleuth Kit fls/icat; auto-detects partition table via fdisk; `list_path(dir)`, `path_exists(p)`, `find_suid()`; closes DISK-IMG-GAP-001; see docs/reference-modules/disk-image-extractor.md |
 | "Security scan an embedded Linux rootfs (PetaLinux, OpenWRT, Yocto) from WIC image or directory" | `EmbeddedRootfsScanner.from_dir(rootfs_dir).scan()` or `.from_image(wic_path)`: checks credentials (shadow/passwd), inetd services, systemd autostart units, SSH config, IPBus shims, SUID binaries; returns `List[RootfsFinding]`; see docs/reference-modules/embedded-rootfs-scanner.md |
-| "Parse IPBus XML address table (CERN/ATLAS/EMP firmware) into structured register map" | `IPBusAddrParser.from_file(xml).parse()` → `IPBusRegisterMap`; `.writable()` lists all r/w registers; `.lookup_addr(word_addr)` maps raw address to symbolic name; handles nested nodes, bitmasks, permission inheritance; closes IPBUS-ADDR-TABLE-GAP-001; see docs/reference-modules/ipbus-addr-parser.md |
+| "Parse IPBus XML address table (facility/ATLAS/EMP firmware) into structured register map" | `IPBusAddrParser.from_file(xml).parse()` → `IPBusRegisterMap`; `.writable()` lists all r/w registers; `.lookup_addr(word_addr)` maps raw address to symbolic name; handles nested nodes, bitmasks, permission inheritance; closes IPBUS-ADDR-TABLE-GAP-001; see docs/reference-modules/ipbus-addr-parser.md |
 | "Identify IoT firmware container format without extracting" | `IoTFirmwareUnpacker.probe(fw_path)` → `FirmwareInfo(format, encrypted, inner_offset)`; detects 15+ formats; returns early with error hint on OpenSSL AES encrypted images |
 | "Extract IoT firmware: strip VIVOTEK 49-byte header / uImage 64-byte header, decompress, unpack squashfs/cpio/tar" | `IoTFirmwareUnpacker.unpack(fw_path, outdir)` → `UnpackResult(format_chain, rootfs_path, inventory, error)` |
 | "Map HTTP CGI attack surface of a firmware rootfs: classify handlers as shell vs ELF, run ShellSinkClassifier on all shell CGIs, return sorted findings table" | `CGISurfaceMapper.from_rootfs(rootfs_path).map()` → `CGISurface`; `CGISurfaceMapper.report(surface)` for formatted output |

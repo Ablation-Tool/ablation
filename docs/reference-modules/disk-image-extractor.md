@@ -8,7 +8,7 @@
 ## Why this exists
 
 1. Analyzing embedded Linux disk images required knowing the Sleuth Kit CLI (`fls`/`icat`), computing partition sector offsets from `fdisk` output, and running per-file commands manually. No ablation API existed for structured, path-navigable filesystem access.
-2. The CERN ATLAS GEP PetaLinux session required 30+ individual `fls`/`icat` invocations to read the rootfs. These were ad-hoc Bash commands. EmbeddedRootfsScanner and future scanners need a clean Python API.
+2. The facility ATLAS GEP PetaLinux session required 30+ individual `fls`/`icat` invocations to read the rootfs. These were ad-hoc Bash commands. EmbeddedRootfsScanner and future scanners need a clean Python API.
 3. The module enables `EmbeddedRootfsScanner.from_image()` to work without manual sector arithmetic.
 
 ---

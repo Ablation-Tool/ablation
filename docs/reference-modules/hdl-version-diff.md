@@ -78,7 +78,7 @@ for name, entry in diff.added_constants().items():
     print(f"  + {name} = {entry['value']!r}  ({entry['file']}:{entry['line']})")
 
 # Sweep all consecutive version pairs
-dirs = sorted(glob.glob('/media/cowboy/research/CERN/asic/bcc/extracted/bcc_vhdl_0.*/'))
+dirs = sorted(glob.glob('/media/cowboy/research/facility/asic/bcc/extracted/bcc_vhdl_0.*/'))
 for old_dir, new_dir in zip(dirs, dirs[1:]):
     diff = HDLVersionDiff.from_directories(old_dir, new_dir)
     label = f"{os.path.basename(old_dir.rstrip('/'))} → {os.path.basename(new_dir.rstrip('/'))}"

@@ -22,7 +22,7 @@
    | ABC130 → lpGBT (uplink) | 160 Mb/s | 4-bit symbols | STAR FLINK |
    | HCC → lpGBT (uplink) | 640 Mb/s | Standard 8B/10B | Variable-length packets |
 
-2. **The 6B/8B codec is non-standard and not documented outside the CERN VHDL source.** It was derived by Paul Sherwood (CERN) and implemented by Matt Warren (UCL HEP) in 2016. The table in `lcb_pkg_globals.vhd` is the only authoritative source; `LpgbtDecoder` embeds the complete table verified against the VHDL decode case-statement in `lcb_decoder.vhd`.
+2. **The 6B/8B codec is non-standard and not documented outside the facility VHDL source.** It was derived by Paul Sherwood (facility) and implemented by Matt Warren (UCL HEP) in 2016. The table in `lcb_pkg_globals.vhd` is the only authoritative source; `LpgbtDecoder` embeds the complete table verified against the VHDL decode case-statement in `lcb_decoder.vhd`.
 
 3. **LCB frame structure is the trigger and control backbone.** Every Level-0 Accept (L0A) trigger and Bunch Counter Reset (BCR) reaches the HCC ASICs through LCB frames. Understanding LCB decoding is prerequisite to any latency or trigger-pipeline RE.
 
@@ -178,7 +178,7 @@ from ablation.analyzers.lpgbt_decoder import (
 ```python
 from ablation.analyzers.lpgbt_decoder import LpgbtDecoder, LcbFrameType
 
-with open('/media/cowboy/research/CERN/data/stlog880.txt') as f:
+with open('/media/cowboy/research/facility/data/stlog880.txt') as f:
     # Parse the text log to extract raw LCB bytes (site-specific parsing)
     lcb_bytes = parse_stlog(f.read())
 

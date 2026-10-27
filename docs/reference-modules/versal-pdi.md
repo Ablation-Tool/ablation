@@ -14,7 +14,7 @@
 
 ## Why this exists <sup>[↑](#versalpdi)</sup>
 
-1. **Versal PDI is the primary firmware delivery format for Xilinx Versal ACAP.** Every programmable image that runs on Versal (VC1902, VCK5000, and variants) is packaged as a PDI — including the PL bitstream, PLM bootloader, AI Engine CDO, and NoC configuration. The CERN ATLAS ITk FELIX and GEP boards use Versal; understanding the PDI format is prerequisite to any firmware RE or build-provenance tracking on those targets.
+1. **Versal PDI is the primary firmware delivery format for Xilinx Versal ACAP.** Every programmable image that runs on Versal (VC1902, VCK5000, and variants) is packaged as a PDI — including the PL bitstream, PLM bootloader, AI Engine CDO, and NoC configuration. The facility ATLAS ITk FELIX and GEP boards use Versal; understanding the PDI format is prerequisite to any firmware RE or build-provenance tracking on those targets.
 
 2. **Two physically distinct PDI sub-formats exist in the collection.** `bootgen` produces different headers depending on the output type. A pld PDI (PL-only, no boot) has 4 sync words followed by a plaintext Image Header Table. A boot PDI (full system image with PLM) has 5 sync words and an "XLNX" identification word; its IHT is partially opaque because the MetaHeader CDO wraps it. Both are present in the ATLAS GEP/FELIX collection; a parser that only handles one type silently fails on the other.
 
@@ -273,7 +273,7 @@ from ablation.analyzers.versal_pdi import (
 ```python
 from ablation.analyzers.versal_pdi import VersalPdi
 
-vp = VersalPdi.from_path('/media/cowboy/research/CERN/fw/gep/GCI_GCM415_pld-v0.159.38-35A2CC3.pdi')
+vp = VersalPdi.from_path('/media/cowboy/research/facility/fw/gep/GCI_GCM415_pld-v0.159.38-35A2CC3.pdi')
 print(vp.report())
 # VersalPdi: GCI_GCM415_pld-v0.159.38-35A2CC3.pdi
 #   type=pld  sync_words=4  size=0x7765e0 bytes (7.5 MB)
@@ -292,7 +292,7 @@ print(vp.report())
 ```python
 from ablation.analyzers.versal_pdi import VersalPdi
 
-vp = VersalPdi.from_path('/media/cowboy/research/CERN/fw/gep/GCI_GCM415_boot-v0.159.38-35A2CC3.pdi')
+vp = VersalPdi.from_path('/media/cowboy/research/facility/fw/gep/GCI_GCM415_boot-v0.159.38-35A2CC3.pdi')
 
 npi_writes = []
 for section in vp.cdo_sections():
@@ -322,7 +322,7 @@ for insn in MicroBlazeDecoder(image, plm[0].address, byte_order="little").disass
 **Recover git hash from a boot PDI:**
 
 ```python
-vp = VersalPdi.from_path('/media/cowboy/research/CERN/fw/gep/GCI_GCM415_boot-v0.159.38-35A2CC3.pdi')
+vp = VersalPdi.from_path('/media/cowboy/research/facility/fw/gep/GCI_GCM415_boot-v0.159.38-35A2CC3.pdi')
 print(vp.git_hash())  # → "035a2cc3"
 # Works via LOADER/SET_IMAGE_INFO even when IHT image header offsets are opaque
 ```
@@ -330,7 +330,7 @@ print(vp.git_hash())  # → "035a2cc3"
 **Batch-parse a firmware directory:**
 
 ```python
-pdis = VersalPdi.scan_directory('/media/cowboy/research/CERN/fw/gep', glob='*.pdi')
+pdis = VersalPdi.scan_directory('/media/cowboy/research/facility/fw/gep', glob='*.pdi')
 for vp in pdis:
     print(f"{vp.result.path}  git={vp.git_hash()}  type={vp.result.pdi_type}  "
           f"cdos={len(vp.cdo_sections())}")

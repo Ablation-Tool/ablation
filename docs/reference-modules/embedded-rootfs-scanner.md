@@ -7,7 +7,7 @@
 ## Why this exists
 
 1. Every embedded Linux firmware image (PetaLinux, OpenWRT, Yocto, Buildroot) requires the same manual security checks: empty/weak credentials, inetd dangerous services, systemd autostart units, SSH config, SUID binaries. These were repeated manually on every new image.
-2. The PetaLinux GEP analysis session for CERN ATLAS confirmed the pattern: the same 8-step enumeration applied to every rootfs from every board variant.
+2. The PetaLinux GEP analysis session for facility ATLAS confirmed the pattern: the same 8-step enumeration applied to every rootfs from every board variant.
 3. Wrapping this into a structured scanner produces machine-readable findings rather than prose notes, enabling programmatic triage across multiple image variants (e.g., all 10 GCM415/GCM4 images).
 
 ---
@@ -70,7 +70,7 @@ high = [f for f in findings if f.severity == 'HIGH']
 
 # Batch across multiple images
 from ablation.analyzers.disk_image_extractor import DiskImageExtractor
-for wic in Path('/media/cowboy/research/CERN/fw/gep/').glob('*.wic.gz'):
+for wic in Path('/media/cowboy/research/facility/fw/gep/').glob('*.wic.gz'):
     # Decompress first, then:
     scanner = EmbeddedRootfsScanner.from_image(str(wic_decompressed))
     findings = scanner.scan()

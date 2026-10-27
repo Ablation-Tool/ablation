@@ -9,7 +9,7 @@
 
 1. `SinkArgClassifier` (x86-64) uses x86-64 register IDs (rdi=7, rsi=6, rdx=4). AArch64 binaries never produce those IDs — every call site returned `UNKNOWN`.
 2. No AArch64-specific SAC existed despite `taint_tracker_arm64.py` being present. The gap was the argument-provenance classifier, not the taint tracker.
-3. CERN ATLAS GEP ships `versalTcpIpbusShim` (AArch64, stripped), which is the primary network-to-/dev/mem bridge. Without this module, its sink call sites could not be classified.
+3. facility ATLAS GEP ships `versalTcpIpbusShim` (AArch64, stripped), which is the primary network-to-/dev/mem bridge. Without this module, its sink call sites could not be classified.
 
 ---
 

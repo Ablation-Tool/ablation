@@ -12,7 +12,7 @@ Extract transistor counts, supply rails, and topology classifications from SPICE
 
 3. **Current mirror identification maps the bias network.** The trimmed BCC netlist contains PMOS mirrors biased from VDD (PMOS load bias) and NMOS mirrors biased from GND (tail current sources for diff pairs). These are recoverable from the netlist graph without simulation.
 
-4. **Supply rails from voltage source declarations confirm process and I/O technology.** BCC shows VDD=2.5V (TSMC 0.25µm core) with differential swing at 1.1V/1.3V (100mV LVDS swing, 1.2V common mode). Both values match the expected CERN radiation-hard TSMC 0.25µm specification.
+4. **Supply rails from voltage source declarations confirm process and I/O technology.** BCC shows VDD=2.5V (TSMC 0.25µm core) with differential swing at 1.1V/1.3V (100mV LVDS swing, 1.2V common mode). Both values match the expected facility radiation-hard TSMC 0.25µm specification.
 
 ---
 

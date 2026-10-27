@@ -7,8 +7,8 @@
 
 ## Why this exists
 
-1. IPBus firmware (CERN ATLAS GEP, EMP framework, TriDAS FELIX) ships register maps as XML address tables. Without parsing these, register addresses captured from live IPBus TCP traffic are opaque 32-bit word offsets.
-2. The CERN GEP rootfs contains `addr_table_a.vhd`, `addr_table_b.vhd` (auto-generated VHDL from XML). Parsing the source XML files directly recovers the full register map including symbolic names, permissions, and bitmask fields.
+1. IPBus firmware (facility ATLAS GEP, EMP framework, TriDAS FELIX) ships register maps as XML address tables. Without parsing these, register addresses captured from live IPBus TCP traffic are opaque 32-bit word offsets.
+2. The facility GEP rootfs contains `addr_table_a.vhd`, `addr_table_b.vhd` (auto-generated VHDL from XML). Parsing the source XML files directly recovers the full register map including symbolic names, permissions, and bitmask fields.
 3. IPBus protocol is unauthenticated on the GEP (ports 8061–8064). Mapping which addresses are writable from the network is the primary threat model.
 
 ---

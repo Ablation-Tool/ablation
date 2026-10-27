@@ -138,7 +138,7 @@ ext = LatexReExtractor.from_text(latex_source, label='doc.tex')
 from ablation.analyzers.latex_re_extractor import LatexReExtractor
 
 ext = LatexReExtractor.from_tar(
-    '/media/cowboy/research/CERN/fw/tdr/tdr_readout_control_20160705.tar.gz',
+    '/media/cowboy/research/facility/fw/tdr/tdr_readout_control_20160705.tar.gz',
     'tdr_readout_control_strips.tex'
 )
 
