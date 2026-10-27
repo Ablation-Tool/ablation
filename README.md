@@ -225,45 +225,16 @@ pip install ablation-tool
 <details>
 <summary>Agent Configuration</summary>
 
-**Compatible Agents:** Claude Code | OpenAI Codex | OpenCode | Hermes Agent | Gemini | Kimi
+Choose an agent for launch instructions, recommended settings, and its Ablation reverse-engineering workflow:
 
-### 1. Launch Session
-```bash
-cd ~/ablation && claude
-```
+- [**Moonshot AI Kimi**](docs/integrations/agent-configuration.md#moonshot-ai-kimi)
+- [**Anthropic Claude Code**](docs/integrations/agent-configuration.md#anthropic-claude-code)
+- [**OpenAI Codex**](docs/integrations/agent-configuration.md#openai-codex)
+- [**Google Antigravity / Gemini**](docs/integrations/agent-configuration.md#google-antigravity-and-gemini)
+- [**OpenCode**](docs/integrations/agent-configuration.md#opencode)
+- [**Hermes Agent**](docs/integrations/agent-configuration.md#hermes-agent)
 
-### 2. Set Model
-```text
-/model claude-sonnet-4-6
-```
-*(or `/model claude-sonnet-4-5`)*
-
-### 3. Define Objective
-```text
-/goal reverse engineer [target binary, firmware image, or directory]
-```
-
-### 4. Check Effort Level
-```text
-/btw What effort level should we be set on right now?
-```
-
-### Recommended Autonomous Configuration (`/config`)
-```text
-Model                                   claude-sonnet-4-6
-Thinking mode                           true
-Auto-compact                            true
-Continue automatically at usage limit   true
-Dynamic workflows                       true
-Dynamic workflow size                   unrestricted
-Rewind code (checkpoints)               true
-Use auto mode during plan               true
-Default permission mode                 Manual
-Respect .gitignore in file picker       true
-Verbose output                          true
-Output style                            Explanatory
-Question auto-continue timeout          never
-```
+See the [master agent configuration guide](docs/integrations/agent-configuration.md) for the shared setup and safety recommendations.
 
 </details>
 
