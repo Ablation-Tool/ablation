@@ -155,7 +155,17 @@ class FindingRegistry:
         if not rows:
             return 0
         texts = [f"{r[1]} | {r[2]}" for r in rows]
-        vecs = np.array(list(model.embed(texts)), dtype=np.float32)
+        if hasattr(model, "embed"):
+            vecs = np.array(list(model.embed(texts)), dtype=np.float32)
+        elif hasattr(model, "encode"):
+            vecs = np.asarray(
+                model.encode(texts, normalize_embeddings=True, show_progress_bar=False),
+                dtype=np.float32,
+            )
+        else:
+            raise TypeError(
+                f"model {type(model).__name__} has neither .embed nor .encode"
+            )
         for (row_id, _, _), vec in zip(rows, vecs):
             self._con.execute(
                 "UPDATE findings SET embedding=? WHERE id=?",

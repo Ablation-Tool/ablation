@@ -953,31 +953,7 @@ def main() -> None:
 
     print("[*] Loading sentence transformer (all-MiniLM-L6-v2) ...")
     from sentence_transformers import SentenceTransformer
-
-    class _STAdapter:
-        """Expose fastembed-style .embed() alongside sentence-transformers .encode().
-
-        FindingRegistry.build_embeddings() expects a fastembed-like model with
-        .embed(texts) yielding normalized np vectors; this sweep uses
-        sentence-transformers directly for its own scoring.
-        """
-
-        def __init__(self, st_model):
-            self._st = st_model
-
-        def encode(self, *a, **kw):
-            return self._st.encode(*a, **kw)
-
-        def embed(self, texts):
-            vecs = self._st.encode(
-                list(texts), normalize_embeddings=True, show_progress_bar=False
-            )
-            for v in vecs:
-                yield np.asarray(v, dtype=np.float32)
-
-    model = _STAdapter(
-        SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
-    )
+    model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
     print("[*] Model loaded")
 
     profiles = _build_win_profiles()
@@ -1020,6 +996,14 @@ def main() -> None:
         if hits and hits[0][0] >= 0.30
     )
     print(f"[*] Summary: {len(results)} binary(ies) swept, {n_hits} semantic hit(s) >= 0.30")
+
+    errors = [r for r in results if r.get("error")]
+    semantic_failed = [r for r in errors if str(r["error"]).startswith("semantic:")]
+    if len(errors) > len(semantic_failed):
+        print(f"[!] {len(errors) - len(semantic_failed)} binary(ies) had extraction/parse errors (see report)")
+    if semantic_failed:
+        print(f"[!] {len(semantic_failed)} binary(ies) could NOT be scored — results incomplete")
+        sys.exit(2)
 
 
 if __name__ == "__main__":
