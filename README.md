@@ -220,8 +220,6 @@ pip install ablation-tool
 
 **Requirements:** Python >= 3.10 · `capstone>=4,<5` · `numpy` · `lief` · `fastembed` · `sentence-transformers` · `pyelftools`
 
-[**Agent Configuration**](docs/integrations/agent-configuration.md)
-
 </details>
 
 
