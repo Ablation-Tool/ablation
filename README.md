@@ -220,21 +220,7 @@ pip install ablation-tool
 
 **Requirements:** Python >= 3.10 · `capstone>=4,<5` · `numpy` · `lief` · `fastembed` · `sentence-transformers` · `pyelftools`
 
-</details>
-
-<details>
-<summary>Agent Configuration</summary>
-
-Choose an agent for launch instructions, recommended settings, and its Ablation reverse-engineering workflow:
-
-- [**Moonshot AI Kimi**](docs/integrations/agent-configuration.md#moonshot-ai-kimi)
-- [**Anthropic Claude Code**](docs/integrations/agent-configuration.md#anthropic-claude-code)
-- [**OpenAI Codex**](docs/integrations/agent-configuration.md#openai-codex)
-- [**Google Antigravity / Gemini**](docs/integrations/agent-configuration.md#google-antigravity-and-gemini)
-- [**OpenCode**](docs/integrations/agent-configuration.md#opencode)
-- [**Hermes Agent**](docs/integrations/agent-configuration.md#hermes-agent)
-
-See the [master agent configuration guide](docs/integrations/agent-configuration.md) for the shared setup and safety recommendations.
+[**Agent Configuration**](docs/integrations/agent-configuration.md)
 
 </details>
 
