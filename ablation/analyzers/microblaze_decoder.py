@@ -119,6 +119,10 @@ class MicroBlazeDecoder:
         self.base_va = base_va
         self.byte_order = byte_order
 
+    @property
+    def image_size(self) -> int:
+        return len(self._data)
+
     @classmethod
     def from_path(
         cls, path: str | Path, base_va: int = 0, byte_order: str = "big"

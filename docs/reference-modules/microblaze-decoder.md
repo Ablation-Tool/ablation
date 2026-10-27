@@ -97,7 +97,7 @@ On the CERN `GCI_GCM415_boot-v0.159.38-35A2CC3.pdi` image, two contiguous DMA se
 
 ## Limitations
 
-- This is a disassembler, not a decompiler, SSA lifter, emulator, or recursive-descent CFG builder.
+- This is a disassembler, not a decompiler, SSA lifter, or emulator. Use `microblaze_cfg.recover_cfg()` for recursive-descent CFG recovery.
 - Linear sweep does not separate code from embedded data and does not account for branch delay-slot reachability when choosing regions.
 - `IMM` state follows linear input order. Starting in the middle of an `IMM` pair cannot recover the missing upper half.
 - Incorrect `base_va` or `byte_order` values invalidate addresses and decoded operands.
