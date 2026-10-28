@@ -239,7 +239,7 @@ request API keys, configure model providers, or start firmware analysis.
 </details>
 
 <details>
-<summary>Install</summary>
+<summary>Manual Install</summary>
 
 ```bash
 pip install ablation-tool
