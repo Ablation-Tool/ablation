@@ -216,8 +216,6 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 <details>
 <summary>AI Agent Install</summary>
 
-Hand this prompt to your AI coding agent. It installs Ablation from source in an isolated Python environment and leaves optional analyzers and analysis workloads for a separate request.
-
 ```text
 Set up Ablation from https://github.com/Ablation-Tool/ablation for me.
 
