@@ -219,19 +219,23 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 ```text
 Set up Ablation from https://github.com/Ablation-Tool/ablation for me.
 
-Check for Git and Python 3.10 or newer. Clone the repository if it is not
-already present and work from that source checkout. Create a project-local
-Python virtual environment and activate it using the appropriate command for
-my operating system. Install Ablation into that environment with:
+Check for Git and Python 3.10 or newer. Clone the repository if it is absent.
+For an existing checkout, verify its origin and check for uncommitted changes.
+Do not reset, clean, overwrite, or pull over local changes. Stop and ask if
+the remote differs or the checkout is dirty.
+
+Review pyproject.toml before installation. Create a project-local Python
+virtual environment, activate it for my operating system, and install only
+the standard package from the source checkout with:
 
   python -m pip install .
 
-Verify the installation by running `ablation --help` and report the checkout
-path, virtual-environment path, Python version, and verification result.
+Keep full, LLM, and bytecode extras opt-in and ask before adding them. Stop
+on errors. Do not use sudo, global Python installation, alternate package
+sources, API keys, model-provider configuration, or firmware analysis.
 
-Keep the full, LLM, and bytecode extras opt-in. Ask before installing any
-optional feature set. Do not use sudo, modify my global Python environment,
-request API keys, configure model providers, or start firmware analysis.
+Verify with `ablation --help`. Report the checkout and environment paths,
+Python version, installed extras, and verification result.
 ```
 
 </details>
