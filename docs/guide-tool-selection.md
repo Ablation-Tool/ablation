@@ -176,6 +176,8 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 
 | Task | First reach |
 |---|---|
+| "Parse Intel HEX with strict checksum and overlap checks" | `IntelHexImage.from_path(path)`; use `.to_sparse()` for spans or `.to_bytes(fill=0xFF, base=0)` for bounded absolute images; see `docs/reference-modules/intel-hex.md` |
+| "Decode C166/C167 flat or boot-loaded firmware" | `EcuC166Decoder(data, base_pa=...)`; use `parse_ivt(start_pa=...)`, `disassemble()`, and explicit DPP helpers for data references; see `docs/reference-modules/c166-c167-decoding.md` |
 | "nanoMIPS: walk frame boundaries" | `NanoMIPSDecoder(endian='little').decode_framesdata, base_addr` |
 | "Disassemble Xilinx MicroBlaze / Versal PLM firmware" | `MicroBlazeDecoder(data, base_va=..., byte_order='little').disassemble()`; extract PDI load bytes first with `VersalPdi.dma_write_segments()` |
 | "Recover MicroBlaze CFG / separate reachable code" | `recover_cfg(decoder, entries=[...])`; validate bounded indirect tables with `resolve_jump_tables()`; see `docs/reference-modules/microblaze-decoder.md#recursive-cfg-recovery` |
@@ -348,6 +350,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Batch-parse all .pdi files in a directory for build provenance" | `VersalPdi.scan_directory(dir, '*.pdi')` — each result has `.git_hash()` |
 | "Scan an arbitrary CDO blob for CDO sections (no MetaHeader)" | `VersalPdi.from_bytes(data).cdo_sections()` — scanner works even when pdi_type = 'unknown' |
 | "Decode LCB downlink byte buffer (L0A triggers, BCR, CMD frames)" | `LcbDecoder.decode_stream(data)` — returns `List[LcbFrame]` with frame_type, l0a_map, bcr, tag |
+| "Encode/decode SPECS frames or parse simulation headers" | `encode_frame()` / `decode_frame()` from `ablation.analyzers.specs_protocol`; use `parse_simulation_headers(text)` for archived vectors and explicit 128/129 long-frame behavior |
 | "Decode STAR FLINK 4-bit nibble uplink (PR/LP events with L0ID)" | `StarFlinkDecoder.decode_stream(nibbles)` — returns `List[StarFlinkEvent]` with l0id |
 | "Decode HCC 8B/10B uplink bit stream" | `decode_8b10b_stream(bits)` — returns `[(offset, byte, is_k)]` per codeword |
 | "Decode single LCB 6B/8B codeword byte" | `decode_6b8b(byte)` → `(6bit_value, is_k)` or `None` if invalid |

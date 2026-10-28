@@ -629,3 +629,15 @@ class TestC166Detection:
         cands = EcuArchDetector(rom).candidates()
         c166 = next(c for c in cands if c.arch == "c166")
         assert c166.score > 0.90
+
+
+def test_rom_size_limit_and_negative_sample_size(monkeypatch, tmp_path):
+    monkeypatch.setattr(EcuArchDetector, "_MAX_ROM_BYTES", 2)
+    with pytest.raises(ValueError, match="64 MiB"):
+        EcuArchDetector(bytes(3))
+    path = tmp_path / "oversized.bin"
+    path.write_bytes(bytes(3))
+    with pytest.raises(ValueError, match="64 MiB"):
+        EcuArchDetector(path)
+    with pytest.raises(ValueError, match="sample_size"):
+        EcuArchDetector(bytes(2), sample_size=-1)

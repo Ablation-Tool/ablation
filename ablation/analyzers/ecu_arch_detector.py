@@ -83,6 +83,7 @@ class EcuArchDetector:
         image (slower on large ROMs).
     """
 
+    _MAX_ROM_BYTES = 64 * 1024 * 1024
     _SRAM_LO  = 0x20000000   # ARM Cortex-M SRAM base
     _SRAM_HI  = 0x40000000   # ARM Cortex-M SRAM ceiling
     _FLASH_LO = 0x00000000   # ARM Cortex-M flash base
@@ -106,9 +107,14 @@ class EcuArchDetector:
         data: "str | Path | bytes",
         sample_size: int = 4096,
     ):
+        if sample_size < 0:
+            raise ValueError("EcuArchDetector: sample_size must be nonnegative")
         if isinstance(data, (str, Path)):
+            source = Path(data)
             try:
-                with open(data, "rb") as f:
+                if source.stat().st_size > self._MAX_ROM_BYTES:
+                    raise ValueError("EcuArchDetector: ROM exceeds 64 MiB limit")
+                with source.open("rb") as f:
                     self._data = f.read()
             except FileNotFoundError as exc:
                 raise FileNotFoundError(
@@ -116,6 +122,8 @@ class EcuArchDetector:
                 ) from exc
         else:
             self._data = bytes(data)
+        if len(self._data) > self._MAX_ROM_BYTES:
+            raise ValueError("EcuArchDetector: ROM exceeds 64 MiB limit")
         n = len(self._data)
         if sample_size == 0 or sample_size > n:
             self._sample = self._data
@@ -674,15 +682,15 @@ class EcuArchDetector:
 
         C166/C167 MCUs (used in BMW MS43/MS41/MS42, Bosch Motronic M3.x/KW1,
         VW Motronic variants) map a 256-byte interrupt vector table at PA 0x000000.
-        The table has exactly 64 entries × 4 bytes. Every entry is a JMPS instruction:
+        The table has 64 entries × 4 bytes. Valid entries commonly contain:
           FA seg lo hi  (opcode 0xFA = JMPS seg, caddr)
-        where lo+hi form the target address in segment `seg` (each segment = 16KB).
+        where lo+hi form the target address in segment `seg`. Code segments
+        are 64KB; the separate DPP data-page mechanism uses 16KB pages.
 
-        This IVT structure is unique: 64 consecutive 4-byte slots at offset 0,
-        every one beginning with opcode 0xFA. No other supported architecture
-        produces this pattern in the first 256 bytes.
+        This IVT structure is distinctive: 64 consecutive 4-byte slots at
+        offset 0 with JMPS opcodes. Sparse or non-JMPS entries lower the score.
 
-        Physical address encoding: PA = seg * 0x4000 + (hi << 8 | lo).
+        Physical code address: PA = seg * 0x10000 + (hi << 8 | lo).
         Reset vector at IVT[0] (offset 0x00). UART/serial ISRs typically in
         segments 0x0E–0x0F; engine ISRs in segment 0x00.
 

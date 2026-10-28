@@ -21,8 +21,8 @@ def _mov_imm(reg: int, imm: int) -> bytes:
 
 
 def _cmp_imm(reg: int, imm: int) -> bytes:
-    """66 Rn, #imm16  (4 bytes, LE immediate)."""
-    return bytes([0x66, 0xF0 | (reg & 0xF)]) + struct.pack('<H', imm & 0xFFFF)
+    """46 Rn, #imm16  (4 bytes, LE immediate)."""
+    return bytes([0x46, 0xF0 | (reg & 0xF)]) + struct.pack('<H', imm & 0xFFFF)
 
 
 def _jmps(seg: int, addr: int) -> bytes:
@@ -46,26 +46,23 @@ def _st_mem(reg: int, addr: int) -> bytes:
 
 
 def _ld_direct(reg: int, addr: int) -> bytes:
-    """C2 Rn lo hi — MOV Rn, [addr] direct load (4 bytes)."""
-    return bytes([0xC2, 0xF0 | (reg & 0xF)]) + struct.pack('<H', addr & 0xFFFF)
+    """F2 Rn lo hi — MOV Rn, [addr] direct load (4 bytes)."""
+    return bytes([0xF2, 0xF0 | (reg & 0xF)]) + struct.pack('<H', addr & 0xFFFF)
 
 
 def _ld_indirect(dst: int, base: int) -> bytes:
-    """A2 — MOV Rdst, [Rbase] register-indirect load (4 bytes)."""
-    return bytes([0xA2, ((base & 0xF) << 4) | (dst & 0xF), 0x00, 0x00])
+    """D4 — MOV Rdst, [Rbase + #0] register-indirect load."""
+    return bytes([0xD4, ((dst & 0xF) << 4) | (base & 0xF), 0x00, 0x00])
 
 
 def _st_indirect(src: int, base: int) -> bytes:
-    """B2 — MOV [Rbase], Rsrc register-indirect store (4 bytes)."""
-    return bytes([0xB2, ((base & 0xF) << 4) | (src & 0xF), 0x00, 0x00])
+    """C4 — MOV [Rbase + #0], Rsrc register-indirect store."""
+    return bytes([0xC4, ((src & 0xF) << 4) | (base & 0xF), 0x00, 0x00])
 
 
 def _nop_2b() -> bytes:
-    """A generic 2-byte placeholder (NOP-like unknown opcode).
-
-    Uses 0xEA, which has no defined C166 decode (confirmed in test_unknown_opcode_decoded_as_raw).
-    """
-    return bytes([0xEA, 0x00])
+    """An undefined two-byte operation used as a walk placeholder."""
+    return bytes([0xF8, 0x00])
 
 
 def _ivt_entry(seg: int, addr: int) -> bytes:
@@ -131,8 +128,8 @@ def test_insn_length_4_for_known_4byte_opcodes(opcode):
     assert dec.insn_length(0) == 4
 
 
-@pytest.mark.parametrize('opcode', [0x00, 0x0D, 0x2D, 0xEA, 0xF3, 0xF7, 0xF0])
-def test_insn_length_2_for_unknown_opcodes(opcode):
+@pytest.mark.parametrize('opcode', [0x00, 0x0D, 0x2D, 0xF8, 0xF0, 0xEC, 0xFC])
+def test_insn_length_2_for_known_2byte_opcodes(opcode):
     data = _make_rom(bytes([opcode, 0x00]))
     dec = EcuC166Decoder(data)
     assert dec.insn_length(0) == 2
@@ -180,12 +177,12 @@ def test_decode_mov_imm_all_registers():
 
 
 # ---------------------------------------------------------------------------
-# Section 4 — decode_one(): 66 CMP_IMM
+# Section 4 — decode_one(): 46 CMP_IMM
 # ---------------------------------------------------------------------------
 
 def test_decode_cmp_imm_r4_0x0020():
-    """CMP R4, #0x0020 — confirmed MS43 length-check pattern."""
-    raw = _cmp_imm(4, 0x0020)   # 66 f4 20 00
+    raw = _cmp_imm(4, 0x0020)
+    assert raw == bytes.fromhex('46 F4 20 00')
     dec = EcuC166Decoder(_make_rom(raw))
     insn = dec.decode_one(0)
     assert insn is not None
@@ -258,12 +255,12 @@ def test_decode_st_mem_to_peripheral():
 
 
 # ---------------------------------------------------------------------------
-# Section 7 — decode_one(): C2 direct-address load
+# Section 7 — decode_one(): F2 direct-address load
 # ---------------------------------------------------------------------------
 
 def test_decode_ld_direct_r4_xram():
-    """MOV R4, [0x96B8] — direct-address load from XRAM (confirmed C2 pattern)."""
-    raw = _ld_direct(4, 0x96B8)  # c2 f4 b8 96
+    raw = _ld_direct(4, 0x96B8)
+    assert raw == bytes.fromhex('F2 F4 B8 96')
     dec = EcuC166Decoder(_make_rom(raw))
     insn = dec.decode_one(0)
     assert insn is not None
@@ -273,12 +270,12 @@ def test_decode_ld_direct_r4_xram():
 
 
 # ---------------------------------------------------------------------------
-# Section 8 — decode_one(): A2/B2 register-indirect
+# Section 8 — decode_one(): D4/C4 register-indirect
 # ---------------------------------------------------------------------------
 
 def test_decode_ld_indirect():
-    """MOV R4, [R12] — register-indirect load (A2 opcode)."""
     raw = _ld_indirect(dst=4, base=12)
+    assert raw == bytes.fromhex('D4 4C 00 00')
     dec = EcuC166Decoder(_make_rom(raw))
     insn = dec.decode_one(0)
     assert insn is not None
@@ -287,8 +284,8 @@ def test_decode_ld_indirect():
 
 
 def test_decode_st_indirect():
-    """MOV [R12], R4 — register-indirect store (B2 opcode)."""
     raw = _st_indirect(src=4, base=12)
+    assert raw == bytes.fromhex('C4 4C 00 00')
     dec = EcuC166Decoder(_make_rom(raw))
     insn = dec.decode_one(0)
     assert insn is not None
@@ -301,8 +298,8 @@ def test_decode_st_indirect():
 # ---------------------------------------------------------------------------
 
 def test_decode_unknown_2b():
-    """Opcode 0xEA has no defined decoding and is returned as UNKNOWN_2B."""
-    data = _make_rom(bytes([0xEA, 0x07, 0xE6, 0xF4, 0x20, 0x00]))
+    """Undefined opcode 0xF8 remains an explicit two-byte unknown."""
+    data = _make_rom(bytes([0xF8, 0x07, 0xE6, 0xF4, 0x20, 0x00]))
     dec = EcuC166Decoder(data)
     insn = dec.decode_one(0)
     assert insn is not None
@@ -337,7 +334,7 @@ def test_disassemble_mixed_sequence():
     body = (
         _mov_imm(12, 0x96AE)    # 4B E6
         + _nop_2b()              # 2B unknown
-        + _cmp_imm(4, 0x0020)   # 4B 66
+        + _cmp_imm(4, 0x0020)   # 4B 46
         + _calls(0x0A, 0xB46E)  # 4B DA
     )
     rom = _make_rom(body)
@@ -427,8 +424,8 @@ def test_scan_xram_loads_finds_mov_imm():
 
 
 def test_scan_xram_loads_finds_ld_direct():
-    """scan_xram_loads also finds C2/F2 direct-address loads of the target addr."""
-    body = _ld_direct(4, 0x96B8)  # C2
+    """scan_xram_loads finds F2 direct-address loads of the target address."""
+    body = _ld_direct(4, 0x96B8)
     dec = EcuC166Decoder(_make_rom(body))
     hits = dec.scan_xram_loads(0x96B8)
     assert len(hits) == 1
@@ -517,10 +514,9 @@ def test_from_path_raises_on_missing_file(tmp_path):
         EcuC166Decoder(tmp_path / 'nonexistent.bin')
 
 
-def test_non_power_of_2_size_raises():
-    """A ROM whose size is not a power of 2 should raise ValueError."""
-    with pytest.raises(ValueError, match='power of 2'):
-        EcuC166Decoder(bytes(0x1234))
+def test_non_power_of_2_size_is_accepted_without_mirror_mask():
+    dec = EcuC166Decoder(bytes(0x1234))
+    assert dec.resolve_pa(0x0A, 0xB46E) == 0x0AB46E
 
 
 def test_from_bytes_constructor():
@@ -589,17 +585,17 @@ def test_insn_str_format():
 # ---------------------------------------------------------------------------
 
 def _push(reg: int) -> bytes:
-    """PUSH Rwn: 0x88 (reg<<4) — confirmed from MS43 prologue."""
-    return bytes([0x88, (reg & 0xF) << 4])
+    """PUSH reg: EC F0|reg, confirmed by C166 epilogues."""
+    return bytes([0xEC, 0xF0 | (reg & 0xF)])
 
 
 def _pop(reg: int) -> bytes:
-    """POP Rwn: 0x98 (reg<<4) — confirmed from MS43 epilogue."""
-    return bytes([0x98, (reg & 0xF) << 4])
+    """POP reg: FC F0|reg, confirmed by C166 epilogues."""
+    return bytes([0xFC, 0xF0 | (reg & 0xF)])
 
 
 def _ret() -> bytes:
-    """RET: 0xDB 0x00 — confirmed from MS43 function return sites."""
+    """RETS: DB 00, the segmented return used by C166 applications."""
     return bytes([0xDB, 0x00])
 
 
@@ -614,8 +610,8 @@ def _mov_reg(dst: int, src: int) -> bytes:
 
 
 def test_decode_push_r9():
-    """PUSH R9: 0x88 0x90 — confirmed MS43 prologue byte pattern."""
-    raw = _push(9)  # 88 90
+    raw = _push(9)
+    assert raw == bytes.fromhex('EC F9')
     dec = EcuC166Decoder(_make_rom(raw))
     insn = dec.decode_one(0)
     assert insn is not None
@@ -625,8 +621,8 @@ def test_decode_push_r9():
 
 
 def test_decode_push_r14():
-    """PUSH R14: 0x88 0xE0 — confirmed from CALLS 0x03D7B0 prologue."""
-    raw = _push(14)  # 88 e0
+    raw = _push(14)
+    assert raw == bytes.fromhex('EC FE')
     dec = EcuC166Decoder(_make_rom(raw))
     insn = dec.decode_one(0)
     assert insn is not None
@@ -644,8 +640,8 @@ def test_decode_push_all_registers():
 
 
 def test_decode_pop_r8():
-    """POP R8: 0x98 0x80 — confirmed MS43 epilogue."""
-    raw = _pop(8)  # 98 80
+    raw = _pop(8)
+    assert raw == bytes.fromhex('FC F8')
     dec = EcuC166Decoder(_make_rom(raw))
     insn = dec.decode_one(0)
     assert insn is not None
@@ -662,14 +658,13 @@ def test_decode_pop_all_registers():
         assert insn is not None and insn.insn_type == 'POP' and insn.reg == r
 
 
-def test_decode_ret():
-    """RET: 0xDB 0x00 — confirmed function return pattern."""
+def test_decode_rets():
     raw = _ret()
     dec = EcuC166Decoder(_make_rom(raw))
     insn = dec.decode_one(0)
     assert insn is not None
-    assert insn.insn_type == 'RET'
-    assert insn.mnemonic == 'RET'
+    assert insn.insn_type == 'RETS'
+    assert insn.mnemonic == 'RETS'
 
 
 def test_decode_ret_is_not_branch_or_call():
@@ -774,16 +769,77 @@ def test_mov_reg_is_load_property():
 def test_disassemble_with_2byte_decoded():
     """disassemble() correctly steps through a mix with decoded 2-byte ops."""
     body = (
-        _push(9)                    # 88 90
-        + _push(8)                  # 88 80
-        + _mov_reg(dst=8, src=13)   # F0 8D (MOV R8, RD)
-        + _mov_imm(4, 0x1234)       # E6 F4 34 12
-        + _jmpr(cc=2, rel=1)        # 2D 01 (JMPR NZ, +1 word)
-        + _pop(8)                   # 98 80
-        + _pop(9)                   # 98 90
-        + _ret()                    # DB 00
+        _push(9)
+        + _push(8)
+        + _mov_reg(dst=8, src=13)
+        + _mov_imm(4, 0x1234)
+        + _jmpr(cc=2, rel=1)
+        + _pop(8)
+        + _pop(9)
+        + _ret()
     )
     dec = EcuC166Decoder(_make_rom(body))
     insns = dec.disassemble(0, len(body))
     types = [i.insn_type for i in insns]
-    assert types == ['PUSH', 'PUSH', 'MOV_REG', 'MOV_IMM', 'JMPR', 'POP', 'POP', 'RET']
+    assert types == ['PUSH', 'PUSH', 'MOV_REG', 'MOV_IMM', 'JMPR', 'POP', 'POP', 'RETS']
+
+
+@pytest.mark.parametrize('hex_bytes, insn_type, mnemonic', [
+    ('EC FD', 'PUSH', 'PUSH RD'),
+    ('FC FD', 'POP', 'POP RD'),
+    ('DB 00', 'RETS', 'RETS'),
+    ('66 F4 20 00', 'AND_IMM', 'AND R4, #0x0020'),
+    ('C2 FB 15 A1', 'MOVBZ', 'MOVBZ RH5, [0xa115]'),
+    ('E0 14', 'MOV_IMM4', 'MOV R4, #1'),
+    ('A6 F4 2C 01', 'CMPD', 'CMPD1 R4, #0x012c'),
+    ('D4 44 96 8A', 'MOV_LD', 'MOV R4, [R4+#0x8a96]'),
+    ('F4 CF 84 73', 'MOV_LD', 'MOVB RL6, [RF+#0x7384]'),
+    ('E1 18', 'MOV_IMM4', 'MOVB RL4, #1'),
+])
+def test_cern_verified_decodes(hex_bytes, insn_type, mnemonic):
+    raw = bytes.fromhex(hex_bytes)
+    dec = EcuC166Decoder(_make_rom(raw))
+    insn = dec.decode_one(0)
+    assert insn is not None
+    assert insn.insn_type == insn_type
+    assert insn.mnemonic == mnemonic
+
+
+def test_cern_verified_jmpa_target():
+    dec = EcuC166Decoder(_make_rom(bytes.fromhex('EA 00 64 09'), 0x8000), base_pa=0x20000)
+    insn = dec.decode_one(0)
+    assert insn is not None
+    assert insn.insn_type == 'JMPA'
+    assert insn.target == 0x20964
+    assert insn.is_branch is True
+
+
+def test_dpp_address_translation_and_reference_scan():
+    assert EcuC166Decoder.dpp_pa(0x45E9, 7) == 0x1C5E9
+    assert EcuC166Decoder.dpp_offset(0x1C5E9, 7, 1) == 0x45E9
+    with pytest.raises(ValueError, match='outside DPP page'):
+        EcuC166Decoder.dpp_offset(0x1C5E9, 3, 1)
+
+    dec = EcuC166Decoder(_make_rom(_mov_imm(9, 0x45E9)))
+    hits = dec.scan_dpp_loads(0x1C5E9, 7, 1)
+    assert len(hits) == 1
+    assert hits[0].imm == 0x45E9
+
+
+def test_ivt_can_start_at_boot_application_base():
+    image = bytearray(0x401)
+    for index in range(64):
+        image[0x200 + index * 4:0x204 + index * 4] = _jmps(2, 0x0104)
+    dec = EcuC166Decoder(bytes(image))
+    entries = dec.parse_ivt(start_pa=0x200)
+    assert len(entries) == 64
+    assert entries[0].pa == 0x200
+    assert entries[0].target_pa == 0x20104
+    assert dec.is_c166_rom(start_pa=0x200) is True
+    assert dec.is_c166_rom() is False
+
+
+def test_negative_instruction_offsets_are_rejected():
+    dec = EcuC166Decoder(_make_rom(b''))
+    assert dec.insn_length(-1) == 0
+    assert dec.decode_one(-1) is None

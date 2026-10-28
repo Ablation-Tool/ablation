@@ -32,6 +32,8 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, Iterator, List, Optional, Tuple
 
+from ablation.parsers.intel_hex import IntelHexImage
+
 _MAX_HEX_FILE_BYTES  = 4 * 1024 * 1024    # 4 MB source text limit
 _MAX_ADDRESS_RANGE   = 512 * 1024           # 512 KB dense buffer limit (CC254x max)
 
@@ -190,7 +192,7 @@ class Mcs51Decoder:
         self.computed_call_stub = computed_call_stub
 
     def decode_one(self, data: bytes | bytearray, offset: int) -> Mcs51Insn:
-        if offset >= len(data):
+        if offset < 0 or offset >= len(data):
             raise IndexError(f"offset 0x{offset:x} out of range")
 
         b0 = data[offset]
@@ -472,21 +474,11 @@ class Mcs51Decoder:
 # ---------------------------------------------------------------------------
 
 class IntelHexLoader:
-    """Parse Intel Extended Linear Address HEX files into a flat byte map.
+    """Compatibility wrapper around the strict shared Intel HEX parser."""
 
-    Supports record types:
-      0x00 — data
-      0x01 — EOF
-      0x04 — extended linear address (sets upper 16 bits of address)
-
-    Typical usage:
-        loader = IntelHexLoader.from_file("/path/to/firmware.hex")
-        flat_bytes = loader.to_bytes()   # dense bytes, gaps filled with 0xFF
-        start, end = loader.address_range()
-    """
-
-    def __init__(self) -> None:
-        self._data: Dict[int, int] = {}   # flat_address → byte
+    def __init__(self, image: IntelHexImage | None = None) -> None:
+        self._image = image
+        self._data: Dict[int, int] = {} if image is None else image.to_sparse()
 
     @classmethod
     def from_file(cls, path: str) -> "IntelHexLoader":
@@ -494,59 +486,12 @@ class IntelHexLoader:
         if file_size > _MAX_HEX_FILE_BYTES:
             raise ValueError(
                 f'{path}: HEX file size {file_size} exceeds {_MAX_HEX_FILE_BYTES} byte limit')
-        loader = cls()
-        base = 0
-        with open(path, encoding="ascii", errors="replace") as fh:
-            for line in fh:
-                line = line.strip()
-                if not line.startswith(":"):
-                    continue
-                try:
-                    bc = int(line[1:3], 16)
-                    addr = int(line[3:7], 16)
-                    rtype = int(line[7:9], 16)
-                    raw = bytes.fromhex(line[9:9 + bc * 2])
-                except (ValueError, struct.error):
-                    continue
-                if rtype == 0x00:   # data
-                    full = (base << 16) | addr
-                    for i, byte in enumerate(raw):
-                        loader._data[full + i] = byte
-                elif rtype == 0x04:  # extended linear address
-                    if len(raw) < 2:
-                        continue
-                    base = struct.unpack(">H", raw[:2])[0]
-                elif rtype == 0x01:  # EOF
-                    break
-        return loader
+        return cls(IntelHexImage.from_path(path, max_input_bytes=_MAX_HEX_FILE_BYTES))
 
     @classmethod
     def from_bytes(cls, hexdata: str) -> "IntelHexLoader":
         """Parse from an in-memory HEX string."""
-        loader = cls()
-        base = 0
-        for line in hexdata.splitlines():
-            line = line.strip()
-            if not line.startswith(":"):
-                continue
-            try:
-                bc = int(line[1:3], 16)
-                addr = int(line[3:7], 16)
-                rtype = int(line[7:9], 16)
-                raw = bytes.fromhex(line[9:9 + bc * 2])
-            except (ValueError, struct.error):
-                continue
-            if rtype == 0x00:
-                full = (base << 16) | addr
-                for i, byte in enumerate(raw):
-                    loader._data[full + i] = byte
-            elif rtype == 0x04:
-                if len(raw) < 2:
-                    continue
-                base = struct.unpack(">H", raw[:2])[0]
-            elif rtype == 0x01:
-                break
-        return loader
+        return cls(IntelHexImage.from_bytes(hexdata, max_input_bytes=_MAX_HEX_FILE_BYTES))
 
     def address_range(self) -> Tuple[int, int]:
         if not self._data:
@@ -557,17 +502,9 @@ class IntelHexLoader:
 
     def to_bytes(self, fill: int = 0xFF) -> bytes:
         """Return a dense flat byte array; gaps filled with `fill`."""
-        if not self._data:
+        if self._image is None:
             return b""
-        lo, hi = self.address_range()
-        if (hi - lo) > _MAX_ADDRESS_RANGE:
-            raise ValueError(
-                f'Address range 0x{lo:x}–0x{hi:x} ({hi - lo} bytes) exceeds '
-                f'{_MAX_ADDRESS_RANGE} byte limit')
-        buf = bytearray(hi - lo)
-        for addr, byte in self._data.items():
-            buf[addr - lo] = byte
-        return bytes(buf)
+        return self._image.to_bytes(fill=fill, max_dense_bytes=_MAX_ADDRESS_RANGE)
 
     def to_sparse(self) -> Dict[int, int]:
         return dict(self._data)

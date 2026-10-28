@@ -2,6 +2,18 @@
 
 ---
 
+## v2.89.0
+
+**Embedded reverse-engineering foundations from CERN artifact analysis.**
+
+- Corrected C166 instruction lengths and semantics, added arbitrary-size image support, selectable IVT bases, explicit code-segment/DPP helpers, and DPP-aware reference scans.
+- Added strict shared Intel HEX parsing with all standard address/start record types, sparse spans, bounded dense conversion, and an 8051 compatibility wrapper.
+- Added SPECS frame encoding/decoding, long-frame count handling, and archived simulation-header parsing.
+- Added independent C166, Intel HEX, and SPECS regression tests and complete module references with limitations and verification guidance.
+- Verified both CERN HEX images byte-for-byte and all six SPECS long-read vectors. All ten changed Python files pass FORGE. The full suite passes with 2,531 tests passed and 92 skipped.
+
+---
+
 ## v2.88.0
 
 **Repository audit remediation.**

@@ -8,51 +8,36 @@ from the Infineon C167CR V1.0 instruction-set reference.
 
 Instruction width
 -----------------
-All instructions are 2 or 4 bytes, always at even addresses.  The opcode byte
-alone determines the length via a small lookup table (``_FOUR_BYTE_OPS``).  9
-opcodes are known 4-byte; every other opcode byte is treated as 2-byte.
+Instructions are 2 or 4 bytes. The opcode byte determines the length through
+``_FOUR_BYTE_OPS``; an incomplete table misaligns every following instruction.
 
-Address space and ROM mirroring
---------------------------------
-The C166 physical address space is 16 MB (24 bits).  JMPS and CALLS encode a
-code segment (``seg``, 8 bits) and a 16-bit code address.  A 512 KB ROM
-occupies 8 × 64 KB segments (seg 0x00–0x07); the hardware bus controllers
-typically mirror it at seg 0x08–0x0F.  ``resolve_pa(seg, addr)`` returns the
-file offset using::
+Address spaces
+--------------
+JMPS and CALLS encode an 8-bit code segment and a 16-bit code address, so code
+segments are 64 KB. Data pointers use a separate DPP mapping with 16 KB pages.
+``resolve_pa()`` preserves power-of-two ROM mirroring; non-power-of-two images
+are accepted without applying a mirror mask.
 
-    file_offset = (seg * 0x10000 + addr) % rom_size
+Confirmed byte-verified patterns::
 
-which is correct for power-of-2 ROM sizes.
-
-Register encoding
------------------
-For 4-byte instructions (except JMPS/CALLS) byte[1] encodes the register
-number in the lower nibble: ``reg = byte[1] & 0x0F`` (R0–R15).
-For JMPS/CALLS byte[1] is the raw segment number.
-
-Confirmed byte-verified patterns (MS43_WBABW510X0PK46741_430069_512KB.bin)
----------------------------------------------------------------------------
-  0xE6 FC AE 96  MOV R12, #0x96AE        ; load XRAM seed-ptr into R12
-  0xE6 FD 68 59  MOV R13, #0x5968        ; load XRAM resp-buf ptr into R13
-  0xE6 FC 67 00  MOV R12, #0x0067        ; SA response code 0x67
-  0xE6 FC 68 00  MOV R12, #0x0068        ; SA response code 0x68
-  0x66 F4 20 00  CMP  R4, #0x0020        ; length ≥ 0x20 check
-  0xDA 0A 6E B4  CALLS seg=0x0A, 0xB46E  ; seed_fetch (PA 0x0AB46E)
-  0xDA 0C EC 23  CALLS seg=0x0C, 0x23EC  ; send_response (PA 0x0C23EC)
-  0xFA 00 06 2D  JMPS  seg=0x00, 0x2D06  ; IVT[0] reset vector
-  0xC2 F4 B8 96  MOV_LD R4, [0x96B8]    ; load XRAM[0x96B8] → R4
-  0xF2 F0 24 F0  MOV_LD R0, [0xF024]    ; load ESFR[0xF024] → R0
-  0xF6 F4 8E E1  MOV_ST [0xE18E], R4    ; store R4 → DS2-hw[0xE18E]
+  E6 FC AE 96  MOV R12, #0x96AE
+  66 F4 20 00  AND R4, #0x0020
+  DA 02 D0 03  CALLS seg=0x02, 0x03D0
+  EC FD        PUSH R13
+  FC FD        POP R13
+  DB 00        RETS
+  F2 F0 24 F0  MOV R0, [0xF024]
+  F6 F4 8E E1  MOV [0xE18E], R4
 
 Usage::
 
     from ablation.analyzers.ecu_c166_decoder import EcuC166Decoder
 
     dec = EcuC166Decoder(rom_path)
-    ivt = dec.parse_ivt()                     # list of IVTEntry
+    ivt = dec.parse_ivt()
     insns = dec.disassemble(0x01AB80, 0x01AE10)
-    seed_refs = dec.scan_xram_loads(0x96AE)   # all C166Insn that load #0x96AE or [0x96AE]
-    calls_targets = dec.function_starts()      # CALLS target PAs across whole ROM
+    seed_refs = dec.scan_xram_loads(0x96AE)
+    calls_targets = dec.function_starts()
 """
 
 from __future__ import annotations
@@ -67,31 +52,37 @@ from typing import Optional
 # Opcode tables
 # ---------------------------------------------------------------------------
 
-# Opcodes whose instruction length is 4 bytes (all others → 2 bytes).
-# Sources: Infineon C167CR User's Manual V1.0, Section 12 instruction encoding.
+# C166 Family Instruction Set Manual, instruction overview and encodings.
 _FOUR_BYTE_OPS: frozenset[int] = frozenset({
-    0xE6,   # MOV Rwn, #data16          — immediate word load
-    0x66,   # CMP Rwn, #data16          — compare with immediate
-    0x46,   # CMP Rwn, #data16          — compare immediate (row x6 col 4); loop termination form
-    0x06,   # ADD Rwn, #data16          — add immediate (row x6 col 0)
-    0xFA,   # JMPS seg, caddr           — absolute code segment jump
-    0xDA,   # CALLS seg, caddr          — absolute code segment call
-    0xF2,   # MOV Rwn, mem              — load from direct address (DPP-mapped)
-    0xF6,   # MOV mem, Rwn              — store to direct address (DPP-mapped)
-    0xC2,   # MOV Rwn, mem              — load from direct address (internal)
-    0xA2,   # MOV Rwn, [Rwm]            — register-indirect load
-    0xB2,   # MOV [Rwm], Rwn            — register-indirect store
+    0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x0A, 0x12,
+    0x13, 0x14, 0x15, 0x16, 0x17, 0x1A, 0x22, 0x23,
+    0x24, 0x25, 0x26, 0x27, 0x2A, 0x32, 0x33, 0x34,
+    0x35, 0x36, 0x37, 0x3A, 0x42, 0x43, 0x46, 0x47,
+    0x4A, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x5A,
+    0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x6A, 0x72,
+    0x73, 0x74, 0x75, 0x76, 0x77, 0x7A, 0x82, 0x84,
+    0x86, 0x87, 0x8A, 0x92, 0x94, 0x96, 0x97, 0x9A,
+    0xA2, 0xA4, 0xA5, 0xA6, 0xA7, 0xAA, 0xB2, 0xB4,
+    0xB5, 0xB6, 0xB7, 0xBA, 0xC2, 0xC4, 0xC5, 0xC6,
+    0xCA, 0xD2, 0xD4, 0xD5, 0xD6, 0xD7, 0xDA, 0xE2,
+    0xE4, 0xE6, 0xE7, 0xEA, 0xF2, 0xF3, 0xF4, 0xF6,
+    0xF7, 0xFA,
 })
 
 # Instruction type tags
-_MOV_IMM  = 'MOV_IMM'    # MOV Rwn, #imm16
-_CMP_IMM  = 'CMP_IMM'    # CMP Rwn, #imm16
-_ADD_IMM  = 'ADD_IMM'    # ADD Rwn, #data16 — add 16-bit immediate (4-byte, 06 n_ ##  ##)
+_MOV_IMM  = 'MOV_IMM'    # MOV Rwn, #data16
+_MOV_IMM4 = 'MOV_IMM4'   # MOV Rwn, #data4
+_CMP_IMM  = 'CMP_IMM'    # CMP Rwn, #data16
+_CMPD     = 'CMPD'       # CMPD1/CMPD2 Rwn, mem
+_AND_IMM  = 'AND_IMM'    # AND Rwn, #data16
+_ADD_IMM  = 'ADD_IMM'    # ADD Rwn, #data16
 _JMPS     = 'JMPS'       # JMPS seg, caddr
 _CALLS    = 'CALLS'      # CALLS seg, caddr
-_MOV_LD   = 'MOV_LD'    # load from direct/indirect memory address
-_MOV_ST   = 'MOV_ST'    # store to direct/indirect memory address
-_MOV_REG  = 'MOV_REG'   # MOV Rwdst, Rwsrc — register-to-register (2-byte, F0)
+_JMPA     = 'JMPA'       # JMPA cc, caddr
+_CALLA    = 'CALLA'      # CALLA cc, caddr
+_MOV_LD   = 'MOV_LD'     # load from direct/indirect memory address
+_MOV_ST   = 'MOV_ST'     # store to direct/indirect memory address
+_MOV_REG  = 'MOV_REG'    # MOV Rwdst, Rwsrc — register-to-register (2-byte, F0)
 _ADD_REG  = 'ADD_REG'   # ADD Rwn, Rwm — word add (2-byte, 00 nm); from PDF table col x0 row 0
 _XOR_REG  = 'XOR_REG'   # XOR Rwn, Rwm — word XOR (2-byte, 50 nm); from PDF table col x0 row 5
 _MOVBZ    = 'MOVBZ'     # MOVBZ Rwn, Rbm — byte zero-extend to word (2-byte, C0 nm); from PDF col x0 row C
@@ -102,9 +93,10 @@ _SHL_REG  = 'SHL_REG'  # SHL Rwn, Rwm  — logical shift left by register count 
 _SHL_IMM  = 'SHL_IMM'  # SHL Rwn, #data4 — logical shift left by immediate 0–15 (2-byte, 5C nm); PDF row xC col 5
 _SHR_REG  = 'SHR_REG'  # SHR Rwn, Rwm  — logical shift right by register count (2-byte, 6C nm); PDF row xC col 6
 _SHR_IMM  = 'SHR_IMM'  # SHR Rwn, #data4 — logical shift right by immediate 0–15 (2-byte, 7C nm); PDF row xC col 7
-_PUSH     = 'PUSH'       # PUSH Rwn — push register onto stack (2-byte, 88 n0)
-_POP      = 'POP'        # POP Rwn — pop register from stack (2-byte, 98 n0)
-_RET      = 'RET'        # RET — return from subroutine (2-byte, DB 00)
+_PUSH     = 'PUSH'       # PUSH reg — push register onto stack (2-byte, EC)
+_POP      = 'POP'        # POP reg — pop register from stack (2-byte, FC)
+_RET      = 'RET'        # RET — near return (2-byte, CB 00)
+_RETS     = 'RETS'       # RETS — segmented return (2-byte, DB 00)
 _JMPR     = 'JMPR'       # JMPR cc, rel8 — relative conditional branch (2-byte, nD rel)
 _UNKNOWN2 = 'UNKNOWN_2B'
 _UNKNOWN4 = 'UNKNOWN_4B'
@@ -114,6 +106,10 @@ _JMPR_CC = (
     'UC', 'Z', 'NZ', 'V', 'NV', 'N', 'NN', 'C',
     'NC', 'UGT', 'ULE', 'SGT', 'SLE', 'SLT', 'SGE', 'NET',
 )
+
+
+def _byte_reg_name(reg: int) -> str:
+    return f'R{"H" if reg & 1 else "L"}{reg >> 1}'
 
 
 # ---------------------------------------------------------------------------
@@ -130,20 +126,22 @@ class C166Insn:
     insn_type: str        # one of the _xxx constants above
     reg: Optional[int] = None    # dest/src register number (0–15), if applicable
     imm: Optional[int] = None    # immediate value or direct address
-    target: Optional[int] = None # resolved target PA for JMPS/CALLS
-    seg: Optional[int] = None    # segment byte for JMPS/CALLS
+    target: Optional[int] = None # resolved target PA for branches/calls
+    seg: Optional[int] = None    # segment byte for absolute branches/calls
 
     @property
     def is_branch(self) -> bool:
-        return self.insn_type in (_JMPS, _JMPR)
+        return self.insn_type in (_JMPS, _JMPA, _JMPR)
 
     @property
     def is_call(self) -> bool:
-        return self.insn_type == _CALLS
+        return self.insn_type in (_CALLS, _CALLA)
 
     @property
     def is_load(self) -> bool:
-        return self.insn_type in (_MOV_IMM, _MOV_LD, _MOV_REG)
+        return self.insn_type in (
+            _MOV_IMM, _MOV_IMM4, _MOV_LD, _MOV_REG, _MOVBZ, _MOVBS,
+        )
 
     @property
     def is_store(self) -> bool:
@@ -178,35 +176,38 @@ class EcuC166Decoder:
     Parameters
     ----------
     data
-        Raw bytes, ``str`` path, or ``pathlib.Path``.  Accepts 128 KB, 256 KB,
-        512 KB, and 1 MB ROM images.
+        Raw bytes, ``str`` path, or ``pathlib.Path``. Images may have any
+        nonzero size up to the C166 24-bit physical address space.
     base_pa
-        Physical address of the first byte in ``data``.  Almost always 0 for
+        Physical address of the first byte in ``data``. Almost always 0 for
         flat ECU ROM images (file offset == PA).
 
     Notes
     -----
-    Instruction length is determined from ``_FOUR_BYTE_OPS``.  Any opcode not
-    in that set is decoded as a 2-byte instruction with type UNKNOWN_2B.
+    Instruction length is determined from ``_FOUR_BYTE_OPS``. Unknown
+    operations remain explicit rather than stopping a linear walk.
     """
 
     def __init__(self, data: 'str | Path | bytes', base_pa: int = 0) -> None:
+        if not 0 <= base_pa <= 0xFFFFFF:
+            raise ValueError('EcuC166Decoder: base_pa outside 24-bit address space')
         if isinstance(data, (str, Path)):
             p = Path(data)
             if not p.exists():
                 raise FileNotFoundError(f'EcuC166Decoder: {data!r} not found')
+            if p.stat().st_size > 0x1000000:
+                raise ValueError('EcuC166Decoder: image exceeds 24-bit address space')
             self._data = p.read_bytes()
         else:
             self._data = bytes(data)
+        if not self._data:
+            raise ValueError('EcuC166Decoder: empty ROM image')
+        if len(self._data) > 0x1000000:
+            raise ValueError('EcuC166Decoder: image exceeds 24-bit address space')
+        if base_pa + len(self._data) > 0x1000000:
+            raise ValueError('EcuC166Decoder: image extends beyond 24-bit address space')
         self._base_pa = base_pa
-        # Validate ROM size is power of 2 (required for mirror resolution)
-        sz = len(self._data)
-        if sz == 0 or (sz & (sz - 1)) != 0:
-            raise ValueError(
-                f'EcuC166Decoder: ROM size {sz:#x} is not a power of 2; '
-                'provide a padded image or set rom_size_override'
-            )
-        self._rom_size = sz
+        self._rom_size = len(self._data)
 
     # ---- Constructors ----
 
@@ -222,7 +223,7 @@ class EcuC166Decoder:
 
     def insn_length(self, byte_off: int) -> int:
         """Return 2 or 4 — byte length of instruction at ``byte_off``."""
-        if byte_off >= len(self._data):
+        if byte_off < 0 or byte_off >= len(self._data):
             return 0
         op = self._data[byte_off]
         return 4 if op in _FOUR_BYTE_OPS else 2
@@ -235,7 +236,7 @@ class EcuC166Decoder:
         enough bytes for the instruction.
         """
         data = self._data
-        if byte_off >= len(data):
+        if byte_off < 0 or byte_off >= len(data):
             return None
         op = data[byte_off]
         pa = self._base_pa + byte_off
@@ -286,8 +287,8 @@ class EcuC166Decoder:
         """
         Return all CALLS target PAs found by scanning the full ROM.
 
-        Targets are resolved through ROM mirrors so they represent file
-        offsets into this ROM image.
+        Targets are physical code addresses after applying the configured
+        ROM-mirror behavior.
         """
         targets: list[int] = []
         data = self._data
@@ -303,33 +304,33 @@ class EcuC166Decoder:
         return targets
 
     def scan_xram_loads(self, xram_addr: int) -> list[C166Insn]:
-        """
-        Return all instructions that load the 16-bit value ``xram_addr`` as
-        an immediate (E6/66) or load/compare from that direct address (C2/F2).
-
-        Useful for finding every site that references a specific XRAM pointer
-        value (e.g. all ``MOV Rn, #0x96AE`` instructions that load the seed
-        buffer address).
-        """
+        """Return immediate and direct references to a 16-bit data offset."""
+        if not 0 <= xram_addr <= 0xFFFF:
+            raise ValueError('EcuC166Decoder: data offset outside 16-bit range')
         results: list[C166Insn] = []
         data = self._data
         size = len(data)
         lo = xram_addr & 0xFF
         hi = (xram_addr >> 8) & 0xFF
-        # Pattern: opcode(1) + reg_byte(1) + lo + hi  (LE 16-bit value)
         for off in range(0, size - 3):
             if data[off + 2] == lo and data[off + 3] == hi:
                 op = data[off]
                 if op in _FOUR_BYTE_OPS:
                     insn = self._decode4(self._base_pa + off, data[off: off + 4])
-                    if insn.insn_type in (_MOV_IMM, _CMP_IMM, _MOV_LD):
+                    if insn.insn_type in (_MOV_IMM, _CMP_IMM, _MOV_LD, _MOVBZ):
                         results.append(insn)
         return results
 
+    def scan_dpp_loads(
+        self, physical_addr: int, dpp: int, dpp_index: int,
+    ) -> list[C166Insn]:
+        """Return references using an explicit DPP register and page value."""
+        return self.scan_xram_loads(self.dpp_offset(physical_addr, dpp, dpp_index))
+
     def scan_xram_stores(self, xram_addr: int) -> list[C166Insn]:
-        """
-        Return all MOV_ST instructions that store TO ``xram_addr``.
-        """
+        """Return all MOV_ST instructions that store to ``xram_addr``."""
+        if not 0 <= xram_addr <= 0xFFFF:
+            raise ValueError('EcuC166Decoder: data offset outside 16-bit range')
         results: list[C166Insn] = []
         data = self._data
         size = len(data)
@@ -337,24 +338,26 @@ class EcuC166Decoder:
         hi = (xram_addr >> 8) & 0xFF
         for off in range(0, size - 3):
             op = data[off]
-            if op in (0xF6,) and data[off + 2] == lo and data[off + 3] == hi:
+            if op == 0xF6 and data[off + 2] == lo and data[off + 3] == hi:
                 results.append(
                     self._decode4(self._base_pa + off, data[off: off + 4])
                 )
         return results
 
-    def parse_ivt(self, num_vectors: int = 64) -> list[IVTEntry]:
-        """
-        Parse the interrupt vector table at PA 0 (file offset 0).
-
-        The C166/C167 IVT occupies the first ``num_vectors`` × 4 bytes; each
-        entry is a JMPS instruction ``FA seg lo hi``.  Returns only entries
-        whose opcode byte is 0xFA.
-        """
+    def parse_ivt(
+        self, num_vectors: int = 64, start_pa: Optional[int] = None,
+    ) -> list[IVTEntry]:
+        """Parse JMPS vector entries at ``start_pa`` or the image base."""
+        if num_vectors < 0:
+            raise ValueError('EcuC166Decoder: negative vector count')
+        table_pa = self._base_pa if start_pa is None else start_pa
+        table_off = table_pa - self._base_pa
+        if table_off < 0:
+            raise ValueError('EcuC166Decoder: IVT starts before image')
         entries: list[IVTEntry] = []
         data = self._data
         for i in range(num_vectors):
-            off = i * 4
+            off = table_off + i * 4
             if off + 4 > len(data):
                 break
             b = data[off: off + 4]
@@ -362,39 +365,58 @@ class EcuC166Decoder:
                 continue
             seg = b[1]
             addr = struct.unpack_from('<H', b, 2)[0]
-            tgt = self.resolve_pa(seg, addr)
             entries.append(IVTEntry(
                 index=i,
-                pa=self._base_pa + off,
+                pa=table_pa + i * 4,
                 seg=seg,
                 addr=addr,
-                target_pa=tgt,
+                target_pa=self.resolve_pa(seg, addr),
             ))
         return entries
 
+    @staticmethod
+    def code_pa(seg: int, addr: int) -> int:
+        """Convert a code segment/address pair to a 24-bit physical address."""
+        if not 0 <= seg <= 0xFF or not 0 <= addr <= 0xFFFF:
+            raise ValueError('EcuC166Decoder: invalid code segment/address')
+        return (seg << 16) | addr
+
+    @staticmethod
+    def dpp_pa(offset: int, dpp: int) -> int:
+        """Convert a 16-bit data offset and DPP page to a physical address."""
+        if not 0 <= offset <= 0xFFFF or not 0 <= dpp <= 0x3FF:
+            raise ValueError('EcuC166Decoder: invalid DPP offset/page')
+        return (dpp << 14) | (offset & 0x3FFF)
+
+    @staticmethod
+    def dpp_offset(physical_addr: int, dpp: int, dpp_index: int) -> int:
+        """Recover a data offset using an explicit DPP register and page."""
+        if not 0 <= physical_addr <= 0xFFFFFF or not 0 <= dpp_index <= 3:
+            raise ValueError('EcuC166Decoder: invalid physical address/DPP register')
+        offset = (dpp_index << 14) | (physical_addr & 0x3FFF)
+        if EcuC166Decoder.dpp_pa(offset, dpp) != physical_addr:
+            raise ValueError('EcuC166Decoder: physical address is outside DPP page')
+        return offset
+
     def resolve_pa(self, seg: int, addr: int) -> int:
-        """
-        Convert a C166 (seg, addr) pair to a file offset.
+        """Resolve a code target, folding mirrors for power-of-two ROMs."""
+        physical = self.code_pa(seg, addr)
+        if self._rom_size & (self._rom_size - 1):
+            return physical
+        if self._base_pa <= physical < self._base_pa + self._rom_size:
+            return physical
+        return self._base_pa + (physical & (self._rom_size - 1))
 
-        For a ROM whose ``rom_size`` is a power of 2, the physical address
-        ``seg * 0x10000 + addr`` is masked to ``rom_size - 1`` to fold in
-        ROM mirrors (e.g. seg 0x0A aliases seg 0x02 in a 512 KB ROM).
-        """
-        return (seg * 0x10000 + addr) & (self._rom_size - 1)
-
-    def is_c166_rom(self) -> bool:
-        """
-        Return True if the ROM begins with a valid-looking C166 IVT.
-
-        Heuristic: at least 32 of the first 64 IVT entries must start with
-        opcode 0xFA (JMPS), which is the expected C166 vector format.
-        Calibration-only ROMs and padding images will fail this check.
-        """
-        data = self._data
-        if len(data) < 256:
+    def is_c166_rom(self, start_pa: Optional[int] = None) -> bool:
+        """Return whether at least 32 of 64 IVT slots contain JMPS opcodes."""
+        table_pa = self._base_pa if start_pa is None else start_pa
+        table_off = table_pa - self._base_pa
+        if table_off < 0 or table_off + 256 > len(self._data):
             return False
-        fa_count = sum(1 for i in range(64) if data[i * 4] == 0xFA)
-        return fa_count >= 32
+        return sum(
+            self._data[table_off + offset] == 0xFA
+            for offset in range(0, 256, 4)
+        ) >= 32
 
     # ---- Internal ----
 
@@ -413,24 +435,17 @@ class EcuC166Decoder:
                 reg=reg, imm=imm,
             )
 
-        if op in (0x66, 0x46):
-            # 0x66: CMP Rwn, #data16 — compare with 16-bit immediate (row x6 col 6).
-            # 0x46: CMP Rwn, #data16 — second loop-termination form (row x6 col 4).
-            # Both encode the destination register in the low nibble of byte1.
-            # Confirmed: '66 f4 40 00' = CMP R4, #0x0040 (followed by JMPR NZ at 0x02BA54);
-            #            '46 f4 0b 00' = CMP R4, #0x000B (inner-loop boundary, 0x02BA46).
+        if op in (0x46, 0x66):
             reg = b1 & 0x0F
+            mnemonic = 'CMP' if op == 0x46 else 'AND'
+            insn_type = _CMP_IMM if op == 0x46 else _AND_IMM
             return C166Insn(
                 pa=pa, raw=raw,
-                mnemonic=f'CMP R{reg:X}, #{imm:#06x}',
-                insn_type=_CMP_IMM,
+                mnemonic=f'{mnemonic} R{reg:X}, #{imm:#06x}',
+                insn_type=insn_type,
                 reg=reg, imm=imm,
             )
 
-        # ADD Rwn, #data16: opcode 0x06 — add 16-bit immediate to word register.
-        # Row x6, column 0 (upper nibble 0, lower nibble 6).
-        # Register in low nibble of byte1 (same convention as 0x66/0xE6).
-        # Confirmed: '06 f4 0e 00' = ADD R4, #0x000E (pointer offset in MS43 inner loop).
         if op == 0x06:
             reg = b1 & 0x0F
             return C166Insn(
@@ -453,46 +468,82 @@ class EcuC166Decoder:
                 seg=seg, imm=addr, target=tgt,
             )
 
-        # Direct-address load (opcode C2 or F2): reg ← [addr16]
-        if op in (0xC2, 0xF2):
-            reg = b1 & 0x0F
+        if op in (0xCA, 0xEA):
+            target = (pa & 0xFF0000) | imm
+            mnemonic = 'CALLA' if op == 0xCA else 'JMPA'
+            insn_type = _CALLA if op == 0xCA else _JMPA
             return C166Insn(
                 pa=pa, raw=raw,
-                mnemonic=f'MOV R{reg:X}, [{imm:#06x}]',
+                mnemonic=f'{mnemonic} {(b1 >> 4):X}, #{imm:#06x}  -> PA {target:#08x}',
+                insn_type=insn_type,
+                seg=pa >> 16, imm=imm, target=target,
+            )
+
+        if op in (0xF2, 0xF3):
+            reg = b1 & 0x0F
+            mnemonic = 'MOV' if op == 0xF2 else 'MOVB'
+            operand = f'R{reg:X}' if op == 0xF2 else _byte_reg_name(reg)
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'{mnemonic} {operand}, [{imm:#06x}]',
                 insn_type=_MOV_LD,
                 reg=reg, imm=imm,
             )
 
-        # Direct-address store (opcode F6): [addr16] ← reg
-        if op == 0xF6:
+        if op in (0xC2, 0xD2):
             reg = b1 & 0x0F
+            mnemonic = 'MOVBZ' if op == 0xC2 else 'MOVBS'
             return C166Insn(
                 pa=pa, raw=raw,
-                mnemonic=f'MOV [{imm:#06x}], R{reg:X}',
+                mnemonic=f'{mnemonic} {_byte_reg_name(reg)}, [{imm:#06x}]',
+                insn_type=_MOVBZ if op == 0xC2 else _MOVBS,
+                reg=reg, imm=imm,
+            )
+
+        if op in (0xF6, 0xF7, 0xC5, 0xD5):
+            reg = b1 & 0x0F
+            mnemonics = {0xF6: 'MOV', 0xF7: 'MOVB', 0xC5: 'MOVBZ', 0xD5: 'MOVBS'}
+            operand = f'R{reg:X}' if op == 0xF6 else _byte_reg_name(reg)
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'{mnemonics[op]} [{imm:#06x}], {operand}',
                 insn_type=_MOV_ST,
                 reg=reg, imm=imm,
             )
 
-        # Register-indirect load: reg ← [base_reg]
-        if op == 0xA2:
-            dst = b1 & 0x0F
-            base = (b1 >> 4) & 0x0F
+        if op in (0xA2, 0xB2, 0xA6, 0xB6):
+            reg = b1 & 0x0F
+            mnemonic = 'CMPD1' if op in (0xA2, 0xA6) else 'CMPD2'
+            operand = f'#{imm:#06x}' if op in (0xA6, 0xB6) else f'[{imm:#06x}]'
             return C166Insn(
                 pa=pa, raw=raw,
-                mnemonic=f'MOV R{dst:X}, [R{base:X}]',
-                insn_type=_MOV_LD,
-                reg=dst,
+                mnemonic=f'{mnemonic} R{reg:X}, {operand}',
+                insn_type=_CMPD,
+                reg=reg, imm=imm,
             )
 
-        # Register-indirect store: [base_reg] ← reg
-        if op == 0xB2:
-            src = b1 & 0x0F
-            base = (b1 >> 4) & 0x0F
+        if op in (0xD4, 0xF4):
+            dst = (b1 >> 4) & 0x0F
+            base = b1 & 0x0F
+            mnemonic = 'MOV' if op == 0xD4 else 'MOVB'
+            operand = f'R{dst:X}' if op == 0xD4 else _byte_reg_name(dst)
             return C166Insn(
                 pa=pa, raw=raw,
-                mnemonic=f'MOV [R{base:X}], R{src:X}',
+                mnemonic=f'{mnemonic} {operand}, [R{base:X}+#{imm:#06x}]',
+                insn_type=_MOV_LD,
+                reg=dst, imm=imm,
+            )
+
+        if op in (0xC4, 0xE4):
+            src = (b1 >> 4) & 0x0F
+            base = b1 & 0x0F
+            mnemonic = 'MOV' if op == 0xC4 else 'MOVB'
+            operand = f'R{src:X}' if op == 0xC4 else _byte_reg_name(src)
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'{mnemonic} [R{base:X}+#{imm:#06x}], {operand}',
                 insn_type=_MOV_ST,
-                reg=src,
+                reg=src, imm=imm,
             )
 
         # Unknown 4-byte (should not reach here, but guard)
@@ -646,40 +697,41 @@ class EcuC166Decoder:
                 imm=cnt,
             )
 
-        # PUSH Rwn: opcode 0x88, register in high nibble of byte1, low nibble = 0.
-        # Confirmed: 88 90/80/70/60/E0/D0/C0 = PUSH R9/R8/R7/R6/R14/R13/R12
-        if op == 0x88 and (b1 & 0x0F) == 0x00:
+        if op in (0x88, 0x98, 0xA8, 0xB8):
             reg = (b1 >> 4) & 0xF
+            base = b1 & 0xF
+            if op == 0x88:
+                mnemonic, insn_type = f'MOV [-R{base:X}], R{reg:X}', _MOV_ST
+            elif op == 0xB8:
+                mnemonic, insn_type = f'MOV [R{base:X}], R{reg:X}', _MOV_ST
+            elif op == 0x98:
+                mnemonic, insn_type = f'MOV R{reg:X}, [R{base:X}+]', _MOV_LD
+            else:
+                mnemonic, insn_type = f'MOV R{reg:X}, [R{base:X}]', _MOV_LD
+            return C166Insn(pa=pa, raw=raw, mnemonic=mnemonic,
+                            insn_type=insn_type, reg=reg)
+
+        if op in (0xEC, 0xFC):
+            reg = b1 & 0x0F
+            mnemonic = 'PUSH' if op == 0xEC else 'POP'
             return C166Insn(
                 pa=pa, raw=raw,
-                mnemonic=f'PUSH R{reg:X}',
-                insn_type=_PUSH,
+                mnemonic=f'{mnemonic} R{reg:X}',
+                insn_type=_PUSH if op == 0xEC else _POP,
                 reg=reg,
             )
 
-        # POP Rwn: opcode 0x98, register in high nibble of byte1, low nibble = 0.
-        # Confirmed: 98 60/70/80/90 = POP R6/R7/R8/R9 (reverse PUSH order)
-        if op == 0x98 and (b1 & 0x0F) == 0x00:
-            reg = (b1 >> 4) & 0xF
+        if op in (0xCB, 0xDB) and b1 == 0x00:
             return C166Insn(
                 pa=pa, raw=raw,
-                mnemonic=f'POP R{reg:X}',
-                insn_type=_POP,
-                reg=reg,
+                mnemonic='RET' if op == 0xCB else 'RETS',
+                insn_type=_RET if op == 0xCB else _RETS,
             )
 
-        # RET: opcode 0xDB, operand 0x00.
-        # Confirmed: DB 00 = RET (appears after POP epilogue in seed_fetch/init_ds2_sa_ctx)
-        if op == 0xDB and b1 == 0x00:
-            return C166Insn(pa=pa, raw=raw, mnemonic='RET', insn_type=_RET)
-
-        # JMPR cc, rel8: low nibble of byte0 = 0xD, high nibble = condition code.
-        # Confirmed: 0D 06 = JMPR UC +12, 2D 10 = JMPR NZ +32, 3D 61 = JMPR V +194
-        # Displacement is signed 8-bit in words (2 bytes each).
-        # Target = pa + 2 + rel*2
+        # JMPR displacement is a signed count of two-byte words.
         if (op & 0x0F) == 0x0D:
             cc = (op >> 4) & 0xF
-            rel = struct.unpack_from('b', raw, 1)[0]  # signed byte
+            rel = struct.unpack_from('b', raw, 1)[0]
             target = pa + 2 + rel * 2
             return C166Insn(
                 pa=pa, raw=raw,
@@ -689,11 +741,7 @@ class EcuC166Decoder:
                 imm=rel,
             )
 
-        # MOV Rwdst, Rwsrc: opcode 0xF0 or 0xE0, byte1 = (dst<<4)|src.
-        # 0xF0 (row x0, col F): confirmed from seed_fetch prologue (F0 8D = MOV R8,RD).
-        # 0xE0 (row x0, col E): second MOV encoding in the x0 column table.
-        # Seen as 'e0 b5' (MOV RB, R5) and 'e0 08' (MOV R0, R8) in MS43 SA function.
-        if op in (0xF0, 0xE0):
+        if op == 0xF0:
             dst = (b1 >> 4) & 0xF
             src = b1 & 0xF
             return C166Insn(
@@ -701,6 +749,18 @@ class EcuC166Decoder:
                 mnemonic=f'MOV R{dst:X}, R{src:X}',
                 insn_type=_MOV_REG,
                 reg=dst,
+            )
+
+        if op in (0xE0, 0xE1):
+            reg = b1 & 0xF
+            immediate = (b1 >> 4) & 0xF
+            mnemonic = 'MOV' if op == 0xE0 else 'MOVB'
+            operand = f'R{reg:X}' if op == 0xE0 else _byte_reg_name(reg)
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'{mnemonic} {operand}, #{immediate}',
+                insn_type=_MOV_IMM4,
+                reg=reg, imm=immediate,
             )
 
         return C166Insn(

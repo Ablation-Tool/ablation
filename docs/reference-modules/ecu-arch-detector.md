@@ -86,7 +86,9 @@ for cand in det.candidates():
 | Parameter | Default | Description |
 |---|---|---|
 | `data` |: | `bytes`, file path (`str`/`Path`), or buffer |
-| `sample_size` | 4096 | Bytes from start of image to use for density sampling. Pass 0 to sample the full image. |
+| `sample_size` | 4096 | Bytes from start of image to use for density sampling. Pass 0 to sample the full image. Must be nonnegative. |
+
+Input images are limited to 64 MiB. The limit applies to file and in-memory inputs.
 
 ---
 
