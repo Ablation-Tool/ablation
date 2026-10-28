@@ -214,58 +214,6 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 ## Setup & About
 
 <details>
-<summary>AI Agent Install</summary>
-
-```text
-Set up Ablation from https://github.com/Ablation-Tool/ablation for me.
-
-Check for Git and Python 3.10 or newer. Clone the repository if it is absent.
-For an existing checkout, verify its origin and check for uncommitted changes.
-Do not reset, clean, overwrite, or pull over local changes. Stop and ask if
-the remote differs or the checkout is dirty.
-
-Review pyproject.toml before installation. Create a project-local Python
-virtual environment, activate it for my operating system, and install only
-the standard package from the source checkout with:
-
-  python -m pip install .
-
-Keep full, LLM, and bytecode extras opt-in and ask before adding them. Stop
-on errors. Do not use sudo, global Python installation, alternate package
-sources, API keys, model-provider configuration, or firmware analysis.
-
-Verify with `ablation --help`. Report the checkout and environment paths,
-Python version, installed extras, and verification result.
-```
-
-</details>
-
-<details>
-<summary>Manual Install</summary>
-
-```bash
-pip install ablation-tool
-```
-
-**Requirements:** Python >= 3.10 · `capstone>=5.0.1` · `numpy` · `lief` · `fastembed` · `pyelftools`
-
-Optional feature sets:
-
-```bash
-# All optional analyzers
-pip install "ablation-tool[full]"
-
-# CPython .pyc scanning and Apple BV41 decompression
-pip install "ablation-tool[bytecode]"
-```
-
-`sentence-transformers`, Anthropic, and Angr support are optional; the `full` extra includes them together with `xdis` and `lz4`.
-
-</details>
-
-
-
-<details>
 <summary>Acknowledgments</summary>
 
 The code couldn't exist without their ideas. Though no code was written by these authors, doctors, and engineers, their work has direct influence on the production of code that makes Ablation what it is.
@@ -386,5 +334,32 @@ The US Department of Defense handbook for reverse engineering methodology define
 **Contact:** Feel free to contact me if you have any questions, ideas, complaints, or bugs:
 * 📧 ablation@nuclide-research.com
 * 𝕏 [@showxlate](https://x.com/showxlate)
+
+</details>
+
+<details>
+<summary>AI Agent Install</summary>
+
+```text
+Set up Ablation from https://github.com/Ablation-Tool/ablation for me.
+
+Check for Git and Python 3.10 or newer. Clone the repository if it is absent.
+For an existing checkout, verify its origin and check for uncommitted changes.
+Do not reset, clean, overwrite, or pull over local changes. Stop and ask if
+the remote differs or the checkout is dirty.
+
+Review pyproject.toml before installation. Create a project-local Python
+virtual environment, activate it for my operating system, and install only
+the standard package from the source checkout with:
+
+  python -m pip install .
+
+Keep full, LLM, and bytecode extras opt-in and ask before adding them. Stop
+on errors. Do not use sudo, global Python installation, alternate package
+sources, API keys, model-provider configuration, or firmware analysis.
+
+Verify with `ablation --help`. Report the checkout and environment paths,
+Python version, installed extras, and verification result.
+```
 
 </details>
