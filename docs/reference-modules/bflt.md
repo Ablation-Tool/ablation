@@ -89,6 +89,8 @@ for insn in decoder.disasm(code[entry_offset:], image.entry):
 
 `skipdata` lets Capstone represent unrecognized or inline-data words without losing synchronization. It does not prove that every skipped word is data. Text can contain literal pools, and data can contain addresses requiring relocation analysis.
 
+Instruction endianness does not determine pointer or relocation endianness. The recovered C111C programs use little-endian ARM instructions but big-endian pointer tables and big-endian relocation entries. Read those words with their observed format, not with the instruction decoder's byte order. Relocations remain unapplied by `BfltImage`, so a pointer found in the file is link-time evidence rather than proof of a runtime address after the self-relocation stub runs.
+
 ---
 
 ## What this adds for the user

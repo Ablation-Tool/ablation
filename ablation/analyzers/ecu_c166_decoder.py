@@ -562,6 +562,17 @@ class EcuC166Decoder:
         op = raw[0]
         b1 = raw[1]
 
+        if op == 0x29 and not (b1 & 0x08):
+            dst = (b1 >> 4) & 0xF
+            imm = b1 & 0x07
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'SUBB {_byte_reg_name(dst)}, #{imm}',
+                insn_type='SUBB_IMM',
+                reg=dst,
+                imm=imm,
+            )
+
         # ADD Rwn, Rwm: opcode 0x00, byte1 = (dst<<4)|src.
         # From PDF opcode table: lower-nibble-0 col, upper-nibble-0 row = ADD.
         # Cross-check: 0x50 (XOR) and 0xF0 (MOV) are at rows 5 and F of the same column.

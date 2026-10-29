@@ -843,3 +843,26 @@ def test_negative_instruction_offsets_are_rejected():
     dec = EcuC166Decoder(_make_rom(b''))
     assert dec.insn_length(-1) == 0
     assert dec.decode_one(-1) is None
+
+
+@pytest.mark.parametrize('raw, expected_reg, expected_imm', [
+    (bytes.fromhex('29 81'), 8, 1),
+    (bytes.fromhex('29 82'), 8, 2),
+    (bytes.fromhex('29 07'), 0, 7),
+    (bytes.fromhex('29 f0'), 15, 0),
+])
+def test_decode_subb_immediate(raw, expected_reg, expected_imm):
+    dec = EcuC166Decoder(_make_rom(raw))
+    insn = dec.decode_one(0)
+    assert insn is not None
+    assert insn.insn_type == 'SUBB_IMM'
+    assert insn.reg == expected_reg
+    assert insn.imm == expected_imm
+    assert insn.raw == raw
+
+
+def test_subb_other_addressing_modes_remain_explicitly_unknown():
+    dec = EcuC166Decoder(_make_rom(bytes.fromhex('29 88')))
+    insn = dec.decode_one(0)
+    assert insn is not None
+    assert insn.insn_type == 'UNKNOWN_2B'

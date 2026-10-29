@@ -2,6 +2,20 @@
 
 ---
 
+## v2.91.0
+
+**C166 update-dispatch recovery and C111C command-socket evidence.**
+
+- Added immediate `SUBB` decoding with explicit unknown handling for other addressing modes, enabling recovery of selector-driven C166 update chains.
+- Documented big-endian bFLT pointer tables and relocation entries alongside little-endian ARM instructions, without applying relocations or inventing runtime addresses.
+- Corrected A1676 update gating to `can_is_busy == 0x0D` and `ClearAlarm == 0`; `can_dwld` is a data/state buffer, not an authorization flag in that branch.
+- Recovered selector value 7 in ten C166 update paths and documented A3801 and N1470 as separate variants. A3009's update path has no unlock-flag read.
+- Confirmed C111C's CAMAC listener on TCP 2000 with an unspecified bind address and no password check in its reviewed setup and command parser. Remote credential mutation and update-script reachability remain unproven.
+- Added independent decoder and original-artifact assertions, including actual gate bytes, C111C listener instructions, and the ten-image selector mapping.
+- Confirmed `ALICE-CONTROL-RESET-001`: the control FPGA dispatches reset/start commands directly when `command_strobe` is high, without an authorization check in that dispatch. All three source versions pass the reproducer; deployment reachability remains unresolved.
+
+---
+
 ## v2.90.0
 
 **CAEN firmware containers and embedded filesystem recovery.**

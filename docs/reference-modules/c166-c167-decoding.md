@@ -28,6 +28,8 @@ flowchart LR
 
 `function_starts()` scans direct `CALLS` targets. It does not add IVT targets automatically and does not recover indirect calls. Use `parse_ivt()` separately when vector targets are needed.
 
+Immediate `SUBB` is decoded when `0x29` has bit 3 of the second byte clear. The high nibble selects the destination byte register and the low three bits select the immediate value. For example, `29 81` becomes `SUBB RL8, #1` and `29 82` becomes `SUBB RL8, #2`. Other `SUBB` addressing modes remain explicit unknowns rather than being assigned invented semantics. This support makes immediate-count dispatch chains readable without treating every `0x29` form as an immediate instruction.
+
 Power-of-two images retain the original ROM-mirror folding behavior. Other image sizes are accepted without applying a mirror mask. An image may occupy at most the 24-bit C166 physical address space.
 
 ---
