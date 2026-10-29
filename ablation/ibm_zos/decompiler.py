@@ -2,7 +2,7 @@ import json
 import re
 from dataclasses import dataclass, field
 
-from .callgraph import _memory_operand
+from .callgraph import _memory_operand, _writes_register
 from .io_utils import ensure_directory, write_text
 
 
@@ -29,6 +29,19 @@ class IRBlock:
 
 
 @dataclass
+class FunctionPointerSite:
+    site_rva: int
+    register: int
+    expression: str
+    target_rva: int | None
+    target_name: str | None
+    evidence: str
+
+    def to_dict(self):
+        return self.__dict__.copy()
+
+
+@dataclass
 class Decompilation:
     entry_rva: int
     code_rva: int
@@ -39,9 +52,15 @@ class Decompilation:
     unknown_statement_count: int
     stack_variables: list[str]
     complete: bool | None
+    return_type: str
+    arguments: list[str]
+    stack_types: dict
+    function_pointers: list[FunctionPointerSite]
 
     def to_dict(self):
-        return self.__dict__.copy()
+        result = self.__dict__.copy()
+        result["function_pointers"] = [site.to_dict() for site in self.function_pointers]
+        return result
 
 
 def _hex(value):
@@ -107,6 +126,8 @@ class S390Decompiler:
         self.recovery = recovery
         self.call_graph = call_graph
         self.stack_variables = set()
+        self.stack_types = {}
+        self.function_pointers = []
         self.unknown_statements = 0
         self.call_targets = {}
         if call_graph is not None:
@@ -123,6 +144,7 @@ class S390Decompiler:
         if not index and base in (4, 13):
             name = _stack_name(displacement)
             self.stack_variables.add(name)
+            self.stack_types.setdefault(name, set()).add(size)
             return name
         terms = []
         if index:
@@ -266,6 +288,8 @@ class S390Decompiler:
             if instruction.flow in ("conditional_jump", "jump", "return"):
                 continue
             if instruction.flow == "call":
+                register = instruction.data[1] & 15 if instruction.format == "RR" else None
+                pointer_expression = registers.get(register, f"r{register}") if register is not None else None
                 flush(instruction)
                 site = self.call_targets.get(instruction.address)
                 if site is not None:
@@ -275,8 +299,14 @@ class S390Decompiler:
                 elif instruction.target is not None:
                     text = f"fn_{instruction.target:x}(r1);"
                 else:
-                    register = instruction.data[1] & 15 if instruction.format == "RR" else None
-                    text = f"indirect_call(r{register});" if register is not None else "indirect_call();"
+                    text = f"(*{pointer_expression})(r1);" if pointer_expression else "indirect_call();"
+                if register is not None:
+                    self.function_pointers.append(FunctionPointerSite(
+                        instruction.address, register, pointer_expression,
+                        site.target_rva if site else None,
+                        site.target_name if site else None,
+                        site.evidence if site else "unresolved",
+                    ))
                 statements.append(IRStatement(instruction.address, text, instruction.text()))
                 continue
             if not instruction.known:
@@ -363,6 +393,106 @@ class S390Decompiler:
             lines.append(" " * indent + f"goto loc_{block.successors[0]:x};")
         return lines
 
+    def _if_region(self, block, by_address, predecessors, consumed):
+        terminator = block.terminator
+        if terminator.flow != "conditional_jump":
+            return None
+        if any(candidate.terminator.target == block.start and candidate.start > block.start for candidate in by_address.values()):
+            return None
+        if terminator.target not in by_address or terminator.end not in by_address:
+            return None
+        true_block = by_address[terminator.target]
+        false_block = by_address[terminator.end]
+        if true_block.start == false_block.start:
+            return None
+        if any(item.start in consumed for item in (block, true_block, false_block)):
+            return None
+        if predecessors[true_block.start] - {block.start, false_block.start} or predecessors[false_block.start] - {block.start, true_block.start}:
+            return None
+        if true_block.terminator.flow == "conditional_jump" or false_block.terminator.flow == "conditional_jump":
+            return None
+        common = set(true_block.successors) & set(false_block.successors)
+        if common:
+            join = common.pop()
+        elif true_block.successors == [false_block.start] or false_block.successors == [true_block.start]:
+            join = true_block.successors[0] if true_block.successors else false_block.successors[0]
+        elif not true_block.successors and len(false_block.successors) == 1:
+            join = false_block.successors[0]
+        elif not false_block.successors and len(true_block.successors) == 1:
+            join = true_block.successors[0]
+        else:
+            return None
+        if join in consumed or join == block.start:
+            return None
+        condition = _branch_parts(block.condition, block.branch_mask)
+        lines = [f"  if ({condition}) {{"]
+        lines.extend(self._emit_statements(true_block, 4))
+        if true_block.terminator.flow == "return":
+            lines.extend(self._emit_goto(true_block, 4))
+        lines.append("  } else {")
+        lines.extend(self._emit_statements(false_block, 4))
+        if false_block.terminator.flow == "return":
+            lines.extend(self._emit_goto(false_block, 4))
+        lines.append("  }")
+        consumed.update((block.start, true_block.start, false_block.start))
+        return lines
+
+    def _emit_loop_terminator(self, block, header, loop_blocks):
+        terminator = block.terminator
+        if terminator.flow == "return":
+            return self._emit_goto(block, 4)
+        if terminator.target == header:
+            if terminator.flow == "conditional_jump":
+                condition = _branch_parts(block.condition, block.branch_mask)
+                lines = [f"    if ({condition}) continue;"]
+                if terminator.end not in loop_blocks:
+                    lines.append("    else break;")
+                return lines
+            return ["    continue;"]
+        if terminator.target is not None and terminator.target not in loop_blocks:
+            if terminator.flow == "conditional_jump":
+                condition = _branch_parts(block.condition, block.branch_mask)
+                return [f"    if ({condition}) break;"]
+            return ["    break;"]
+        lines = self._emit_goto(block, 4)
+        if terminator.end not in loop_blocks:
+            lines = ["    break;" if f"goto loc_{terminator.end:x};" in line else line for line in lines]
+        return lines
+
+    def _loop_region(self, block, by_address, predecessors, consumed):
+        terminator = block.terminator
+        header = terminator.target
+        if terminator.flow not in ("conditional_jump", "jump") or header not in by_address or header > block.start:
+            return None
+        if header in consumed or block.start in consumed:
+            return None
+        loop_blocks = {header}
+        pending = [block.start]
+        while pending:
+            current = pending.pop()
+            if current in loop_blocks:
+                continue
+            loop_blocks.add(current)
+            if len(loop_blocks) > 64:
+                return None
+            pending.extend(predecessors[current])
+        if predecessors[header] - loop_blocks:
+            return None
+        for start in loop_blocks:
+            if start != header and predecessors[start] - loop_blocks:
+                return None
+            if start in consumed:
+                return None
+        lines = ["  for (;;) {"]
+        for start in sorted(loop_blocks):
+            current = by_address[start]
+            lines.append(f"    loc_{start:x}:")
+            lines.extend(self._emit_statements(current, 4))
+            lines.extend(self._emit_loop_terminator(current, header, loop_blocks))
+        lines.append("  }")
+        consumed.update(loop_blocks)
+        return lines, 1
+
     def _render(self, function, blocks):
         by_address = {block.start: block for block in blocks}
         predecessors = {block.start: set() for block in blocks}
@@ -412,14 +542,62 @@ class S390Decompiler:
                         break
             if block.start in consumed:
                 continue
+            loop_candidates = [
+                candidate for candidate in blocks
+                if candidate.terminator.target == block.start and candidate.start >= block.start
+            ]
+            if loop_candidates:
+                loop_region = self._loop_region(loop_candidates[-1], by_address, predecessors, consumed)
+                if loop_region is not None:
+                    loop_lines, loop_count = loop_region
+                    lines.extend(loop_lines)
+                    loops += loop_count
+                    continue
+            if_region = self._if_region(block, by_address, predecessors, consumed)
+            if if_region is not None:
+                lines.extend(if_region)
+                continue
+            loop_region = self._loop_region(block, by_address, predecessors, consumed)
+            if loop_region is not None:
+                loop_lines, loop_count = loop_region
+                lines.extend(loop_lines)
+                loops += loop_count
+                continue
             lines.append(f"loc_{block.start:x}:")
             lines.extend(self._emit_statements(block, 2))
             lines.extend(self._emit_goto(block, 2))
             consumed.add(block.start)
         return lines, loops
 
+    def _return_type(self, function):
+        for index, instruction in enumerate(function.instructions):
+            if instruction.flow != "return":
+                continue
+            for previous in reversed(function.instructions[:index]):
+                if previous.format in ("RI", "RIL") and previous.data[1] >> 4 == 15:
+                    if previous.mnemonic in ("lhi", "chi"):
+                        return "int32_t"
+                    if previous.mnemonic in ("lghi", "lgfi"):
+                        return "int64_t"
+                    if previous.mnemonic in ("llilf", "llihf", "llill", "llilh", "llihl", "llihh"):
+                        return "uint64_t"
+                operand = _memory_operand(previous)
+                if operand is not None and operand[0] == 15:
+                    types = {
+                        "l": "uint32_t", "ly": "uint32_t", "llgf": "uint64_t",
+                        "lg": "uint64_t", "lgf": "int64_t", "lh": "int16_t",
+                        "lgh": "int64_t", "ic": "uint8_t",
+                    }
+                    if previous.mnemonic in types:
+                        return types[previous.mnemonic]
+                if _writes_register(previous, 15):
+                    return "uintptr_t"
+        return "uintptr_t"
+
     def decompile(self, function):
         self.stack_variables = set()
+        self.stack_types = {}
+        self.function_pointers = []
         self.unknown_statements = 0
         blocks = self._blocks(function)
         body, loop_count = self._render(function, blocks)
@@ -430,13 +608,18 @@ class S390Decompiler:
             if f"%r{register}" in operands:
                 arguments.append(f"uintptr_t r{register}")
         name = _identifier(function.name, function.entry_rva)
+        return_type = self._return_type(function)
         lines = [
             f"/* entry={function.entry_rva:#x} code={function.code_rva:#x} evidence={function.kind} confidence={function.confidence} */",
             "/* Prototype, expressions, and stack-shaped references are static estimates; verify linkage and types. */",
-            f"uintptr_t {name}({', '.join(arguments) if arguments else 'void'}) {{",
+            f"{return_type} {name}({', '.join(arguments) if arguments else 'void'}) {{",
         ]
         for variable in sorted(self.stack_variables):
-            lines.append(f"  uintptr_t {variable}; /* stack-shaped reference, not a proven local */")
+            sizes = self.stack_types.get(variable, set())
+            type_name = {8: "uint8_t", 16: "uint16_t", 32: "uint32_t", 64: "uint64_t"}.get(
+                next(iter(sizes)) if len(sizes) == 1 else None, "uintptr_t",
+            )
+            lines.append(f"  {type_name} {variable}; /* width from observed access; not a proven local type */")
         lines.extend(body)
         if not any("return " in line for line in body):
             lines.append("  return r15; /* synthesized fallthrough; verify reachability */")
@@ -444,6 +627,7 @@ class S390Decompiler:
         result = Decompilation(
             function.entry_rva, function.code_rva, function.name, "\n".join(lines) + "\n",
             len(blocks), loop_count, self.unknown_statements, sorted(self.stack_variables), function.complete,
+            return_type, arguments, {name: sorted(sizes) for name, sizes in self.stack_types.items()}, self.function_pointers,
         )
         return result
 

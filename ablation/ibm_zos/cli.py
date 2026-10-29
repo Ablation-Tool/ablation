@@ -141,7 +141,8 @@ def _relocate(args):
 def _callgraph(args):
     image = read_load_image(args.input)
     recovery = recover_functions(image, True, args.maximum)
-    graph = build_call_graph(image, recovery)
+    decks = [read_side_deck(path) for path in args.sid]
+    graph = build_call_graph(image, recovery, decks)
     graph.write(args.output)
     result = graph.to_dict()
     _print({key: value for key, value in result.items() if key not in ("nodes", "edges", "unresolved_calls")})
@@ -237,6 +238,7 @@ def build_parser():
     for name in ("callgraph", "decompile", "compare", "opcode-inventory"):
         subparsers.choices[name].add_argument("--maximum", type=int, default=20000)
     subparsers.choices["relocate"].add_argument("--base", default="0")
+    subparsers.choices["callgraph"].add_argument("--sid", nargs="*", default=[])
     subparsers.choices["decompile"].add_argument("--function")
     subparsers.choices["pipeline"].add_argument("--deep", action="store_true")
     return parser

@@ -190,13 +190,20 @@ class S390Tests(unittest.TestCase):
     def test_extended_opcode_families(self):
         samples = {
             "a5f60000": "nilh", "a7010001": "tmll", "bd71e000": "clm",
-            "bf0f400c": "icm", "b25e0018": "srst", "c20000000001": "msgfi",
-            "e3e040000024": "stg",
+            "bf0f400c": "icm", "b2520016": "msr", "b25e0018": "srst",
+            "b3050000": "lxdbr", "b3490004": "cxbr", "3604": "axr",
+            "c20000000001": "msgfi", "e3e040000024": "stg",
+            "51514100": "lae", "7120b040": "ms", "d0b85880c1f4": "trtr",
+            "a90e0040": "clcle",
         }
         for encoded, mnemonic in samples.items():
             with self.subTest(mnemonic=mnemonic):
                 self.assertEqual(self.decoder.decode(bytes.fromhex(encoded)).mnemonic, mnemonic)
         self.assertEqual(self.decoder.decode(bytes.fromhex("bd71e000")).operands, "%r7, 0x1, 0x0(%r14)")
+        self.assertEqual(self.decoder.decode(bytes.fromhex("51514100")).operands, "%r5, 0x100(%r1,%r4)")
+        self.assertEqual(self.decoder.decode(bytes.fromhex("a90e0040")).operands, "%r0, %r14, 0x40")
+        self.assertEqual(self.decoder.decode(bytes.fromhex("3604")).operands, "%f0, %f4")
+        self.assertEqual(self.decoder.decode(bytes.fromhex("b3490004")).operands, "%f0, %f0")
         self.assertEqual(self.decoder.decode(bytes.fromhex("c01000000002")).target, 4)
 
     def test_linkage_and_never_branch_semantics(self):
@@ -254,12 +261,55 @@ class SideDeckTests(unittest.TestCase):
             "__ct__5IDateFiT1": "IDate::IDate(int, int)",
             "__eq__FRC9IThreadIdT1": "operator==(const IThreadId&, const IThreadId&)",
             "__vc__7IStringCFi": "IString::operator[](int) const",
+            "throwIt__14IFullExceptionFUlPCcT1": "IFullException::throwIt(unsigned long, const char*, unsigned long)",
+            "AddAntivalence__14IARelationImplFRC14IARelationImplT1":
+                "IARelationImpl::AddAntivalence(const IARelationImpl&, const IARelationImpl&)",
             "__dt__16IBagOnKeyBagImplXT21IKeyBagAsHshTableImpl_Fv": "IBagOnKeyBagImpl<IKeyBagAsHshTableImpl>::~IBagOnKeyBagImpl()",
         }
         for symbol, expected in samples.items():
             self.assertEqual(demangle_ibm_cpp(symbol), (expected, "demangled"))
         self.assertEqual(demangle_ibm_cpp("__vtt10IDirectory"), (None, "virtual_table"))
         self.assertEqual(demangle_ibm_cpp("__fsm_tab____ls__Fv"), (None, "static_table"))
+
+    def test_parameter_pack_and_volatile_demangles(self):
+        self.assertEqual(demangle_ibm_cpp("__ct__12IDecimalUtilFL"), ("IDecimalUtil::IDecimalUtil(long)", "demangled"))
+        self.assertEqual(demangle_ibm_cpp("__ct__12IDecimalUtilFr"), ("IDecimalUtil::IDecimalUtil(long double)", "demangled"))
+        self.assertEqual(demangle_ibm_cpp("__ct__12IDecimalUtilFBd"), ("IDecimalUtil::IDecimalUtil(volatile double)", "demangled"))
+        self.assertEqual(
+            demangle_ibm_cpp("change__7IStringFRC7IStringN21UiT4"),
+            ("IString::change(const IString&, const IString&, unsigned int, unsigned int)", "demangled"),
+        )
+        self.assertEqual(
+            demangle_ibm_cpp("indexOfWord__7IStringCFUiN21"),
+            ("IString::indexOfWord(unsigned int, unsigned int) const", "demangled"),
+        )
+        self.assertEqual(demangle_ibm_cpp("change__7IStringFRC7IStringN99Ui"), (None, "unparsed"))
+
+    def test_function_pointer_demangles(self):
+        samples = {
+            "__ct__7IThreadFPFPv_vPvi": "IThread::IThread(void (*)(void*), void*, int)",
+            "__ct__7IThreadFPFUl_vUli": "IThread::IThread(void (*)(unsigned long), unsigned long, int)",
+            "AllElementsDo__16IACollectionImplFPFPvT1_iPv":
+                "IACollectionImpl::AllElementsDo(int (*)(void*, IACollectionImpl&), void*)",
+            "AllElementsDo__16IACollectionImplFPFPvT1_bPv":
+                "IACollectionImpl::AllElementsDo(bool (*)(void*, IACollectionImpl&), void*)",
+            "callback__FPFi_v": "callback(void (*)(int))",
+            "setDecisionFn__21IDecisionFnWrapperhexFM8ITesthexFv_b":
+                "IDecisionFnWrapperhex::setDecisionFn(bool (ITesthex::*)())",
+            "printf__3iocFPCce": "ioc::printf(const char*, ...)",
+            "IExcept__assertParameter__FPCcRC18IExceptionLocation":
+                "IExcept__assertParameter(const char*, const IExceptionLocation&)",
+            "IsEqual__Q2_27IKeySortedBagOnSequenceImplXT19ISequenceAsListImpl_9PredicateFPCvPv":
+                "IKeySortedBagOnSequenceImpl<ISequenceAsListImpl>::Predicate::IsEqual(const void*, void*)",
+        }
+        for symbol, expected in samples.items():
+            self.assertEqual(demangle_ibm_cpp(symbol), (expected, "demangled"))
+        self.assertEqual(demangle_ibm_cpp("__ct__7IThreadFPFPvPvi"), (None, "unparsed"))
+        self.assertEqual(demangle_ibm_cpp("callback__FPFi"), (None, "unparsed"))
+        self.assertEqual(
+            demangle_ibm_cpp("Any__16IBagOnKeyBagImplXT25IKeyBagOnKeySortedBagImplXT27IKeySortedBagOnSequenceImplXT19ISequenceAsListImpl___CFv"),
+            ("IBagOnKeyBagImpl<IKeyBagOnKeySortedBagImpl<IKeySortedBagOnSequenceImpl<ISequenceAsListImpl>>>::Any() const", "demangled"),
+        )
 
     def test_parse_normalize_and_compare(self):
         first = parse_side_deck(sid_records(
@@ -353,6 +403,41 @@ class CallGraphTests(unittest.TestCase):
         self.assertEqual((edge.target_rva, edge.target_name, edge.evidence), (0x80, "target", "rld:0x12"))
         self.assertEqual(graph.unresolved, [])
 
+    def test_interprocedural_return_summary(self):
+        target_raw = bytes.fromhex("a7f8008007fe")
+        target = FunctionInfo(0x80, 0x80, "target", "PPA_CPP", "high", instructions=list(S390Decoder().linear(target_raw)), complete=True)
+        caller_raw = bytes.fromhex("c0e50000004005ef051e")
+        caller = FunctionInfo(0, 0, "caller", "PPA_CPP", "high", instructions=list(S390Decoder().linear(caller_raw)), complete=True)
+        text = caller_raw + bytes(0x90 - len(caller_raw))
+        text = text[:0x80] + target_raw + text[0x80 + len(target_raw):]
+        image = LoadImage(
+            "summary", "", "PDS_LOAD_MODULE", text,
+            [Symbol("caller", 0, "LR"), Symbol("target", 0x80, "LR")], [], None, [],
+        )
+        graph = build_call_graph(image, Recovery([caller, target], []))
+        self.assertEqual(len(graph.edges), 2)
+        self.assertEqual(graph.edges[0].evidence, "direct:brasl")
+        self.assertEqual(graph.edges[1].evidence, "summary:0x80")
+        self.assertEqual(graph.edges[1].target_name, "target")
+
+    def test_unresolved_external_and_binder_links(self):
+        raw = bytes.fromhex("053058f0301005ef051e")
+        function = FunctionInfo(0, 0, "caller", "PPA_CPP", "high", instructions=list(S390Decoder().linear(raw)), complete=True)
+        image = LoadImage(
+            "external", "", "PDS_LOAD_MODULE", raw + bytes(0x90 - len(raw)),
+            [Symbol("target", 0x80, "LR")], [], None, [],
+            {"relocations": [{"rva": 0x12, "resolved": False, "target_name": "target", "target_address": None}]},
+        )
+        deck = parse_side_deck(sid_records(" IMPORT CODE,'IOC','target'"))
+        graph = build_call_graph(image, Recovery([function], []), [deck])
+        self.assertEqual(graph.edges, [])
+        self.assertEqual(graph.unresolved, [])
+        self.assertEqual(len(graph.external_calls), 1)
+        self.assertEqual(graph.external_calls[0].target_name, "target")
+        self.assertEqual(graph.external_calls[0].evidence, "external_rld:0x12")
+        self.assertEqual(len(graph.binder_links), 1)
+        self.assertEqual(graph.binder_links[0]["dll"], "IOC")
+
 
 class DecompilerTests(unittest.TestCase):
     @staticmethod
@@ -374,6 +459,26 @@ class DecompilerTests(unittest.TestCase):
         self.assertEqual(result.structured_loop_count, 1)
         self.assertIn("while", result.pseudo_c)
         self.assertIn("r1 = (r1 + -0x1);", result.pseudo_c)
+
+    def test_if_else_and_multiblock_loop_structuring(self):
+        image, function = self.function(bytes.fromhex("a71e0000a7840004a7000001a700000207fe"))
+        result = S390Decompiler(image).decompile(function)
+        self.assertIn("if ((r1 == 0x0))", result.pseudo_c)
+        self.assertIn("} else {", result.pseudo_c)
+        image, function = self.function(bytes.fromhex("a71e0000a7840006a71affff1211a7e4fff907fe"))
+        result = S390Decompiler(image).decompile(function)
+        self.assertGreaterEqual(result.structured_loop_count, 1)
+        self.assertIn("for (;;)", result.pseudo_c)
+        self.assertIn("continue;", result.pseudo_c)
+
+    def test_function_pointer_and_width_types(self):
+        image, function = self.function(bytes.fromhex("58f0d00405ef051e"))
+        result = S390Decompiler(image).decompile(function)
+        self.assertEqual(result.return_type, "uint32_t")
+        self.assertEqual(result.stack_types["stack_4"], [32])
+        self.assertEqual(len(result.function_pointers), 1)
+        self.assertEqual(result.function_pointers[0].expression, "stack_4")
+        self.assertIn("(*stack_4)(r1);", result.pseudo_c)
 
     def test_loop_with_external_predecessor_keeps_labels(self):
         image, function = self.function(bytes.fromhex("a7f40002a71e0000a7840006a71affffa7f4fffa07fe"))
@@ -542,7 +647,8 @@ class IbmGoldenTests(unittest.TestCase):
             for item in deck.statements:
                 statuses[item.demangle_status] = statuses.get(item.demangle_status, 0) + 1
         self.assertEqual(total, 19546)
-        self.assertEqual(statuses["demangled"], 7692)
+        self.assertEqual(statuses["demangled"], 17675)
+        self.assertEqual(statuses["unparsed"], 697)
         self.assertEqual(statuses["static_table"], 27)
         self.assertLessEqual(inventories["CLB3D003"], inventories["CLB3D008"])
 

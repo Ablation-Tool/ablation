@@ -137,7 +137,8 @@ OPERATORS = {
 }
 BASIC_TYPES = {
     "v": "void", "b": "bool", "c": "char", "s": "short", "i": "int", "l": "long",
-    "f": "float", "d": "double", "w": "wchar_t", "x": "long long",
+    "L": "long", "r": "long double", "f": "float", "d": "double",
+    "w": "wchar_t", "x": "long long",
 }
 
 
@@ -157,38 +158,37 @@ def _identifier(text, offset):
 
 
 def _qualified_name(text, offset=0, types=None):
-    names = []
+    count = 1
     if text.startswith("Q", offset):
         match = re.match(r"Q(\d+)_", text[offset:])
         if match is None:
             raise ValueError("nested-name count expected")
         offset += len(match.group(0))
         count = int(match.group(1))
-        for _ in range(count):
-            name, offset = _identifier(text, offset)
-            names.append(name)
-    else:
+    names = []
+    for _ in range(count):
         name, offset = _identifier(text, offset)
+        if text.startswith("XT", offset):
+            offset += 2
+            arguments = []
+            while True:
+                if offset >= len(text):
+                    raise ValueError("unterminated template")
+                if text[offset] == "_":
+                    offset += 1
+                    break
+                argument, offset = _type(text, offset, types)
+                arguments.append(argument)
+            if not arguments:
+                raise ValueError("empty template argument list")
+            name += "<" + ", ".join(arguments) + ">"
         names.append(name)
-    if text.startswith("XT", offset):
-        offset += 2
-        arguments = []
-        while True:
-            if offset >= len(text):
-                raise ValueError("unterminated template")
-            if text[offset] == "_":
-                offset += 1
-                break
-            argument, offset = _type(text, offset, types)
-            arguments.append(argument)
-        if not arguments:
-            raise ValueError("empty template argument list")
-        names[-1] += "<" + ", ".join(arguments) + ">"
     return "::".join(names), offset
 
 
-def _type(text, offset, types=None):
+def _type(text, offset, types=None, member_type=None):
     const = False
+    volatile = False
     unsigned = False
     signed = False
     pointers = 0
@@ -197,6 +197,8 @@ def _type(text, offset, types=None):
         qualifier = text[offset]
         if qualifier == "C":
             const = True
+        elif qualifier == "B":
+            volatile = True
         elif qualifier == "U":
             unsigned = True
         elif qualifier == "S":
@@ -208,6 +210,28 @@ def _type(text, offset, types=None):
         else:
             break
         offset += 1
+    if offset < len(text) and text[offset] == "F":
+        if const or volatile or unsigned or signed or not (pointers or references):
+            raise ValueError("unsupported function type qualifiers")
+        function_types = [] if types is None else types.copy()
+        if member_type is not None:
+            function_types.insert(0, member_type)
+        arguments, offset = _arguments(text, offset + 1, function_types, "_", member_type)
+        return_type, offset = _type(text, offset, function_types, member_type)
+        declarator = "*" * pointers + "&" * references
+        return f"{return_type} ({declarator})({', '.join(arguments)})", offset
+    if offset < len(text) and text[offset] == "M":
+        if const or volatile or unsigned or signed or pointers or references:
+            raise ValueError("unsupported member-function type qualifiers")
+        class_name, offset = _qualified_name(text, offset + 1, types)
+        if offset >= len(text) or text[offset] != "F":
+            raise ValueError("member-function type expected")
+        member_type = f"{class_name}&"
+        function_types = [] if types is None else types.copy()
+        function_types.insert(0, member_type)
+        arguments, offset = _arguments(text, offset + 1, function_types, "_", member_type)
+        return_type, offset = _type(text, offset, function_types, member_type)
+        return f"{return_type} ({class_name}::*)({', '.join(arguments)})", offset
     if offset < len(text) and text[offset] in BASIC_TYPES:
         name = BASIC_TYPES[text[offset]]
         offset += 1
@@ -219,6 +243,9 @@ def _type(text, offset, types=None):
         if types and 1 <= number <= len(types):
             name = types[number - 1]
             offset += len(match.group(0))
+        elif types and number == len(types) + 1:
+            name = types[-1]
+            offset += len(match.group(0))
         else:
             name, offset = _qualified_name(text, offset + 1, types)
     elif offset < len(text) and (text[offset].isdigit() or text.startswith("Q", offset)):
@@ -227,17 +254,47 @@ def _type(text, offset, types=None):
         raise ValueError("unsupported type")
     prefix = "unsigned " if unsigned else "signed " if signed else ""
     const_prefix = "const " if const else ""
+    volatile_prefix = "volatile " if volatile else ""
     suffix = "*" * pointers + "&" * references
-    return f"{prefix}{const_prefix}{name}{suffix}", offset
+    return f"{prefix}{const_prefix}{volatile_prefix}{name}{suffix}", offset
 
 
-def _arguments(text, offset, types=None):
-    arguments = [] if types is None else types
-    if offset < len(text) and text[offset] == "v" and offset + 1 == len(text):
-        return arguments, offset + 1
-    while offset < len(text):
-        argument, offset = _type(text, offset, arguments)
+def _arguments(text, offset, types=None, terminator=None, member_type=None):
+    known_types = [] if types is None else types
+    arguments = []
+    if (offset < len(text) and text[offset] == "v"
+            and (offset + 1 == len(text)
+                 or (terminator is not None and text.startswith(terminator, offset + 1)))):
+        offset += 1
+        if terminator is not None:
+            offset += 1
+        return arguments, offset
+    while offset < len(text) and (terminator is None or not text.startswith(terminator, offset)):
+        if text[offset] == "e":
+            arguments.append("...")
+            known_types.append("...")
+            offset += 1
+            if offset < len(text) and (terminator is None or not text.startswith(terminator, offset)):
+                raise ValueError("trailing ellipsis encoding")
+            continue
+        match = re.match(r"N(\d+)(\d)", text[offset:])
+        if match is not None:
+            count = int(match.group(1))
+            index = int(match.group(2))
+            if count < 1 or not 1 <= index <= len(arguments):
+                raise ValueError("invalid parameter pack")
+            repeated = [arguments[index - 1]] * (count - 1)
+            arguments.extend(repeated)
+            known_types.extend(repeated)
+            offset += len(match.group(0))
+            continue
+        argument, offset = _type(text, offset, known_types, member_type)
         arguments.append(argument)
+        known_types.append(argument)
+    if terminator is not None:
+        if not text.startswith(terminator, offset):
+            raise ValueError("unterminated function type")
+        offset += len(terminator)
     return arguments, offset
 
 
@@ -253,7 +310,8 @@ def _method_or_global(operator, text):
             offset += 1
     if offset >= len(text) or text[offset] != "F":
         raise ValueError("function marker expected")
-    arguments, offset = _arguments(text, offset + 1, types)
+    member_type = f"{'const ' if const_method else ''}{class_name}&" if class_name else None
+    arguments, offset = _arguments(text, offset + 1, types, member_type=member_type)
     if offset != len(text):
         raise ValueError("trailing function encoding")
     prefix = f"{class_name}::" if class_name else ""
@@ -299,15 +357,23 @@ def demangle_ibm_cpp(symbol):
             if offset != len(symbol) or arguments:
                 raise ValueError("unsupported destructor")
             return f"{class_name}::~{_class_basename(class_name)}()", "demangled"
-        match = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)__(.+)$", symbol)
+        match = re.match(r"^([A-Za-z_][A-Za-z0-9_]*?)__((?:F|Q|\d).*)$", symbol)
         if match:
             name, remainder = match.groups()
+            if remainder.startswith("F"):
+                return _method_or_global(name, remainder), "demangled"
             types = []
             class_name, offset = _qualified_name(remainder, 0, types)
+            const_method = False
+            if offset < len(remainder) and remainder[offset] == "C" and offset + 1 < len(remainder) and remainder[offset + 1] == "F":
+                const_method = True
+                offset += 1
             if offset < len(remainder) and remainder[offset] == "F":
-                arguments, offset = _arguments(remainder, offset + 1, types)
+                member_type = f"{'const ' if const_method else ''}{class_name}&"
+                arguments, offset = _arguments(remainder, offset + 1, types, member_type=member_type)
                 if offset == len(remainder):
-                    return f"{class_name}::{name}({', '.join(arguments)})", "demangled"
+                    suffix = " const" if const_method else ""
+                    return f"{class_name}::{name}({', '.join(arguments)}){suffix}", "demangled"
         return None, "unparsed"
     except (ValueError, IndexError):
         return None, "unparsed"

@@ -9,17 +9,17 @@ RR = {
     0x1C: "mr", 0x1D: "dr", 0x1E: "alr", 0x1F: "slr", 0x20: "lpdr", 0x21: "lndr",
     0x22: "ltdr", 0x23: "lcdr", 0x28: "ldr", 0x29: "cdr", 0x2A: "adr", 0x2B: "sdr",
     0x2C: "mdr", 0x2D: "ddr", 0x2E: "awr", 0x2F: "swr", 0x30: "lper", 0x31: "lner",
-    0x32: "lter", 0x33: "lcer", 0x38: "ler", 0x39: "cer", 0x3A: "aer", 0x3B: "ser",
+    0x32: "lter", 0x33: "lcer", 0x36: "axr", 0x38: "ler", 0x39: "cer", 0x3A: "aer", 0x3B: "ser",
     0x3C: "mder", 0x3D: "der", 0x3E: "aur", 0x3F: "sur",
 }
 RX = {
     0x40: "sth", 0x41: "la", 0x42: "stc", 0x43: "ic", 0x44: "ex", 0x45: "bal",
     0x46: "bct", 0x47: "bc", 0x48: "lh", 0x49: "ch", 0x4A: "ah", 0x4B: "sh",
-    0x4C: "mh", 0x4D: "ms", 0x4E: "cvd", 0x4F: "cvb", 0x50: "st", 0x54: "n",
+    0x4C: "mh", 0x4D: "ms", 0x4E: "cvd", 0x4F: "cvb", 0x50: "st", 0x51: "lae", 0x54: "n",
     0x55: "cl", 0x56: "o", 0x57: "x", 0x58: "l", 0x59: "c", 0x5A: "a",
     0x5B: "s", 0x5C: "m", 0x5D: "d", 0x5E: "al", 0x5F: "sl", 0x60: "std",
     0x68: "ld", 0x69: "cd", 0x6A: "ad", 0x6B: "sd", 0x6C: "md", 0x6D: "dd",
-    0x6E: "aw", 0x6F: "sw", 0x70: "ste", 0x78: "le", 0x79: "ce", 0x7A: "ae",
+    0x6E: "aw", 0x6F: "sw", 0x70: "ste", 0x71: "ms", 0x78: "le", 0x79: "ce", 0x7A: "ae",
     0x7B: "se", 0x7C: "mde", 0x7D: "de", 0x7E: "au", 0x7F: "su",
 }
 RS = {
@@ -27,17 +27,18 @@ RS = {
     0x86: "bxh", 0x87: "bxle", 0x88: "srl", 0x89: "sll", 0x8A: "sra",
     0x8B: "sla", 0x8C: "srdl", 0x8D: "sldl", 0x8E: "srda", 0x8F: "slda",
     0x90: "stm", 0x98: "lm", 0x99: "trace", 0x9A: "lam", 0x9B: "stam",
-    0xBD: "clm", 0xBF: "icm",
+    0xA9: "clcle", 0xBD: "clm", 0xBF: "icm",
 }
 SI = {0x91: "tm", 0x92: "mvi", 0x93: "ts", 0x94: "ni", 0x95: "cli", 0x96: "oi", 0x97: "xi"}
 SS = {
-    0xD2: "mvc", 0xD3: "mvz", 0xD4: "nc", 0xD5: "clc", 0xD6: "oc", 0xD7: "xc",
+    0xD0: "trtr", 0xD2: "mvc", 0xD3: "mvz", 0xD4: "nc", 0xD5: "clc", 0xD6: "oc", 0xD7: "xc",
     0xD9: "mvck", 0xDA: "mvcp", 0xDB: "mvcs", 0xDC: "tr", 0xDD: "trt",
     0xDE: "ed", 0xDF: "edmk", 0xF0: "srp", 0xF1: "mvo", 0xF2: "pack",
     0xF3: "unpk", 0xF8: "zap", 0xF9: "cp", 0xFA: "ap", 0xFB: "sp", 0xFC: "mp", 0xFD: "dp",
 }
 RRE = {
-    0xB255: "mvst", 0xB25D: "clst", 0xB25E: "srst",
+    0xB252: "msr", 0xB255: "mvst", 0xB25D: "clst", 0xB25E: "srst",
+    0xB305: "lxdbr", 0xB349: "cxbr",
     0xB900: "lpgr", 0xB901: "lngr", 0xB902: "ltgr",
     0xB903: "lcgr", 0xB904: "lgr", 0xB988: "alcgr",
     0xB998: "alcr", 0xB9BE: "srstu",
@@ -93,18 +94,26 @@ RI_A5 = {
 RXE = {
     0x04: "lg", 0x14: "lgf", 0x15: "lgh", 0x16: "llgf",
     0x20: "cg", 0x21: "clg", 0x24: "stg", 0x30: "cgf", 0x31: "clgf",
-    0x32: "ltgf", 0x34: "cgh", 0x47: "bic", 0x50: "sty",
-    0x54: "ny", 0x55: "cly", 0x56: "oy", 0x57: "xy",
+    0x32: "ltgf", 0x34: "cgh", 0x3C: "mgh", 0x47: "bic", 0x50: "sty",
+    0x51: "msy", 0x54: "ny", 0x55: "cly", 0x56: "oy", 0x57: "xy",
+    0x75: "laey", 0x7C: "mhy",
     0x58: "ly", 0x59: "cy", 0x5A: "ay", 0x5B: "sy", 0x5E: "aly",
     0x5F: "sly", 0x70: "stey", 0x71: "lay", 0x78: "ley", 0x79: "cey",
     0x7A: "aey", 0x7B: "sey", 0x7E: "auy", 0x7F: "suy", 0x91: "llgh",
 }
 RSE = {
     0x04: "lmg", 0x20: "clmh", 0x21: "clm", 0x24: "stmg",
-    0x80: "icmh", 0x81: "icm",
+    0x80: "icmh", 0x81: "icm", 0x8F: "clclu",
 }
 CALLS = {"bal", "balr", "bas", "basr", "bassm", "bras", "brasl"}
 CONDITIONAL = {"bct", "bctr", "brct", "brctg", "brcth", "bxh", "bxle", "brxh", "brxle"}
+FPR_MNEMONICS = {
+    "lpdr", "lndr", "ltdr", "lcdr", "ldr", "cdr", "adr", "sdr", "mdr", "ddr",
+    "awr", "swr", "lper", "lner", "lter", "lcer", "ler", "cer", "aer", "ser",
+    "mder", "der", "aur", "sur", "std", "ld", "cd", "ad", "sd", "md", "dd",
+    "aw", "sw", "ste", "le", "ce", "ae", "se", "mde", "de", "au", "su",
+    "stey", "ley", "cey", "aey", "sey", "auy", "suy", "axr", "lxdbr", "cxbr",
+}
 
 
 @dataclass
@@ -142,6 +151,10 @@ def _reg(number):
     return f"%r{number}"
 
 
+def _fpr(number):
+    return f"%f{number}"
+
+
 def _signed(data):
     return int.from_bytes(data, "big", signed=True)
 
@@ -174,12 +187,14 @@ class S390Decoder:
         mask = None
         if first in RR and length == 2:
             mnemonic, fmt, known = RR[first], "RR", True
-            operands = f"{_reg(raw[1] >> 4)}, {_reg(raw[1] & 15)}"
+            register = _fpr if mnemonic in FPR_MNEMONICS else _reg
+            operands = f"{register(raw[1] >> 4)}, {register(raw[1] & 15)}"
         elif first in RX and length == 4:
             mnemonic, fmt, known = RX[first], "RX", True
             r1, x2 = raw[1] >> 4, raw[1] & 15
             base, displacement = raw[2] >> 4, ((raw[2] & 15) << 8) | raw[3]
-            operands = f"{_reg(r1)}, {_memory(base, displacement, x2)}"
+            first_register = _fpr(r1) if mnemonic in FPR_MNEMONICS else _reg(r1)
+            operands = f"{first_register}, {_memory(base, displacement, x2)}"
             mask = r1
         elif first in RS and length == 4:
             mnemonic, fmt, known = RS[first], "RS", True
@@ -231,7 +246,8 @@ class S390Decoder:
             displacement = (raw[4] << 12) | ((raw[2] & 15) << 8) | raw[3]
             if displacement & 0x80000:
                 displacement -= 0x100000
-            operands = f"{_reg(r1)}, {_memory(base, displacement, x2)}"
+            first_register = _fpr(r1) if mnemonic in FPR_MNEMONICS else _reg(r1)
+            operands = f"{first_register}, {_memory(base, displacement, x2)}"
             mask = r1
         elif first == 0xEB and length == 6 and raw[5] in RSE:
             mnemonic, fmt, known = RSE[raw[5]], "RSE", True
@@ -241,7 +257,8 @@ class S390Decoder:
             operands = f"{_reg(r1)}, {second}, {_memory(base, displacement)}"
         elif first in (0xB2, 0xB3, 0xB9) and length == 4 and opcode2 in RRE:
             mnemonic, fmt, known = RRE[opcode2], "RRE", True
-            operands = f"{_reg(raw[2] >> 4)}, {_reg(raw[2] & 15)}"
+            register = _fpr if mnemonic in FPR_MNEMONICS else _reg
+            operands = f"{register(raw[2] >> 4)}, {register(raw[2] & 15)}"
         flow = "next"
         if mnemonic in ("balr", "basr") and raw[1] & 15 == 0:
             flow = "next"

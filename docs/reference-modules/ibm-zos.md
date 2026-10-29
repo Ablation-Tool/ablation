@@ -71,7 +71,7 @@ flowchart TD
 | RLD entries | Full eight-byte and repeated-pointer four-byte entries, including continuation across records | External targets and invalid ranges remain explicit |
 | `IEWPLMH` program object | `IEWPSEGM`, LMH type-7 fallback, and `IEWBXLF NAME` inventories | Fallback entry is `null`; name records do not imply addresses |
 | FB80 definition side-deck | CP1140 CODE/DATA imports, two syntaxes, and continuations | Input must be nonempty complete 80-byte records with imports |
-| IBM C++ symbols | Constructors, destructors, operators, nested names, `XT` templates, `T` back-references, qualifiers, pointers, and references | Unfamiliar encodings remain `unparsed`; tables are not functions |
+| IBM C++ symbols | Constructors, destructors, operators, nested/template names, type back-references, function and member-function pointers, variadic functions, and parameter packs | Unfamiliar encodings remain `unparsed`; arrays are unverified; tables are not functions |
 | EBCDIC strings | CP500 printable string candidates with RVAs | Triage data, not proof of references or declarations |
 
 Non-NETDATA tape formats, raw core dumps, and running z/OS systems are outside the module's input scope.
@@ -174,7 +174,18 @@ python3 -m ablation.ibm_zos correlate PRIMARY.bin analysis/matches.json \
 
 The `sid` command writes `OUTPUT_PREFIX.json` and `OUTPUT_PREFIX.txt`. Records include original and demangled symbols, DLL, CODE/DATA kind, and source record range.
 
-Supported demangling includes constructors, destructors, arithmetic/comparison/conversion operators, nested names, repeated pointers/references, `XT` template arguments, and `T1`/`T2`-style type back-references. Statuses are:
+Supported demangling includes constructors, destructors, arithmetic/comparison/conversion operators, global and member functions, nested names and templated outer classes, repeated pointers/references, `XT` template arguments, `T1`/`T2`-style type back-references, `L`/`r` types, `B` volatile types, named `const` methods, and `N<count><index>` parameter packs. `N21` repeats the first explicit argument once, `N31` repeats it twice, and `N92` repeats the second argument eight times. A following `T4` can reuse the immediately preceding type.
+
+Function-type encoding is `F<arguments>_<return-type>`; the arguments precede the underscore. Thus `PFi_v_` in a template is a pointer to a function taking `int` and returning `void`, with the final underscore closing the template. This agrees with IBM's [`-qnamemangling` example](https://www.ibm.com/docs/en/xl-c-and-cpp-aix/13.1.0?topic=descriptions-qnamemangling-only) and the IOC Open Class declarations. `M<class>F<arguments>_<return-type>` encodes a pointer to a member function, and a final `e` encodes variadic ellipsis. Callback back-references have a nested scope: a member class reference does not become an explicit argument or change ordinary `T1` reuse.
+
+| Encoded symbol | Recovered signature |
+|---|---|
+| `__ct__7IThreadFPFPv_vPvi` | `IThread::IThread(void (*)(void*), void*, int)` |
+| `AllElementsDo__16IACollectionImplFPFPvT1_iPv` | `IACollectionImpl::AllElementsDo(int (*)(void*, IACollectionImpl&), void*)` |
+| `setDecisionFn__21IDecisionFnWrapperhexFM8ITesthexFv_b` | `IDecisionFnWrapperhex::setDecisionFn(bool (ITesthex::*)())` |
+| `printf__3iocFPCce` | `ioc::printf(const char*, ...)` |
+
+Across the five IOC side-decks, **17,675 of 17,688 CODE imports** demangle completely. Thirteen CODE records with unfamiliar qualifiers, type references, template-function grammar, or plain C identifiers remain unparsed; 684 DATA records also remain unparsed rather than receiving invented function signatures. No array parameter encoding occurs in this corpus, so array support is not claimed without a verified form. Statuses are:
 
 - `demangled`: the complete encoding was consumed and converted.
 - `virtual_table`: a recognized virtual-table record, not a function.
@@ -215,7 +226,7 @@ Side-deck comparison reports both raw unique-symbol and semantic demangled-name 
 
 Function output contains `functions.json`, `functions.txt`, and `disassembly.txt`. CFG output adds instructions, direct calls/branches, completeness, and unknown counts.
 
-Call-graph output contains `callgraph.json` and `callgraph.txt`, including unresolved sites and per-edge evidence. Decompilation writes per-function `.c` and `.json` files plus `decompilation.json`. See [S/390 call graphs and native decompilation](s390.md#call-graphs) for evidence and confidence rules.
+Call-graph output contains `callgraph.json` and `callgraph.txt`, including unresolved sites, external RLD references, per-edge evidence, and optional normalized-name `binder_links`. Straight-line return summaries propagate only proven values; unresolved indirect calls and external targets remain distinct. Decompilation writes per-function `.c` and `.json` files plus `decompilation.json`, including function-pointer sites and width-based type estimates. See [S/390 call graphs and native decompilation](s390.md#call-graphs) for evidence and confidence rules.
 
 ### Address and mapping model
 
@@ -264,7 +275,7 @@ Current boundaries:
 - Relocation applies only resolved entries; external targets remain unresolved.
 - Call graphs retain unresolved indirect calls rather than guessing destinations.
 - Pseudo-C prototypes, types, stack variables, and complex CFG structure are estimates, not source recovery.
-- IBM C++ demangling remains partial; function pointers and unfamiliar encodings can remain `unparsed`.
+- IBM C++ demangling remains partial. Verified function/member pointers and variadic functions are supported; array encodings, unfamiliar qualifiers and type references, and template-function forms remain `unparsed` rather than receiving invented signatures.
 - Name correlation does not prove DLL ownership or complete Binder linkage.
 - No z/OS execution or vulnerability verdict is implied. Dynamic validation requires a separate host or emulator.
 - Encrypted `AMSCIPHR` and non-NETDATA tape formats are unsupported.
