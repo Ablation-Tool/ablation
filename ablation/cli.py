@@ -1103,6 +1103,160 @@ def cmd_junos(args):
     import json
     from dataclasses import asdict
 
+    if args.junos_command == 'target':
+        from ablation.analyzers.junos_target import JunosTargetProfile
+        print(json.dumps(JunosTargetProfile.from_name().report(args.binary), indent=2))
+        return
+
+    if args.junos_command == 'xrefs':
+        from ablation.analyzers.binary_context import BinaryContext
+        from ablation.analyzers.mips_string_xrefs import resolve_string_xrefs
+        ctx = BinaryContext.load_or_build(args.binary)
+        targets = {va for va, value in ctx.strings.items() if args.substring in value}
+        if not targets:
+            raise SystemExit(f'error: no strings contain {args.substring!r}')
+        results = resolve_string_xrefs(args.binary, targets)
+        print(json.dumps([asdict(result) for result in results], indent=2))
+        return
+
+    if args.junos_command == 'overlay':
+        from ablation.analyzers.binary_context import BinaryContext
+        from ablation.analyzers.junos_overlay import recover_overlay
+        from ablation.analyzers.mips_string_xrefs import resolve_string_xrefs
+        ctx = BinaryContext.load_or_build(args.binary)
+        results = resolve_string_xrefs(args.binary, set(ctx.strings))
+        result = recover_overlay(ctx, results)
+        print(json.dumps(asdict(result), indent=2))
+        return
+
+    if args.junos_command == 'gencfg':
+        from ablation.analyzers.gencfg import load_schemas, serialize_vrf_group, validate_message
+        if args.list_schemas:
+            print(json.dumps(load_schemas(), indent=2))
+            return
+        if getattr(args, 'encode', False):
+            if args.family != 'vrf-group':
+                raise SystemExit('error: --encode currently supports only --family vrf-group')
+            try:
+                message = serialize_vrf_group(
+                    args.group_id, args.vrf or [], operation=args.operation, lsys_id=args.lsys_id,
+                )
+            except ValueError as exc:
+                raise SystemExit(f'error: {exc}') from exc
+            print(json.dumps({
+                'message': message.hex(),
+                'validation': validate_message(message, family=args.family),
+            }, indent=2))
+            return
+        if not args.message:
+            raise SystemExit('error: provide a hexadecimal message, --encode, or --list')
+        try:
+            message = bytes.fromhex(args.message)
+        except ValueError as exc:
+            raise SystemExit(f'error: invalid hexadecimal message: {exc}') from exc
+        print(json.dumps(validate_message(message, family=args.family), indent=2))
+        return
+
+    if args.junos_command == 'function-diff':
+        from ablation.analyzers.junos_function_diff import (
+            compare_functions, comparison_cache_key, write_json_atomic,
+        )
+        cache_path = None
+        if args.cache:
+            key = comparison_cache_key(
+                args.old, args.new, args.old_va, args.new_va, args.old_size, args.new_size,
+            )
+            cache_path = Path(args.cache, key + '.json')
+            if cache_path.is_file():
+                report = json.loads(cache_path.read_text())
+                report['cache_hit'] = True
+                print(json.dumps(report, indent=2))
+                return
+        try:
+            report = compare_functions(
+                args.old, args.new, args.old_va, args.new_va,
+                old_size=args.old_size, new_size=args.new_size,
+                max_size=args.max_size, timeout=args.timeout,
+            )
+        except (ValueError, TimeoutError) as exc:
+            raise SystemExit(f'error: {exc}') from exc
+        report['cache_hit'] = False
+        if cache_path:
+            write_json_atomic(cache_path, report)
+        text = json.dumps(report, indent=2)
+        if args.json:
+            write_json_atomic(args.json, report)
+        print(text)
+        return
+
+    if args.junos_command == 'ownership':
+        from ablation.analyzers.junos_function_diff import write_json_atomic
+        from ablation.analyzers.mips_ownership import analyze_ownership
+        spec = json.loads(Path(args.spec).read_text())
+
+        def integers(values):
+            return {int(value, 0) if isinstance(value, str) else int(value) for value in values or []}
+
+        functions = []
+        for item in spec.get('functions', []):
+            normalized = dict(item)
+            normalized['va'] = int(normalized['va'], 0) if isinstance(normalized['va'], str) else int(normalized['va'])
+            if isinstance(normalized.get('size'), str):
+                normalized['size'] = int(normalized['size'], 0)
+            functions.append(normalized)
+        if not functions:
+            raise SystemExit('error: ownership specification contains no functions')
+        try:
+            report = analyze_ownership(
+                args.binary, functions,
+                free_functions=integers(spec.get('free_functions')),
+                free_names=set(spec.get('free_names') or ['free', 'mod_free']),
+                allocator_functions=integers(spec.get('allocator_functions')),
+                allocator_names=set(spec.get('allocator_names') or ['malloc', 'calloc', 'mod_kzalloc']),
+                max_paths=args.max_paths, max_steps=args.max_steps,
+            )
+        except ValueError as exc:
+            raise SystemExit(f'error: {exc}') from exc
+        text = json.dumps(report, indent=2)
+        if args.json:
+            write_json_atomic(args.json, report)
+        print(text)
+        return
+
+    if args.junos_command == 'gencfg-graph':
+        from ablation.analyzers.gencfg_provenance import build_provenance_graph
+        from ablation.analyzers.junos_function_diff import write_json_atomic
+        spec = json.loads(Path(args.spec).read_text())
+        try:
+            report = build_provenance_graph(args.root, spec)
+        except (OSError, ValueError) as exc:
+            raise SystemExit(f'error: {exc}') from exc
+        text = json.dumps(report, indent=2)
+        if args.json:
+            write_json_atomic(args.json, report)
+        print(text)
+        return
+
+    if args.junos_command == 'provenance-slice':
+        from ablation.analyzers.isa_mips import canon_reg
+        from ablation.analyzers.junos_function_diff import write_json_atomic
+        from ablation.analyzers.mips_message_provenance import analyze_direct_callers
+        arguments = tuple(canon_reg(value.strip()) for value in args.args.split(','))
+        if any(value is None for value in arguments):
+            raise SystemExit('error: --args must be a comma-separated list of MIPS registers')
+        try:
+            report = analyze_direct_callers(
+                args.binary, args.target, arguments=arguments,
+                max_instructions=args.back, max_results=args.max_callers, max_size=args.max_size,
+            )
+        except (OSError, ValueError) as exc:
+            raise SystemExit(f'error: {exc}') from exc
+        text = json.dumps(report, indent=2)
+        if args.json:
+            write_json_atomic(args.json, report)
+        print(text)
+        return
+
     if args.junos_command == 'extract':
         from ablation.core.junos_package import extract_package
         result = extract_package(args.package, args.output, extract_iso=not args.no_iso)
@@ -1341,6 +1495,59 @@ def main():
     p_junos = sub.add_parser('junos', help='Junos package, signature, inventory, and diff workflows')
     junos_sub = p_junos.add_subparsers(dest='junos_command', metavar='<command>')
     junos_sub.required = True
+    p_junos_target = junos_sub.add_parser('target', help='report Junos target and ELF ISA/ABI')
+    p_junos_target.add_argument('binary')
+    p_junos_target.set_defaults(func=cmd_junos)
+    p_junos_xrefs = junos_sub.add_parser('xrefs', help='resolve a string to internal MIPS functions')
+    p_junos_xrefs.add_argument('binary')
+    p_junos_xrefs.add_argument('substring')
+    p_junos_xrefs.set_defaults(func=cmd_junos)
+    p_junos_overlay = junos_sub.add_parser('overlay', help='recover and persist Junos function names')
+    p_junos_overlay.add_argument('binary')
+    p_junos_overlay.set_defaults(func=cmd_junos)
+    p_junos_gencfg = junos_sub.add_parser('gencfg', help='validate a gencfg message against Junos schemas')
+    p_junos_gencfg.add_argument('message', nargs='?', help='hexadecimal message bytes')
+    p_junos_gencfg.add_argument('--family', default='vrf-group')
+    p_junos_gencfg.add_argument('--list', dest='list_schemas', action='store_true', help='list schemas')
+    p_junos_gencfg.add_argument('--encode', action='store_true', help='construct and validate a VRF-group message')
+    p_junos_gencfg.add_argument('--group-id', type=lambda value: int(value, 0), default=0)
+    p_junos_gencfg.add_argument('--lsys-id', type=lambda value: int(value, 0), default=0)
+    p_junos_gencfg.add_argument('--operation', type=lambda value: int(value, 0), default=2)
+    p_junos_gencfg.add_argument('--vrf', type=lambda value: int(value, 0), action='append', help='VRF ID; repeat for multiple entries')
+    p_junos_gencfg.set_defaults(func=cmd_junos)
+    p_junos_fdiff = junos_sub.add_parser('function-diff', help='compare two explicitly bounded MIPS functions')
+    p_junos_fdiff.add_argument('old')
+    p_junos_fdiff.add_argument('new')
+    p_junos_fdiff.add_argument('old_va', type=lambda value: int(value, 0))
+    p_junos_fdiff.add_argument('new_va', type=lambda value: int(value, 0))
+    p_junos_fdiff.add_argument('--old-size', type=lambda value: int(value, 0))
+    p_junos_fdiff.add_argument('--new-size', type=lambda value: int(value, 0))
+    p_junos_fdiff.add_argument('--max-size', type=lambda value: int(value, 0), default=16384)
+    p_junos_fdiff.add_argument('--timeout', type=float, default=30.0)
+    p_junos_fdiff.add_argument('--cache', help='directory for content-addressed, resumable results')
+    p_junos_fdiff.add_argument('--json', help='write the complete comparison atomically')
+    p_junos_fdiff.set_defaults(func=cmd_junos)
+    p_junos_owner = junos_sub.add_parser('ownership', help='analyze bounded MIPS pointer ownership paths')
+    p_junos_owner.add_argument('binary')
+    p_junos_owner.add_argument('spec', help='JSON function and allocator/free model')
+    p_junos_owner.add_argument('--max-paths', type=int, default=256)
+    p_junos_owner.add_argument('--max-steps', type=int, default=20000)
+    p_junos_owner.add_argument('--json', help='write the complete ownership report')
+    p_junos_owner.set_defaults(func=cmd_junos)
+    p_junos_graph = junos_sub.add_parser('gencfg-graph', help='verify and report gencfg provenance and authorization edges')
+    p_junos_graph.add_argument('root', help='extracted Junos root for relative binary paths')
+    p_junos_graph.add_argument('spec', help='JSON node, edge, transport, and authorization specification')
+    p_junos_graph.add_argument('--json', help='write the complete graph report')
+    p_junos_graph.set_defaults(func=cmd_junos)
+    p_junos_slice = junos_sub.add_parser('provenance-slice', help='trace direct callers and basic-block call arguments')
+    p_junos_slice.add_argument('binary')
+    p_junos_slice.add_argument('target', type=lambda value: int(value, 0), help='callee virtual address')
+    p_junos_slice.add_argument('--args', default='a0,a1,a2', help='comma-separated argument registers')
+    p_junos_slice.add_argument('--back', type=int, default=64, help='backward instruction and event budget')
+    p_junos_slice.add_argument('--max-callers', type=int, default=64)
+    p_junos_slice.add_argument('--max-size', type=int, default=16384, help='maximum caller function size in bytes')
+    p_junos_slice.add_argument('--json', help='write the complete provenance report atomically')
+    p_junos_slice.set_defaults(func=cmd_junos)
     p_junos_extract = junos_sub.add_parser('extract', help='extract a signed Junos package')
     p_junos_extract.add_argument('package')
     p_junos_extract.add_argument('output')

@@ -48,3 +48,31 @@ def test_junos_verify_require_all(tmp_path, monkeypatch):
 
     with pytest.raises(SystemExit):
         cmd_junos(args)
+
+
+def test_junos_gencfg_cli(capsys):
+    message = bytearray(0x11C)
+    message[0:2] = (0x89).to_bytes(2, "big")
+    message[2:4] = (4).to_bytes(2, "big")
+    message[4:8] = (3).to_bytes(4, "big")
+    message[12:16] = (0x98).to_bytes(4, "big")
+    message[32:34] = (4).to_bytes(2, "big")
+    args = SimpleNamespace(junos_command="gencfg", message=message.hex(), family="vrf-group", list_schemas=False)
+
+    cmd_junos(args)
+
+    assert json.loads(capsys.readouterr().out)["valid"]
+
+
+def test_junos_target_cli(capsys, monkeypatch):
+    monkeypatch.setattr(
+        "ablation.analyzers.junos_target.describe_mips_elf",
+        lambda binary: "mips32/o32 (mips64r2 instructions, big-endian)",
+    )
+    args = SimpleNamespace(junos_command="target", binary="flowd_octeon")
+
+    cmd_junos(args)
+
+    report = json.loads(capsys.readouterr().out)
+    assert report["profile"] == "junos-octeon-o32"
+    assert "mips32/o32" in report["elf"]

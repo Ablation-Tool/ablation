@@ -1,0 +1,40 @@
+{
+  "schema_version": 2,
+  "families": {
+    "vrf-group": {
+      "description": "Junos VRF-group gencfg IPC messages",
+      "endian": "big",
+      "fields": {
+        "major_type": {"offset": 0, "type": "u16"},
+        "minor_type": {"offset": 2, "type": "u16"},
+        "operation": {"offset": 4, "type": "u32"},
+        "key_length": {"offset": 12, "type": "u32"},
+        "minor_type_check": {"offset": 32, "type": "u16"},
+        "group_id": {"offset": 34, "type": "u16"}
+      },
+      "operation": {"minimum": 0, "maximum": 3},
+      "operations_requiring_blob": [1, 2],
+      "minor_type": 4,
+      "blob_major_type": 137,
+      "blob_offset": 284,
+      "declared_length_offset": 0,
+      "group_id_offset": 132,
+      "lsys_id_offset": 136,
+      "declared_vrf_count_offset": 140,
+      "first_variable_entry_offset": 152,
+      "entry_type": 2,
+      "entry_length": 8,
+      "entry_alignment": 4,
+      "variants": {
+        "137": {
+          "key_length_minimum": 152,
+          "message_size_minimum": 284
+        },
+        "138": {
+          "key_length_minimum": 4,
+          "message_size_minimum": 4
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+vendor: juniper
+name: junos-octeon-o32
+architecture: mips32
+isa: mips64r2
+abi: o32
+endian: big
+userland: FreeBSD
+loader:
+  pure_elf_fallback: true
+  unsupported_metadata:
+    - DT_REL
+analysis:
+  window_backend: pure_elf_mips
+  register_annotator: mips_o32
+  string_resolver: got_aware_mips
+  skip_undecoded_words: true
+  gencfg_schema: junos_gencfg.json
