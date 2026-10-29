@@ -53,7 +53,7 @@ Step-by-step guides for common research tasks.
 | [Vulnerability Hunting](workflows/vuln-hunting.md) | Full loop: sweep to confirmed finding to disclosure |
 | [Cross-Version Diffing](workflows/cross-version.md) | Track a function across firmware patch releases |
 | [Go Binary RE](workflows/go-binaries.md) | Stripped Go binaries: pclntab recovery, garbled builds |
-| [Android Reverse Engineering](workflows/android-reverse-engineering.md) | End-to-end APK/XAPK → manifest → DEX → JNI → native taint tutorial, with confirmation and reporting guidance |
+| [Android Cross-Layer Analysis](workflows/android-reverse-engineering.md) | End-to-end APK/XAPK → manifest → DEX → JNI → native taint tutorial, with confirmation and reporting guidance |
 | [Crypto Analysis](workflows/crypto.md) | Encrypted firmware, XOR key recovery, JWT cracking |
 | [Source Code Audit](workflows/source-code-audit.md) | Compress a repo → rank files → confirm findings; full worked example |
 | [KASAN-Oracle](workflows/kasan-oracle.md) | Scan KASAN debug build first; verify candidates in stripped production build |
@@ -138,7 +138,7 @@ Analyze hardware description language source files: extract constants, compare v
 | [Huawei Squashfs Extractor](reference-modules/huawei-squashfs-extractor.md) | HuaweiSquashfsExtractor: pure-Python squashfs v4 XZ reader; ARM64 BCJ filter bypass via FORMAT_RAW; Huawei VRP V600R024+ S6750-H confirmed |
 | [AMI CramFS Extractor](reference-modules/ami-cramfs-extractor.md) | AmiCramFSExtractor: pure-Python reader for AMI-modified CramFS ASPEED AST2xxx BMC; 16-byte inode format: namelen@bits[8:13], data_off in w3; from_image with path and offset; extract_file/extract_all; QTECH G4DCL BMC confirmed |
 | [Android / APK](reference-modules/android.md) | APKParser AXML+DEX, DexAnalyzer, JniBridgeScanner (JNI_OnLoad/Java_*/opaque peer), BinderScanner: exported services, AIDL Stubs, onTransact; LibraryInventory: native.so scanner; arch, exports, JNI count, PLT hook detection, security score, classify_internals |
-| [Android Reverse Engineering Workflow](reference-modules/android-cross-layer.md) | End-to-end AndroidPackage base/split XAPK inventory; namespace/text AXML; overload-aware Java-like DEX; byte-backed ARM/Thumb ELF; exact canonical/JNINativeMethod bindings; fixed-point DEX-to-native taint; single-DEX mapper limit and known anomalies |
+| [Android Cross-Layer Analysis Workflow](reference-modules/android-cross-layer.md) | End-to-end AndroidPackage base/split XAPK inventory; namespace/text AXML; overload-aware Java-like DEX; byte-backed ARM/Thumb ELF; exact canonical/JNINativeMethod bindings; fixed-point DEX-to-native taint; single-DEX mapper limit and known anomalies |
 | [SPU Disassembler](reference-modules/spu-disassembler.md) | Cell BE SPU (PS3) instruction decoder: all formats RRR/RI18/RI16/RI10/RR/RI7, confirmed opcode table, frequency/coverage report, embedded SPU ELF extraction |
 | [HarmonyOS / ArkTS](reference-modules/harmonyos.md) | ABCParser Ark Bytecode v9–v13+: header, class walk, method iteration, CodeItem (ULEB128), native/string queries; ARKDisasm: 324-opcode ISA, smali output, call/string-load queries; ABCDecompiler: JS-like pseudocode, accumulator tracking, property/global name resolution via method_idx |
 | [LLM Analyst](reference-modules/llm.md) | LlmAnalyst ReAct agent loop |

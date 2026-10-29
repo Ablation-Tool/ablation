@@ -1,8 +1,8 @@
-# Android Reverse Engineering Workflow
+# Android Cross-Layer Analysis
 
 Analyze Android applications end to end: inventory APK/XAPK splits, decode binary Android XML, inspect DEX classes and Java-like pseudocode, disassemble bundled ELF libraries, recover exact JNI bindings, and trace selected network, camera, biometric, and IPC inputs through DEX into native sinks.
 
-This page is the complete capability reference. For a guided first analysis, see the [Android reverse-engineering tutorial](../workflows/android-reverse-engineering.md).
+This page is the complete capability reference. For a guided first analysis, see the [Android cross-layer analysis tutorial](../workflows/android-reverse-engineering.md).
 
 ## Who this is for
 

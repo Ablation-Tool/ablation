@@ -1,8 +1,8 @@
-# Android Reverse-Engineering Tutorial
+# Android Cross-Layer Analysis Tutorial
 
 This tutorial walks through an authorized static review of an Android APK or XAPK, from initial inventory to JNI mapping, cross-layer taint analysis, and manual confirmation. It is intended for a first end-to-end analysis.
 
-For complete command and output-field references, see [Android Reverse Engineering Workflow](../reference-modules/android-cross-layer.md).
+For complete command and output-field references, see [Android Cross-Layer Analysis](../reference-modules/android-cross-layer.md).
 
 ## Before you start
 
