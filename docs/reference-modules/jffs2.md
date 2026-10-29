@@ -110,6 +110,6 @@ A later safe extraction interface or general filesystem framework could reuse th
 ## See also
 
 - [Firmware Parsing: From Artifacts to Analysis](firmware-parsing.md)
-- [bFLT v4 Executables](bflt.md)
+- [bFLT (Binary Flat Format)](bflt.md)
 - [CAEN ASCII-Hex Firmware Containers](caen-ascii-hex.md)
 - [IoT Firmware Unpacker](iot-firmware-unpacker.md)

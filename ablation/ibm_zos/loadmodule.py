@@ -4,6 +4,7 @@ from pathlib import Path
 
 from .errors import FormatError
 from .image import LoadImage, Symbol, TextChunk
+from .relocation import parse_rld
 
 
 ESD_TYPES = {
@@ -22,6 +23,62 @@ def u24(data, offset):
 
 def u32(data, offset):
     return struct.unpack_from(">I", data, offset)[0]
+
+
+def _program_object_symbols(data, records):
+    signature = "IEWBXLF ".encode("cp500")
+    symbols = []
+    inventory = []
+    binary_inventory = []
+    errors = []
+    for record in records:
+        start = record["file_offset"]
+        end = start + record["length"]
+        cursor = start
+        while cursor < end:
+            cursor = data.find(signature, cursor, end)
+            if cursor < 0:
+                break
+            if cursor + 24 > end:
+                errors.append({"file_offset": cursor, "error": "truncated IEWBXLF header"})
+                break
+            kind = data[cursor + 16:cursor + 20].decode("cp500", errors="replace").strip()
+            if kind == "NAME":
+                count = u32(data, cursor + 20)
+                pointers_end = cursor + 24 + count * 4
+                if pointers_end > end:
+                    errors.append({"file_offset": cursor, "error": "IEWBXLF NAME pointers exceed record"})
+                else:
+                    for index in range(count):
+                        pointer = u32(data, cursor + 24 + index * 4)
+                        if pointer + 4 > len(data):
+                            errors.append({"file_offset": pointer, "error": "IEWBXLF name pointer outside input"})
+                            continue
+                        attributes = data[pointer]
+                        length = u16(data, pointer + 1)
+                        name_end = pointer + 3 + length
+                        if not length or name_end > len(data):
+                            errors.append({"file_offset": pointer, "error": "invalid IEWBXLF name length"})
+                            continue
+                        raw_name = data[pointer + 3:name_end]
+                        name = raw_name.decode("cp500", errors="replace")
+                        if not name.isprintable():
+                            binary_inventory.append({
+                                "name_hex": raw_name.hex(), "name_file_offset": pointer + 3,
+                                "attributes": attributes, "address": None,
+                            })
+                            continue
+                        symbols.append(Symbol(name, -1, "NAME", None, None, attributes, "IEWBXLF"))
+                        inventory.append({
+                            "name": name, "name_file_offset": pointer + 3,
+                            "attributes": attributes, "address": None,
+                        })
+            cursor += 8
+    return symbols, {
+        "program_object_names": inventory,
+        "program_object_binary_names": binary_inventory,
+        "program_object_name_errors": errors,
+    }
 
 
 def _program_object(data, source_name):
@@ -67,12 +124,13 @@ def _program_object(data, source_name):
     if text_file_offset + text_length > len(data):
         raise FormatError("program-object text exceeds input")
     chunks = [TextChunk(text_rva, text_file_offset, text_length)]
+    symbols, name_metadata = _program_object_symbols(data, records)
     metadata = {
         "module_size": module_size, "segment_record_file_offset": segment_offset,
         "text_file_offset": text_file_offset, "text_rva": text_rva,
-        "segment_words": segment_words,
+        "segment_words": segment_words, **name_metadata,
     }
-    return LoadImage(source_name, hashlib.sha256(data).hexdigest(), "IEWPLMH", data[text_file_offset:text_file_offset + text_length], [], chunks, entry_rva, records, metadata)
+    return LoadImage(source_name, hashlib.sha256(data).hexdigest(), "IEWPLMH", data[text_file_offset:text_file_offset + text_length], symbols, chunks, entry_rva, records, metadata)
 
 
 def _cesd(data):
@@ -141,9 +199,9 @@ def _pds_load_module(data, source_name):
             raise FormatError(f"unsupported record ID {record_id:#x} at {offset:#x}")
         control_length = u16(data, offset + 4)
         rld_length = u16(data, offset + 6)
-        control_offset = offset + 16
-        rld_offset = control_offset + control_length
-        record_end = rld_offset + rld_length
+        rld_offset = offset + 16
+        control_offset = rld_offset + rld_length
+        record_end = control_offset + control_length
         if record_end > len(data):
             raise FormatError("truncated control/RLD data")
         if control_length % 4:
@@ -183,11 +241,24 @@ def _pds_load_module(data, source_name):
                 raise FormatError("conflicting overlapping TEXT")
             image[position] = value
             covered[position] = 1
+    relocations = []
+    rld_state = {}
+    for record in records:
+        if not record["rld_length"]:
+            continue
+        start = record["rld_file_offset"]
+        raw_rld = data[start:start + record["rld_length"]]
+        entries = parse_rld(raw_rld, symbols, record["index"], start, rld_state)
+        for entry in entries:
+            if entry.rva + entry.length > image_size:
+                raise FormatError(f"RLD address outside load image at {entry.rva:#x}")
+        relocations.extend(entry.to_dict() for entry in entries)
     ceestart = next((symbol for symbol in symbols if symbol.name == "CEESTART" and symbol.kind.startswith("SD")), None)
     metadata = {
         "cesd_records": cesd_records, "idrs": idrs,
         "text_covered_bytes": sum(covered), "text_gap_bytes": image_size - sum(covered),
         "ceestart": ceestart.__dict__ if ceestart else None,
+        "relocation_count": len(relocations), "relocations": relocations,
     }
     return LoadImage(source_name, hashlib.sha256(data).hexdigest(), "PDS_LOAD_MODULE", bytes(image), symbols, chunks, None, records, metadata)
 

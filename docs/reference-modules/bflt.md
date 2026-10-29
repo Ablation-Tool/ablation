@@ -1,24 +1,62 @@
-# bFLT v4 Executables
+<a id="bflt-binary-flat-format"></a>
+# bFLT (Binary Flat Format)
 
-`BfltImage` reads version-4 binary Flat (`bFLT`) programs used by uClinux and other embedded Linux systems. It exposes text, initialized data, and an address-indexed memory image without running the program or requiring its original operating system.
+`BfltImage`, `BfltArm32`, and `BfltBinaryContext` provide one bounded workflow for **binary Flat (`bFLT`)** executables: validate the container, recover text/data/BSS and link-time references, apply supported Linux RAM relocations, and build an analysis context with functions, calls, strings, and literal references.
 
----
-
-## Why an executable needs its own loader
-
-An analyst cannot reliably disassemble a file by treating every byte as an instruction. Executable files also contain headers, constants, pointers, relocation information, and descriptions of memory that should be created at runtime.
-
-ELF loaders recover this structure for ELF programs, but embedded systems may use bFLT instead. bFLT stores a compact header followed by a flat text/data image. Its header uses big-endian integers even when the program contains little-endian ARM instructions. Assuming one byte order for both layers produces invalid addresses or nonsensical disassembly.
-
-`BfltImage` supplies the missing boundary between recovered file bytes and architecture-specific analysis. It was added after six bFLT executables were recovered from the CAEN C111C JFFS2 image, including its web server and command services.
-
-See [Firmware Parsing: From Artifacts to Analysis](firmware-parsing.md) for the surrounding pipeline.
+**bFLT means binary Flat. It does not mean binary Floating Point and is not bfloat16.** It is an executable container used mainly by uClinux and other embedded or no-MMU Linux environments. It is unrelated to IBM Granite foundation models, IBM Storage Scale, NVIDIA BlueField, floating-point data types, or machine-learning precision formats.
 
 ---
 
-## What “flat” means
+## Why this exists
 
-Flat addresses in this API are offsets in an image whose first byte is the 64-byte bFLT header. They are not automatically physical addresses, ELF virtual addresses, or a runtime load base chosen by an operating system.
+1. **Flat executables still have structure.** Headers, entry points, text, initialized data, BSS, pointers, and relocation records must be separated before disassembly. Treating every byte as an instruction produces invalid analysis.
+
+2. **The format and the ISA are different layers.** bFLT v4 stores header fields in big-endian order even when the target contains little-endian ARM instructions. Pointer and relocation endianness must be established independently rather than inferred from instruction decoding.
+
+3. **File addresses are not necessarily runtime addresses.** A self-relocating program can adjust stored pointers for a selected load base. Link-time references remain useful evidence, but a relocated context is required when the analysis question concerns runtime values.
+
+4. **One workflow needs explicit boundaries.** Parsing, link-time reference recovery, and relocation-aware context construction have different responsibilities and uncertainty. Keeping those boundaries visible prevents a partial or wrongly mapped image from looking authoritative.
+
+---
+
+## How it works
+
+```mermaid
+flowchart TD
+    A(["bFLT file or recovered bytes"]):::input --> B["BfltImage\nValidate 64-byte big-endian header"]:::primary
+    B --> C{"Compression mode"}:::neutral
+    C -->|"RAM / uncompressed"| D["Preserve stored layout"]:::secondary
+    C -->|"GZIP / GZDATA"| E["Expand bounded payload\nUse logical uncompressed offsets"]:::secondary
+    C -->|"GOT-PIC / invalid flags"| Z["Reject explicitly"]:::neutral
+    D --> F["Text + initialized data + BSS range\nBounded reads and relocation records"]:::tertiary
+    E --> F
+    F --> G["BfltArm32\nStored pointers and PC-relative literals"]:::primary
+    F --> H["relocate_bflt\nMap relocation slot and stored value"]:::primary
+    G --> I["Link-time evidence\nNo invented runtime base"]:::output
+    H --> J{"Every value mapped?"}:::neutral
+    J -->|"yes"| K["Complete relocated image"]:::secondary
+    J -->|"strict default"| L["BfltRelocationError"]:::neutral
+    J -->|"allow_unresolved"| M["Partial image\nrelocation_complete=False"]:::neutral
+    K --> N["BfltBinaryContext\nFunctions, calls, strings, literal references"]:::tertiary
+    M --> N
+    N --> O(["BinaryContext queries\nWindowAnalyzer.from_bflt"]):::output
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+```
+
+The three APIs remain separate so callers can choose the appropriate evidence level. They are documented as one capability because they form one analysis path rather than three unrelated format readers.
+
+---
+
+## Container and address model
+
+### What “flat” means
+
+Flat addresses in `BfltImage` are offsets in an image whose first byte is the 64-byte bFLT header. They are not automatically physical addresses, ELF virtual addresses, or an operating system's chosen runtime base.
 
 ```text
 0x00               64-byte header
@@ -29,38 +67,27 @@ data_end..bss_end    zero-initialized BSS, not stored in memory_image
 reloc_start         physical relocation table in the input file
 ```
 
-Text and initialized data have stored bytes. BSS describes zero-initialized memory, so it has a range but no file payload. The relocation table belongs to the file layout, not to `data_bytes`.
+Text and initialized data have stored bytes. BSS describes memory that should be zero-initialized and therefore has a range but no file payload. The relocation table belongs to the file layout, not to `data_bytes`.
 
-This separation prevents common mistakes: reading a string from BSS as though it were stored in the file, disassembling the relocation table, or treating a flat address as a guaranteed hardware address.
+This prevents reading BSS as stored data, disassembling the relocation table, or assuming that a flat offset is a proven hardware address.
 
----
+### Supported flags
 
-## How the parser works
+| Flag | Meaning | Handling |
+|---|---|---|
+| `RAM` (`0x01`) | Contiguous RAM layout | Supported |
+| `GOTPIC` (`0x02`) | Position-independent GOT layout | Rejected until that relocation model is implemented |
+| `GZIP` (`0x04`) | Everything after the header is compressed, including relocation data | Supported with bounded expansion |
+| `GZDATA` (`0x08`) | Header and text are stored; data and relocation data are compressed | Supported with bounded expansion |
+| `KTRACE` (`0x10`) | Loader tracing request | Preserved as metadata; no execution or tracing |
 
-1. Read and unpack the 64-byte header with big-endian integer fields.
-2. Require revision 4, zero reserved fields, supported flags, and coherent entry, text, data, BSS, and relocation ranges.
-3. Enforce input and memory limits before constructing the flat image. Both default to 64 MiB.
-4. For RAM-style images, copy the initialized image through `data_end`.
-5. For GZIP (`0x04`), decompress everything after the header, including relocation data, and split it at `data_end`.
-6. For GZDATA (`0x08`), preserve header and text, then decompress data and relocation data and split them at `data_end`.
-7. For uncompressed input, validate the physical relocation table. For compressed input, require `reloc_start == data_end`, the logical uncompressed offset.
-8. Expose bounded slices and reads. Preserve trailing-byte counts for uncompressed input instead of silently classifying them.
+Simultaneous compression modes are rejected. For compressed images, `reloc_start` is a logical uncompressed offset and must equal `data_end`; it is not an offset into the compressed file.
 
-`GOTPIC` (`0x02`) is rejected until its relocation model is implemented. `KTRACE` (`0x10`) is metadata only. Simultaneous compression modes are rejected. Compressed input therefore has two coordinate systems: physical bytes in the stored file and logical bytes after decompression. Confusing those coordinate systems can truncate the stream or place the relocation table at a nonexistent address.
-
-Malformed headers, unsupported flags, truncated relocations, invalid gzip streams, and output-size mismatches raise `BfltError`.
+The parser enforces revision, reserved fields, coherent ranges, input limits, output limits, relocation bounds, and decompression sizes. Defaults limit input and constructed memory to 64 MiB. Invalid gzip streams, unsupported flags, truncated relocations, and output-size mismatches raise `BfltError`.
 
 ---
 
-## Why this works
-
-The bFLT header supplies lengths and offsets for each stored region. Once those values are checked, slicing produces the original text and initialized data, and decompression restores the same flat layout for compressed files. The address of a byte in `memory_image` remains its flat address.
-
-No processor assumption is needed for this transformation. ISA selection happens afterward. Keeping format parsing separate from instruction decoding allows the same loader to serve ARM, MIPS, or another bFLT target when its layout is supported.
-
----
-
-## Usage
+## Parse an executable
 
 ```python
 from ablation.parsers.bflt import BfltImage
@@ -76,54 +103,189 @@ assert code == image.memory_image[0x40:image.data_start]
 
 `from_bytes()` accepts a program recovered from a filesystem. `metadata()` reports ranges, entry, BSS end, flags, compression, relocation count, and trailing bytes. `read_memory()` rejects reads beyond initialized memory.
 
-For an ARM32 target whose ISA has been independently confirmed:
+The parser does not infer an ISA or apply relocations. Confirm the processor independently; bFLT revision 4 is a container version, not an architecture identifier. The same container parser can serve different ISAs when their analysis models are implemented.
 
-```python
-from capstone import Cs, CS_ARCH_ARM, CS_MODE_ARM, CS_MODE_LITTLE_ENDIAN
+---
 
-decoder = Cs(CS_ARCH_ARM, CS_MODE_ARM | CS_MODE_LITTLE_ENDIAN)
-decoder.skipdata = True
-entry_offset = image.entry - 0x40
-for insn in decoder.disasm(code[entry_offset:], image.entry):
-    print(f'{insn.address:#x}: {insn.mnemonic} {insn.op_str}')
+## Recover ARM32 link-time references
+
+`BfltArm32` resolves aligned stored pointers and supported PC-relative ARM32 literal-pool references in an already validated image. The caller must establish little-endian ARM state and explicitly select pointer byte order.
+
+Consider:
+
+```text
+0x40: ldr r0, [pc, #4]
+0x44: ...
+0x48: ...
+0x4c: 00 02 00 00
 ```
 
-`skipdata` lets Capstone represent unrecognized or inline-data words without losing synchronization. It does not prove that every skipped word is data. Text can contain literal pools, and data can contain addresses requiring relocation analysis.
+In ARM state, the instruction's PC is `0x48`, so the load reads the word at `0x4c`. If that word is big-endian, its stored value is `0x00020000`:
 
-Instruction endianness does not determine pointer or relocation endianness. The recovered C111C programs use little-endian ARM instructions but big-endian pointer tables and big-endian relocation entries. Read those words with their observed format, not with the instruction decoder's byte order. Relocations remain unapplied by `BfltImage`, so a pointer found in the file is link-time evidence rather than proof of a runtime address after the self-relocation stub runs.
+```text
+instruction at 0x40 → literal at 0x4c → stored value 0x20000
+```
 
-For independently confirmed little-endian ARM32 images, [BfltArm32](bflt-arm32.md) can resolve aligned pointer candidates and two-level PC-relative literal references. It preserves this link-time/runtime distinction and does not apply the missing runtime load base.
+There are two separate hops. Decoding the literal as another instruction loses the reference, using native byte order can produce the wrong value, and treating the stored value as a final runtime address can be wrong after self-relocation.
+
+```python
+from ablation.analyzers.bflt_arm32 import BfltArm32
+from ablation.parsers.bflt import BfltImage
+
+image = BfltImage.from_path('/path/to/program')
+context = BfltArm32(image, pointer_byteorder='big')
+
+print(hex(context.read_pointer(0x4C)))  # 0x20000
+for reference in context.literal_references(0x20000):
+    print(hex(reference.instruction_address),
+          hex(reference.literal_address),
+          hex(reference.value))
+```
+
+Available operations include:
+
+- `instructions(start=0x40, end=None)`: bounded, four-byte-aligned instruction decoding inside text.
+- `read_pointer(address)`: one explicitly endian 32-bit stored-pointer read.
+- `pointer_references(target, start=0x40, end=None)`: aligned candidate words in initialized memory.
+- `literal_references(target)`: supported PC-relative loads whose stored pointer equals `target`.
+- `literal_references(target, dereference=False)`: loads whose literal-pool slot itself equals `target`; the returned value is `None`.
+- `literal_address(insn)`: the supported ARM-state PC-relative calculation.
+
+An aligned pointer is only a candidate. A two-level literal reference is stronger instruction-level evidence, but it remains link-time evidence until relocation is applied. Thumb, big-endian ARM, register-relative constructions, and unsupported load forms are outside this reader's coverage.
 
 ---
 
-## What this adds for the user
+## Build a relocation-aware BinaryContext
 
-The parser turns a previously manual loading exercise into a reusable, bounded API. A user can inspect service configuration and code in an embedded Linux filesystem without first rebuilding its runtime or writing a one-off header decoder.
+`BfltBinaryContext` applies supported Linux RAM relocations, creates zero-filled BSS, and exposes functions, direct calls, strings, literal references, and caller/callee indexes through the shared context interface.
 
-This is a small enabling component, not a bFLT decompiler. The parser itself does not apply relocations or infer an ISA. For the larger next step, [BfltBinaryContext](bflt-context.md) applies supported relocations and recovers function candidates, direct calls, strings, and literal references through the normal context interface.
+For a contiguous RAM layout, if `base_va` is the runtime address of the 64-byte header, an image-relative value `r` maps as:
 
-That separation keeps the loader bounded and the address model explicit. The adapter should be used with relocation-aware tests rather than guesses that could make later security analysis look precise while being wrong.
+```text
+runtime_address = base_va + 0x40 + r
+```
+
+The valid relative range is `0 .. bss_end - 0x40`. Each relocation entry requires two mappings:
+
+```text
+entry offset → mapped relocation slot → stored pointer value → relocated value
+```
+
+The slot and the value have different meanings and both must be mapped. Zero-valued pointers remain zero. Out-of-range slots fail even when unresolved values are allowed. Relocated pointers in this ARM32 model are written in little-endian runtime order, independently of stored file order.
+
+The implementation follows the [Linux bFLT loader](https://github.com/torvalds/linux/blob/master/fs/binfmt_flat.c) and the [elf2flt producer](https://github.com/uclinux-dev/elf2flt), without executing the program or emulating a complete process.
+
+### Strict and partial outcomes
+
+The default is strict: an unmapped stored value raises `BfltRelocationError` with its entry index and slot. This prevents a plausible but incorrect runtime image from silently driving later analysis.
+
+With `allow_unresolved=True`, unresolved words are preserved and recorded:
+
+- `UNRESOLVED_OUT_OF_RANGE`: no main-image mapping exists.
+- `UNRESOLVED_SHARED_LIBRARY`: a nonzero library identifier has no supplied library mapping.
+
+`relocation_complete` is then false and `unresolved_relocations` contains the evidence. **A partial model is not a guaranteed runtime image.**
+
+### Usage
+
+```python
+from ablation.analyzers.bflt_context import BfltBinaryContext
+
+ctx = BfltBinaryContext.from_path(
+    '/path/to/program',
+    base_va=0,
+    pointer_byteorder='big',
+    allow_unresolved=False,
+)
+
+print(ctx.summary())
+print(ctx.metadata())
+for record in ctx.relocations[:4]:
+    print(record)
+```
+
+`from_bytes()` accepts a complete stored file. `from_image()` accepts a previously parsed `BfltImage`. Complete original bytes determine the context SHA-256 when available; otherwise the parsed image and relocation table are hashed rather than pretending to identify the original file.
+
+The context exposes:
+
+- `memory_image`: relocated header, text, initialized data, and zero-filled BSS.
+- `relocations` and `unresolved_relocations`: entry index, offset, slot, stored/relocated values, and status.
+- `relocation_complete`: whether every entry was applied.
+- `read_memory(address, size)`: bounded reads in the selected address model.
+- `func_starts`: entry, direct-call targets, and ARM prologue candidates.
+- `call_edges`: direct `BL`/`BLX` edges inside text.
+- `strings`: printable strings in initialized data.
+- `literal_references(target)`: supported PC-relative references to a relocated pointer.
+- `string_xrefs()`, `strings_in_func()`, `funcs_referencing_string()`, `callers_of()`, and `callees_of()`: shared context queries.
+
+`BfltBinaryContext` subclasses `BinaryContext`; it does not need an ELF parser or fabricated ELF section table.
 
 ---
 
-## Disassembly checklist and limitations
+## Window analysis
 
-1. Preserve the original file hash before analysis.
-2. Confirm the ISA independently. bFLT revision 4 is not an architecture identifier.
-3. Disassemble from flat address `image.entry`, not an assumed ELF virtual base.
-4. Resolve target-specific relocation semantics before trusting absolute pointers. Relocations are exposed but not applied.
-5. Account for zero-filled BSS when interpreting globals; it is not included in `memory_image`.
-6. RAM, GZIP (`0x04`), GZDATA (`0x08`), and KTRACE (`0x10`) are supported. GOT-PIC (`0x02`) and simultaneous compression modes fail explicitly.
-7. Nonzero trailing bytes are counted, not silently treated as code or relocations.
-8. A valid layout does not prove safe code, complete firmware, or suitability for a particular board.
+`WindowAnalyzer.from_bflt(ctx)` uses the relocated image and text bounds rather than reparsing the file as ELF.
+
+```python
+from ablation.analyzers.window_analyzer import WindowAnalyzer
+
+wa = WindowAnalyzer.from_bflt(ctx)
+print(wa.dump_text(0x1518, window=256))
+print(wa.calls_in_window(0x1518, window=0x300))
+```
+
+This is the appropriate path for relocated function windows, direct-call inspection, and string references. Other analyzers that reparse `ctx.path` as ELF still need their own bFLT-aware path.
 
 ---
 
-## See also
+## What this provides
 
-- [bFLT ARM32 Link-Time References](bflt-arm32.md)
-- [Relocation-Aware bFLT BinaryContext](bflt-context.md)
-- [Firmware Parsing: From Artifacts to Analysis](firmware-parsing.md)
-- [JFFS2 Filesystem Reader](jffs2.md)
-- [CAEN ASCII-Hex Firmware Containers](caen-ascii-hex.md)
-- [WindowAnalyzer](window-analyzer.md)
+The unified workflow turns a recovered flat executable into bounded, reviewable analysis without requiring its original operating system:
+
+- A reusable bFLT v4 parser with compression and resource checks.
+- Explicit pointer-endian link-time reference recovery.
+- Relocation records with strict or explicitly partial outcomes.
+- A shared context for function, call, string, and literal-reference analysis.
+- A window-analysis path that respects the relocated address model.
+
+It is not a bFLT decompiler, operating-system emulator, complete function-boundary proof, or vulnerability verdict. The value is making container, link-time, relocation, and analysis evidence available without hiding their differences.
+
+---
+
+## Limitations and review checklist
+
+1. Preserve the original file hash and confirm the ISA independently.
+2. Disassemble from `image.entry`, not an assumed ELF virtual base.
+3. Select pointer and relocation byte orders from target evidence, not instruction endianness alone.
+4. Do not mistake link-time pointers for final runtime addresses after self-relocation.
+5. Account for zero-filled BSS; it is not stored in the parser's `memory_image`.
+6. GOT-PIC and simultaneous compression modes fail explicitly. Shared-library values need corresponding library mappings.
+7. Function entries and prologues are candidates, not complete boundaries or a complete CFG. Indirect calls are not resolved automatically.
+8. Empty `plt` and `exports` do not prove the absence of library calls; this model has no dynamic symbol table.
+9. Valid layout, decoded instructions, and relocated pointers do not establish reachability, authentication, complete firmware, or a vulnerability.
+
+Run related tests with:
+
+```bash
+python3 -m pytest -q tests/test_bflt.py tests/test_bflt_context.py
+```
+
+---
+
+## Related workflows
+
+- [BinaryContext](binary-context.md) documents the shared context interface and its limits.
+- [WindowAnalyzer](window-analyzer.md) documents bounded function and disassembly windows.
+- [JFFS2 Filesystem Recovery](jffs2.md) covers filesystem images from which bFLT programs can be recovered.
+- [CAEN ASCII-Hex Firmware Containers](caen-ascii-hex.md) covers the separate CAEN transport format.
+- [Firmware Parsing: From Artifacts to Analysis](firmware-parsing.md) places this workflow in the broader firmware pipeline.
+
+### API map
+
+| API | Responsibility |
+|---|---|
+| `ablation.parsers.bflt.BfltImage` | Bounded bFLT v4 parsing, decompression, regions, and stored reads |
+| `ablation.analyzers.bflt_arm32.BfltArm32` | Explicit-endian stored pointers and PC-relative literal references |
+| `ablation.analyzers.bflt_context.relocate_bflt` | Relocation-slot/value mapping and explicit unresolved outcomes |
+| `ablation.analyzers.bflt_context.BfltBinaryContext` | Relocated memory, functions, calls, strings, and context queries |
+| `ablation.analyzers.window_analyzer.WindowAnalyzer` | Relocated bFLT window analysis |

@@ -6,14 +6,19 @@ import unittest
 from collections import OrderedDict
 from pathlib import Path
 
+from ablation.ibm_zos.callgraph import build_call_graph
 from ablation.ibm_zos.cli import main
+from ablation.ibm_zos.compare import compare_images, compare_side_decks
+from ablation.ibm_zos.decompiler import S390Decompiler, _branch_parts
 from ablation.ibm_zos.errors import FormatError, SafetyError
-from ablation.ibm_zos.functions import decode_cfg, prolog_candidates, recover_functions
-from ablation.ibm_zos.image import LoadImage
-from ablation.ibm_zos.loadmodule import parse_load_image
+from ablation.ibm_zos.functions import FunctionInfo, Recovery, decode_cfg, prolog_candidates, recover_functions
+from ablation.ibm_zos.image import LoadImage, Symbol
+from ablation.ibm_zos.inventory import instruction_inventory
+from ablation.ibm_zos.loadmodule import _program_object_symbols, parse_load_image
 from ablation.ibm_zos.netdata import (
     Member, _extract_members, _parse_directory_record, parse_netdata, parse_text_units,
 )
+from ablation.ibm_zos.relocation import parse_rld, relocate_image
 from ablation.ibm_zos.s390 import S390Decoder
 from ablation.ibm_zos.sid import compare_inventories, demangle_ibm_cpp, parse_side_deck
 
@@ -182,6 +187,23 @@ class S390Tests(unittest.TestCase):
         negative = self.decoder.decode(bytes.fromhex("e3000fffff50"))
         self.assertEqual(negative.operands, "%r0, -0x1")
 
+    def test_extended_opcode_families(self):
+        samples = {
+            "a5f60000": "nilh", "a7010001": "tmll", "bd71e000": "clm",
+            "bf0f400c": "icm", "b25e0018": "srst", "c20000000001": "msgfi",
+            "e3e040000024": "stg",
+        }
+        for encoded, mnemonic in samples.items():
+            with self.subTest(mnemonic=mnemonic):
+                self.assertEqual(self.decoder.decode(bytes.fromhex(encoded)).mnemonic, mnemonic)
+        self.assertEqual(self.decoder.decode(bytes.fromhex("bd71e000")).operands, "%r7, 0x1, 0x0(%r14)")
+        self.assertEqual(self.decoder.decode(bytes.fromhex("c01000000002")).target, 4)
+
+    def test_linkage_and_never_branch_semantics(self):
+        self.assertEqual(self.decoder.decode(bytes.fromhex("051e")).flow, "return")
+        self.assertEqual(self.decoder.decode(bytes.fromhex("0530")).flow, "next")
+        self.assertEqual(self.decoder.decode(bytes.fromhex("0707")).flow, "next")
+
     def test_unknown_instruction_preserves_bytes(self):
         instruction = self.decoder.decode(b"\xff" * 6)
         self.assertFalse(instruction.known)
@@ -201,10 +223,18 @@ class S390Tests(unittest.TestCase):
             self.assertEqual(function.code_rva, 96 if trampoline else 80)
             self.assertEqual(function.kind, "PPA_LE" if trampoline else "PPA_CPP")
 
+    def test_ppa_code_prolog_is_not_duplicated(self):
+        image = ppa_image()
+        image.text = image.text[:80] + bytes.fromhex("50e0d004") + image.text[84:]
+        self.assertEqual(len(recover_functions(image).functions), 1)
+
     def test_xplink_prolog(self):
         candidates = prolog_candidates(bytes.fromhex("50e0484c07fe"), S390Decoder())
         self.assertEqual(len(candidates), 1)
         self.assertEqual(candidates[0].kind, "XPLINK_SAVE_STORE")
+        extended = prolog_candidates(bytes.fromhex("e3e04000002407fe"), S390Decoder())
+        self.assertEqual(len(extended), 1)
+        self.assertEqual(extended[0].kind, "XPLINK_SAVE_STORE")
 
 
 class SideDeckTests(unittest.TestCase):
@@ -218,6 +248,18 @@ class SideDeckTests(unittest.TestCase):
         }
         for symbol, expected in samples.items():
             self.assertEqual(demangle_ibm_cpp(symbol), (expected, "demangled"))
+
+    def test_template_backreference_and_operator_demangles(self):
+        samples = {
+            "__ct__5IDateFiT1": "IDate::IDate(int, int)",
+            "__eq__FRC9IThreadIdT1": "operator==(const IThreadId&, const IThreadId&)",
+            "__vc__7IStringCFi": "IString::operator[](int) const",
+            "__dt__16IBagOnKeyBagImplXT21IKeyBagAsHshTableImpl_Fv": "IBagOnKeyBagImpl<IKeyBagAsHshTableImpl>::~IBagOnKeyBagImpl()",
+        }
+        for symbol, expected in samples.items():
+            self.assertEqual(demangle_ibm_cpp(symbol), (expected, "demangled"))
+        self.assertEqual(demangle_ibm_cpp("__vtt10IDirectory"), (None, "virtual_table"))
+        self.assertEqual(demangle_ibm_cpp("__fsm_tab____ls__Fv"), (None, "static_table"))
 
     def test_parse_normalize_and_compare(self):
         first = parse_side_deck(sid_records(
@@ -243,6 +285,136 @@ class SideDeckTests(unittest.TestCase):
         self.assertEqual(len(deck.statements), 1)
         self.assertEqual(deck.statements[0].end_record, 2)
         self.assertEqual(deck.statements[0].demangled, "operator<<(IUnicode::EUnicodeBounds&, IDataStream&)")
+
+
+class RelocationTests(unittest.TestCase):
+    def test_rld_continuation_and_signed_relocation(self):
+        symbols = [Symbol("SECTION", 0x100, "SD", symbol_id=1)]
+        state = {}
+        first = parse_rld(bytes.fromhex("000100010d000018"), symbols, 1, 0x100, state)
+        second = parse_rld(bytes.fromhex("0400002c"), symbols, 2, 0x200, state)
+        self.assertEqual(len(first), 1)
+        self.assertTrue(second[0].repeated)
+        self.assertEqual(second[0].target_address, 0x100)
+        extended = parse_rld(bytes.fromhex("000100014c000030"), symbols)[0]
+        self.assertEqual(extended.length, 8)
+        relative = parse_rld(bytes.fromhex("000100013c000034"), symbols)[0]
+        self.assertEqual(relative.kind, "RI")
+        self.assertFalse(relative.resolved)
+        text = bytearray(64)
+        text[0x18:0x1C] = bytes.fromhex("fffffffe")
+        text[0x2C:0x2E] = bytes.fromhex("0001")
+        image = LoadImage(
+            "rld", "", "PDS_LOAD_MODULE", bytes(text), symbols, [], None, [],
+            {"relocations": [item.to_dict() for item in first + second]},
+        )
+        unchanged, _ = relocate_image(image)
+        self.assertEqual(unchanged, image.text)
+        relocated, report = relocate_image(image, 0x1000)
+        self.assertEqual(relocated[0x18:0x1C], bytes.fromhex("00000ffe"))
+        self.assertEqual(relocated[0x2C:0x2E], bytes.fromhex("1001"))
+        self.assertEqual(report["applied_count"], 2)
+        with self.assertRaises(ValueError):
+            relocate_image(image, -1)
+        with self.assertRaises(FormatError):
+            parse_rld(b"\0" * 4)
+
+
+class ProgramObjectNameTests(unittest.TestCase):
+    def test_name_inventory_does_not_infer_addresses(self):
+        data = bytearray(512)
+        signature = "IEWBXLF ".encode("cp500")
+        data[100:108] = signature
+        struct.pack_into(">II", data, 108, 24, 0x01000000)
+        data[116:120] = "NAME".encode("cp500")
+        struct.pack_into(">II", data, 120, 1, 400)
+        data[400] = 1
+        struct.pack_into(">H", data, 401, 4)
+        data[403:407] = "TEST".encode("cp500")
+        symbols, metadata = _program_object_symbols(data, [{"file_offset": 100, "length": 28}])
+        self.assertEqual([symbol.name for symbol in symbols], ["TEST"])
+        self.assertEqual(symbols[0].address, -1)
+        self.assertIsNone(metadata["program_object_names"][0]["address"])
+        self.assertEqual(metadata["program_object_name_errors"], [])
+
+
+class CallGraphTests(unittest.TestCase):
+    def test_base_register_rld_call_resolution(self):
+        raw = bytes.fromhex("053058f0301005ef051e")
+        instructions = list(S390Decoder().linear(raw))
+        function = FunctionInfo(0, 0, "caller", "PPA_CPP", "high", instructions=instructions, complete=True)
+        image = LoadImage(
+            "calls", "", "PDS_LOAD_MODULE", raw + bytes(0x90 - len(raw)), [Symbol("target", 0x80, "LR")], [], None, [],
+            {"relocations": [{"rva": 0x12, "resolved": True, "target_address": 0x80}]},
+        )
+        graph = build_call_graph(image, Recovery([function], []))
+        self.assertEqual(len(graph.edges), 1)
+        edge = graph.edges[0]
+        self.assertEqual((edge.target_rva, edge.target_name, edge.evidence), (0x80, "target", "rld:0x12"))
+        self.assertEqual(graph.unresolved, [])
+
+
+class DecompilerTests(unittest.TestCase):
+    @staticmethod
+    def function(raw):
+        image = LoadImage("decompile", "", "IEWPLMH", raw, [], [], None, [])
+        instructions = list(S390Decoder().linear(raw))
+        function = FunctionInfo(0, 0, "test", "PPA_CPP", "high", instructions=instructions, complete=True)
+        return image, function
+
+    def test_expression_and_stack_recovery(self):
+        image, function = self.function(bytes.fromhex("5810d0044120d0081a1218f107fe"))
+        result = S390Decompiler(image).decompile(function)
+        self.assertIn("stack_4", result.stack_variables)
+        self.assertIn("return (stack_4 + (r13 + 0x8));", result.pseudo_c)
+
+    def test_simple_loop_structuring(self):
+        image, function = self.function(bytes.fromhex("a71e0000a7840006a71affffa7f4fffa07fe"))
+        result = S390Decompiler(image).decompile(function)
+        self.assertEqual(result.structured_loop_count, 1)
+        self.assertIn("while", result.pseudo_c)
+        self.assertIn("r1 = (r1 + -0x1);", result.pseudo_c)
+
+    def test_loop_with_external_predecessor_keeps_labels(self):
+        image, function = self.function(bytes.fromhex("a7f40002a71e0000a7840006a71affffa7f4fffa07fe"))
+        result = S390Decompiler(image).decompile(function)
+        self.assertEqual(result.structured_loop_count, 0)
+        self.assertIn("loc_4:", result.pseudo_c)
+
+    def test_unknown_operation_is_explicit(self):
+        image, function = self.function(b"\xff" * 6)
+        result = S390Decompiler(image).decompile(function)
+        self.assertEqual(result.unknown_statement_count, 1)
+        self.assertIn("UNKNOWN_0xffffffffffff", result.pseudo_c)
+
+    def test_external_branch_and_memcmp_condition(self):
+        image, function = self.function(bytes.fromhex("a7f40010"))
+        result = S390Decompiler(image).decompile(function)
+        self.assertIn("external_branch(0x20);", result.pseudo_c)
+        self.assertNotIn("goto loc_20", result.pseudo_c)
+        self.assertNotIn("None", _branch_parts(("memcmp", "memcmp(a, b)", None), 4))
+
+
+class ComparisonAndInventoryTests(unittest.TestCase):
+    def test_image_and_side_deck_comparison(self):
+        image = ppa_image()
+        result = compare_images(image, image)
+        self.assertTrue(result["text_identical"])
+        self.assertEqual(result["exact_function_match_count"], 1)
+        first = parse_side_deck(sid_records(" IMPORT CODE 'ASCCOLL'  currentPID__12IApplicationFv"))
+        second = parse_side_deck(sid_records(
+            " IMPORT CODE 'ASCCOLL'  currentPID__12IApplicationFv",
+            " IMPORT CODE,'IOC','__ct__5IDateFiT1'",
+        ))
+        comparison = compare_side_decks(first, second)
+        self.assertEqual(comparison["semantic"]["intersection_count"], 1)
+        self.assertEqual(comparison["semantic"]["right_only_count"], 1)
+
+    def test_instruction_inventory(self):
+        result = instruction_inventory(ppa_image())
+        self.assertEqual(result["function_count"], 1)
+        self.assertEqual(result["unknown_instruction_count"], 0)
+        self.assertGreaterEqual(result["known_instruction_count"], 1)
 
 
 class OutputSafetyTests(unittest.TestCase):
@@ -279,6 +451,25 @@ class CliTests(unittest.TestCase):
             self.assertEqual(summary["items"][0]["kind"], "uninterpreted")
             self.assertTrue((output / "TEST.DATA" / "DATA.bin").is_file())
 
+    def test_analysis_cli_commands(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "program.bin"
+            source.write_bytes(minimal_pds_image())
+            self.assertEqual(main(["relocate", str(source), str(root / "relocated"), "--base", "0x1000"]), 0)
+            self.assertEqual(main(["callgraph", str(source), str(root / "graph")]), 0)
+            self.assertEqual(main(["decompile", str(source), str(root / "decompiled")]), 0)
+            self.assertEqual(main(["compare", str(source), str(source), str(root / "compare.json")]), 0)
+            self.assertEqual(main(["opcode-inventory", str(source), str(root / "inventory.json")]), 0)
+            sid = root / "deck.bin"
+            sid.write_bytes(sid_records(" IMPORT CODE 'ASCCOLL'  currentPID__12IApplicationFv"))
+            self.assertEqual(main(["sid-compare", str(sid), str(sid), str(root / "sid-compare.json")]), 0)
+            self.assertTrue((root / "relocated" / "relocated-text.bin").is_file())
+            self.assertTrue((root / "graph" / "callgraph.json").is_file())
+            self.assertEqual(json.loads((root / "decompiled" / "decompilation.json").read_text())["function_count"], 0)
+            self.assertTrue(json.loads((root / "compare.json").read_text())["text_identical"])
+            self.assertIn("semantic", json.loads((root / "sid-compare.json").read_text()))
+
 
 @unittest.skipUnless(IBM_RE.is_dir(), "IBM-RE golden corpus is unavailable")
 class IbmGoldenTests(unittest.TestCase):
@@ -314,6 +505,16 @@ class IbmGoldenTests(unittest.TestCase):
             image = read_load_image(IBM_RE / source)
             self.assertEqual(len(image.text), size, source)
             self.assertEqual(image.entry_rva, entry, source)
+        named = read_load_image(IBM_RE / cases[2][0])
+        self.assertEqual(len(named.metadata["program_object_names"]), 263)
+        self.assertEqual(len(named.metadata["program_object_binary_names"]), 1)
+        self.assertEqual(named.metadata["program_object_name_errors"], [])
+        clas = read_load_image(IBM_RE / cases[3][0])
+        self.assertEqual(clas.metadata["relocation_count"], 40069)
+        unchanged, report = relocate_image(clas)
+        self.assertEqual(unchanged, clas.text)
+        self.assertEqual(report["unchanged_count"], 40039)
+        self.assertEqual(report["unresolved_count"], 30)
 
     def test_function_golden(self):
         from ablation.ibm_zos.loadmodule import read_load_image
@@ -333,11 +534,16 @@ class IbmGoldenTests(unittest.TestCase):
         from ablation.ibm_zos.sid import read_side_deck
         total = 0
         inventories = {}
+        statuses = {}
         for name in ("CLB3D003", "CLB3D004", "CLB3D008", "CLBECOLL", "CLBEIOC"):
             deck = read_side_deck(IBM_RE / f"analysis/zos-ioc/5c0751aef203db91/20261029T055542Z-ioc-sid/recovered/TSKRIK.SCLBSID/{name}.txt")
             total += len(deck.statements)
             inventories[name] = {item.symbol for item in deck.statements}
+            for item in deck.statements:
+                statuses[item.demangle_status] = statuses.get(item.demangle_status, 0) + 1
         self.assertEqual(total, 19546)
+        self.assertEqual(statuses["demangled"], 7692)
+        self.assertEqual(statuses["static_table"], 27)
         self.assertLessEqual(inventories["CLB3D003"], inventories["CLB3D008"])
 
 

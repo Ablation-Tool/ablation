@@ -73,8 +73,7 @@ The current APIs are intentionally explicit. They do not claim automatic format 
 
 - [CAEN ASCII-Hex Firmware Containers](caen-ascii-hex.md): remove and validate the vendor update wrapper.
 - [JFFS2 Filesystem Reader](jffs2.md): recover paths and file contents from a little-endian filesystem.
-- [bFLT v4 Executables](bflt.md): obtain a bounded flat memory image for disassembly.
-- [Relocation-Aware bFLT BinaryContext](bflt-context.md): apply supported relocations and recover functions, calls, strings, and literal references.
+- [bFLT (Binary Flat Format)](bflt.md): load binary Flat executables, recover link-time references, apply supported relocations, and build analysis contexts.
 - [Strict Intel HEX Parser](intel-hex.md): preserve sparse addresses from record-oriented firmware text.
 
 For architectural analysis after extraction, see [Understanding Ablation](../overview.md) and the [Tool Selection Guide](../guide-tool-selection.md).
