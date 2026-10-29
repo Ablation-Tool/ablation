@@ -37,6 +37,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install the test dependency
+        run: python -m pip install pytest
+
       - name: Test the Wiki publisher
         run: python -m pytest -q tests/test_wiki_publishing.py
 
