@@ -1,10 +1,40 @@
+<a id="android-cross-layer-analysis"></a>
 # Android Cross-Layer Analysis
 
 Analyze Android applications end to end: inventory APK/XAPK splits, decode binary Android XML, inspect DEX classes and Java-like pseudocode, disassemble bundled ELF libraries, recover exact JNI bindings, and trace selected network, camera, biometric, and IPC inputs through DEX into native sinks.
 
 This page is the complete capability reference. For a guided first analysis, see the [Android cross-layer analysis tutorial](../workflows/android-reverse-engineering.md).
 
-## Who this is for
+  - [Who this is for](#who-this-is-for)
+  - [What the workflow adds](#what-the-workflow-adds)
+  - [Components](#components)
+  - [Supported inputs and boundaries](#supported-inputs-and-boundaries)
+  - [Quick start](#quick-start)
+  - [CLI reference](#cli-reference)
+    - [`android inventory`](#android-inventory)
+    - [`android xml`](#android-xml)
+    - [`android decompile`](#android-decompile)
+    - [`android jni`](#android-jni)
+    - [`android trace`](#android-trace)
+    - [`elf-disasm`](#elf-disasm)
+  - [Python API](#python-api)
+    - [Inventory and decode an XAPK](#inventory-and-decode-an-xapk)
+    - [Inspect DEX methods and calls](#inspect-dex-methods-and-calls)
+    - [Disassemble an embedded ELF function](#disassemble-an-embedded-elf-function)
+    - [Recover and inspect JNI bindings](#recover-and-inspect-jni-bindings)
+    - [Run cross-layer tracing](#run-cross-layer-tracing)
+  - [How JNI recovery works](#how-jni-recovery-works)
+  - [How cross-layer propagation works](#how-cross-layer-propagation-works)
+  - [Review methodology](#review-methodology)
+  - [Operational safety](#operational-safety)
+  - [Limitations and false results](#limitations-and-false-results)
+  - [Troubleshooting](#troubleshooting)
+  - [Validated example: Bloomberg B-Unit](#validated-example-bloomberg-b-unit)
+  - [Quality and audit evidence](#quality-and-audit-evidence)
+
+---
+
+## Who this is for <sup>[↑](#android-cross-layer-analysis)</sup>
 
 Use this workflow when you need to answer questions such as:
 
@@ -16,7 +46,7 @@ Use this workflow when you need to answer questions such as:
 
 The workflow is intended for static reverse engineering and security review. It does not install or execute the target application, emulate Android, or contact application servers.
 
-## What the workflow adds
+## What the workflow adds <sup>[↑](#android-cross-layer-analysis)</sup>
 
 Earlier Android support focused on manifest findings, dangerous API references, and JNI registration signals. This workflow connects those signals into a single evidence path:
 
@@ -44,7 +74,7 @@ The most important distinction is between **evidence levels**:
 
 A structural or analytical result is not automatically a vulnerability.
 
-## Components
+## Components <sup>[↑](#android-cross-layer-analysis)</sup>
 
 | Component | File | Responsibility |
 |---|---|---|
@@ -60,7 +90,7 @@ A structural or analytical result is not automatically a vulnerability.
 
 Related components remain useful: `DexAnalyzer` performs broader dangerous-API and secret scanning, `BinderScanner` enumerates Binder services, and `JniBridgeScanner` provides a lightweight JNI surface scan.
 
-## Supported inputs and boundaries
+## Supported inputs and boundaries <sup>[↑](#android-cross-layer-analysis)</sup>
 
 | Input | Current behavior |
 |---|---|
@@ -76,7 +106,7 @@ Related components remain useful: `DexAnalyzer` performs broader dangerous-API a
 
 Default resource limits are 256 MiB per APK member and 1 MiB for XAPK `manifest.json`. `AndroidPackage.from_path(..., max_apk_bytes=...)` changes the per-APK/member limit. Limits apply to individual reads, not total package analysis time or memory.
 
-## Quick start
+## Quick start <sup>[↑](#android-cross-layer-analysis)</sup>
 
 Run from the Ablation checkout with the CLI installed:
 
@@ -99,7 +129,7 @@ A typical first review is:
 5. Disassemble a bound native implementation and inspect its direct calls.
 6. Run a trace until it converges, then review candidates and warnings manually.
 
-## CLI reference
+## CLI reference <sup>[↑](#android-cross-layer-analysis)</sup>
 
 ### `android inventory`
 
@@ -243,7 +273,7 @@ Disassembles an ELF virtual address. `VA` and `--size` accept decimal or Python-
 
 The Android JNI commands read embedded ELF bytes directly. This standalone command expects a filesystem path, so extract a library first when necessary.
 
-## Python API
+## Python API <sup>[↑](#android-cross-layer-analysis)</sup>
 
 ### Inventory and decode an XAPK
 
@@ -345,7 +375,7 @@ with APKJNIMapper.from_path('app.xapk') as mapper:
     report = analyzer.analyze()
 ```
 
-## How JNI recovery works
+## How JNI recovery works <sup>[↑](#android-cross-layer-analysis)</sup>
 
 Canonical registration is matched against JNI escaping rules and exact DEX declarations. Short canonical names provide class/method evidence; an encoded overload suffix provides stronger signature evidence.
 
@@ -357,7 +387,7 @@ Dynamic registration recovery scans native data sections for records with:
 
 The mapper then uses exact signatures and recovered library-load evidence to select a declaration. Unique-signature and loader-confirmed matches have different confidence labels. Duplicate canonical exports and ambiguous dynamic candidates remain unresolved rather than being assigned arbitrarily.
 
-## How cross-layer propagation works
+## How cross-layer propagation works <sup>[↑](#android-cross-layer-analysis)</sup>
 
 The DEX engine starts with known entry parameters and API calls, tracks origin tags through registers and declared invocations, and recomputes method argument/return summaries until no new origins appear or the iteration limit is reached.
 
@@ -365,7 +395,7 @@ For a mapped native declaration, Java argument origins are converted to ARM argu
 
 This is not full Android framework modeling, symbolic execution, or proof of path feasibility. Unknown transformations and unresolved dispatch lose precision; conservative register and path approximations can also overstate a flow.
 
-## Review methodology
+## Review methodology <sup>[↑](#android-cross-layer-analysis)</sup>
 
 Use outputs in this order:
 
@@ -377,7 +407,7 @@ Use outputs in this order:
 6. **Resolve deployment reachability:** exported component, application state, user interaction, device policy, and server behavior.
 7. **Use runtime evidence when authorized:** validate the surviving hypothesis in an isolated emulator or test environment.
 
-## Operational safety
+## Operational safety <sup>[↑](#android-cross-layer-analysis)</sup>
 
 - Analysis is local and read-only with respect to target packages. It does not run application code.
 - Archive and parser limits reduce malformed-input and compressed-member resource risk but do not impose a global time budget.
@@ -385,7 +415,7 @@ Use outputs in this order:
 - Reports can contain package names, class names, endpoint URLs, strings, and target-specific paths. Review them before sharing.
 - No runtime intent injection, server probing, or device modification is performed by these commands.
 
-## Limitations and false results
+## Limitations and false results <sup>[↑](#android-cross-layer-analysis)</sup>
 
 - **Multi-DEX:** JNI mapping and tracing require exactly one DEX and reject more rather than mixing shard-local indices.
 - **Obfuscation:** original identifiers are not recovered. API catalog matching and source inference can miss custom wrappers.
@@ -398,7 +428,7 @@ Use outputs in this order:
 
 See [Known Anomalies: Cross-Layer Taint](../reference-anomalies/cross-layer-taint.md) for trigger conditions and workarounds.
 
-## Troubleshooting
+## Troubleshooting <sup>[↑](#android-cross-layer-analysis)</sup>
 
 | Symptom | Likely cause | Action |
 |---|---|---|
@@ -412,7 +442,7 @@ See [Known Anomalies: Cross-Layer Taint](../reference-anomalies/cross-layer-tain
 | Trace reports iteration exhaustion | Propagation did not converge within the configured limit. | Increase `--iterations` and compare output after convergence. |
 | Zero cross-layer findings | Sources/sinks are unrecognized, paths are indirect, or no modeled flow exists. | Review known anomalies and seed target-specific wrappers manually; do not treat zero as safe. |
 
-## Validated example: Bloomberg B-Unit
+## Validated example: Bloomberg B-Unit <sup>[↑](#android-cross-layer-analysis)</sup>
 
 The real B-Unit 1.25.0 XAPK provided a full integration target:
 
@@ -425,7 +455,7 @@ The real B-Unit 1.25.0 XAPK provided a full integration target:
 
 The review also identified unprotected exported enrollment/token activities and custom/HTTPS deep-link challenge handling. That is confirmed IPC attack surface, not a demonstrated authentication bypass. Details and addresses are in [Bloomberg B-Unit Android Reverse Engineering](../../re/bloomberg/ANDROID_BUNIT_RE.md).
 
-## Quality and audit evidence
+## Quality and audit evidence <sup>[↑](#android-cross-layer-analysis)</sup>
 
 All 11 touched Python files, including the test module, have cached FORGE passes with zero unresolved findings. The review fixed multi-DEX misattribution, unbounded archive/parser reads, repeated-mapper state, duplicate canonical selection, and initialization cleanup.
 
@@ -435,3 +465,5 @@ All 11 touched Python files, including the test module, have cached FORGE passes
 - [Original Android APK analysis](android.md)
 - [JNI bridge reconstruction](jni-bridge-reconstruction.md)
 - [DEX disassembly and lifting](dex-disassembly-and-lifting.md)
+
+[↑ Back to top](#android-cross-layer-analysis)
