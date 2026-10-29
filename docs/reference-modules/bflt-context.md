@@ -22,6 +22,16 @@ Keeping those steps separate makes a wrong address assumption easier to see and 
 
 ---
 
+## Why this is a capability, not just another parser
+
+A capability is reusable analysis functionality, not merely a way to read a file format. `BfltImage` answers where text, initialized data, BSS, and relocation entries live. `BfltBinaryContext` answers what those bytes mean at a selected load base.
+
+That added work is what lets an analyst move from artifact inspection to meaningful control-flow and data-reference analysis. The adapter applies supported relocations, creates zero-filled BSS, recovers function candidates and direct calls, and connects strings and literal references to their owning functions through the shared `BinaryContext` interface. `WindowAnalyzer.from_bflt()` can then inspect the relocated image instead of treating file offsets as final addresses.
+
+Without this step, an analyst can associate a call site with the wrong string or function. The C111C `WS_CMD` example in the next section demonstrates that risk concretely: relocation changes the pointer from `0x3D204` to `0x3D244`. A file-only reading sees `WS_CMD`; the relocated reading points at `CLMR`. The adapter's value is making that distinction visible and reproducible, not claiming a new parser, a vulnerability, or complete runtime behavior.
+
+---
+
 ## The relocation model
 
 For a contiguous RAM layout, let `base_va` be the address of the 64-byte bFLT header in the chosen runtime model. A valid image-relative value `r` maps to:
