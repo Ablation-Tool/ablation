@@ -1,0 +1,352 @@
+{
+  "directories": {
+    "capability-audit": "Development-Audits",
+    "company-index": "Company-Index",
+    "i18n": "Languages",
+    "integrations": "Integrations",
+    "prompts": "Rubric-Library",
+    "reference-anomalies": "Known-Limitations",
+    "reference-modules": "Module-Reference",
+    "updates": "Release-Updates",
+    "workflows": "Workflows"
+  },
+  "pages": [
+    {
+      "slug": "Workflows",
+      "title": "Workflows",
+      "intro": "Start with the artifact or research goal. Each guide explains the sequence, decision points, and verification steps.",
+      "sections": [
+        {
+          "title": "Reverse engineering",
+          "entries": [
+            {"path": "workflows/fortinet-firmware.md", "title": "Fortinet Firmware", "description": "Decrypt, extract, and analyze Fortinet images."},
+            {"path": "workflows/android-reverse-engineering.md", "title": "Android Reverse Engineering", "description": "Follow application data from APK and DEX into native code."},
+            {"path": "workflows/go-binaries.md", "title": "Go Binaries", "description": "Recover functions and meaning from stripped Go executables."},
+            {"path": "workflows/cross-version.md", "title": "Cross-Version Diffing", "description": "Track functions and patches across firmware releases."}
+          ]
+        },
+        {
+          "title": "Security research",
+          "entries": [
+            {"path": "workflows/vuln-hunting.md", "title": "Vulnerability Hunting", "description": "Move from broad triage to a confirmed, reportable finding."},
+            {"path": "workflows/source-code-audit.md", "title": "Source Code Auditing", "description": "Prioritize security-sensitive code without reading linearly."},
+            {"path": "workflows/crypto.md", "title": "Cryptographic Analysis", "description": "Identify ciphers, recover simple keys, and test token weaknesses."},
+            {"path": "workflows/kasan-oracle.md", "title": "KASAN Oracle", "description": "Use a debug build to guide verification in production binaries."}
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "Capabilities",
+      "title": "Capabilities",
+      "intro": "Explore Ablation by analysis domain. These pages curate the most useful entry points instead of presenting one giant module list.",
+      "sections": [
+        {
+          "title": "Analysis domains",
+          "entries": [
+            {"page": "Capabilities-Disassembly-Decompilation", "title": "Disassembly & Decompilation", "description": "Turn machine code into instructions, IR, and readable pseudocode."},
+            {"page": "Capabilities-Data-Flow", "title": "Data Flow, Taint & Symbolic Analysis", "description": "Follow values, attacker input, and security-sensitive operations."},
+            {"page": "Capabilities-Firmware-Formats", "title": "Firmware & Executable Formats", "description": "Load executables with correct boundaries, addresses, and metadata."},
+            {"page": "Capabilities-Extraction", "title": "Filesystems, Archives & Extraction", "description": "Recover files and payloads from nested artifacts safely."},
+            {"page": "Capabilities-Applications", "title": "Applications & Mobile", "description": "Analyze Android, Windows, Java, Python, and application runtimes."},
+            {"page": "Capabilities-Protocols-Systems", "title": "Protocols, Networks & Live Systems", "description": "Map network input, protocols, infrastructure, and host behavior."},
+            {"page": "Capabilities-AI-Automation", "title": "AI-Guided Analysis & Automation", "description": "Combine semantic search, knowledge, and repeatable analysis pipelines."},
+            {"page": "Capabilities-Reporting", "title": "Reporting, Export & Integrations", "description": "Validate findings and carry evidence into other tools and workflows."}
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "Capabilities-Disassembly-Decompilation",
+      "title": "Disassembly & Decompilation",
+      "intro": "Choose how much structure you need: instructions, control flow, intermediate representation, or pseudocode.",
+      "sections": [
+        {
+          "title": "Code understanding pipeline",
+          "entries": [
+            {"path": "concepts-decompiler.md", "title": "Decompiler Concepts", "description": "Understand decoding, lifting, IR, SSA, and decompilation."},
+            {"path": "reference-modules/streaming-and-windowed-disassembly.md", "title": "Disassembly & Code Profiling", "description": "Inspect bounded code windows and stream larger binaries."},
+            {"path": "reference-modules/binary-lifting.md", "title": "Binary Lifting", "description": "Translate supported instruction sets into a shared representation."},
+            {"path": "reference-modules/binary-lifter.md", "title": "Binary Lifter", "description": "Generate architecture-specific IR and readable output."},
+            {"path": "reference-modules/ir.md", "title": "Intermediate Representation", "description": "Use typed IR nodes and architecture-specific lifters."},
+            {"path": "reference-modules/ssa.md", "title": "Static Single Assignment", "description": "Track definitions explicitly through control-flow joins."},
+            {"path": "reference-modules/structurizer.md", "title": "Control-Flow Structuring", "description": "Recover readable structured control flow from basic blocks."},
+            {"path": "reference-modules/microblaze-decoder.md", "title": "MicroBlaze Decoder & Lifter", "description": "Decode, recover CFGs, and lift Xilinx MicroBlaze code."}
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "Capabilities-Data-Flow",
+      "title": "Data Flow, Taint & Symbolic Analysis",
+      "intro": "Use these tools when the question is where a value came from, how it changes, and whether it reaches a sensitive operation.",
+      "sections": [
+        {
+          "title": "Tracking and validation",
+          "entries": [
+            {"path": "reference-modules/taint-analysis.md", "title": "Taint Analysis", "description": "Follow untrusted data through architecture-specific analysis."},
+            {"path": "reference-modules/control-flow-graph-construction.md", "title": "Control & Data-Flow Analysis", "description": "Build CFGs and propagate facts through program paths."},
+            {"path": "reference-modules/analysis-engine.md", "title": "CFG Analysis Engine", "description": "Run bounded data-flow analysis over architecture-specific CFGs."},
+            {"path": "reference-modules/call-argument-annotation.md", "title": "Call Argument Annotation", "description": "Recover argument values and register state at call sites."},
+            {"path": "reference-modules/arm64-symbolic-slicing.md", "title": "ARM64 Data-Flow Slicing", "description": "Trace writes back to targeted globals and structure fields."},
+            {"path": "reference-modules/path-solver.md", "title": "Path Solver", "description": "Check path feasibility and derive concrete inputs."},
+            {"path": "reference-modules/evidence-scoring-and-probe-ranking.md", "title": "Evidence & Probe Ranking", "description": "Rank the next evidence-gathering step for competing hypotheses."},
+            {"path": "reference-modules/finding-validation.md", "title": "Finding Validation", "description": "Turn candidate paths into reviewed, reusable evidence."}
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "Capabilities-Firmware-Formats",
+      "title": "Firmware & Executable Formats",
+      "intro": "Parsers establish trustworthy byte ranges, addresses, and metadata before disassembly begins.",
+      "sections": [
+        {
+          "title": "Loaders and formats",
+          "entries": [
+            {"path": "reference-modules/firmware-parsing.md", "title": "Firmware Parsing Pipeline", "description": "Understand how containers, filesystems, and loaders compose."},
+            {"path": "reference-modules/bflt.md", "title": "bFLT Executables", "description": "Load, relocate, and analyze binary Flat programs."},
+            {"path": "reference-modules/caen-ascii-hex.md", "title": "CAEN ASCII-Hex", "description": "Decode CAEN wrappers and verify their additive checksums."},
+            {"path": "reference-modules/intel-hex.md", "title": "Intel HEX", "description": "Validate records, checksums, addresses, and sparse images."},
+            {"path": "reference-modules/jffs2.md", "title": "JFFS2 Filesystem Recovery", "description": "Reconstruct versioned files without mounting the image."},
+            {"path": "reference-modules/binary-format-and-platform-identification.md", "title": "Binary Parsing & Platform Identification", "description": "Identify executable formats, platforms, and hardening."},
+            {"path": "reference-modules/xcoff-parser.md", "title": "XCOFF Parser", "description": "Read AIX executable sections, symbols, and loader metadata."},
+            {"path": "reference-modules/pe-parser.md", "title": "PE Parser", "description": "Recover Windows executable headers, sections, imports, and exports."}
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "Capabilities-Extraction",
+      "title": "Filesystems, Archives & Extraction",
+      "intro": "Recover useful artifacts from vendor containers and nested formats while preserving boundaries and avoiding unsafe extraction.",
+      "sections": [
+        {
+          "title": "Artifact recovery",
+          "entries": [
+            {"path": "reference-modules/firmware-containers.md", "title": "Firmware Containers", "description": "Split partitioned firmware into analyzable payloads."},
+            {"path": "reference-modules/nested-archive-scanner.md", "title": "Nested Archive Scanner", "description": "Find executables and embedded content inside nested archives."},
+            {"path": "reference-modules/archive-context.md", "title": "Archive Context", "description": "Share archive structure and metadata across analysis steps."},
+            {"path": "reference-modules/iot-firmware-unpacker.md", "title": "IoT Firmware Unpacker", "description": "Recover firmware filesystems and executable payloads."},
+            {"path": "reference-modules/ar-archive-scanner.md", "title": "Unix Archive Scanner", "description": "Inspect static library members and their security-sensitive imports."},
+            {"path": "reference-modules/aix-big-archive-extraction.md", "title": "AIX Big Archive Extraction", "description": "Read AIX big-af libraries and recover XCOFF members."},
+            {"path": "reference-modules/metakit-parser.md", "title": "MetaKit Parser", "description": "Extract files from TclKit and BitRock virtual filesystems."},
+            {"path": "reference-modules/huawei-squashfs-extractor.md", "title": "Huawei SquashFS Extraction", "description": "Read Huawei-modified SquashFS images without vendor tools."}
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "Capabilities-Applications",
+      "title": "Applications & Mobile",
+      "intro": "Analyze application packages, managed bytecode, native libraries, and the boundaries between them.",
+      "sections": [
+        {
+          "title": "Application analysis",
+          "entries": [
+            {"path": "reference-modules/android-cross-layer.md", "title": "Android Cross-Layer Analysis", "description": "Connect APK, DEX, JNI, and native analysis."},
+            {"path": "reference-modules/android-apk-analysis.md", "title": "APK & XAPK Analysis", "description": "Inventory packages, manifests, splits, and native libraries."},
+            {"path": "reference-modules/dex-disassembly-and-lifting.md", "title": "DEX Disassembly & Lifting", "description": "Decode Dalvik bytecode into readable Java-like output."},
+            {"path": "reference-modules/jni-bridge-reconstruction.md", "title": "JNI Bridge Reconstruction", "description": "Recover Java-to-native registrations and call relationships."},
+            {"path": "reference-modules/windows-pe.md", "title": "Windows PE Security Suite", "description": "Audit Windows binaries, drivers, and exploit mitigations."},
+            {"path": "reference-modules/java-class-jar-parsing.md", "title": "Java Classes & JARs", "description": "Parse Java artifacts and inspect security-sensitive behavior."},
+            {"path": "reference-modules/harmonyos.md", "title": "HarmonyOS & ArkTS", "description": "Decode Ark bytecode and recover JavaScript-like pseudocode."},
+            {"path": "reference-modules/python-pyc-scanning.md", "title": "Python Bytecode", "description": "Lift and inspect compiled Python artifacts."}
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "Capabilities-Protocols-Systems",
+      "title": "Protocols, Networks & Live Systems",
+      "intro": "Start with external input and map the protocols, routes, services, and system behavior it can reach.",
+      "sections": [
+        {
+          "title": "Exposure and infrastructure",
+          "entries": [
+            {"path": "reference-modules/api-re.md", "title": "API Reverse Engineering", "description": "Recover API behavior and transport-specific attack surfaces."},
+            {"path": "reference-modules/unknown-http-api-mapping.md", "title": "Unknown HTTP API Mapping", "description": "Map undocumented HTTP endpoints and handlers."},
+            {"path": "reference-modules/additional-api-protocols.md", "title": "Additional API Protocols", "description": "Analyze protocol-specific transports and authorization boundaries."},
+            {"path": "reference-modules/nginx-configuration-probes.md", "title": "Nginx Configuration Probes", "description": "Identify routing, alias, proxy, and request-handling risks."},
+            {"path": "reference-modules/api-authentication-and-token-checks.md", "title": "API Authentication & Token Checks", "description": "Inspect authentication gates and token validation."},
+            {"path": "reference-modules/preauth-exposure.md", "title": "Pre-Authentication Exposure", "description": "Find sensitive operations reachable before authentication."},
+            {"path": "reference-modules/nexus-dashboard.md", "title": "Cisco Infrastructure Assessment", "description": "Map infrastructure configuration and management exposure."},
+            {"path": "reference-modules/host-platform-inventory.md", "title": "Host & Platform Inventory", "description": "Inventory host services, privileges, and forensic evidence."}
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "Capabilities-AI-Automation",
+      "title": "AI-Guided Analysis & Automation",
+      "intro": "Use learned context and deterministic analysis together, with explicit evidence and reproducible state.",
+      "sections": [
+        {
+          "title": "Knowledge and automation",
+          "entries": [
+            {"path": "reference-modules/knowledge-graph.md", "title": "AI Knowledge Graph", "description": "Explore relationships across artifacts, sessions, and findings."},
+            {"path": "reference-modules/llm-analyst-loop.md", "title": "LLM Analyst Loop", "description": "Guide tool-assisted naming, role analysis, and hypotheses."},
+            {"path": "reference-modules/semantic-search.md", "title": "Semantic Code Search", "description": "Find functions by meaning rather than exact instruction text."},
+            {"path": "reference-modules/function-identity-database.md", "title": "Function Identity Database", "description": "Recognize known functions and preserve analyst-assigned names."},
+            {"path": "reference-modules/cross-target-learning.md", "title": "Cross-Target Learning", "description": "Reuse useful findings and patterns across related targets."},
+            {"path": "reference-modules/flywheel.md", "title": "Analysis Flywheel", "description": "Turn confirmed findings into better future analysis."},
+            {"path": "reference-modules/multi-phase-vulnerability-sweeps.md", "title": "Automated Vulnerability Sweeps", "description": "Run resumable triage, classification, and taint phases."},
+            {"path": "reference-modules/forge.md", "title": "FORGE Quality Gate", "description": "Require documented security review before code is committed."}
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "Capabilities-Reporting",
+      "title": "Reporting, Export & Integrations",
+      "intro": "Preserve evidence, compare versions, and move results into reporting, review, and downstream analysis tools.",
+      "sections": [
+        {
+          "title": "Evidence and interoperability",
+          "entries": [
+            {"path": "reference-modules/export.md", "title": "Export Formats", "description": "Write JSON and SARIF reports for review and automation."},
+            {"path": "reference-modules/yara-json-sarif-export.md", "title": "YARA, JSON & SARIF", "description": "Turn findings into detection rules and structured reports."},
+            {"path": "reference-modules/finding-validation.md", "title": "Finding Validation", "description": "Validate and preserve evidence for reporting."},
+            {"path": "reference-modules/binary-ninja-plugin.md", "title": "Binary Ninja Plugin", "description": "Use Ablation annotations inside Binary Ninja."},
+            {"path": "reference-modules/attandck-labeling.md", "title": "ATT&CK Labeling", "description": "Classify findings with MITRE ATT&CK techniques and tactics."},
+            {"path": "reference-modules/dependency-and-supply-chain-tooling.md", "title": "Dependency & Supply-Chain Tooling", "description": "Extract provenance and inspect dependency risk."},
+            {"path": "reference-modules/structural-sim.md", "title": "Structural Function Matching", "description": "Match functions across architectures and optimized builds."},
+            {"path": "reference-modules/version-delta-finetune.md", "title": "Version Delta Analysis", "description": "Compare functions and behavior across software versions."}
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "Reference",
+      "title": "Reference",
+      "intro": "Use curated lookup pages for detailed formats, tools, limitations, and supporting material.",
+      "sections": [
+        {
+          "title": "Lookup and support",
+          "entries": [
+            {"page": "Module-Reference", "title": "Module Reference", "description": "Browse curated domains or the complete A–Z module index."},
+            {"path": "index.md", "title": "Documentation Index", "description": "Read the original core-guide navigation."},
+            {"path": "INDEX.md", "title": "Complete Document Library", "description": "Open the full documentation catalog."},
+            {"path": "user-guide.md", "title": "CLI & User Guide", "description": "Review sessions, commands, configuration, and examples."},
+            {"path": "reference-modules/isa-models.md", "title": "Architecture & ISA Models", "description": "Inspect architecture definitions and ABI behavior."},
+            {"page": "Known-Limitations", "title": "Known Limitations", "description": "Check false negatives, unsupported cases, and review requirements."},
+            {"page": "Languages", "title": "Languages", "description": "Read translated guides and documentation."},
+            {"page": "Rubric-Library", "title": "Rubric Library", "description": "Apply reusable analysis instructions and review rubrics."},
+            {"page": "Company-Index", "title": "Company Index", "description": "Browse supporting company and project material."}
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "Module-Reference",
+      "title": "Module Reference",
+      "intro": "Start with a curated capability domain, or use the alphabetical index for direct lookup. No single page contains the entire module inventory.",
+      "module_index": true,
+      "sections": [
+        {
+          "title": "Alternative views",
+          "entries": [
+            {"page": "Capabilities", "title": "Browse by Capability", "description": "Use analysis domains to find the right tool for a task."},
+            {"path": "INDEX.md", "title": "Complete Document Library", "description": "Use the original comprehensive documentation catalog."}
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "Known-Limitations",
+      "title": "Known Limitations & Anomalies",
+      "intro": "Check these records before treating a negative result as proof that a target is safe. They explain unsupported cases, uncertainty, and manual review requirements.",
+      "directory_index": "reference-anomalies"
+    },
+    {
+      "slug": "Architecture-Guide",
+      "title": "Architecture",
+      "intro": "Understand how parsing, analysis, IR, and architecture-specific models fit together.",
+      "sections": [
+        {
+          "title": "Design and internals",
+          "entries": [
+            {"path": "architecture.md", "title": "Architecture & Design", "description": "See the analysis pipeline and major design decisions."},
+            {"path": "concepts-decompiler.md", "title": "Decompiler Concepts", "description": "Understand the stages from machine code to pseudocode."},
+            {"path": "reference-modules/encoding-dag.md", "title": "Architecture Definition Language", "description": "Model ISA encodings and semantics as reusable graphs."},
+            {"path": "reference-modules/analysis-engine.md", "title": "Analysis Engine", "description": "Understand bounded data-flow evaluation over CFGs."},
+            {"path": "reference-modules/ir.md", "title": "Intermediate Representation", "description": "Review shared IR structures and lifting stages."},
+            {"path": "reference-modules/isa-models.md", "title": "ISA & ABI Models", "description": "Review architecture and calling-convention models."}
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "Development-Guide",
+      "title": "Development",
+      "intro": "Learn how Ablation is built, reviewed, tested, and documented.",
+      "sections": [
+        {
+          "title": "Engineering process",
+          "entries": [
+            {"path": "development.md", "title": "Development Guide", "description": "Review project structure and the module development workflow."},
+            {"path": "documentation-standard.md", "title": "Documentation Standard", "description": "Write purpose-driven, verifiable capability documentation."},
+            {"path": "reference-modules/forge.md", "title": "FORGE", "description": "Apply the required module security and quality gate."},
+            {"path": "reference-modules/coverage-gate.md", "title": "Coverage Gate", "description": "Understand test coverage requirements for qualified trackers."},
+            {"path": "reference-modules/documentation-prose-checks.md", "title": "Documentation Prose Checks", "description": "Check documentation for clarity and prohibited prose patterns."},
+            {"path": "reference-modules/ci-and-release-automation.md", "title": "CI & Release Automation", "description": "Understand validation and release workflows."},
+            {"path": "standards-ablation.md", "title": "Engineering Standards", "description": "Review security, qualification, and research standards."},
+            {"path": "audit-transparency.md", "title": "Audit Transparency", "description": "Understand what review evidence and limitations are published."},
+            {"page": "Development-Audits", "title": "Capability Audits", "description": "Read capability coverage and documentation audit records."}
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "Development-Audits",
+      "title": "Capability Audits",
+      "intro": "Review coverage, documentation quality, support claims, and remaining uncertainty.",
+      "directory_index": "capability-audit"
+    },
+    {
+      "slug": "Releases",
+      "title": "Releases",
+      "intro": "See what changed, which capabilities are supported, and where to find release-specific documentation.",
+      "sections": [
+        {
+          "title": "Version information",
+          "entries": [
+            {"path": "CHANGELOG.md", "title": "Changelog", "description": "Read the complete version history."},
+            {"path": "capability-audit/SUPPORT_MATRIX.md", "title": "Support Matrix", "description": "Check capability and platform support claims."},
+            {"page": "Release-Updates", "title": "Release Updates", "description": "Read documentation for specific releases."}
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "Release-Updates",
+      "title": "Release Updates",
+      "intro": "Review release-specific notes and migration context.",
+      "directory_index": "updates"
+    },
+    {
+      "slug": "Languages",
+      "title": "Languages",
+      "intro": "Read Ablation guides and documentation in supported languages.",
+      "directory_index": "i18n"
+    },
+    {
+      "slug": "Integrations",
+      "title": "Integrations",
+      "intro": "Connect Ablation to agent sessions, analysis tools, and supporting workflows.",
+      "directory_index": "integrations"
+    },
+    {
+      "slug": "Rubric-Library",
+      "title": "Rubric Library",
+      "intro": "Use structured instructions to make analysis and review behavior repeatable.",
+      "directory_index": "prompts"
+    },
+    {
+      "slug": "Company-Index",
+      "title": "Company Index",
+      "intro": "Supporting company and project documentation.",
+      "directory_index": "company-index"
+    }
+  ]
+}

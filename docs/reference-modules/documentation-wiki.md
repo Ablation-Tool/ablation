@@ -24,11 +24,39 @@ Pull requests run validation only. Their contents do not reach the Wiki before m
 
 ## What readers get
 
-`Home.md` provides starting points for installation, concepts, tool selection, and the full document library. `_Sidebar.md` keeps those entry points and every documentation category available while reading.
+The Home page has six clear destinations: Getting Started, Choose a Workflow, Explore Capabilities, Module Reference, Known Limitations, and What's New. It uses the standard AIARE tagline and does not repeat a long inventory of documentation categories.
 
-Each category has its own alphabetical index. This divides the library into manageable groups such as Module Reference, Workflows, Known Anomalies, Integrations, Languages, and Release Updates. Readers can use these pages instead of scrolling through one list of hundreds of filenames.
+The sidebar has ten primary links. Workflows lead readers by artifact or research goal. Capability pages group useful modules by analysis domain rather than by repository directory or processor family. Breadcrumbs show the way back to those curated pages.
+
+The complete module inventory remains available through alphabetical `Module Index` pages split by letter. This keeps direct lookup practical without placing nearly 600 links on one page. Smaller supporting indexes cover anomalies, translations, audits, integrations, release updates, and other material without crowding the primary sidebar.
 
 The Wiki represents the latest `main` branch. For documentation tied to an older release, use the `docs/` directory in that release's source tree.
+
+## Maintaining navigation
+
+`.github/wiki/navigation.json` defines the curated reading paths. `.github/wiki/Home.md` controls the six Home destinations, and `.github/wiki/_Sidebar.md` controls the ten primary links. Keep these entry points small; adding every document to them would recreate the navigation problem.
+
+Each manifest page has a `slug`, `title`, and `intro`. Its optional `sections` contain entries with either a `path` to a source document or a `page` linking another curated page. A `description` tells the reader when to use that destination.
+
+```json
+{
+  "slug": "Capabilities-Firmware-Formats",
+  "title": "Firmware & Executable Formats",
+  "intro": "Load executables with correct boundaries and addresses.",
+  "sections": [
+    {
+      "title": "Loaders and formats",
+      "entries": [
+        {"path": "reference-modules/bflt.md", "title": "bFLT Executables"}
+      ]
+    }
+  ]
+}
+```
+
+A page can instead use `directory_index` for a smaller supporting inventory, or `module_index` for the split A–Z module lookup. The `directories` mapping converts existing relative directory links to the curated destinations.
+
+New documents are always mirrored, even when they are not listed in the manifest. Add a manifest entry only when the document belongs in a curated reading path. Missing targets, duplicate page names, and hierarchy cycles stop publication rather than producing a partially broken Wiki.
 
 ## How page names work
 
@@ -53,7 +81,7 @@ Relative Markdown document links become Wiki links, including their heading anch
 
 Links to source files become absolute links to the corresponding file on `main`. Relative images, including existing HTML `<img>` tags, use GitHub's raw asset URLs and must exist in the repository. External URLs and local heading anchors are left alone. Fenced code blocks and inline code spans are preserved, so an example that looks like a Markdown link is not rewritten as though it were real navigation.
 
-Mermaid fences become prominent links to the rendered diagram in the canonical repository document, anchored to the current section. Their source remains visible in a plain-text code block. This avoids the blank Mermaid frame produced by the Wiki renderer without discarding documentation content or adding a rendering dependency. Other fenced code blocks and inline code spans are preserved.
+Mermaid fences become prominent links to the rendered diagram in the canonical repository document, anchored to the current section. Their source is preserved inside a collapsed `View Mermaid source` section. This avoids the blank Mermaid frame produced by the Wiki renderer and keeps long diagrams from crowding the page. Other fenced code blocks and inline code spans are preserved.
 
 The publisher handles ordinary inline and reference-style Markdown links. Documents with unusually complex multiline link syntax should use a simple inline destination or an explicit GitHub URL so the result remains easy to verify.
 
@@ -82,4 +110,4 @@ Treat the Wiki as generated output. Direct Wiki edits are replaced by the next s
 
 The first Wiki page must be created once through GitHub's web interface to initialize the Wiki repository. After that, the workflow owns `Home.md`, `_Sidebar.md`, and all generated pages.
 
-Wiki navigation is deliberately grouped only by the existing top-level documentation directories. It does not infer a conceptual hierarchy between individual modules. Curated reading paths belong in documents such as `docs/index.md`, `docs/INDEX.md`, and the workflow guides, where they remain versioned with the project.
+The manifest provides a small explicit hierarchy for navigation; it does not infer semantic relationships automatically. That hierarchy is maintained separately from the documents, so a module can have a useful curated destination without changing its source filename. Unlisted documents remain available through directory indexes, the complete document library, and the A–Z module reference.
