@@ -3,6 +3,12 @@
 
 `EcuM68kDecoder` disassembles Motorola 68000-family code with Capstone and discovers likely function entries in flat CPU32 ROMs. It wraps instructions in a common typed model for downstream ECU analysis. It does not emit pseudo-C.
 
+## Why wrap Capstone instead of duplicating it?
+
+The main missing pieces for ECU triage are a consistent instruction model and candidate function entries, not another general-purpose M68K disassembler. The wrapper retains Capstone's decoding while adding prologue recognition, direct-target extraction, and typed control-flow classifications used by later analysis.
+
+That division keeps the component small and replaceable: Capstone handles the base ISA, while ECU-specific heuristics can evolve without forking it. Users gain a practical way to locate calls and likely routines in a flat ROM before choosing deeper manual analysis. The function-start patterns are evidence, not boundary proofs, and the 68020 profile does not establish complete CPU32 semantics. A future lifter could consume the typed objects, but no such integration is claimed here.
+
 ## Usage
 
 ```python
@@ -30,7 +36,7 @@ These are compiler-pattern heuristics, not authoritative boundaries. Other prolo
 
 `M68kInsn` contains `offset`, `mnemonic`, `op_str`, `insn_type`, `raw`, `size`, and optional `target`. Instruction types include `RETURN`, `BRANCH`, `CALL`, `PROLOGUE`, and `MISC`. Direct static branch/call targets are recovered when Capstone supplies a parseable absolute operand; indirect targets remain `None`.
 
-The Capstone profile is M68K 68020. CPU32 belongs to the same family but has instructions and behavior not fully represented by that generic mode.
+The Capstone profile is M68K 68020. CPU32 belongs to the same family but has instructions and behavior not represented by that generic mode.
 
 ## Limitations
 

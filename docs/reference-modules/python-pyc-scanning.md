@@ -3,6 +3,12 @@
 
 `PycBytecodeScanner` uses `xdis` to parse CPython bytecode across interpreter versions and reports security-relevant names, constants, imports, and path metadata. It scans `.pyc` code objects; it does not decompile them to Python source and does not analyze Perl or Electron.
 
+## Why cross-version parsing comes before scanning
+
+A `.pyc` produced by one CPython release can have different headers, code-object fields, and opcode meanings from the host interpreter. Using host `marshal` and opcode tables as universal readers can misinterpret the artifact. `xdis` supplies the version-aware layer needed before names and constants become dependable review evidence.
+
+The scanner then turns execution, dynamic-evaluation, network, path, and credential-like indicators into a prioritized inventory. This helps users examine firmware Python without executing it, while avoiding the claim that name co-presence proves a call. It is a triage component that can grow with `xdis` support or feed version-aware disassembly; it is not a source decompiler or a unified Perl/Electron analyzer. Parse errors remain part of the result so unsupported input is not confused with a clean scan.
+
 ## Scan files or a directory
 
 ```python
@@ -32,7 +38,7 @@ The scanner reports source filenames embedded in code objects, which can reveal 
 
 CPython changes opcode numbers, instruction encoding, code-object fields, and `.pyc` headers between releases. Use a current compatible `xdis` rather than hard-coded host opcode tables. A `.pyc` cannot be loaded safely with arbitrary host `marshal.loads()` as a cross-version analysis strategy.
 
-MicroPython `.mpy` is a different format and belongs to [MicroPython .mpy v6 Lifting](micropython.md). Native Python extension modules (`.so`, `.pyd`) require native analysis. This scanner performs no source decompilation and no sandboxed execution of the target module.
+MicroPython `.mpy` is a different format and belongs to [MicroPython .mpy v6 Lifting](micropython.md). Native Python extension modules such as `.so` and `.pyd` require native analysis. This scanner performs no source decompilation and no sandboxed execution of the target module.
 
 ## Limitations
 

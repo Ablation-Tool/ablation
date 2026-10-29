@@ -3,6 +3,12 @@
 
 The SH-2A backend of `BinaryLifter` lifts Renesas SuperH functions to annotated structural pseudo-C. It supports headerless flat ROM images where virtual addresses equal file offsets and models common calls, branches, delay slots, loads, stores, and returns.
 
+## Why flat-ROM support is explicit
+
+A headerless ROM does not carry the section map an ELF lifter expects. Directly treating file offsets as virtual addresses can be useful, but only when that mapping matches the target. Making this a dedicated backend keeps the assumption visible instead of silently applying it to every binary.
+
+The decoder supplies calls, delay slots, and common memory operations; the lifter organizes them into a bounded review form. Users gain a faster way to navigate SH-2A routines without mistaking structural output for complete semantics. This is a focused compatibility backend that can later consume richer CFG or instruction support, while the raw decoder remains available for independent verification. Rebased images and unmodeled extensions still need manual mapping and review.
+
 ## Usage
 
 ```python

@@ -132,7 +132,7 @@ data = open('TlsDxe.efi', 'rb').read()
 findings = LA64MaxNotMinScanner.from_pe32plus(data).scan()
 ```
 
-Linux kernel (`vmlinux` — fully linked, no PLT):
+Linux kernel (`vmlinux`: linked image with no PLT):
 
 ```python
 # vmlinux has no .rela.plt; sinks (kmalloc, vmalloc, kzalloc, __kmalloc) are
@@ -143,9 +143,9 @@ findings = LA64MaxNotMinScanner.from_system_map(
 ).scan()
 ```
 
-Note: kernel modules (`.ko`) are ET_REL and are already handled by `from_path()` —
-the scanner reads `R_LARCH_B26` relocations from `.rela.text` to identify sink calls.
-`from_system_map()` is only needed for the fully-linked vmlinux image.
+Note: kernel modules (`.ko`) are ET_REL and are already handled by `from_path()`.
+The scanner reads `R_LARCH_B26` relocations from `.rela.text` to identify sink calls.
+`from_system_map()` is only needed for the linked vmlinux image.
 
 ### False positive class <sup>[↑](#compiler-defect-detection)</sup>
 

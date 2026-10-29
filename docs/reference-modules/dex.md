@@ -3,6 +3,12 @@
 
 Analyze Dalvik Executable (DEX) bytecode at three levels: smali-style disassembly with `DEXDisasm`, pseudo-Java with `DEXLifter`, and APK-wide security screening with `DexAnalyzer`. These tools read `.dex` inside APKs; they do not decompile ART's compiled `.oat` or `.vdex` artifacts.
 
+## Why three views of the same bytecode are useful
+
+An APK-wide scan can locate interesting components and constants, but it cannot explain a particular method's behavior. Disassembly preserves bytecode detail, lifting offers a more readable partial view, and the scanner supplies breadth. Using them together separates candidate discovery from candidate verification.
+
+The approach relies on DEX tables and code items rather than source names alone, so it remains useful when an application is stripped or obfuscated. Users can move from an application-level lead to the exact method without treating a method-string reference as a reachable call. These components can improve independently, including richer control-flow lifting later, while retaining DEX disassembly as ground truth. OAT/VDEX native compilation and bundled native libraries remain separate analysis problems.
+
 ## Disassemble or lift a method
 
 ```python

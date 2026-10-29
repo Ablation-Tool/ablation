@@ -84,6 +84,12 @@ Example output:
 
 ---
 
+## What this adds for the user
+
+The decoder turns otherwise opaque C166 bytes into typed instructions, vector entries, and explicit code/data address candidates. It provides the mechanical foundation needed to inspect update handlers and service paths without depending on a Capstone backend or a target execution environment.
+
+It remains a focused decoding component rather than a complete C166 analysis framework. A future CFG or state-machine analyzer could consume its typed instructions, but DPP values, indirect targets, and code-region choices still need target evidence. Keeping those inputs explicit makes the decoder reusable across ROM layouts while preventing an address guess from becoming an unsupported security conclusion.
+
 ## False positives
 
 Linear scanning can interpret data as instructions. Confirm candidate functions against code regions and call evidence. A direct-reference scan can also find an immediate constant that is not a pointer. Validate the surrounding operation before treating it as an address reference.

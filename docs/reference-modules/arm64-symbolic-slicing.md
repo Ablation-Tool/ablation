@@ -7,6 +7,12 @@ Trace ARM64 store addresses backward through structured symbolic expressions (SS
 
 ---
 
+## Why these scanners exist
+
+A taint tracker asks where a value goes. These scanners answer the inverse address question: which stores might write here? That is useful when a global flag or structure field changes behavior and its writers are more important than a general network-to-sink path.
+
+The backward walk builds a small symbolic expression for each store base, resolving constants, pointer arithmetic, selected loads, and configured GOT entries. Exact and possible results are kept separate so unresolved memory does not become a fabricated address. Users gain a focused provenance aid that complements CFG taint analysis rather than replacing it. The slicer and GOT catalogue can be extended independently as new address idioms are validated; unresolved cases remain explicit instead of being treated as proof of no writes.
+
 ## When to use this
 
 Use these scanners when you know a global address or GOT-backed object and need to answer **which instructions write to it?** They are useful for reconstructing global state initialization, configuration structures, and writes through pointers recovered from the GOT.

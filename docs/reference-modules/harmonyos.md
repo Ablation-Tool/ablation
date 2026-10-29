@@ -3,6 +3,12 @@
 
 Parse Ark Bytecode (ABC), disassemble ARK instructions, and decompile methods to JavaScript-like pseudocode. The stack is `ABCParser` for the container, `ARKDisasm` for instructions, and `ABCDecompiler` for method- and class-level output.
 
+## Why the stack has three layers
+
+A HAP/ABC container must be mapped before method code can be decoded, and decoded instructions must be understood before expressions can be reconstructed. Combining those steps into one opaque decompiler would make version-specific parsing failures look like instruction failures. The separate layers let users inspect exactly where an assumption changes.
+
+Container metadata resolves classes and methods, instruction decoding preserves the underlying evidence, and partial expression propagation produces a more readable review form. Users can choose the level needed for inventory, manual verification, or broader pseudocode review. Future version or opcode support can extend the appropriate layer without requiring every consumer to change. The output is not original ArkTS, and native libraries still require native analysis.
+
 ## Decompile ABC
 
 Extract the `.abc` payload from a HAP package first, then pass that file to the decompiler:

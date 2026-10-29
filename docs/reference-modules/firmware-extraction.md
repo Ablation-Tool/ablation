@@ -54,12 +54,12 @@ with tempfile.TemporaryDirectory() as tmp:
     print(f"XOR key ({len(result.key)} bytes): {result.key.hex()}")
     print(f"Confidence: {result.key_confidence:.3f}")
     for p in result.partitions:
-        print(f"  {p.name:20}  offset={p.offset:#x}")
+        print(f"  {p.kind:20}  offset={p.offset:#x}")
 
 # Stage 2: Inner partition decryption (hardware FortiGate targets)
 result2 = FirmwareContainerKeyExtractor.from_path(fw_path, output_dir='/tmp/fgt_extracted')
 print(result2.report())
-# After extraction: /tmp/fgt_extracted/rootfs.gz is decrypted and mountable
+# After extraction: recovered filesystem payloads still need format-specific unpacking
 try:
     result2.cleanup()  # Remove tmpdir if output_dir was not specified
 except Exception:
@@ -100,13 +100,17 @@ FirmwareContainerKeyExtractor:
 
 ## Pipeline position
 
-`FortiOSHardwareExtractor` is the entry point for any Fortinet physical-appliance firmware analysis. Run it first, then mount the extracted `rootfs.gz` and load the target ELF binaries into `BinaryContext.load_or_build()`. Never analyze a firmware that shows an `.aria2` file: incomplete downloads produce false results. Consult `README.md` Download Status table first.
+`FortiOSHardwareExtractor` is the entry point for supported Fortinet physical-appliance images. Run it first, then unpack recovered filesystem payloads with the appropriate format tool and load target ELF binaries into `BinaryContext.load_or_build()`. A gzip file is not directly mountable. Never analyze a firmware that shows an `.aria2` file: incomplete downloads produce false results. Consult `README.md` Download Status table first.
+
+The two extractors form a compatibility pipeline rather than a universal Fortinet decoder. Their XOR, RC4, and PKCS#1 assumptions must be revalidated for new formats, VM images, and future releases. Outer-key confidence and known gzip magic provide evidence for candidate selection; they do not authenticate the resulting filesystem or prove that every partition was recovered.
 
 ---
 
 ## Reading output
 
-`FortiOSHardwareExtractor.extract()` returns an `ExtractionResult` object:
+`FortiOSHardwareExtractor.extract_to()` returns its own `ExtractionResult` with `key`, `key_confidence`, `partitions`, `extracted_paths`, `inner_size`, and entropy fields. Its `fmt()` method renders the result.
+
+`FirmwareContainerKeyExtractor.from_path()` performs the full second-stage pipeline and returns a different `ExtractionResult`:
 
 | Attribute | Content |
 |:---|:---|
@@ -116,10 +120,10 @@ FirmwareContainerKeyExtractor:
 | `pkcs1_candidates` | `List[bytes]`: PKCS#1-formatted key block candidates |
 | `partitions` | `List[PartitionResult]`: extracted partition results |
 | `datafs_path` | `Optional[str]`: path to the extracted `datafs` on disk |
-| `workdir` | `Optional[str]`: temp working directory (call `.cleanup()` when done) |
+| `workdir` | `Optional[str]`: temporary working directory created when no output directory was supplied |
 | `error` | `Optional[str]`: error message if extraction failed partially |
 
-`FirmwareContainerKeyExtractor.extract()` returns `{pkcs1_key_blocks: List[bytes], rc4_inner_key: bytes}`.
+Call `result2.cleanup()` only for a temporary workdir created by the second-stage extractor. Do not remove a caller-selected output directory. The current second-stage API does not expose `FirmwareContainerKeyExtractor.extract()` or return the older `{pkcs1_key_blocks, rc4_inner_key}` dictionary shown in a previous example.
 
 ---
 

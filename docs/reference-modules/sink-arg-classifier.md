@@ -161,7 +161,7 @@ for r in results:
     if r.verdict in (ARG_PROPAGATED, UNKNOWN):
         sinks = tt.trace_function(r.func_va, tainted_args=['rdi', 'rsi', 'rdx'])
         if sinks:
-            print(f"CONFIRMED: 0x{r.func_va:x} {r.sink_name} — taint path confirmed")
+            print(f"CONFIRMED: 0x{r.func_va:x} {r.sink_name}: taint path confirmed")
             for s in sinks:
                 print(f"  {s.sink_type} at 0x{s.address:x}: {s.instruction}")
 ```
@@ -216,7 +216,7 @@ The variants share verdict concepts but use architecture-specific instruction de
 
 **Before this module:** `BinaryContext.load_or_build()`: PLT and func_starts accelerate classification. Register vendor sinks with `add_sink()` before calling `classify_all()`.
 
-**After this module:** Discard `RODATA_CONST` results. For networked binaries (any `recv`/`accept`/`read` in PLT), pass results to `NetworkSinkFinder.from_context(ctx).find()` first — it filters to network-reachable sinks and is the primary triage step before TaintTracker. For local-only binaries, pass `ARG_PROPAGATED` and `UNKNOWN` directly to `TaintTracker.trace_function()`. `SNPRINTF_RODATA` sites warrant manual inspection of `%s` argument sources before taint tracing.
+**After this module:** Discard `RODATA_CONST` results. For networked binaries (any `recv`/`accept`/`read` in PLT), pass results to `NetworkSinkFinder.from_context(ctx).find()` first: it filters to network-reachable sinks and is the primary triage step before TaintTracker. For local-only binaries, pass `ARG_PROPAGATED` and `UNKNOWN` directly to `TaintTracker.trace_function()`. `SNPRINTF_RODATA` sites warrant manual inspection of `%s` argument sources before taint tracing.
 
 ---
 
@@ -236,7 +236,7 @@ The variants share verdict concepts but use architecture-specific instruction de
 
 ## See also <sup>[↑](#sinkargclassifier)</sup>
 
-- [NetworkSinkFinder](network-sink-finder.md): filters SAC results to network-reachable sinks — run this before TaintTracker on any networked binary
+- [NetworkSinkFinder](network-sink-finder.md): filters SAC results to network-reachable sinks: run this before TaintTracker on any networked binary
 - [Taint Analysis](taint-analysis.md): run on `ARG_PROPAGATED` and `UNKNOWN` results
 - [Function Profiler](function-profiler.md): integrates sink detection with argument annotation
 - [Binary Context](binary-context.md): share PLT via `from_context()` to skip re-parsing

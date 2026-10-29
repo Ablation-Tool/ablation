@@ -28,7 +28,7 @@ Symbolic path solving answers the question taint analysis cannot: not "does atta
 
 `PathSolver` uses Z3, a satisfiability modulo theories (SMT) solver from Microsoft Research, to decide reachability precisely. It enumerates the basic-block paths in the CFG from function entry to the target block, encodes each branch condition as a Z3 `BitVec` constraint, and asks: does there exist an assignment to the entry-register variables that satisfies all constraints along this path? A SAT answer proves a concrete exploit input exists and reveals its value. An UNSAT answer proves the path is infeasible under the encoded model.
 
-`FindingRegistry` closes the loop between analysis and submission. It records each SAT-confirmed finding in a persistent SQLite store (`~/.ablation/findings.db`, never committed), indexes a sentence embedding for the Flywheel to replay on future binaries, and formats the record for PSIRT submission. The rule from `CLAUDE.md` is explicit: call `FindingRegistry.register()` only after Z3 returns SAT. Pattern-only matches that skip path solving have carried false-positive findings through multiple sessions in prior engagements.
+`FindingRegistry` closes the loop between analysis and submission. It records each SAT-confirmed finding in a persistent SQLite store at `~/.ablation/findings.db`, which is never committed, indexes a sentence embedding for the Flywheel to replay on future binaries, and formats the record for PSIRT submission. The rule from `CLAUDE.md` is explicit: call `FindingRegistry.register()` only after Z3 returns SAT. Pattern-only matches that skip path solving have carried false-positive findings through multiple sessions in prior engagements.
 
 ## Why this exists <sup>[↑](#pathsolver--findingregistry)</sup>
 

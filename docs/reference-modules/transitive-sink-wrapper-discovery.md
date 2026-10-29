@@ -134,7 +134,7 @@ Run `SinkPropagator.propagate()` before `SinkArgClassifier.classify_all()` on an
 | `wraps_name` | Name of the immediate sink |
 | `chain` | `List[str]`: lineage from root PLT sink to this wrapper |
 
-Add wrapper names to `SinkArgClassifier` by calling `SinkPropagator.add_sinkname, arg_pos` to extend coverage before running the classifier.
+Add discovered wrapper names to `SinkArgClassifier` with `clf.add_sink(w.wrapper_name, w.wrapper_arg_pos)` before running the classifier. The earlier `SinkPropagator.add_sinkname, arg_pos` text was not a valid API example.
 
 ---
 

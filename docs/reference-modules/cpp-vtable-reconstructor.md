@@ -287,5 +287,5 @@ Each `SlotSpec` has: `slot_index`, `slot_offset`, `func_va`, `func_name`, `name_
 - [BinaryContext](binary-context.md): function and import resolution before scanning
 - [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
 - [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [Exploit Path Validation](finding-validation.md): verify path feasibility for confirmed candidates
 - [FindingRegistry](registry.md): record confirmed findings

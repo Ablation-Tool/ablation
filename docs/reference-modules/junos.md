@@ -2,6 +2,12 @@
 
 `ablation junos` provides safe Junos package extraction, detached-signature verification, filesystem inventories, and cross-version diffs. Package scripts and Junos executables are never run on the analysis host, and filesystem mounting is not required.
 
+## Why this is a layered workflow
+
+A Junos package is not immediately a set of analyzable executables. Archive safety, payload integrity, signature verification, ISO recovery, and program semantics are separate questions. The workflow keeps them separate so a successful extraction is not confused with a trusted package, and a verified package is not confused with safe code.
+
+Users gain a reproducible path from vendor archive to file inventory, release comparison, and architecture-aware review. The container and signature components provide evidence for later stages; the target pack supplies reusable MIPS/o32 and IPC context for deeper analysis. Each layer can be extended or replaced as another package layout or platform is validated, without making unsupported formats appear trusted or complete.
+
 ## Extract a package
 
 ```bash
@@ -10,10 +16,10 @@ ablation junos extract junos-srxsme-15.1X49-D170.4-domestic.tgz work/D170.4
 
 The extractor validates archive paths, verifies embedded SHA-1 manifests, decodes Juniper's block-compressed ISO container, and extracts the ISO9660/Rock Ridge userland. Outputs are:
 
-- `package/` — safely unpacked top-level files
-- `payload.iso` — recovered ISO9660 image
-- `root/` — extracted userland
-- `metadata.json` — package, payload, ISO, and hash metadata
+- `package/`: safely unpacked top-level files
+- `payload.iso`: recovered ISO9660 image
+- `root/`: extracted userland
+- `metadata.json`: package, payload, ISO, and hash metadata
 
 Use `--no-iso` to stop after recovering `payload.iso`.
 

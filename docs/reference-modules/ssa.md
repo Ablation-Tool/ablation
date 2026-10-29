@@ -28,7 +28,7 @@ Ablation uses `SSABuilder` because linear-scan taint trackers (the `TaintTracker
    prior call. It cannot follow the taint across a basic block boundary because
    it does a linear backward scan within a single block window.
 
-2. `SinkArgClassifier` stops at `ARG_PROPAGATED` — it knows the argument came
+2. `SinkArgClassifier` stops at `ARG_PROPAGATED`: it knows the argument came
    from outside the block, but cannot say which instruction in which predecessor
    block defined it.
 
@@ -59,14 +59,14 @@ ssa  = SSABuilder(cfg, arch).build()
 
 Runs three phases (Cytron et al. 1991):
 
-1. **Def-site collection** — scans each `BasicBlock` via `arch.dest_reg()` and
+1. **Def-site collection**: scans each `BasicBlock` via `arch.dest_reg()` and
    `arch.call_clobbers()` to record which blocks define each register.
 
-2. **Phi insertion** — computes iterated dominance frontiers (from
+2. **Phi insertion**: computes iterated dominance frontiers (from
    `DomTree.dom_frontier()`). Inserts a phi node at every block in `DF+(def_site)`
    for each register that is defined in multiple blocks.
 
-3. **Variable renaming** — DFS over the dominator tree with per-register version
+3. **Variable renaming**: DFS over the dominator tree with per-register version
    stacks. Assigns a fresh version at each definition; fills phi arguments by
    looking up the current version on entry to each successor.
 
@@ -92,8 +92,8 @@ Returns all instruction VAs where `name` is in scope as a potential use.
 ```text
 ssa.report() -> str
 ```
-Human-readable phi summary: block VA, phi result, incoming (pred_va, SSA_name)
-pairs.
+Human-readable phi summary: block VA, phi result, and incoming pairs of
+predecessor VA and SSA name.
 
 ## `SSAName` <sup>[↑](#ssabuilder)</sup>
 
@@ -133,9 +133,15 @@ for va, block in cfg.blocks.items():
                 print(f'  defined at: {[hex(v) for v in ssa.defs_of(name)]}')
 ```
 
+## Role in the analysis workflow
+
+SSA is a small semantic foundation used when a linear scan is not enough. It lets a reviewer ask which definition reaches a use across branches instead of manually reconstructing every predecessor. That can improve taint queries, return-value analysis, and pseudo-C generation while leaving the underlying CFG and instruction evidence available for verification.
+
+It is not a standalone decompiler or a proof that every merged value is feasible. Architecture adapters and CFG recovery can improve independently, and the same SSA layer can be reused when those inputs change. Correct dominance and successor relationships are therefore prerequisites for the precision this component provides.
+
 ## Known limitations <sup>[↑](#ssabuilder)</sup>
 
-- Version 0 (`r0_0`) means "defined before the function entry" — i.e., a
+- Version 0 (`r0_0`) means "defined before the function entry": i.e., a
   function argument or an uninitialized register. Treat it as an external source.
 - The renaming pass uses a recursive DFS. For very deep dominator trees
   (pathological loops with hundreds of nested levels) this can hit Python's

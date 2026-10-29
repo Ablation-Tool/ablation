@@ -3,6 +3,12 @@
 
 `MpyLifter` parses MicroPython `.mpy` version 6 files, lifts bytecode code objects to pseudo-Python, extracts imports, and flags security-relevant names and attributes. It runs without a MicroPython runtime and does not execute the module.
 
+## Why a format-specific lifter helps
+
+Firmware can ship Python-like behavior without Python source, but MicroPython `.mpy` is not CPython `.pyc`. Its QSTR names, constant objects, and recursive code objects need a version-specific reader before imports or calls can be interpreted reliably.
+
+The lifter recovers those structures and presents supported bytecode as pseudo-Python, while name-based checks point users toward process, dynamic-execution, and hardware surfaces. This makes small embedded scripts reviewable without a device runtime. It is a focused v6 component that could gain another version backend or richer control-flow support, not a universal Python decompiler. Native/Viper objects and dangerous-name matches remain explicit boundaries requiring native analysis or call-site verification.
+
 ## Usage
 
 ```python

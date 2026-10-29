@@ -3,6 +3,12 @@
 
 `Xcoff32Decompiler` converts AIX PPC32 big-endian XCOFF functions to C-like pseudocode. It understands function descriptors, TOC-relative data references, imports, glue call sequences, and names recovered from an XCOFF-aware `BinaryContext`.
 
+## Why AIX needs a separate path
+
+An AIX function descriptor is data that points to code and supplies a TOC base; treating its address as an instruction address analyzes the wrong bytes. ELF-oriented tools also lack the XCOFF symbol and call conventions needed to name many operations. These format differences justify a dedicated decompiler rather than an architecture label alone.
+
+The tool combines descriptor resolution, TOC-relative naming, and PPC32 register tracking to produce a more readable local view. Its output is useful for reviewing calls and values, but it does not recover original C or complete control flow. Users gain an AIX compatibility layer that can evolve with XCOFF metadata support while remaining separate from ELF lifters. Security conclusions still require verification against the instructions and the target's runtime conventions.
+
 ## Usage
 
 ```python

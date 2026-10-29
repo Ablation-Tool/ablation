@@ -7,6 +7,12 @@ Use an LLM to propose a function name and role, reconstruct behavior, or compare
 
 ---
 
+## Why pre-fetch evidence before asking the model?
+
+A model given only an address or a few strings can produce a convincing name without enough evidence. The current integration gathers local disassembly, context, and prior records first, then asks for one structured proposal. This makes the input inspectable and keeps tool execution under local code control rather than presenting the run as an autonomous research loop.
+
+The user value is focused interpretation after static triage, not automated confirmation. `AgentLoop` is therefore a compatibility-named, single-shot integration that could later gain a different orchestration layer without changing the need for evidence validation. A future iterative design would be a behavior change, not something implied by the current class name. Persisted results remain `ANGR_INFERRED` so model output does not silently become confirmed analyst knowledge.
+
 ## What the current implementation does
 
 `AgentLoop` retains its historical name, but the current implementation is **single-shot analysis**, not an iterative ReAct tool-calling loop.
@@ -23,7 +29,7 @@ The model is explicitly instructed that no tools are available in the child sess
 
 ## When to use it
 
-Use AI-guided analysis after static tools have identified a function worth reviewing. It is suited to targeted naming, role classification, and vulnerability or patch hypotheses—not an unattended bulk replacement for disassembly, taint tracking, or path validation.
+Use AI-guided analysis after static tools have identified a function worth reviewing. It is suited to targeted naming, role classification, and vulnerability or patch hypotheses, not an unattended bulk replacement for disassembly, taint tracking, or path validation.
 
 Treat names, roles, and vulnerability notes as proposals. Confirm security findings with byte-level evidence and appropriate static or dynamic analysis before registering or disclosing them.
 

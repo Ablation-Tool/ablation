@@ -22,7 +22,7 @@
 
 ## What is cryptographic binary analysis? <sup>[↑](#hashalgodiscriminator--xorsolver--cryptoaudit)</sup>
 
-Stripped firmware rarely documents its own cryptography. A binary may implement MD5 for authentication tokens, AES-128-CBC for VPN payloads, or a custom XOR cipher for configuration blob obfuscation, with no symbol names or comments identifying which is which. Audit starts with identifying what cryptographic algorithms are present, then determining whether the key material is recoverable, and finally confirming that the implementation has no critical weaknesses (weak secrets, nonce reuse, TOCTOU in key generation).
+Stripped firmware rarely documents its own cryptography. A binary may implement MD5 for authentication tokens, AES-128-CBC for VPN payloads, or a custom XOR cipher for configuration blob obfuscation, with no symbol names or comments identifying which is which. Audit starts with identifying what cryptographic algorithms are present, then determining whether the key material is recoverable, and finally checking for critical weaknesses such as weak secrets, nonce reuse, and TOCTOU in key generation.
 
 `HashAlgoDiscriminator` identifies hash algorithm implementations by matching K-table constants embedded in `.rodata` or as immediate loads in code. Round constants for SHA-256, SHA-1, and MD5 are globally unique 32-bit values; their presence in a function's immediate operands identifies the function without disassembling the round logic. `CustomCBCDetector` finds hand-rolled AES-128-CBC by three structural signatures: a BSS-tracked block pointer pair, an XOR-with-previous-ciphertext back-edge loop, and an `.rodata` IV load at function entry.
 
@@ -187,7 +187,7 @@ result = solver.freq_attack()   # frequency-based column-by-column recovery
 | `key` | `Optional[bytes]` | Recovered key bytes; `None` if recovery failed |
 | `key_length` | `Optional[int]` | Key length in bytes |
 | `method` | `str` | Attack that succeeded: `'kpa'`, `'hamming+freq'`, or `'manual'` |
-| `magic_matched` | `Optional[str]` | KPA magic label (e.g. `'ELF'`, `'gzip'`) if KPA succeeded |
+| `magic_matched` | `Optional[str]` | KPA magic label such as `'ELF'` or `'gzip'` when KPA succeeds |
 | `confidence` | `float` | 0.0–1.0 confidence estimate |
 | `notes` | `str` | Additional diagnostic text |
 

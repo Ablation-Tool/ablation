@@ -3,6 +3,12 @@
 
 Lift MIPS32 and MIPS64 functions to structural pseudo-C with `BinaryLifter`, or trace network- and file-derived values to dangerous calls with the architecture-specific taint trackers. Big- and little-endian ELF inputs are supported by separate `arch=` tokens and tracker options.
 
+## Why architecture selection matters
+
+“MIPS” describes a family, not one byte encoding or calling convention. A 32-bit big-endian router image and a 64-bit little-endian userspace binary need different instruction decoding, register widths, and argument models. Selecting the wrong one can produce plausible-looking output from incorrect premises.
+
+The lifter and trackers therefore expose those choices rather than hiding them. Structural lifting helps a reader navigate a function; the trackers model source-to-sink propagation under a selected ABI. This gives users reusable MIPS analysis paths while keeping width and endianness assumptions visible. Each backend can evolve independently as new instruction forms or relocation layouts are observed, but support for one MIPS variant is not evidence for all variants.
+
 ## Structural lifting
 
 ```python

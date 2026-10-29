@@ -14,13 +14,13 @@
 
 ## Why this exists <sup>[↑](#versalpdi)</sup>
 
-1. **Versal PDI is the primary firmware delivery format for Xilinx Versal ACAP.** Every programmable image that runs on Versal (VC1902, VCK5000, and variants) is packaged as a PDI — including the PL bitstream, PLM bootloader, AI Engine CDO, and NoC configuration. The facility ATLAS ITk FELIX and GEP boards use Versal; understanding the PDI format is prerequisite to any firmware RE or build-provenance tracking on those targets.
+1. **Versal PDI is the primary firmware delivery format for Xilinx Versal ACAP.** Versal devices such as VC1902 and VCK5000 package programmable images as PDIs, including the PL bitstream, PLM bootloader, AI Engine CDO, and NoC configuration. The facility ATLAS ITk FELIX and GEP boards use Versal; understanding the PDI format is prerequisite to firmware RE and build-provenance tracking on those targets.
 
-2. **Two physically distinct PDI sub-formats exist in the collection.** `bootgen` produces different headers depending on the output type. A pld PDI (PL-only, no boot) has 4 sync words followed by a plaintext Image Header Table. A boot PDI (full system image with PLM) has 5 sync words and an "XLNX" identification word; its IHT is partially opaque because the MetaHeader CDO wraps it. Both are present in the ATLAS GEP/FELIX collection; a parser that only handles one type silently fails on the other.
+2. **Two physically distinct PDI sub-formats exist in the collection.** `bootgen` produces different headers depending on the output type. A PL-only pld PDI has 4 sync words followed by a plaintext Image Header Table. A full-system boot PDI has 5 sync words and an "XLNX" identification word; its IHT is partially opaque because the MetaHeader CDO wraps it. Both are present in the ATLAS GEP/FELIX collection; a parser that only handles one type silently fails on the other.
 
-3. **Git hashes are embedded in two independent locations.** Every PDI built by `bootgen` embeds the 4-byte truncated commit hash: (a) at image header offset +0x2c for pld PDIs, and (b) as the 4th payload word of a `LOADER/SET_IMAGE_INFO` CDO command. This dual-embedding means `VersalPdi.git_hash()` can recover the build commit for both PDI types — and for arbitrary CDO blobs extracted from encrypted partitions.
+3. **Git hashes are embedded in two independent locations.** Every PDI built by `bootgen` embeds the 4-byte truncated commit hash at image header offset +0x2c for pld PDIs and as the fourth payload word of a `LOADER/SET_IMAGE_INFO` CDO command. This dual-embedding means `VersalPdi.git_hash()` can recover the build commit for both PDI types and for arbitrary CDO blobs extracted from encrypted partitions.
 
-4. **CDO sections carry all high-value register and configuration data.** A PDI's entire NPI (NoC/PL interface) initialization, error-handling setup, and image metadata lives in CDO sections. Parsing CDO commands exposes register write sequences, NPI addresses touched during boot, module identifiers, and loader image metadata. For security-relevant RE (boot-time privilege escalation, PL misconfiguration, register backdoors) the CDO command stream is the primary artifact.
+4. **CDO sections carry all high-value register and configuration data.** A PDI's entire NoC/PL interface initialization, error-handling setup, and image metadata lives in CDO sections. Parsing CDO commands exposes register write sequences, NPI addresses touched during boot, module identifiers, and loader image metadata. For security research into boot-time privilege escalation, PL misconfiguration, and register backdoors, the CDO command stream is the primary artifact.
 
 5. **Existing `XilinxBitfile` does not parse PDI.** PDI is structurally unrelated to the `.bit` format parsed by `XilinxBitfile`. `.bit` is a Type1/Type2 configuration packet stream for 7-series and earlier; PDI is a container format for Versal that includes CDO sections, ELF partition payloads, and a Versal-specific IHT. A separate module is required.
 
@@ -64,7 +64,7 @@ For pld PDI (confirmed from GCI_GCM415_pld RE at 2026-10):
 | sbd_off | +0x14 | Secondary boot device offset |
 | checksum | +0x18 | XOR checksum |
 
-For boot PDI: fields at +0x08 and +0x0C hold fixed magic constants (`0x00000F80`, `0xF2000000`) that are the same across all known boot PDIs — they are not variable counts. The parser records these under `pdi_flags` and `no_of_imgs` but marks `img_hdr_off = 0` as unreliable.
+For boot PDI: fields at +0x08 and +0x0C hold fixed magic constants `0x00000F80` and `0xF2000000` that are the same across all known boot PDIs: they are not variable counts. The parser records these under `pdi_flags` and `no_of_imgs` but marks `img_hdr_off = 0` as unreliable.
 
 ### Image headers
 
@@ -109,7 +109,7 @@ Partition headers (0x3C bytes each) immediately follow at `part_hdr_off × 4`. K
 | 0x05 | ELF/R5 | RPU ELF image |
 | 0x06 | CFICDR/PL | PL config frame (bitstream) |
 
-A `dst_load_addr = 0xFFFFFFFFFFFFFFFF` marks PL CFRAME partitions — the PL config data goes directly to the CFRAME interface, not a memory address.
+A `dst_load_addr = 0xFFFFFFFFFFFFFFFF` marks PL CFRAME partitions: the PL config data goes directly to the CFRAME interface, not a memory address.
 
 ### CDO section format
 
@@ -126,7 +126,7 @@ CDO header (prefix + 4 × 4 = 20 bytes):
 |---|---|---|
 | 0 | prefix | Partition payload prefix, normally `0x00000004` |
 | 1 | magic | `0x004F4443` = "CDO\x00" LE |
-| 2 | version | `0x00000200` = "2.0" (bits[15:8]=major=2, bits[7:0]=minor=0) |
+| 2 | version | `0x00000200` = "2.0": bits 15:8 hold major version 2 and bits 7:0 hold minor version 0 |
 | 3 | length_words | Payload word count (excludes prefix and header) |
 | 4 | checksum | Bitwise inverse of the 32-bit sum of words 0–3 |
 
@@ -153,15 +153,15 @@ Important module/command combinations found in GEP/FELIX PDIs:
 | GENERIC | 0x01 | MASK_WRITE | 0x02 | addr, mask, value |
 | GENERIC | 0x01 | WRITE | 0x03 | addr, value |
 | GENERIC | 0x01 | KEYHOLE_WRITE | 0x0D | bulk data write |
-| GENERIC | 0x01 | NOP | 0x11 | (variable, padding) |
+| GENERIC | 0x01 | NOP | 0x11 | variable-length padding |
 | GENERIC | 0x01 | MARKER | 0x19 | type, string bytes |
 | XILPM | 0x02 | ADD_NODE | 0x39 | node ID and class-specific arguments |
 | XILPM | 0x02 | ADD_NODE_PARENT | 0x3A | node ID, parent IDs |
 | XILPM | 0x02 | INIT_NODE | 0x3E | node ID, function, arguments |
 | LOADER | 0x07 | SET_IMAGE_INFO | 0x04 | imgid, hash1, hash2, **git_hash** |
-| ERROR | 0x08 | various | — | error/event config |
+| ERROR | 0x08 | various |: | error/event config |
 
-The LOADER `SET_IMAGE_INFO` command (module=0x07, cmd=0x04) carries 4 words: the image ID and 3 hash/version words, with the git hash always at payload[3] (confirmed from GCI GCM415 builds). XILPM `INIT_NODE` handles power-domain, PL-device, and AIE-device initialization; it does not decode XPPU/XMPU protection configuration. AMD XilPM 2024.2 and later silently ignores deprecated protection-class `ADD_NODE` records, so protection conclusions require actual register writes rather than topology or marker names.
+The LOADER `SET_IMAGE_INFO` command uses module `0x07` and command `0x04`. It carries 4 words: the image ID and 3 hash/version words, with the git hash always at payload[3] (confirmed from GCI GCM415 builds). XILPM `INIT_NODE` handles power-domain, PL-device, and AIE-device initialization; it does not decode XPPU/XMPU protection configuration. AMD XilPM 2024.2 and later silently ignores deprecated protection-class `ADD_NODE` records, so protection conclusions require actual register writes rather than topology or marker names.
 
 ---
 
@@ -240,7 +240,7 @@ from ablation.analyzers.versal_pdi import (
 | `length_words` | `int` | Payload word count |
 | `checksum` | `int` | Stored inverse-sum header checksum |
 | `header_checksum_valid` | `Optional[bool]` | Prefix + magic + version + length checksum result |
-| `commands` | `List[CdoCommand]` | Parsed commands (capped at 50,000) |
+| `commands` | `List[CdoCommand]` | Parsed commands, capped at 50,000 |
 | `parse_error` | `str` | Set if command parsing was truncated |
 | `end_detected` | `bool` | Whether GENERIC/END terminated the stream |
 | `consumed_words` | `int` | Words consumed before END, an error, or section end |
@@ -398,6 +398,12 @@ VersalPdi: GCI_GCM415_boot-v0.159.38-35A2CC3.pdi
 
 ---
 
+## What this adds for the user
+
+`VersalPdi` is an ingestion and evidence-extraction layer. It exposes the container and command structure needed by later boot, register, and MicroBlaze analysis instead of forcing users to search raw bytes for recognizable words. The parser can remain useful on its own for inventory and provenance work, or serve as a backend in a larger boot-image workflow.
+
+Additional command decoders can be added as their layouts are validated. Unsupported or partially opaque fields should remain explicit; a parsed header does not establish protection policy, a recovered register write does not establish its runtime effect, and a git identifier does not authenticate the image.
+
 ## Known targets <sup>[↑](#versalpdi)</sup>
 
 | PDI file | Type | Git hash | Description |
@@ -405,9 +411,9 @@ VersalPdi: GCI_GCM415_boot-v0.159.38-35A2CC3.pdi
 | `fw/gep/GCI_GCM415_pld-v0.159.38-35A2CC3.pdi` | pld | `035a2cc3` | GEP GCM415 PL-only, 7.5 MB |
 | `fw/gep/GCI_GCM415_boot-v0.159.38-35A2CC3.pdi` | boot | `035a2cc3` | Same build, full boot image with PLM, 1.3 MB |
 | `fw/gep/GEP_2ACC_GCM3_pld-v0.159.40-F119A21.pdi` | pld | `0f119a21` | Larger PL fabric (GCM3), 12 MB |
-| `fw/felix/FLX182_STRIPS_..._1448.pdi` | boot | — | FELIX FLX182 boot image, 35 MB |
+| `fw/felix/FLX182_STRIPS_..._1448.pdi` | boot |: | FELIX FLX182 boot image, 35 MB |
 
-**Build provenance:** All known GCI/GEP pld PDIs contain `img_name = "CONFIG_MASTER"`. The `git_hash` at image header +0x2C always matches the hex suffix in the filename (e.g. `35A2CC3` → `0x035a2cc3`). This provides tamper-evident version tracking without unpacking the bitstream.
+**Build provenance:** All known GCI/GEP pld PDIs contain `img_name = "CONFIG_MASTER"`. In the reviewed files, the `git_hash` at image header +0x2C matches the hexadecimal filename suffix. This is a build-provenance clue, not tamper evidence: the truncated identifier and filename can both be modified, and the header checksum does not authenticate the payload.
 
 ---
 
@@ -415,14 +421,14 @@ VersalPdi: GCI_GCM415_boot-v0.159.38-35A2CC3.pdi
 
 `FORGE.audit_module()` and the SAFE CODE 10-section review pass with zero open findings. File and buffer inputs are capped at 512 MiB. Pre-audit corrections also require CDO magic for direct CFICDR parsing and mask the command length to its defined eight bits; regression tests cover both behaviors and the size limit.
 
-Residual limitations: boot IHT fields remain partially opaque, the header checksum does not authenticate the payload, and valid CDO streams without an END command are accepted when their declared length is fully consumed. Security conclusions about register semantics require independent validation.
+Residual limitations: boot IHT fields remain partially opaque, the header checksum does not authenticate the payload, and valid CDO streams without an END command are accepted when their declared length is consumed. Security conclusions about register semantics require independent validation.
 
 ---
 
 ## See also <sup>[↑](#versalpdi)</sup>
 
-- `XilinxBitfile` — parser for Spartan-3/6/7-series `.bit` files (not for Versal PDI)
-- `XilinxFrameDecoder` — Type1/Type2 config packet decoder (not applicable to PDI)
-- `re/atlas/gep_re.py` — GEP/GCI build inventory and git hash timeline
-- `LpgbtDecoder` — lpGBT e-link protocol decoder used in the GEP/FELIX firmware
-- `LatexReExtractor` — for reading lpGBT/HCC specification documents alongside PDI analysis
+- `XilinxBitfile`: parser for Spartan-3/6/7-series `.bit` files (not for Versal PDI)
+- `XilinxFrameDecoder`: Type1/Type2 config packet decoder (not applicable to PDI)
+- `re/atlas/gep_re.py`: GEP/GCI build inventory and git hash timeline
+- `LpgbtDecoder`: lpGBT e-link protocol decoder used in the GEP/FELIX firmware
+- `LatexReExtractor`: for reading lpGBT/HCC specification documents alongside PDI analysis

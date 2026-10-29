@@ -49,6 +49,12 @@ The parser checks:
 
 Inputs are capped at 512 MiB, 32 images, 32 partitions, and 255 encoded name bytes. Extraction prefixes every name with its partition index and replaces path separators and other unsafe filename characters.
 
+## What this adds for the user
+
+The parser turns a multi-stage boot container into named, bounded components that can be examined independently. It replaces manual table arithmetic and makes checksum status, load addresses, destination CPUs, and raw partition bytes available to scripts. This is a small ingestion layer that can feed ELF, device-tree, bitstream, or raw-code analysis as appropriate.
+
+Its role is intentionally limited to container structure. A future boot-chain workflow could classify those components automatically, but it would still need separate evidence for decryption, authentication, and runtime behavior. The current reader remains useful because it does not conflate those questions with successful table parsing.
+
 ## Limitations
 
 - The extractor returns raw stored partitions. A partition named after an ELF may contain one or more raw load sections, and a combined PMU/FSBL partition remains combined.

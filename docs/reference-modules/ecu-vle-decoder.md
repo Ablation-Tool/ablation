@@ -3,6 +3,12 @@
 
 `EcuVLEDecoder` decodes NXP PowerPC Variable Length Encoding (VLE) instructions from raw automotive ROM images. It handles a defined set of 16-bit SE and 32-bit VLE encodings, classifies control flow, and proposes function starts from common prologues. It is a decoder and function-discovery aid, not a pseudo-C decompiler.
 
+## Why a dedicated decoder is useful
+
+A raw automotive ROM has no ELF section map to explain where code begins, and generic PowerPC tools may not accept VLE encodings. Without a decoder, an analyst must translate opcode fields by hand before even locating calls or function candidates.
+
+This component performs that first mechanical step using documented instruction lengths, opcode patterns, and prologue shapes. Those rules make decoding and candidate discovery reproducible; they do not prove complete instruction coverage or function boundaries. The user gains instruction objects that can support manual review or a future VLE-aware control-flow or data-flow backend. That future integration is optional, not current behavior. Keeping the decoder independent also lets unknown instructions remain visible instead of forcing them through an incompatible Book E pipeline.
+
 ## Usage
 
 ```python

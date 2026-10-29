@@ -7,6 +7,12 @@ Decode LoongArch64 and variable-width nanoMIPS instructions, then classify dange
 
 ---
 
+## Why these tools share a reference
+
+The first barrier on these targets is obtaining trustworthy instruction frames. Fixed-width LoongArch and variable-width nanoMIPS require different decoders, so they remain separate components even though both support later binary analysis. Sink classification then applies only to LoongArch64's LP64 conventions, not to nanoMIPS.
+
+Users gain a clear sequence from frame recovery to dangerous-call triage, with optional kernel and compiler-defect paths built on the same foundation. Each decoder can be replaced or extended independently as Capstone and target evidence improve. This modularity also prevents a fallback frame or a sink verdict from being mistaken for full semantic recovery or exploitability.
+
 ## LoongArch64 decoding
 
 LoongArch64 instructions are fixed-width 32-bit little-endian words. `LoongArchDecoder` provides typed operands and frame-level control-flow information for binaries that Capstone does not handle.

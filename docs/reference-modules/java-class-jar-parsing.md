@@ -4,6 +4,12 @@
 
 Parse JVM `.class` files and JAR archives to recover class metadata, constants, method references, dependencies, and security-relevant patterns. Despite the legacy filename `modules/java_decompiler.py`, these modules do not reconstruct Java source or provide a full bytecode-to-source decompiler.
 
+## Why constant-pool analysis is useful
+
+Even without source, JVM class files preserve names, descriptors, API references, and literals needed to locate execution, deserialization, XML, JNDI, and framework surfaces. JAR context adds dependency information. This gives users a fast triage layer across large Java payloads before choosing dedicated bytecode disassembly or decompilation.
+
+The method works because these references are structured constants, not guesses from raw strings. It cannot by itself establish method-level reachability or authorization. The legacy APIs remain separate compatibility surfaces with different result schemas, so users must not assume a unified finding model or source emitter. They can be extended independently or replaced by a richer bytecode pipeline later; live HTTP helpers are outside the offline examples and require explicit authorization.
+
 ## Parse a class
 
 ```python

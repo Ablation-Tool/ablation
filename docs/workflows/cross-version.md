@@ -132,6 +132,12 @@ ctx_v2.set_name(match.va, 'parse_request', source='confirmed')
 
 Do not port names automatically from low-confidence matches. Keep the matching evidence with the session record so later releases can reassess the correspondence.
 
+## What this workflow adds
+
+The tracker reduces a release comparison from “find the same bytes at a new address” to a sequence of reviewable evidence steps. Users can identify candidate homologs, inspect normalized changes and callee deltas, then carry a name forward only after confirming the correspondence. Snippet diffing remains available when a full CFG project is unnecessary.
+
+This is a workflow composed of replaceable matching stages rather than a patch-correctness oracle. Better anchors or semantic models can improve ranking without changing the required final review. A changed instruction sequence shows where to look; it does not establish that a vulnerability was fixed, introduced, or remains reachable.
+
 ## Limitations
 
 - Heavy optimization, inlining, function splitting, and refactoring can prevent a reliable match.

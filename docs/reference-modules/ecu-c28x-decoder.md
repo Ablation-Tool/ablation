@@ -3,6 +3,12 @@
 
 `EcuC28xDecoder` decodes a control-flow-focused subset of TI TMS320C28x instructions from raw code bytes. It handles common 16- and 32-bit branches, calls, returns, loops, and direct-call function discovery. It is not a full C28x disassembler or pseudo-C decompiler.
 
+## Why byte and word addresses are separated
+
+C28x code addresses count 16-bit words, while host buffers and file offsets count bytes. Mixing those units produces incorrect targets even when every instruction decodes correctly. The API exposes that distinction directly so users can map raw sections without silently applying a byte-oriented assumption.
+
+The decoder focuses on control flow because calls and branches are useful first landmarks when exploring a raw DSP image. Direct-call targets become candidate function entries, and unknown operations remain visible for manual review. This is a small navigation component that could feed a later CFG or data-flow implementation, but it does not provide one today. Correct COFF extraction, a word-addressed base, and independent validation of partial instruction coverage remain prerequisites.
+
 ## Usage
 
 ```python

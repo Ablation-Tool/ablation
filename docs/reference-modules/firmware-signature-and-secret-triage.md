@@ -7,6 +7,12 @@ Scan raw firmware for embedded filesystems, compression formats, security-releva
 
 ---
 
+## Why these tools exist
+
+An unknown firmware image can contain several embedded regions, but scanning it by eye offers no reliable starting point. Signature, string, and entropy checks provide three different kinds of leads: a possible container boundary, a possible credential or component, and a change in byte distribution. Each is useful because the others cannot answer its question.
+
+The fixed-record container reader is separate from that broad triage. It performs actual partition extraction only for one validated layout instead of treating every magic match as a filesystem. Users therefore get a small first-pass workflow: locate candidates, inspect them structurally, then hand valid payloads to a format-specific parser. These components can grow with independently verified signatures or container layouts; they are not a universal unpacker, credential validator, or encryption detector.
+
 ## What these modules do
 
 `firmware_analyzer.py` provides static, standard-library triage for an arbitrary byte image. It identifies likely extraction targets and security-review leads without executing firmware.

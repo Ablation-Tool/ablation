@@ -110,8 +110,16 @@ Run `Ablation > Semantic Search`, type a description such as `"HTTP chunked tran
 
 ---
 
+## Scope and limitations
+
+The plugin is an optional presentation integration, not an independent analysis engine. It saves repeated name entry and navigation but inherits the accuracy of the cache, corpus, semantic descriptions, and prior verdicts. A sweep score or model-derived name remains a candidate until reviewed.
+
+Binary identity is matched by a SHA-256 prefix, so unusual prefix collisions or stale caches need investigation. Confirm that the displayed names and tags belong to the exact input hash. Plugin behavior also depends on the Binary Ninja Python environment and its API; it can be updated or removed without changing the underlying CLI analysis.
+
+The timing figures on this page are illustrative rather than performance guarantees. No live Binary Ninja UI validation is implied by the examples.
+
 ## See also
 
 - [BinaryContext](binary-context.md): the session cache and `ctx.set_name()` API
-- [Semantic Search](semantic-search.md): `SemanticSearcher.query()` — the same engine the plugin calls
-- [Pattern Library](pattern-library.md): `PatternLibrary.sweep()` — sweep patterns behind `Ablation > Sweep Binary`
+- [Semantic Search](semantic-search.md): `SemanticSearcher.query()`: the same engine the plugin calls
+- [Pattern Library](pattern-library.md): `PatternLibrary.sweep()`: sweep patterns behind `Ablation > Sweep Binary`

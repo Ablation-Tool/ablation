@@ -13,13 +13,13 @@ Firmware vendors ship products that contain dozens of open-source libraries. Ope
 
 This creates a concrete problem during RE. A CVE publishes for OpenSSL 1.1.1k describing a heap buffer overflow in the public key parsing path. You are analyzing a firewall appliance from that vendor. Without an SBOM you cannot answer the basic question: does this appliance contain OpenSSL 1.1.1k? You could spend hours tracing TLS code before confirming the version, or skip the appliance entirely and miss a real exposure. `SBOMExtractor` answers the version question in seconds so you decide whether to trace the vulnerable path before opening a disassembler.
 
-An SBOM also changes where analysis starts. A binary that contains BusyBox 1.33.1 tells you that the shell environment has specific command injection surfaces documented in BusyBox CVE history. A binary that contains OpenSSH 8.0p1 tells you exactly which pre-auth parsing paths matter. `SemanticSearcher` works best when you give it a specific function name to search for, and the SBOM produces those function names from the component list before any disassembly runs.
+Component evidence also changes where analysis starts. A plausible BusyBox or OpenSSH version can direct attention to relevant historic vulnerability classes and function names, but a version string does not prove that the corresponding vulnerable code is present, enabled, or reachable. Use that evidence to choose review targets, not to assign a CVE automatically.
 
-The toolchain string from the `.comment` section carries separate value. A binary compiled with GCC 4.8.5 does not emit stack canaries by default and generates more predictable function prologues than a binary compiled with GCC 10.2.1. Knowing the compiler version tells `SinkArgClassifier` which patterns to expect so it produces fewer false positives.
+The `.comment` toolchain string provides a separate compiler-family clue. Hardening still depends on build flags and vendor changes, so compiler version alone does not establish stack-canary use or prologue shape. Treat it as supporting context for pattern selection and manual verification.
 
-SBOMExtractor improves the ablation pipeline in two concrete ways. First, it prioritizes which functions are worth tracing because a confirmed OpenSSL 1.1.1k presence means the `d2i_PublicKey` path exists and is a taint target, and without the SBOM that selection requires manual version confirmation. Second, it attaches the SPDX license identifier to each component so the output feeds a compliance tool without a separate lookup step.
+SBOMExtractor improves the ablation pipeline in two concrete ways. First, it prioritizes version-specific review, such as checking whether an expected OpenSSL parsing path is actually present and reachable. Second, it attaches an SPDX license identifier where the component mapping is known, reducing a manual lookup before downstream compliance validation.
 
-CycloneDX and SPDX are standard machine-readable SBOM formats with different security and compliance conventions. `SBOMComponent` provides SBOM-ready component names, versions, evidence, and license identifiers where recovered, but this module emits component objects and a text report—not a serialized CycloneDX or SPDX document. Convert and validate those objects with your downstream SBOM tooling before using them for compliance or vulnerability management.
+CycloneDX and SPDX are standard machine-readable SBOM formats with different security and compliance conventions. `SBOMComponent` provides SBOM-ready component names, versions, evidence, and license identifiers where recovered, but this module emits component objects and a text report, not a serialized CycloneDX or SPDX document. Convert and validate those objects with your downstream SBOM tooling before using them for compliance or vulnerability management.
 
 ---
 
@@ -139,7 +139,7 @@ SBOMExtractor: 6 component(s) in /path/to/firmware.bin
 
 **Version string patterns match substrings.** A binary that logs `"OpenSSL error"` without embedding a version number will not match because all patterns require a version string after the library name. A binary that ships a static error message like `"zlib 1.2.11 is required"` in a log message will match, so confirm the version string is from the library itself and not a requirements check before reporting.
 
-**Byte signature matching requires three hits per library.** A single AES S-box constant in an unrelated crypto implementation will not fire because `ThirdPartyLibraryIdentifier` requires `min_matches=2` by default. Raise to 3 for lower false-positive rate on larger binaries.
+**Byte signature matching uses a configurable hit threshold.** The default is `min_matches=2`, so the earlier claim that three hits are always required was incorrect. A single AES S-box constant in an unrelated implementation will not meet that default, but two common constants can still collide. Raise the threshold to 3 for fewer false positives on larger binaries and validate library identity with additional evidence.
 
 **DT_NEEDED entries reflect link-time dependencies, not runtime presence.** A library listed in DT_NEEDED may be dlopen'd and absent from the firmware image. These entries are `MEDIUM` confidence for this reason.
 

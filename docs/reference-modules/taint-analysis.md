@@ -18,7 +18,7 @@
 
 ## What is taint analysis? <sup>[↑](#tainttracker)</sup>
 
-Taint analysis is a form of information flow tracking that marks data as "tainted" when it originates from an untrusted source (network input, user-supplied arguments, file reads) and propagates that mark forward through every computation that depends on that data. When tainted data reaches a security-sensitive operation (a size argument to `malloc`, a length to `memcpy`, a command string to `system`), a finding is reported.
+Taint analysis is a form of information flow tracking that marks data as "tainted" when it originates from an untrusted source such as network input, user-supplied arguments, or file reads. It propagates that mark forward through computations that depend on the data. A finding is reported when tainted data reaches a security-sensitive operation, such as a size argument to `malloc`, a length to `memcpy`, or a command string to `system`.
 
 The key insight is that taint analysis answers a different question than static pattern matching. A scanner that flags every call to `system()` produces false positives for calls with hardcoded strings. A scanner that flags every `memcpy` with a length argument produces false positives when the length comes from a compile-time constant. Taint analysis narrows the question: does attacker-supplied data actually flow to this argument? Only findings where the data flow is confirmed get reported.
 

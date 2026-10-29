@@ -44,12 +44,12 @@ Both sequences place `r0 + 8` in `r1`. A taint tracker operating at the instruct
 
 ### Expression lifting <sup>[↑](#exprlifter)</sup>
 
-**Expression lifting** converts an imperative instruction into a typed expression tree — an intermediate representation (IR) node that captures what value the instruction computes, independent of how the ISA encodes the computation. The lifted form records:
+**Expression lifting** converts an imperative instruction into a typed expression tree: an intermediate representation (IR) node that captures what value the instruction computes, independent of how the ISA encodes the computation. The lifted form records:
 
-- The operation (add, mul, load, cast, call)
-- The operand types and widths (uint32_t, uint64_t)
-- The taint status of each operand (attacker-controlled or not)
-- The tree structure (children are sub-expressions, not registers)
+- The operation, such as add, multiply, load, cast, or call
+- Operand types and widths, such as `uint32_t` and `uint64_t`
+- Whether each operand is attacker-controlled
+- The tree structure, whose children are sub-expressions rather than registers
 
 An `ExprNode` in `ExprLifter` is a frozen, hashable dataclass. Two nodes that compute the same value with the same types and the same child structure are `==` and share the same hash. This structural equality is the foundation value numbering builds on.
 
@@ -106,7 +106,7 @@ Three IBM production systems analyzed from extracted binaries. See `docs/concept
 
 | Component | IBM source | Algorithm |
 |:---|:---|:---|
-| `ExprSimplifier` | XLC/OMR WCodeDriver `TR_Simplifier` — 1116 per-opcode functions | Per-opcode dispatch table: `_SIMPLIFIERS[op](node)` |
+| `ExprSimplifier` | XLC/OMR WCodeDriver `TR_Simplifier`: 1116 per-opcode functions | Per-opcode dispatch table: `_SIMPLIFIERS[op](node)` |
 | `ValueNumberer` | XLC/OMR `TR_ValueNumberInfo` | Hash-congruence: `(op, ctype, child_vnums)` key + `canShareValueNumber()` gate |
 | `LiftRule` / `ConsumableInsnList` | HATS 7.5 `AbstractRenderingRulesEngine` | Greedy consumption: priority-ordered rules + `PatternComponent.newInstance()` factory |
 | `ExprNode` hierarchy | VisualAge EPDC model layer | Flat frozen dataclass + type annotations |
@@ -146,12 +146,12 @@ from ablation.analyzers.expr_lifter import ExprNode
 
 `ExprNode` is a frozen dataclass: immutable, hashable, and structurally comparable with `==`. Two nodes with the same opcode, children, and type are equal and share the same hash.
 
-**Raw fields** (set via convenience constructors, not directly):
+**Raw fields**, normally set through convenience constructors:
 
 | Field | Type | Description |
 |:---|:---|:---|
-| `op` | `str` | Opcode string (e.g. `'add'`, `'load'`, `'const'`) |
-| `children` | `Tuple[ExprNode, ...]` | Child sub-expressions (empty for leaf nodes) |
+| `op` | `str` | Opcode string such as `'add'`, `'load'`, or `'const'` |
+| `children` | `Tuple[ExprNode, ...]` | Child sub-expressions; empty for leaf nodes |
 | `ctype` | `str` | C width annotation (default `'uint64_t'`) |
 | `const_val` | `Optional[int]` | Integer value for `const` nodes; `None` otherwise |
 | `name` | `Optional[str]` | Identifier for `arg`, `temp`, `sym` nodes; `None` otherwise |
@@ -264,7 +264,7 @@ assert vn.number(l1) != vn.number(l2)
 # Identify duplicates in a block
 nodes = [e1, e2, ExprNode.arg(2)]
 pairs = vn.cse_pairs(nodes)
-# pairs = {vn_for_e1: e1} — one repeated expression
+# pairs = {vn_for_e1: e1}: one repeated expression
 ```
 
 **Methods:**
@@ -386,7 +386,7 @@ print(simplified.to_c())
 
 **From `BinaryLifter` `NativeVal`:**
 
-`BinaryLifter` outputs `NativeVal` objects per-register. Promote a `NativeVal` to `ExprNode`, simplify, then use `to_c()` as the expression text. `tainted=True` should be set on nodes derived from attacker-controlled registers (`x0`–`x7` from network input, etc.).
+`BinaryLifter` outputs `NativeVal` objects per-register. Promote a `NativeVal` to `ExprNode`, simplify, then use `to_c()` as the expression text. Set `tainted=True` on nodes derived from attacker-controlled registers, such as `x0` through `x7` when those registers carry network input.
 
 ---
 
@@ -407,11 +407,11 @@ Gate: **PASSED**. 2 LOW findings.
 
 2. Load aliasing is conservatively treated as always fresh. Two `load(addr)` nodes with structurally equal `addr` trees get different value numbers because the memory state may have changed between the two loads. This is sound but may miss CSE opportunities in loop bodies where the address is provably stable.
 
-3. Rule-based lifting requires caller-supplied rules. `ExprLifter.lift()` does nothing without a `rules` list. No arch-specific rules are bundled in `ExprLifter` itself; the arch lifters (`BinaryLifter`, `Ppc476Decompiler`) supply them.
+3. Rule-based lifting requires caller-supplied rules. `ExprLifter.lift()` does nothing without a `rules` list. No arch-specific rules are bundled in `ExprLifter` itself; architecture lifters such as `BinaryLifter` and `Ppc476Decompiler` supply them.
 
 4. `simplify()` is not aware of signedness. The strength reduction `x / 2^N → x >> N` applies unsigned right shift. Signed division by a power of two requires arithmetic shift right with a rounding correction; the simplifier does not detect this case and skips the reduction when signedness is ambiguous.
 
-5. The `tainted` flag is not propagated through `cast` and `load`. A `cast(tainted_node, uint32_t)` drops the taint flag on the outer cast node (it inherits from the child only through the child node itself, not through the wrapper). Callers should check `node.tainted or any(c.tainted for c in node.children)` for full subtree taint coverage.
+5. The `tainted` flag is not propagated through `cast` and `load`. A `cast(tainted_node, uint32_t)` drops the taint flag on the outer cast node; the child retains its own flag, but the wrapper does not inherit it. Callers should check `node.tainted or any(c.tainted for c in node.children)` for subtree taint coverage.
 
 ---
 
@@ -425,7 +425,7 @@ After this module: `SinkArgClassifier` or `TaintTracker`. Pass the simplified `E
 
 ## See also <sup>[↑](#exprlifter)</sup>
 
-- [Decompiler and IR Lifter Concepts](../concepts-decompiler.md): ExprLifter design architecture section — algorithm details from HATS, XLC/OMR, and VisualAge EPDC
+- [Decompiler and IR Lifter Concepts](../concepts-decompiler.md): ExprLifter design architecture section: algorithm details from HATS, XLC/OMR, and VisualAge EPDC
 - [BinaryLifter](binary-lifter.md): upstream arch-neutral lifter producing `NativeVal` register state
 - [PPC476 Lifter](ppc476-lifter.md): arch-specific decompiler; `ExprLifter` targets its `_Val` expressions
 - [SinkArgClassifier](sink-arg-classifier.md): downstream consumer of simplified `ExprNode.to_c()` strings

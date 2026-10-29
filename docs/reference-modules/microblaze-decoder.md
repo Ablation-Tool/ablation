@@ -261,7 +261,7 @@ An additional 16,384-byte DMA segment covers `0xF612C000–0xF6130000`. Only 37 
 
 The reset vector targets local `0x20050`; the corresponding loaded entry is `0xF6130050`. A local-to-global delta of `0xF6110000` also maps the two validated jump tables and their targets.
 
-Initial direct-control-flow recovery found 103 functions and 14,008 instructions. Adding the bounded 19-entry and 5-entry tables and validating the no-return loop at `0xF6130080` recovered 124 functions, 21,733 instructions (86,932 bytes), and 3,723 basic blocks. The tables have nine and three unique targets respectively. No-return suppression removed false fall-through and both former overlap diagnostics. The image has 7,148 unclassified bytes, six unresolved indirect calls, and four external call sites to `0xF6110000`. These figures describe this image and entry model, not complete firmware coverage.
+Initial direct-control-flow recovery found 103 functions and 14,008 instructions. Adding the bounded 19-entry and 5-entry tables and validating the no-return loop at `0xF6130080` recovered 124 functions, 21,733 instructions totaling 86,932 bytes, and 3,723 basic blocks. The tables have nine and three unique targets respectively. No-return suppression removed false fall-through and both former overlap diagnostics. The image has 7,148 unclassified bytes, six unresolved indirect calls, and four external call sites to `0xF6110000`. These figures describe this image and entry model, not complete firmware coverage.
 
 Lifting all 124 recovered functions produces 21,484 lines. Every recovered instruction has an emitted statement or an intentional no-op/`IMM` omission; there are no `unlifted` operations in this image. Output includes six indirect-call operations and two resolved jump-table operations.
 
@@ -283,6 +283,12 @@ The separate function at `0xF613072C` contains 62 instructions in 16 blocks with
 | `0xF613D894` | `0x1C658` | `0x36D60` | 43 |
 
 The next reference after `0x1C4F8` is `0x1C5D0`, a 216-byte referenced interval; both 72-byte copies fit. The next reference after `0x1C658` is `0x1C683`, exactly 43 bytes, matching its copy length. The 72-byte source is zero-initialized, and the 43-byte source is a binary table rather than a string. These sites do not show attacker-controlled lengths, and all three lengths fit the observed layouts. Referenced intervals are not source-level type proof, so this is not a blanket buffer-safety or symbol verdict.
+
+## What this adds to an investigation
+
+The decoder, CFG recovery, argument helpers, and lifter form a graduated path from opaque DMA bytes to reviewable control flow. A user can stop at instruction evidence, recover only reachable functions, or inspect structural pseudo-C without treating a linear sweep as complete firmware coverage.
+
+These are deliberately separable building blocks. Better PDI extraction can supply new segments, additional instruction semantics can deepen the decoder, and future indirect-call evidence can refine the same CFG. Such growth does not turn unresolved callbacks or unmapped memory into recovered facts. The production measurements above demonstrate the workflow on one image, not a universal coverage guarantee.
 
 ## Limitations
 

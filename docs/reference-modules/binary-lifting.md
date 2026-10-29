@@ -21,7 +21,7 @@ Binary lifting translates raw machine instructions from a native ISA into a high
 
 The fundamental challenge in binary lifting is that native instructions are highly heterogeneous. ARM64 uses 32-bit fixed-width encodings with SIMD registers and status flags; MIPS uses delay slots and branch-likely instructions that have no C equivalent; BEAM is a bytecode VM for Erlang processes with message-passing and process scheduling built into the instruction set. A single lifter that handles all 18 ISAs in Ablation's target list must abstract over these differences while preserving the semantics that taint analysis and vulnerability detection depend on.
 
-`BinaryLifter` dispatches to per-arch state machines (`_ARM64State`, `_X86_64State`, etc.) that each implement the ISA-specific decoding, then normalizes the output into a common `NativeVal`-based pseudocode format. The lifting output integrates directly with `BinaryContext` function boundaries and the taint annotation pipeline, so a lifted function can be taint-analyzed immediately after lifting without a separate import step.
+`BinaryLifter` dispatches to per-arch state machines such as `_ARM64State` and `_X86_64State` that each implement the ISA-specific decoding, then normalizes the output into a common `NativeVal`-based pseudocode format. The lifting output integrates directly with `BinaryContext` function boundaries and the taint annotation pipeline, so a lifted function can be taint-analyzed immediately after lifting without a separate import step.
 
 ## Why this exists <sup>[↑](#binarylifter)</sup>
 

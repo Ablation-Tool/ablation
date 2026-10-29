@@ -21,7 +21,7 @@ For firmware RE, YARA rules close the gap between a confirmed finding and operat
 
 SARIF stands for Static Analysis Results Interchange Format. It is the OASIS standard that GitHub Code Scanning, VS Code, and most modern SAST platforms consume natively. A SARIF document is a JSON file that describes analysis results in a schema those tools understand so sweep results appear as PR annotations and Security tab findings without any custom integration work.
 
-Each SARIF result carries a rule ID derived from the pattern tag and query, a severity level mapped from the finding's severity field (CRITICAL/HIGH become `error`, MEDIUM becomes `warning`, LOW becomes `note`), the virtual address of the hit in `physicalLocation.address.absoluteAddress`, and the cosine similarity score in `properties.score`. This structure lets GitHub Code Scanning display the hit location, severity, and evidence in the same UI as any other static analysis tool.
+Each SARIF result carries a rule ID derived from the pattern tag and query, the virtual address in `physicalLocation.address.absoluteAddress`, and the cosine similarity score in `properties.score`. Severity maps from CRITICAL or HIGH to `error`, MEDIUM to `warning`, and LOW to `note`. This structure lets GitHub Code Scanning display the hit location, severity, and evidence in the same UI as any other static analysis tool.
 
 ---
 
@@ -41,7 +41,7 @@ Flat JSON is the right choice when the consumer is a Python script, a CI pipelin
 
 3. **Confirmed findings have no operational value until they reach the systems that act on them.** A buffer overflow confirmed in firmware at VA `0x22ccc0` needs to reach GitHub Code Scanning for PR-level blocking, a SIEM for alerting, and a threat intelligence platform for indicator sharing. Each system expects a different format. This module produces YARA, SARIF, and JSON from the same findings list so no manual translation step exists between analysis and detection.
 
-4. **YARA condition logic must balance sensitivity and specificity.** A rule that fires on any single matching string produces too many false positives in large malware corpora. The generator uses `2 of ($s_*)` for IOC strings requiring two independent matches and `any of ($api_*)` for CRITICAL API imports because a single CRITICAL import like `NtCreateThreadEx` is a strong signal on its own. The eight built-in rules use calibrated conditions derived from API co-occurrence patterns documented in Mohanta & Saldanha, "Malware Analysis and Detection Engineering" (Apress, 2020).
+4. **YARA condition logic must balance sensitivity and specificity.** A rule that fires on any single matching string produces too many false positives in large malware corpora. The generator uses `2 of ($s_*)` for IOC strings requiring two independent matches and `any of ($api_*)` for CRITICAL API imports because a single CRITICAL import like `NtCreateThreadEx` is a strong signal on its own. The eight built-in rules use calibrated conditions derived from API co-occurrence patterns documented in Mohanta & Saldanha, "Malware Analysis and Detection Engineering", published by Apress in 2020.
 
 ---
 
@@ -100,7 +100,7 @@ The SHA256 prefix ensures uniqueness across renamed malware samples. Non-alphanu
 
 | Source | YARA String Type | Modifiers |
 |:---|:---|:---|
-| IOC strings (IP, domain, path, key) | `"quoted string"` | `ascii wide nocase` |
+| IOC strings for IPs, domains, paths, and keys | `"quoted string"` | `ascii wide nocase` |
 | CRITICAL malware API names | `"quoted string"` | `ascii wide` |
 | Anti-debug byte patterns | `{ HH HH HH }` hex | (none) |
 
@@ -343,7 +343,7 @@ rule mal_malware_exe_3a4f8c1d2b9e7f5a
 
 **API names in security utilities.** Anti-malware agents, EDR tools, and debugging utilities legitimately import `NtCreateThreadEx`, `VirtualAllocEx`, and other CRITICAL APIs for monitoring purposes. The CRITICAL threshold is calibrated for untrusted samples so applying generated rules to enterprise endpoint binaries will produce false positives.
 
-**Empty YARA rules (`condition: false`).** When the findings dict is empty (no IOC strings, no CRITICAL APIs, no byte patterns), the generator emits a rule with `condition: false`. This is a syntactically valid YARA rule that never matches. Validate that the findings input is populated before generating rules for deployment.
+**Empty YARA rules (`condition: false`).** When the findings dict contains no IOC strings, CRITICAL APIs, or byte patterns, the generator emits a rule with `condition: false`. This is a syntactically valid YARA rule that never matches. Validate that the findings input is populated before generating rules for deployment.
 
 **`sweep_to_sarif()` emits candidates, not confirmed findings.** A SARIF output from sweep results should be treated as a triage queue. Use `findings_to_sarif()` when the output must represent only confirmed findings from `FindingRegistry`.
 
@@ -361,7 +361,7 @@ Run all three export steps after `PatternLibrary.sweep()` or `FindingRegistry.li
 
 | Field | Content |
 |:---|:---|
-| `rule.name` | YARA rule identifier (alphanumeric + underscore, unique per binary SHA256) |
+| `rule.name` | YARA rule identifier using alphanumerics and underscores, unique per binary SHA256 |
 | `rule.meta` | Dict of metadata: description, author_type, date, sha256, technique |
 | `rule.strings` | List of `(identifier, value, modifiers)` tuples |
 | `rule.condition` | YARA condition expression |

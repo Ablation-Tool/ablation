@@ -3,6 +3,12 @@
 
 `LoongArchDecoderV2` extends the native LoongArch decoder with instrumentation tagging for KASAN- and KCOV-instrumented kernels. It identifies known sanitizer calls and recognized KASAN shadow-check preambles, then can yield a cleaned instruction stream for downstream analysis.
 
+## Why filter instrumentation?
+
+Sanitizer calls and shadow checks add control flow that is unrelated to the original kernel logic. When an analyst compares a KASAN report with a production build, those additions can hide the relevant path or inflate call relationships. Removing recognized instrumentation makes the remaining instructions easier to compare.
+
+The approach relies on symbol addresses and a bounded set of compiler idioms, not on a claim that every sanitizer sequence is understood. Users gain a preprocessing aid for differential review, with tagging retained so removed instructions can be audited. It remains a small adapter between `System.map` evidence and later analysis rather than an automatic vulnerability validator. New compiler patterns can extend the tagger; uncertain sequences should remain visible instead of being deleted speculatively.
+
 ## What it does
 
 1. Decodes 32-bit little-endian LoongArch frames using the V1 decoder.

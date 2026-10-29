@@ -3,6 +3,12 @@
 
 Decode variable-width nanoMIPS instructions, lift functions to structural pseudo-C, and trace source-to-sink data flows. `NanoMIPSTaintTracker` uses Capstone's nanoMIPS mode when available and otherwise falls back to Ablation's pure-Python frame decoder with more conservative analysis.
 
+## Why the decode-confidence distinction exists
+
+nanoMIPS support depends on both the instruction format and the capabilities of the installed Capstone binding. A silent fallback could make conservative results look equivalent to full decoding. This integration exposes `has_full_decode` and per-finding decode status so users can tell which path produced the evidence.
+
+Frame decoding establishes instruction boundaries before call and register analysis can begin. Capstone supplies richer semantics when available; the internal decoder preserves a bounded fallback when it is not. This layered design lets users continue an investigation without concealing reduced confidence. It also allows either decoder to be replaced independently, while keeping the same triage discipline: verify the original bytes and buffer flow before treating a finding as a security conclusion.
+
 ## Capability levels
 
 | API | Purpose | Output |

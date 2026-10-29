@@ -59,7 +59,7 @@ flowchart TD
     linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
-Register values flow forward through the instruction stream. Each instruction either transfers a known value (copy or constant propagation), loads a resolvable value (string from `.rodata`, return value from a named callee), clears a register (caller-save kill at an unknown call), or produces `Unknown`. The tracked state is a flat dict; there is no branching, no join, no fixpoint iteration. At each `CALL` instruction, the current argument register state is snapshotted into a `CallSite` record.
+Register values flow forward through the instruction stream. An instruction can copy or propagate a constant, load a string from `.rodata`, preserve a named callee's return value, clear a caller-saved register at an unknown call, or produce `Unknown`. The tracked state is a flat dict; there is no branching, no join, and no fixpoint iteration. At each `CALL` instruction, the current argument register state is snapshotted into a `CallSite` record.
 
 ---
 

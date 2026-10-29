@@ -108,6 +108,12 @@ Always inspect `errors`; partial results can still be useful. If Capstone is una
 
 Do not enable live probing against a production or otherwise unauthorized service. Use an isolated test instance, preserve its initial state, and review each command's effect before execution. Static analysis does not require live socket access.
 
+## What this workflow adds
+
+The metadata layer turns runtime structures into a function map when ordinary symbols are unavailable. That map makes semantic retrieval and manual navigation more informative, while the specialized analyzer adds handler and framing evidence for supported binaries. Users can adopt only the metadata step or continue to the deeper workflow.
+
+This is a layered compatibility path, not a universal Go decompiler. New `pclntab` layouts can extend the parser, and framework-specific handler recovery can remain separate from generic naming. Live vmnetd probing is optional and outside the static path; recovered names and command structures still require instruction and deployment verification.
+
 ## Limitations
 
 - `pclntab` recovery can fail for unsupported versions, packed files, malformed offsets, and aggressive obfuscation.

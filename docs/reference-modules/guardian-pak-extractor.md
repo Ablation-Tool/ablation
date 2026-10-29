@@ -1,145 +1,81 @@
-# GuardianPakExtractor
+# Guardian PAK Extraction
+
+`GuardianPakExtractor` functionality in `ablation.core.guardian_pak_extractor` recovers files from Tandem NonStop Guardian PAK archives. It provides in-memory iteration and optional disk extraction without a NonStop system or a ZIP-compatible tool.
+
+---
 
 ## Why this exists
 
-Four things were not possible before in Ablation:
+Guardian patches may use a `.ZIP` suffix while containing none of the ZIP structure expected by `unzip` or `binwalk`. The payload combines a proprietary PAK chunk stream with Guardian BACKUP tape records. Without a reader for both layers, the executable contents remain inaccessible.
 
-1. **Extract files from Tandem Guardian PAK archives.** Guardian PAK is not a ZIP file despite the `.ZIP` extension used for patch distribution. `unzip`, `file`, `binwalk`, and every other standard archive tool reject these files. The only documented extractor (`UNPAK`) requires a live Tandem NSK system. Without this module, every Guardian PAK is a sealed black box.
+The extractor also addresses two details that a one-off decompressor can get wrong. BACKUP record type codes vary between archives, so content signatures are more reliable than a fixed type table. Guardian filenames contain three components, so preserving volume, subvolume, and filename separately avoids flattening the namespace.
 
-2. **Provide the prerequisite for any RE work on Guardian-native code.** Guardian PAK archives are the only publicly accessible corpus of Tandem NonStop binaries. The platform's source code, ABI, and file-format specs are covered by NDA; no public documentation or disassembler plugin exists for any of the common RE tools. This extractor is the unlocking step for all Guardian RE in Ablation.
+This is an ingestion component, not a NonStop decompiler. Recovered Himalaya K-series files are labeled `mips32be` so they can enter an appropriate MIPS analysis workflow.
 
-3. **Handle content-based record detection.** The Guardian BACKUP tape format which wraps the PAK contents uses 2-byte type codes per record, but these codes are NOT stable across archive runs, confirmed: the tape-label code is `0x6891` in one PTF archive and `0x1F1A` in another for the same logical record class. Any type-code-based parser silently misidentifies records on the second archive it encounters. This module detects record class by content signature and record size, making it correct across archive variants.
+---
 
-4. **Preserve Guardian three-component filenames.** Guardian files live in a `$VOLUME.SUBVOLUME.FILENAME` three-field namespace each component up to 8 characters with no POSIX equivalent. No standard tool maps these to a safe filesystem path without truncation or silent collision. This module parses the 24-byte padded-field structure at offset `0x2E` in file header records and maps it to a clean directory hierarchy.
+## How extraction works
 
-## Format notes
+1. Require the `PAK ` magic and walk the big-endian compressed-chunk lengths after the header and subtype field.
+2. Decompress each recognized zlib chunk and skip `0xFFFF` group separators and alignment padding.
+3. Identify tape-label, file-catalog, and file-header records using fixed sizes and content signatures.
+4. Parse the 24-byte path field at offset `0x2E` in a file header, with a bounded fallback search for `$`.
+5. Accumulate following data records until another file or catalog boundary, then yield a `GuardianFile`.
 
-**PAK container structure:**
+The observed layout is:
 
-```
-magic       8 bytes   b'PAK \x00\x01\x00\x00'
-subtype     2 bytes   (typically 0x000A)
-
-Chunk stream:
-  chunk_size  2 bytes   big-endian; 0xFFFF = group separator (skip)
-  zlib_data   chunk_size bytes
-  padding     0-1 bytes (1 if chunk_size is odd, for 2-byte alignment)
-
-Archive terminator: FF FF FF FF  (two consecutive group separators)
-```
-
-**Guardian BACKUP tape records decompressed chunk contents:**
-
-```
-Record detection is content-based, because type codes are not stable across archives:
-
-  Tape label    200-byte chunk containing b'Tandem Archive Tape'
-  File catalog  222-byte chunk containing b'File Backup'
-  File header   358-byte chunk with b'$' at offset 0x2E (Guardian path start)
-  Data block    any other chunk following a file header (~28 KB typical)
+```text
+PAK header + subtype
+  -> repeated zlib chunks
+  -> Guardian BACKUP records
+  -> file header: $VOLUME + SUBVOLUME + FILENAME
+  -> consecutive file-data records
+  -> GuardianFile(path, components, data, arch='mips32be')
 ```
 
-**Guardian path layout (offset 0x2E in 358-byte file header):**
+Content-based record detection works across the reviewed archive variants because it does not assign permanent meaning to their unstable two-byte type codes. It remains an empirical format model rather than a vendor conformance proof.
 
-```
-bytes[0:8]   volume    space-padded, e.g. b'$DEV2   '
-bytes[8:16]  subvolume space-padded, e.g. b'ZMQP001E'
-bytes[16:24] filename  space-padded, e.g. b'ALTMQFLS'
-```
+---
 
-**Confirmed architecture:** Tandem Himalaya K-series = MIPS32 big-endian. Verified by Capstone decode of extracted binaries from two NSK PTF archives.
-
-## Usage
+## Iterate without writing files
 
 ```python
-from ablation.core.guardian_pak_extractor import iter_files, extract_to, GuardianFile
 from pathlib import Path
+from ablation.core.guardian_pak_extractor import iter_files
 
-# Iterate files without writing to disk
-data = Path('patch.zip').read_bytes()
-for f in iter_files(data):
-    print(f'{f.path}  {len(f.data)} bytes  arch={f.arch}')
-
-# Extract to a directory hierarchy ($VOL/SUBVOL/FILENAME)
-extracted = extract_to(data, Path('/tmp/guardian_out'))
-for f in extracted:
-    print(f'{f.path}  →  {f.volume.lstrip("$")}/{f.subvolume}/{f.filename}')
-
-# Access file contents directly
-for f in iter_files(data):
-    if f.filename == 'MQMSVR':
-        mips_code = f.data  # raw MIPS32be binary
+raw = Path('/path/to/patch.zip').read_bytes()
+for item in iter_files(raw):
+    print(f'{item.path}  {len(item.data)} bytes  arch={item.arch}')
+    if item.filename == 'MQMSVR':
+        mips_code = item.data
 ```
 
-## Key API
+`GuardianFile` exposes `path`, `volume`, `subvolume`, `filename`, `data`, and `arch`. In-memory iteration is the preferred first step for unfamiliar or untrusted archives.
 
-| Symbol | Description |
-|--------|-------------|
-| `GUARDIAN_PAK_MAGIC` | `b'PAK '`: first 4 bytes of any valid PAK archive |
-| `GuardianFile` | Dataclass: `path`, `volume`, `subvolume`, `filename`, `data`, `arch` (`"mips32be"`) |
-| `iter_chunks(data)` | Decompress and yield raw Guardian BACKUP record bytes; raises `ValueError` on bad magic; skips corrupt chunks silently |
-| `iter_files(data)` | Yield `GuardianFile` per file; accumulates consecutive data chunks; flushes on tape_label/file_catalog boundaries |
-| `extract_todata, dest` | Extract all files to `dest/$VOL/SUBVOL/FILENAME` hierarchy; returns `List[GuardianFile]`; skips files with empty filename |
-| `_parse_guardian_path(record)` | `volume, subvolume, filename` from 358-byte file header; fallback scans for `$` if not at offset `0x2E` |
-
-## FORGE audit
-
-Gate: **PASSED** 0 HIGH, 0 CRITICAL.
-
-- 1 MEDIUM FORGE §3: `zlib.decompress()` has no `max_length`: a crafted PAK could cause OOM via zlib bomb. Acceptable for trusted RE corpus use; callers consuming untrusted PAK files should pre-screen decompressed size.
-- 1 LOW FORGE §6: the docstring listed specific record type code values `0x6891`, `0xDF3B`, and `0x0F02` as if they were authoritative. Fixed before commit: docstring now explicitly states codes are not stable and documents the content-detection approach instead.
-- 1 LOW FORGE §2: the `< 4` chunk size guard in `iter_files` discarded legitimate small data chunks for example 3-byte or 1-byte payloads. Fixed before commit: guard changed to skip only truly empty blocks (`if not chunk`).
-
-Confirmed on two NSK middleware PTF archives 66 files / ~130 MB and 83 files / ~139 MB decompressed.
+`iter_chunks()` is the lower-level zlib/record iterator. Invalid outer magic raises `ValueError`; corrupt compressed chunks are skipped. `extract_to(data, Path(destination))` writes recovered files into volume/subvolume directories and returns the corresponding `GuardianFile` objects.
 
 ---
 
-## How it works
+## What this adds for the user
 
-Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation CRC32 or SHA256 depending on container format runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
+The reader turns a vendor-specific archive into named byte payloads suitable for inventory and MIPS analysis. It replaces a live-platform extraction dependency with a small Python API that can be reused by a batch sweep or a later Guardian-aware loader.
 
----
-
-## Example output
-
-```
-Extracted 4 partitions from firmware.bin:
-  [0] boot      512 KB  ELF (ARM64)
-  [1] rootfs    18 MB   SquashFS
-  [2] data      4 MB    ext4
-  [3] config    128 KB  JFFS2
-Written to /tmp/extracted/
-```
+The parser can evolve independently as more record layouts are validated. A future bounded extraction interface could wrap it, but such an interface must add hostile-input limits rather than presenting current iteration as a containment boundary.
 
 ---
 
-## False positives
+## Safety and limitations
 
-Extraction either succeeds or raises an exception, there are no false positives in the traditional sense. Check for incomplete downloads (`.aria2` sidecar present) before analysis: partial images produce truncated or zero-filled partitions that pass validation but contain no useful data.
-
----
-
-## Pipeline position
-
-**Before this module:** `BinaryContext.load_or_build()` to identify the outer binary format and confirm the container is present.
-
-**After this module:** Feed extracted partition bytes to `BinaryContext.load_or_build()` or the appropriate ISA taint tracker for each extracted payload.
-
----
-
-## Reading findings
-
-| Field | Content |
-|:---|:---|
-| `path` | Filesystem path to the extracted file or partition |
-| `partition_name` | Partition label or index from the container header |
-| `size` | Size of the extracted payload in bytes |
-| `format` | Detected format of the extracted payload `ext4`, `squashfs`, and `ELF`, and so on |
+- `zlib.decompress()` and per-file accumulation have no global expanded-output budget. Apply process resource limits and pre-screen untrusted archives before iteration.
+- Corrupt compressed chunks are skipped, so a nonempty result does not prove that every archive member was recovered.
+- `extract_to()` derives directories from archive metadata but is not a general hostile-path containment proof. Validate names and destination containment before using it on untrusted input.
+- The `mips32be` label reflects the validated Himalaya K-series artifacts. Confirm architecture independently for a new payload family.
+- No cryptographic signature, package authenticity, runtime authorization, or deployment relevance is established by successful extraction.
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md): load extracted payloads for analysis
-- [FirmwareContainers](firmware-containers.md): higher-level firmware partition walker
-- [EntropyMapper](entropy-mapper.md): locate encrypted or compressed regions before extraction
+- [Legacy Binary Formats](motorola-88000-bcs-coff.md): how Guardian and MC88100 ingestion relate
+- [MIPS Decompilation & Taint Analysis](mips.md): subsequent analysis for recovered MIPS payloads
+- [Nested Archive Scanner](nested-archive-scanner.md): other archive-handling paths with different safety models

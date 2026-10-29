@@ -3,6 +3,12 @@
 
 Inspect Erlang/Elixir `.beam` modules with `BeamContext`, sweep OTP releases for dangerous imports, summarize a module through `BinaryLifter`, or decode the Code chunk into partial pseudo-IR with `BEAMLifter`.
 
+## Why module context and function lifting differ
+
+A BEAM file contains named imports, exports, atoms, literals, and code chunks. Those facts are useful even when no source or debug AST is present, but they do not form a native virtual-address space. The summary API therefore answers module-level questions, while `BEAMLifter` attempts partial function-level decoding from a Code chunk.
+
+Users can inventory a release, narrow dangerous execution surfaces, and then inspect selected instructions without confusing an import with an executed call. The layered design permits a future public chunk accessor or more opcode coverage without changing the basic inventory workflow. The current low-level helper is intentionally called out as less stable, and unknown opcodes leave partial output rather than invented source. NIF-backed behavior remains in native libraries outside this bytecode model.
+
 ## Inspect a module
 
 ```python

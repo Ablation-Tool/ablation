@@ -3,6 +3,12 @@
 
 `BinaryLifter` provides one interface for native pseudo-C lifting. ARM64 and x86-64 have the richest register-tracking backends; ARM32, Thumb, ARC, and the other native backends produce structural pseudocode that preserves calls, branches, returns, and unmodeled instructions as comments.
 
+## Why one lifter has different backends
+
+An analyst should not need a new top-level workflow for every instruction set. `BinaryLifter` supplies a common entry point while making the depth of each backend explicit. Full register tracking and structural presentation answer different questions: the first models selected values, while the second primarily organizes disassembly into readable control flow.
+
+The approach works because ELF/PE address mapping and many calling conventions can be shared even when instruction semantics differ. It does not make unsupported semantics interchangeable. The value is a stable navigation layer in which a backend can be added, deepened, or replaced without rewriting every consumer. Start with structural output for orientation, then use an architecture-specific analyzer when a security claim depends on exact data flow.
+
 ## Usage
 
 ```python

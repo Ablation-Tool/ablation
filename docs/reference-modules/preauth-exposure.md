@@ -98,61 +98,67 @@ results = auditor.run(
 print(results.fmt())
 ```
 
-Each result in `results.routes` has:
+Each `RouteEntry` in `results.routes` exposes:
 
 | Field | Content |
 |---|---|
-| `path` | HTTP path string for example `api/v2/monitor/system/status` |
-| `method` | `GET` / `POST` / `PUT` / `DELETE` |
-| `handler_va` | VA of the handler function |
-| `sink_calls` | List of dangerous PLT calls reachable from the handler |
-| `pre_auth` | `True` if no session validation middleware is present |
+| `url` | Recovered route string |
+| `handler` | Handler class or registration name |
+| `method_ids` | Numeric method identifiers recovered at registration |
+| `middleware` | Recovered middleware description |
+| `is_preauth` | Whether the auditor found no recognized session middleware |
+
+Handler details are stored separately in `results.handlers`. Each `HandlerEntry` can contain GET and POST code addresses and their `FuncProfiler` results. Sink calls belong to those profiles, not directly to `RouteEntry`.
 
 ---
 
 ## Validate exposure safely
 
-Use `results.preauth_with_sinks()` to select routes with dangerous sinks for manual review. There is no built-in `PocGenerator`; construct protocol requests only after confirming the route, method, parameters, and deployment context from the binary and configuration.
+Use `results.preauth_with_sinks()` to select route/handler pairs with dangerous sinks for manual review. There is no built-in `PocGenerator`; construct protocol requests only after confirming the route, method, parameters, and deployment context from the binary and configuration.
 
-Compare unauthenticated and authenticated responses in an isolated test instance, preserving status, body differences, and side-effect evidence. Do not replay a candidate against production or assume that a route marked pre-auth is externally reachable.
+Compare unauthenticated and authenticated responses only in an isolated, authorized test instance, preserving status, body differences, and side-effect evidence. Do not replay a candidate against production or assume that a route marked pre-auth is externally reachable.
 
 ---
 
-## Example output <sup>[↑](#preauthroute-auditor)</sup>
+## Illustrative output <sup>[↑](#preauthroute-auditor)</sup>
 
-```
+The following illustrates the `PreAuthAuditResult.fmt()` structure rather than a particular firmware run:
+
+```text
 === PreAuthRouteAuditor Results ===
   Total routes scanned:  24
   Pre-auth routes found: 3
 
-[HIGH]   /api/admin/reboot     handler=admin_reboot (0x0041b400)  no auth decorator
-[MEDIUM] /api/system/status    handler=status_handler (0x00419200)  no auth decorator
-[LOW]    /api/version          handler=version_handler (0x004188a0)  no auth decorator (info only)
+--- Pre-auth routes ---
+  '/api/admin/reboot'
+    handler=AdminReboot  middleware=...
+  Handler: AdminReboot
+    GET  0x0041b400  *** SINKS: system@0x0041b590 ***
 ```
+
+The auditor does not assign the generic HIGH/MEDIUM/LOW labels shown in an older example. Severity and exploitability require handler-specific review.
 
 ---
 
 ## False positives <sup>[↑](#preauthroute-auditor)</sup>
 
-Routes registered with auth middleware at the app level not as a decorator on the handler function appear as unauthenticated. The scanner only detects per-route auth decorators; verify app-level middleware before reporting. Informational endpoints version, health that are intentionally unauthenticated are expected findings.
+Routes registered with auth middleware at the application level rather than in the recognized registration argument can appear unauthenticated. Global middleware, alternate registration helpers, intentional public endpoints, and deployment routing need separate review. Conversely, middleware text alone does not prove that authentication is implemented correctly.
 
 ---
 
 ## Pipeline position <sup>[↑](#preauthroute-auditor)</sup>
 
-**Before this module:** No binary analysis required: `from_pathsource_root` operates on Python/JS source files.
+**Before this module:** `from_path()` builds a `BinaryContext` internally. Supply route-init and factory virtual addresses verified for the exact binary version; do not reuse the illustrative addresses as universal Fortinet constants.
 
-**After this module:** For HIGH/MEDIUM pre-auth routes that reach business-logic handlers, verify whether the handler reads user-controlled input and passes it to a taint sink. Register with `FindingRegistry`.
+**After this module:** Inspect selected handler profiles, verify user-controlled inputs and authorization wrappers, and use taint or path analysis where supported. Register only independently reviewed findings with `FindingRegistry`.
+
+This is a focused flatui compatibility analyzer. New registration idioms can be added as they are observed, but no generic Python/JavaScript source-route scanner is performed by this class.
 
 ---
 
 ## Reading output <sup>[↑](#preauthroute-auditor)</sup>
 
-This page describes a CFG reachability workflow. Individual tools return different types:
-
-- **TaintTracker** paths from entry point to security sink: `List[TaintPath]`: see [source-audit](source-audit.md) for `TaintPath` fields `sink`, `hops`, `confidence`, `has_source`.
-- **SourceEntryClassifier** routes without auth: `List[RouteClassification]`: see [tenant-isolation-checks](tenant-isolation-checks.md) for `RouteClassification` fields `rel_path`, `auth_level`, `matched_signal`.
-- **GateFinding** for binary targets: `List[GateFinding]`: see [compiler-security-gate](compiler_security_gate.md) for fields `func_va`, `site_va`, `category`, `severity`.
+`run()` returns `PreAuthAuditResult` with `routes`, `preauth_routes`, and `handlers`. `preauth_with_sinks()` returns `(RouteEntry, HandlerEntry)` tuples. `fmt()` presents those objects for review; it does not establish live HTTP reachability or a vulnerability severity.
 
 ---
 

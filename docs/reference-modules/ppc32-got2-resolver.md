@@ -7,6 +7,12 @@ Resolve PowerPC indirect calls and PLT references, and identify vector-heavy fun
 
 ---
 
+## Why call recovery and density profiling belong together
+
+Stripped PowerPC binaries can hide both the destination of a call and the role of a function. GOT2 and PLT recovery restore selected call relationships; VMX density supplies an independent hint about vector-intensive code. These are different evidence sources that help a user choose functions for closer review.
+
+The tools are building blocks rather than a single vulnerability scanner. Resolver improvements can add supported address idioms, PLT analysis can adapt to another linker layout, and density profiling can remain a lightweight triage pass. None assigns a target to a genuinely dynamic branch without evidence or treats a vector-heavy label as an algorithm or security verdict.
+
 ## PPC32 GOT2 indirect-call resolution
 
 Position-independent PPC32 code can load a GOT2-relative target into a register and branch through CTR with `BCTRL`. A linear call scanner sees the branch but not its destination. `PPC32GOT2Resolver` traces the register setup and resolves supported targets into concrete names and addresses.

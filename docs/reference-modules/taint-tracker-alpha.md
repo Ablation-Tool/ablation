@@ -3,6 +3,12 @@
 
 Recover Alpha ECOFF function logic with CFG/IR-backed pseudo-C, scan direct exec-class calls, and propagate taint across basic blocks. The implemented parser is specifically for Tru64/OSF1-style Alpha ECOFF; generic Alpha ELF support is not provided by this path.
 
+## Why the ECOFF and CFG work matters
+
+Common Linux binary loaders do not make Tru64 Alpha ECOFF sections, GP-relative references, and direct BSR calls intelligible. A linear scan also loses values at basic-block joins. These tools address the container problem first, then use CFG and IR layers to reason about control flow more carefully.
+
+The direct scanner offers cheap candidate discovery, while the CFG-fixpoint tracker and IR lifter support closer review of selected functions. This gives users a graduated path from triage to explanation instead of one opaque score. The components are reusable building blocks: a new loader or improved IR rule can be added without changing ECOFF byte evidence. Their results remain conservative candidates because seeded arguments and retained taint do not establish attacker reachability or sanitization.
+
 ## IR-backed pseudo-C
 
 ```python

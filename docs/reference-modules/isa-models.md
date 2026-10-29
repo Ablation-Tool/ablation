@@ -7,6 +7,12 @@ Normalize x86 instruction listings and provide shared x86/x86-64 register, calli
 
 ---
 
+## Why shared models matter
+
+An alias mistake can turn `eax` and `rax` into unrelated values, and an ABI mistake can assign taint to the wrong argument. Reimplementing those rules inside every scanner creates inconsistent results that are difficult to audit. These modules centralize the syntactic and convention-level facts on which other analyses depend.
+
+They are small foundational components rather than user-facing vulnerability scanners. Instruction normalization makes operands consistent; register and ABI models make downstream queries consistent; syscall tables provide named input-source mappings. Each table or parser can be corrected independently and have that correction propagate to consumers. That reuse also makes scope discipline important: a modeled default is not proof of a custom calling convention or an exhaustive platform syscall inventory.
+
 ## What these modules do
 
 `insn_x86.py` turns Capstone instructions or objdump-style text into a common `Insn` representation with typed operands. `isa_x86.py` supplies architecture facts that would otherwise be duplicated across instruction parsers, taint trackers, and control-flow analysis.

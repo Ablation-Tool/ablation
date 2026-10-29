@@ -3,6 +3,12 @@
 
 `HiSiliconRV32ExtDecoder` wraps Capstone for HiSilicon `riscv31`/HCC RV32 firmware and intercepts vendor instructions whose lengths or semantics stock Capstone does not model. Its primary purpose is to keep subsequent instruction boundaries correct and expose conservative register-taint metadata.
 
+## Why an adapter is safer than a patchwork scan
+
+One incorrectly sized vendor instruction shifts every following instruction boundary. A string or call scan can then miss the real handler or manufacture a false one. The adapter isolates vendor-specific decoding while delegating standard instructions to Capstone, so extension support does not require rewriting the base ISA implementation.
+
+Known instruction lengths restore synchronization; explicit dependency metadata supplies conservative taint facts where semantics are incomplete. This gives users a practical bridge into existing RV32 analysis while keeping uncertainty visible. It is intentionally a small compatibility component: new observed opcodes can extend it, and a future upstream Capstone implementation could replace it without changing the tracker's public input model. Raw-byte verification remains necessary for security claims.
+
 ## Supported extension families
 
 The decoder handles custom multi-register load/store, shift-fused arithmetic, branch-immediate, multiply-add, 48-bit `l.li`, selected 16-bit zero-extension operations, and custom-3 R-type encodings. The six-byte `l.li` instruction is especially important: treating it as a four-byte instruction misaligns the following stream.

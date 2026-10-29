@@ -3,6 +3,12 @@
 
 Decode LoongArch64 instructions, lift functions to structural pseudo-C, and trace taint with the LP64 ABI. Additional support covers Linux syscall labels, DWARF unwind metadata, and KASAN/KCOV instrumentation filtering.
 
+## Why these capabilities share a page
+
+Userspace analysis and instrumented-kernel analysis face different obstacles, but both depend on correct LoongArch instruction and ABI handling. The common decoder supplies that foundation. Structural lifting aids local review, taint tracking examines selected values, and the V2 preprocessing path removes recognized sanitizer machinery that would otherwise obscure kernel behavior.
+
+This separation lets users choose the least complicated tool that answers their question while sharing decoder improvements. It also makes the scope of each result visible: a cleaned instruction stream is not a production-kernel image, and pseudo-C is not a vulnerability verdict. Future decoder or metadata improvements can broaden all three paths, but the current workflows retain different constructors, inputs, and result types.
+
 ## Structural lifting
 
 ```python

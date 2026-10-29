@@ -1,41 +1,40 @@
 <a id="source-dangerous-sink-detection"></a>
 # Source Code Security Analysis
 
-Find dangerous code patterns across a source repository: detecting `eval`/`vm.runInContext` code execution, `subprocess`/`exec` command injection, SSRF-prone `fetch`/`axios` calls, path traversal in `fs.readFile`, and unguarded internal endpoints: with guard-condition detection that narrows findings to unguarded sinks and maps each to a CWE and severity.
+Inspect JavaScript, TypeScript, and Python repositories for dangerous operations, nearby guard conditions, and syntactic source-to-sink paths. The tools prioritize human review; they do not turn a pattern match into proof of exploitability.
 
 ---
 
-## Why this exists <sup>[↑](#source-dangerous-sink-detection)</sup>
+## Why this exists
 
-1. **Source RE requires the same sink-to-taint discipline as binary RE, but at the AST level.** `SourceSinkScanner` is the source-code equivalent of `SinkArgClassifier` + `FormatStringScanner`, it identifies every dangerous sink in a repository and classifies each by severity and CWE, providing the starting point for `SourceTaintTracker` dataflow analysis.
+Large source trees make it difficult to decide which files deserve attention first. A reviewer can search for `eval`, `subprocess`, or `fetch`, but raw search results do not explain severity, nearby guards, or how request input might reach the operation.
 
-2. Guard-condition detection reduces `HIGH` findings to `MEDIUM` for gated sinks: `vm.runInContext` gated by `LANGFUSE_CODE_EVAL_DISPATCHER=insecure-local` is a `MEDIUM` requires explicit misconfiguration, not a `HIGH` always reachable. This was the LFG-CODEEVAL-1 pattern: the sink was present, dangerous in the abstract, but not exploitable without the env-var gate. `SourceSinkScanner` detects the gate and adjusts severity.
+`SourceSinkScanner` provides that first inventory. `SourceTaintTracker` then builds a repository call graph and traces selected sink hits toward request-input sources. `SourceAuditCompressor` groups files with similar security profiles so reviewers can choose representative and high-priority files without treating compression as permission to discard the remainder.
 
-3. `SinkHit.as_dict()` provides structured output for `AgentLoop` integration: findings include file path, line number, sink function, CWE, severity, and the snippet. `AgentLoop` can consume these as pre-analyzed candidates for generating vulnerability hypothesis reports, referencing the exact file and line without re-running the scanner.
+These are source-oriented counterparts to binary sink triage. They reuse the same discipline of separating a dangerous operation, input provenance, and a verified security conclusion.
 
 ---
 
-## How it works <sup>[↑](#source-dangerous-sink-detection)</sup>
+## How scanning works
 
-```mermaid
-flowchart TD
-    A(["SourceSinkScanner.from_context(ctx)"]):::input --> B["scan(files=None) → List[SinkHit]\n  For each source file (JS/TS/Python):\n    Pattern match per SinkDef:\n      CODE_EVAL: eval() / vm.runInContext / exec()\n      SUBPROCESS: child_process.exec / subprocess.run\n      SSRF: fetch() / axios.get() with non-const URL\n      PATH_TRAVERSAL: fs.readFile / open() with concat path\n      UNGUARDED_ENDPOINT: express route without auth middleware\n    Guard condition check:\n      if sink inside env-var conditional gate → severity -1\n    → SinkHit"]:::primary
-    B:::primary --> C["SinkHit:\n  file: Path\n  line: int\n  sink_def: SinkDef\n  snippet: str\n  gated: bool\n  severity: CRITICAL | HIGH | MEDIUM | LOW\n  cwe: str\n  as_dict() → dict"]:::secondary
-    C:::secondary --> D(["report(findings, severity_filter) → str"]):::output
-    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
-    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
-    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
-    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
-    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
-    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
-    linkStyle 0 stroke:#bf360c,stroke-width:2px
-    linkStyle 1 stroke:#00695c,stroke-width:2px
-    linkStyle 2 stroke:#2e7d32,stroke-width:3px
+`SourceSinkScanner` applies language-specific sink patterns to source lines. Categories include code evaluation, subprocess execution, server-side request forgery candidates, path traversal, and unguarded internal endpoints. Each match receives a category, CWE, base severity, source location, and nearby context.
+
+The guard check searches a bounded context window for environment-variable and conditional-gate patterns. A recognized guard lowers severity by one level. This is a textual heuristic, not AST proof that the guard dominates the operation or validates its input.
+
+```text
+source files
+  -> sink-pattern matches
+  -> nearby guard classification
+  -> prioritized SinkHit objects
+  -> optional call-graph taint tracing
+  -> manual route, authorization, and data-flow verification
 ```
 
+The approach works as triage because dangerous APIs and common guard idioms have recognizable spellings. It cannot establish every dynamic call, framework middleware rule, or cross-file transformation from those spellings alone.
+
 ---
 
-## Usage <sup>[↑](#source-dangerous-sink-detection)</sup>
+## Scan a repository
 
 ```python
 from ablation.analyzers.source_sink_scanner import SourceSinkScanner
@@ -43,19 +42,17 @@ from ablation.analyzers.source_ingestion import SourceContext
 
 ctx = SourceContext.from_path('/path/to/repo')
 scanner = SourceSinkScanner.from_context(ctx)
-
 findings = scanner.scan()
-print(SourceSinkScanner.report(findings, severity_filter='HIGH'))
 
-# Critical unguarded sinks
-critical = [f for f in findings if f.severity == 'CRITICAL' and not f.gated]
-for f in critical:
-    print(f"  {f.file}:{f.line}  {f.sink_def.name}  CWE-{f.cwe}")
+print(SourceSinkScanner.report(findings, severity_filter='HIGH'))
+critical = [f for f in findings if f.severity == 'CRITICAL' and not f.guarded]
+for finding in critical:
+    print(f'{finding.rel_path}:{finding.line}  {finding.category}  {finding.cwe}')
 ```
 
-### Trace sources and prioritize repository review
+`scan()` returns `SinkHit` objects sorted by severity, path, and line. `report()` is a static method. `SinkHit.as_dict()` provides JSON-compatible output for agent or export workflows.
 
-`SourceTaintTracker` builds a repository call graph and traces selected sink hits back toward request-input sources:
+### Trace sources and prioritize review
 
 ```python
 from ablation.analyzers.source_taint_tracker import SourceTaintTracker
@@ -66,7 +63,9 @@ paths = tracker.trace_all(findings)
 print(tracker.report(paths, ctx))
 ```
 
-`SourceAuditCompressor` groups files with similar security profiles so reviewers can prioritize representative files and spot-check batches instead of reading every file first:
+A reported taint path shows syntactic source-to-sink connectivity. Route exposure, middleware authorization, type conversions, and framework behavior still require review.
+
+`SourceAuditCompressor` supplies a different view: review ordering rather than a vulnerability path.
 
 ```python
 from ablation.analyzers.source_audit_compressor import SourceAuditCompressor
@@ -77,66 +76,61 @@ print(compressor.report(buckets, show_files=True))
 print(compressor.priority_reads(buckets))
 ```
 
-A taint path shows syntactic source-to-sink connectivity; it does not prove route exposure, missing authorization, or exploitability. Compression is a review-ordering aid and must not be used to discard unaudited security-relevant files.
+Use the buckets to select representative and high-priority reads. Do not interpret omission from a priority list as evidence that a file is safe.
 
 ---
 
-## Example output <sup>[↑](#source-dangerous-sink-detection)</sup>
+## Illustrative output
 
-The following illustrates source sink scanner output format. Actual paths and sinks are codebase-specific.
+The following illustrates the sink report's meaning rather than output from a particular repository:
 
-```
-SourceSinkScanner: /path/to/repo
-
-Files scanned: <N>  Findings: <M>
-
-  [CRITICAL] CODE_EVAL  src/eval.ts:<line>  CWE-95
-    vm.runInContext(code, sandbox)
-    gated=False
-
-  [MEDIUM] CODE_EVAL  src/local_eval.ts:<line>  CWE-95
-    vm.runInContext(code, sandbox)
-    gated=True  (LANGFUSE_CODE_EVAL_DISPATCHER=insecure-local gate)
+```text
+[CRITICAL] code-eval  src/eval.ts:42  CWE-95  guarded=False
+[MEDIUM]   code-eval  src/local_eval.ts:18  CWE-95  guarded=True
 ```
 
----
-
-## False positives <sup>[↑](#source-dangerous-sink-detection)</sup>
-
-**Pattern matching without AST analysis may fire on string literals**: a `eval("safe_constant")` call where the argument is a string literal will be flagged as `CODE_EVAL`. Verify the `snippet` to confirm the sink argument is not a compile-time constant before escalating.
-
-**Guard-condition detection uses regex on the surrounding code block**: a conditional gate that checks the env-var on a different line than the sink invocation may not be detected. Findings with complex or multi-file guard logic should be reviewed manually even if `gated=False`.
+The second result is lower severity because a guard pattern was detected nearby. It is not proof that the environment is configured safely or that the guard cannot be bypassed.
 
 ---
 
-## Pipeline position <sup>[↑](#source-dangerous-sink-detection)</sup>
+## What this adds for the user
 
-Run `SourceSinkScanner` immediately after `SourceContext.from_path()` as the first scan on any source repository. This is the source-RE equivalent of Phase 0.5 triage. Feed `CRITICAL` and `HIGH` unguarded findings to `SourceTaintTracker` for full dataflow analysis.
+The three tools provide a graduated workflow from broad inventory to focused review. A user can begin with sink locations, add call-graph evidence where useful, and organize the remaining reading without deploying the target.
+
+They remain separate, composable components rather than one universal source decompiler. New sink rules, framework-aware guards, or richer call-graph models can extend the appropriate layer. A future replacement must preserve the distinction between heuristic severity and verified reachability.
 
 ---
 
-## Reading findings <sup>[↑](#source-dangerous-sink-detection)</sup>
+## False positives and limitations
 
-`SourceSinkScanner.from_context(ctx).scan()` returns `List[SinkHit]`:
+- A dangerous API can appear in a string, test, example, or unreachable branch. A constant argument can also be harmless even when the operation is generally dangerous.
+- Guard detection uses a bounded textual window. A guard on another line or in another file can be missed; a nearby but ineffective guard can produce an undeserved downgrade.
+- Taint paths do not prove route exposure, missing authorization, or attacker control after framework and runtime transformations.
+- Compression is a review-ordering aid and does not provide complete file-level safety coverage.
+- Verify critical findings against the actual call site, input source, guards, deployment configuration, and runtime behavior where available.
 
-| Attribute | Content |
+---
+
+## Reading findings
+
+| `SinkHit` field | Content |
 |:---|:---|
 | `rel_path` | Source file path relative to the repository root |
-| `line` | Line number |
-| `category` | Sink category for example `code-evaluation`, `subprocess`, `path-traversal`, `ssrf` |
-| `cwe` | CWE identifier for example `CWE-95`, `CWE-78`, `CWE-22` |
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` after guard reduction |
+| `line` | One-based source line number |
+| `line_text` | Exact source line containing the match |
+| `category` | Sink category such as `code-eval`, `subprocess`, `path-traversal`, or `ssrf` |
+| `cwe` | CWE identifier associated with the sink rule |
+| `severity` | Severity after guard reduction |
 | `base_severity` | Severity before guard reduction |
-| `guarded` | `True` if an env-var or conditional gate was detected near the sink |
-| `description` | Human-readable description of the sink pattern |
-| `line_text` | Exact source line containing the sink |
+| `guarded` | Whether a nearby guard pattern was detected |
+| `description` | Human-readable explanation of the sink rule |
 
-`SinkHit.as_dict()` returns a JSON-serializable dict for export.
+`path` holds the full `Path` object, while `rel_path` is normally used in reports. There are no `gated`, `file`, or `sink_def` fields on `SinkHit`; those names belonged to an outdated example.
 
 ---
 
-## See also <sup>[↑](#source-dangerous-sink-detection)</sup>
+## See also
 
-- [Source Code Analysis Pipeline](bare-integration.md): `SourceContext` that `SourceSinkScanner` consumes
-- [Tenant Isolation Checking](container-isolation-escape-surface.md): `SourceIsolationChecker` for IDOR complement scan
-- [Source Taint Tracking](bare-integration.md): `SourceTaintTracker` for full dataflow from identified sinks
+- [Source Code Audit Workflow](../workflows/source-code-audit.md): repository ingestion, compression, prioritized reads, and finding closure
+- [Sink Argument Classification](sink-arg-classifier.md): analogous binary sink triage
+- [Unauthenticated Attack Surface](preauth-exposure.md): exposure and authorization review after sink discovery

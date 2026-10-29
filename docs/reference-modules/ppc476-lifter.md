@@ -3,6 +3,12 @@
 
 `Ppc32Lifter` lifts 32-bit big-endian PowerPC functions to linear, register-tracked pseudo-C. It is intended for IBM PPC476-style ELF firmware and resolves imported calls through `BinaryContext`, annotating call arguments with recovered register expressions.
 
+## Why this specialist lifter exists
+
+Structural output can show that a call occurs without showing which computed value reaches its argument. For security review, that missing expression is often the important part. This lifter follows selected general-register values and combines them with `BinaryContext` import information so calls become more useful review candidates.
+
+The method works within its model because PowerPC address construction and argument setup leave recognizable register operations. It remains a bounded linear interpretation, not a proof of runtime values across every branch. Users gain a focused PPC476 inspection aid rather than another generic disassembly view. The backend can be extended with more instructions or replaced by a CFG-based lifter without changing the meaning of unrelated PowerPC backends; neither possibility implies full semantic coverage today.
+
 ## Usage
 
 ```python

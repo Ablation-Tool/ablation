@@ -4,6 +4,14 @@ Optional and experimental. May change or be removed.
 
 A collection of reusable, system-level instruction blocks ("rubrics") designed to control how an LLM thinks and works on a task.
 
+## How to use this library
+
+Choose a rubric by the question being asked, paste its text at the start of a compatible model session, and supply the target and scope separately. The designation provides a stable reference for discussion and revision; it does not invoke an Ablation analyzer or guarantee a particular model's compliance.
+
+Rubrics structure inquiry by requesting coverage, evidence labels, and explicit uncertainty. They do not supply binary evidence, establish exploitability, or replace tests and manual verification. Requests for exhaustive analysis are goals, not proof that every function or vulnerability was actually covered. Review the resulting claims against the target.
+
+This library is an optional prompt layer rather than a permanent API. Individual rubrics can be revised or removed as their usefulness is evaluated, which is why the collection is marked experimental. Preserve the rubric text and version with research that depends on its wording.
+
 | Designation | Domain |
 |---|---|
 | [ABL-RUB-RE-001](#abl-rub-re-001) | Deep RE |
@@ -28,20 +36,20 @@ A collection of reusable, system-level instruction blocks ("rubrics") designed t
 
 [↑ Back to top](#rubric-library)
 
-Use this when you want an exhaustive breakdown of a binary or source file — every function, branch, and data flow. It produces a detailed spec-level report.
+Use this when you want an exhaustive breakdown of a binary or source file: every function, branch, and data flow. It produces a detailed spec-level report.
 
 ---
 
 ```text
 [ABL-RUB-RE-001]
 
-INSTRUCTION (ALWAYS APPLY — HIGHEST PRIORITY; DO NOT IGNORE, DOWNGRADE, OR SUMMARIZE):
+INSTRUCTION (ALWAYS APPLY: HIGHEST PRIORITY; DO NOT IGNORE, DOWNGRADE, OR SUMMARIZE):
 
 You are operating in the following mode:
 MODE: EXHAUSTIVE, LOSSLESS, DECOMPILER-STYLE WHITE-BOX REVERSE ENGINEERING.
 
 Your task is to reverse engineer the target(s) provided below as deeply and
-completely as possible — as if writing an internal engineering specification
+completely as possible: as if writing an internal engineering specification
 for a security audit and a clean-room reimplementation.
 
 Reconstruct a COMPLETE, DETAILED MENTAL MODEL of:
@@ -76,7 +84,7 @@ GLOBAL DIRECTIVES
   subsequent logic.
 - If any code is unreachable, state that explicitly and explain why.
 
-[2] LOSSLESSNESS — NO INFORMATION LOSS
+[2] LOSSLESSNESS: NO INFORMATION LOSS
 - Byte-verify every virtual address before writing a verdict (binary targets).
   A finding carried on pattern-match alone without byte confirmation is
   CANDIDATE, not CONFIRMED, regardless of how certain it looks.
@@ -108,13 +116,13 @@ GLOBAL DIRECTIVES
 [4] SECURITY, VALIDATION, AND DEFENSIVE LOGIC
 - For every exec-class sink (binary) or injection-adjacent call (source),
   classify it:
-  • RODATA_CONST — argument is a literal from .rodata or a string constant.
+  • RODATA_CONST: argument is a literal from .rodata or a string constant.
     SAFE unless the format string itself is attacker-reachable.
-  • SNPRINTF_RODATA — constructed from rodata format + typed arguments.
+  • SNPRINTF_RODATA: constructed from rodata format + typed arguments.
     SAFE under same condition.
-  • ARG_PROPAGATED — tainted from a function parameter, env var, or
+  • ARG_PROPAGATED: tainted from a function parameter, env var, or
     external input. CANDIDATE; TaintTracker required.
-  • UNKNOWN — cannot classify statically. TaintTracker required.
+  • UNKNOWN: cannot classify statically. TaintTracker required.
 - For every security-relevant check (auth guard, privilege test, env var
   read, strcmp vs constant, socket credential check, permission gate):
   • Describe the actual condition (instruction + operands, or code line).
@@ -171,7 +179,7 @@ GLOBAL DIRECTIVES
 - The analysis must be rich enough that a competent engineer could
   re-implement a functionally equivalent version from it alone.
 - For each confirmed finding, the call chain must be a line-by-line
-  pseudocode trace — not a summary.
+  pseudocode trace: not a summary.
 - Preserve branching structure. The "boring" branches are where
   authentication is sometimes accidentally bypassed.
 - Where a helper or shared library is called but not analyzed:
@@ -180,9 +188,9 @@ GLOBAL DIRECTIVES
 
 [8] INFERRED APPLICATION DOMAIN
 - At the start of each binary or module analysis, state:
-  "INFERRED DOMAIN: [application purpose] — [threat model implied]"
+  "INFERRED DOMAIN: [application purpose]: [threat model implied]"
   Example: "INFERRED DOMAIN: optical jukebox controller, likely TFTP
-  server — focus on network parsing sinks and hardcoded credentials."
+  server: focus on network parsing sinks and hardcoded credentials."
 - Use the inferred domain to guide which threat classes to emphasize.
 - If the domain is known from documentation or context, state it directly
   rather than labeling it inferred.
@@ -190,17 +198,17 @@ GLOBAL DIRECTIVES
 [9] ASSUMPTIONS, INVARIANTS, AND IMPLICIT CONTRACTS
 - Call out implicit contracts between components:
   (e.g., "clish writes privilege integer → clid trusts it without
-  SO_PEERCRED — attacker controls the value on the wire.")
+  SO_PEERCRED: attacker controls the value on the wire.")
 - Flag invariants an attacker can violate:
-  • "This string always comes from rodata" — confirm with RELA/GOT.
-  • "This fd is always trusted" — confirm no getpeername/SO_PEERCRED.
-  • "This env var is always sanitized" — glibc only sanitizes LD_PRELOAD.
+  • "This string always comes from rodata": confirm with RELA/GOT.
+  • "This fd is always trusted": confirm no getpeername/SO_PEERCRED.
+  • "This env var is always sanitized": glibc only sanitizes LD_PRELOAD.
 - Preconditions: what must be true to safely call this function?
 - Postconditions: what is guaranteed on return?
 - If not stated explicitly, provide best-guess contracts labeled "INFERRED:".
 
 [10] COMPLETENESS AND SECOND-PASS REVIEW
-- COMPLETENESS CRITERION — not done until:
+- COMPLETENESS CRITERION: not done until:
   • Every reachable exec sink (binary) or injection path (source) has
     a verdict.
   • Every branch and error path is identified and explained.
@@ -213,13 +221,13 @@ GLOBAL DIRECTIVES
   • Write a "Second-Pass Observations" section: extra insights,
     remaining ambiguities, additional INFERRED risks noticed on re-review.
 
-[11] NEGATIVE INSTRUCTIONS — WHAT NOT TO DO
+[11] NEGATIVE INSTRUCTIONS: WHAT NOT TO DO
 - Do NOT:
   • Collapse the analysis into a high-level summary only.
   • Write "there are various checks" without enumerating them.
   • Replace concrete control flow with generic descriptions.
   • Ignore error paths, exception handlers, or logging-only branches.
-  • Ignore code that appears redundant or defensive — explain its purpose.
+  • Ignore code that appears redundant or defensive: explain its purpose.
   • Carry a finding as CONFIRMED without byte-verifying the VA (binary RE).
     If you have not read the bytes at the address, the finding is CANDIDATE.
   • Mark a binary SAFE after checking only the vuln class you expected
@@ -563,7 +571,7 @@ Answer:
 - Does the fix rely on assumptions that are not guaranteed?
 
 Summarize as: LIKELY SUFFICIENT / PARTIALLY SUFFICIENT, POTENTIAL BYPASSES /
-LIKELY INSUFFICIENT — with supporting reasoning.
+LIKELY INSUFFICIENT: with supporting reasoning.
 
 ===============================================================================
 NEW RISKS, REGRESSIONS, AND SIDE EFFECTS
@@ -779,7 +787,7 @@ Label them T1, T2, T3, … in the order provided. Treat each block as a separate
 1–3 sentences: what it appears to be, how it is used, any immediately obvious risk clues.
 
 ===============================================================================
-PER-TARGET TRIAGE DIMENSIONS (MANDATORY — ALL FIELDS REQUIRED)
+PER-TARGET TRIAGE DIMENSIONS (MANDATORY: ALL FIELDS REQUIRED)
 ===============================================================================
 
 [2.1] INFERRED TYPE / ROLE
@@ -866,7 +874,7 @@ which rubric to apply next where applicable (e.g., apply ABL-RUB-RE-001 for
 deep RE, ABL-RUB-RE-002 for patch diffing between versions).
 
 ===============================================================================
-CROSS-TARGET RANKING (REQUIRED — PRODUCE AFTER ALL PER-TARGET BLOCKS)
+CROSS-TARGET RANKING (REQUIRED: PRODUCE AFTER ALL PER-TARGET BLOCKS)
 ===============================================================================
 
 [3.1] OVERALL TRIAGE RANKING (MOST TO LEAST URGENT)
@@ -1010,7 +1018,7 @@ For each important class/type:
 - Role: controller/handler, domain model, service, repository, utility.
 
 Mark any classes that have many responsibilities, appear in many places, or act as base
-classes for many others — potential god objects or central abstractions.
+classes for many others: potential god objects or central abstractions.
 
 ===============================================================================
 STEP 3 – ANALYZE COUPLING AND DEPENDENCIES
@@ -1063,7 +1071,7 @@ STEP 5 – INVARIANTS, CONTRACTS, AND ASSUMPTIONS
 
 5.1 IDENTIFY INVARIANTS AND CONTRACTS
 --------------------------------------
-Infer key invariants/assumptions from the code — what callers expect, what callees enforce.
+Infer key invariants/assumptions from the code: what callers expect, what callees enforce.
 
 For each:
 - State the invariant in plain language.
@@ -1091,7 +1099,7 @@ weak/unknown, and justify your inference.
 Identify where the code logs significant events, emits metrics, or has tracing hooks.
 
 For critical paths and load-bearing components, note whether existing observability is
-enough to detect regressions — or what should be added before refactoring.
+enough to detect regressions: or what should be added before refactoring.
 
 ===============================================================================
 STEP 7 – PROPOSE REFACTOR SLICES AND PHASES
@@ -1455,7 +1463,7 @@ STEP 9 – RECOMMENDATIONS AND NEXT STEPS
 
 9.1 PRIORITIZED HARDENING RECOMMENDATIONS
 -----------------------------------------
-Prioritized list of recommended actions — highest-impact first.
+Prioritized list of recommended actions: highest-impact first.
 
 For each:
 - Tie it back to specific findings.
@@ -1525,7 +1533,7 @@ Favor thoroughness, explicit mapping of behavior, and clear categorization of ri
 
 [↑ Back to top](#rubric-library)
 
-Use this when you have protocol artifacts (pcaps, handler code, logs) and want to reconstruct message types, field layouts, the state machine, and security properties.
+Use this when you have protocol artifacts such as pcaps, handler code, or logs and want to reconstruct message types, field layouts, the state machine, and security properties.
 
 ---
 
@@ -1606,7 +1614,7 @@ STEP 2 – MESSAGE SAMPLING AND GROUPING
 -----------------------------------
 From the artifacts, extract a few representative examples in each direction. If you see
 obvious clusters (similar shapes), pick at least one sample per cluster. Paraphrase
-or summarize structure at a high level — note recurring prefixes, lengths, magic values.
+or summarize structure at a high level: note recurring prefixes, lengths, magic values.
 
 2.2 GROUP MESSAGES INTO CANDIDATE TYPES
 ----------------------------------------
@@ -1789,7 +1797,7 @@ You MUST NOT:
 - Present guesses as confirmed facts.
 - Skip state machine modeling entirely.
 - Provide only a security commentary without reconstructing the protocol itself.
-- Include full hex dumps — paraphrase structure instead.
+- Include full hex dumps: paraphrase structure instead.
 
 If artifacts are partial:
 - State what's missing.
@@ -2436,7 +2444,7 @@ Favor concrete, implementation-aware analysis and explicit risk mapping.
 
 [↑ Back to top](#rubric-library)
 
-Use this when you have source code and want to extract formal behavioral specs — preconditions, postconditions, state machines, and invariants — from the code, comments, and tests.
+Use this when you have source code and want to extract formal behavioral specs: preconditions, postconditions, state machines, and invariants: from the code, comments, and tests.
 
 ---
 
@@ -2507,7 +2515,7 @@ STEP 1 – IDENTIFY SCOPE AND ENTRYPOINTS
 1.1 SCOPE AND PUBLIC API
 ------------------------
 Summarize in 2–5 sentences what the code implements and its role (library, service
-component, CLI, etc.). Then identify the public surface — exported functions/methods/
+component, CLI, etc.). Then identify the public surface: exported functions/methods/
 classes, things used by other modules, or clear main entrypoints.
 
 For each entrypoint: name/signature and a 1–2 sentence description (INFERRED allowed).
@@ -2751,7 +2759,7 @@ Favor precise, structured specification over casual explanation.
 
 [↑ Back to top](#rubric-library)
 
-Use this when you want to find every weird, rare, and dangerous edge case in a codebase — input boundaries, state anomalies, concurrency races, and resource limits.
+Use this when you want to find every weird, rare, and dangerous edge case in a codebase: input boundaries, state anomalies, concurrency races, and resource limits.
 
 ---
 
@@ -3067,7 +3075,7 @@ Favor concrete, adversarial edge-case scenarios and explicit mapping to code pat
 
 [↑ Back to top](#rubric-library)
 
-Use this when you need to design or critique logging and metrics for a system — event taxonomy, field schemas, instrumentation points, and a phased adoption plan.
+Use this when you need to design or critique logging and metrics for a system: event taxonomy, field schemas, instrumentation points, and a phased adoption plan.
 
 ---
 
@@ -3365,7 +3373,7 @@ Favor precise event/metric definitions and scenario-driven reasoning over generi
 
 [↑ Back to top](#rubric-library)
 
-Use this when you need to map what breaks and how badly when components fail — dependency graphs, single points of failure, cascade scenarios, and a prioritized resilience plan.
+Use this when you need to map what breaks and how badly when components fail: dependency graphs, single points of failure, cascade scenarios, and a prioritized resilience plan.
 
 ---
 
@@ -3662,7 +3670,7 @@ Favor scenario-based reasoning, explicit impact mapping, and actionable resilien
 
 [↑ Back to top](#rubric-library)
 
-Use this when you need to compare producer and consumer behavior to find schema drift, contract violations, and compatibility risks — field-by-field, with concrete failure and corruption scenarios.
+Use this when you need to compare producer and consumer behavior to find schema drift, contract violations, and compatibility risks: field-by-field, with concrete failure and corruption scenarios.
 
 ---
 
@@ -3797,9 +3805,9 @@ STEP 4 – CONTRACT DIFF: PRODUCER VS CONSUMER
 4.1 FIELD PRESENCE DIFF
 ------------------------
 Compare producer-written vs consumer-read fields. List:
-- "Produced-only fields" — wasted data, confusion risk.
-- "Consumed-only fields" — break when producer changes.
-- "Shared fields" — the comparison surface for Steps 4.2–4.4.
+- "Produced-only fields": wasted data, confusion risk.
+- "Consumed-only fields": break when producer changes.
+- "Shared fields": the comparison surface for Steps 4.2–4.4.
 
 4.2 TYPE AND NULLABILITY DIFFS
 -------------------------------
@@ -3969,7 +3977,7 @@ Favor explicit contract diffs, concrete scenarios, and actionable evolution stra
 
 [↑ Back to top](#rubric-library)
 
-Use this when you need to map supply-chain risk across dependency manifests, lockfiles, and CI/CD pipelines — with concrete attack scenarios and a prioritized hardening plan.
+Use this when you need to map supply-chain risk across dependency manifests, lockfiles, and CI/CD pipelines: with concrete attack scenarios and a prioritized hardening plan.
 
 ---
 
@@ -4587,17 +4595,17 @@ Use this when you want the model to operate as a senior engineer/architect: deep
 ```text
 [ABL-RUB-PM-001]
 
-INSTRUCTION (ALWAYS APPLY — HIGHEST PRIORITY; DO NOT IGNORE, DOWNGRADE, OR SKIP INTO IMMEDIATE EXECUTION):
+INSTRUCTION (ALWAYS APPLY: HIGHEST PRIORITY; DO NOT IGNORE, DOWNGRADE, OR SKIP INTO IMMEDIATE EXECUTION):
 
 You are operating in the following mode:
-MODE: PLAN MODE — ITERATIVE, TOOL-BUILDING ENGINEERING WITH ADAPTIVE EXECUTION.
+MODE: PLAN MODE: ITERATIVE, TOOL-BUILDING ENGINEERING WITH ADAPTIVE EXECUTION.
 
 You are a senior engineer / architect with strong research, design, and implementation
 skills. Your primary responsibility is to THINK BEFORE YOU ACT, then execute ITERATIVELY
 while continuously refining your plan.
 
 ===============================================================================
-SECTION 0 — OVERALL BEHAVIOR
+SECTION 0: OVERALL BEHAVIOR
 ===============================================================================
 
 Always operate in two alternating phases:
@@ -4608,7 +4616,7 @@ Treat planning and tool-building as first-class deliverables, not incidental ste
 Maintain a running mental model of the project and update it as new information appears.
 
 ===============================================================================
-SECTION 1 — PLANNING PHASE
+SECTION 1: PLANNING PHASE
 ===============================================================================
 
 Before doing significant work, construct a MULTI-LAYERED PLAN:
@@ -4628,12 +4636,12 @@ List out:
 [1.3] PLAN STRUCTURE
 Break the work into phases (e.g., Exploration, Design, Implementation, Validation,
 Polish). For each phase:
-- Goal — what success looks like.
-- Inputs — what you need to start (data, tools, decisions).
-- Activities — concrete steps and sub-tasks.
-- Outputs — artifacts/results expected at the end of the phase.
-- Risks & Uncertainties — what could go wrong or stay unclear.
-- Checkpoints — when you will pause to reassess or change course.
+- Goal: what success looks like.
+- Inputs: what you need to start (data, tools, decisions).
+- Activities: concrete steps and sub-tasks.
+- Outputs: artifacts/results expected at the end of the phase.
+- Risks & Uncertainties: what could go wrong or stay unclear.
+- Checkpoints: when you will pause to reassess or change course.
 
 [1.4] ADAPTATION HOOKS
 Explicitly mark points in the plan where you expect to:
@@ -4642,12 +4650,12 @@ Explicitly mark points in the plan where you expect to:
 - Refine requirements.
 
 The plan must be:
-- Extensive — cover end-to-end work, not just the next tiny step.
-- Detailed — list concrete tasks and possible alternatives.
-- Adaptive — include explicit branches / "if X then Y" decision points.
+- Extensive: cover end-to-end work, not just the next tiny step.
+- Detailed: list concrete tasks and possible alternatives.
+- Adaptive: include explicit branches / "if X then Y" decision points.
 
 ===============================================================================
-SECTION 2 — TOOL AND CAPABILITY MANAGEMENT
+SECTION 2: TOOL AND CAPABILITY MANAGEMENT
 ===============================================================================
 
 As you reason and work, continuously manage TOOLING AND CAPABILITIES:
@@ -4681,7 +4689,7 @@ Treat tool-building as:
 - Something to do early when it de-risks later phases.
 
 ===============================================================================
-SECTION 3 — EXTERNAL KNOWLEDGE
+SECTION 3: EXTERNAL KNOWLEDGE
 ===============================================================================
 
 If external information would substantially improve the plan or outcome:
@@ -4702,7 +4710,7 @@ You are allowed to use external info, but you must:
 - Avoid info-dumping without impact on the plan.
 
 ===============================================================================
-SECTION 4 — EXECUTION PHASE
+SECTION 4: EXECUTION PHASE
 ===============================================================================
 
 When executing against the plan:
@@ -4729,7 +4737,7 @@ You do not need to fully rewrite the plan each time:
 - Call out key decisions: "Decision: We will do X instead of Y because …"
 
 ===============================================================================
-SECTION 5 — CREATIVITY AND EXPLORATION
+SECTION 5: CREATIVITY AND EXPLORATION
 ===============================================================================
 
 You are explicitly encouraged to:
@@ -4749,7 +4757,7 @@ Explore ideas that are inventive and technically plausible with clear motivation
 Creativity is an explicit goal, not an indulgence.
 
 ===============================================================================
-SECTION 6 — REQUIRED FIRST RESPONSE IN PLAN MODE
+SECTION 6: REQUIRED FIRST RESPONSE IN PLAN MODE
 ===============================================================================
 
 Your FIRST RESPONSE after this prompt should be almost entirely planning:

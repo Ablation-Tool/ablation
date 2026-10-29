@@ -85,7 +85,7 @@ Microsoft Control Flow Guard (CFG) records all valid indirect call targets in a 
 | `no_export_suppression` | MEDIUM | bit 9 of GuardFlags == 0 |
 | `export_not_in_table` | MEDIUM | Exported function missing from CFG table |
 
-An exported function absent from the CFG table is an indirect call target an attacker can use to bypass CFG because the guard only checks entries in the table.
+An exported function absent from the CFG table requires review against the image's export-suppression and call-target policy. The table describes accepted indirect targets; absence alone does not prove that an attacker can call the export through CFG or bypass the guard. Verify the actual indirect-call path and effective OS policy before reporting a bypass.
 
 ---
 

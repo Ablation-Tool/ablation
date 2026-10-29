@@ -3,6 +3,12 @@
 
 Analyze 32- and 64-bit PowerPC ELF functions with structural pseudo-C lifting and architecture-specific taint trackers. Specialized backends cover IBM PPC476, NXP PowerPC VLE, and AIX XCOFF32; those formats should not be treated as interchangeable with generic PowerPC ELF.
 
+## Why there are several PowerPC paths
+
+PowerPC firmware combines different widths, endiannesses, executable containers, instruction encodings, and calling conventions. ELF virtual addresses do not describe an AIX function descriptor, and fixed-width Book E decoding does not describe VLE. One generic path would hide precisely the distinctions that determine whether analysis is valid.
+
+The generic lifter and trackers cover their documented ELF models, while specialist components handle PPC476 annotations, VLE decoding, and XCOFF descriptors. This gives users a map to the right tool instead of a false promise of universal PowerPC support. Each path is a replaceable backend grounded in its own format and ABI evidence. Choose the container and encoding first, then use pseudo-C for orientation and taint output as a candidate for instruction-level verification.
+
 ## Generic structural lifting
 
 ```python

@@ -7,6 +7,12 @@ Compare functions with weighted structural fingerprints, identify functions with
 
 ---
 
+## Why structural matching is useful
+
+Addresses and raw instruction bytes change across compilers and builds, but opcode mixtures, selected constants, calls, and branch density can retain useful resemblance. A weighted fingerprint lets users search for likely correspondences before spending time on instruction-level diffing.
+
+The method works as a ranking heuristic because several weak signals can be combined and normalized over whatever evidence is present. It does not recover function semantics or homology by itself. This is a small comparison component that can be reused by release diffing and corpus research, with thresholds calibrated per corpus. New signals can be added or the matcher replaced without turning an orphan into proof of new, removed, or malicious code.
+
 ## What this module provides
 
 The public API is function-based; there is no `StructuralSim` class.

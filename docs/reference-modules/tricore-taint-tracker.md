@@ -3,6 +3,12 @@
 
 `TriCoreTaintTracker` analyzes Infineon TriCore TC1.6x functions with Capstone, EABI-aware register state, and explicit handling for calls, returns, loads, stores, arithmetic, and indirect targets. It is a taint-analysis capability; there is no TriCore `BinaryLifter` pseudo-C backend.
 
+## Why EABI and context handling matter
+
+A generic register scan cannot distinguish TriCore data and address arguments, caller-saved lower context, callee-saved upper context, or hardware Context Save Area behavior. Those distinctions determine whether a tainted value survives a call or reaches a sink.
+
+The tracker models those conventions for focused ROM functions and ELF analysis, giving users a way to investigate diagnostic input and memory-write paths without a TriCore decompiler. It is a specialized analysis component that can later benefit from richer CFG or loop handling, not a universal TriCore recovery solution. Seeded labels and conservative unknown-instruction propagation preserve candidates for review; they do not establish attacker control, complete loops, or runtime context restoration.
+
 ## Analyze a flat ROM function
 
 ```python

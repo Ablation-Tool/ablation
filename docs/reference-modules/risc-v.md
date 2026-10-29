@@ -3,6 +3,12 @@
 
 Lift RV32 and RV64 functions to structural pseudo-C, decode compressed instructions, and run either binary-oriented or labeled CFG dataflow analysis. HiSilicon's vendor-extended RV32 firmware uses a separate decoder adapter.
 
+## Why there are two analysis APIs
+
+A user may have a complete ELF or only an instruction listing recovered elsewhere. The binary-oriented trackers handle file mapping and imports; the labeled engine accepts an instruction iterable and makes provenance explicit. Treating those inputs as the same API would conceal important differences in context and result types.
+
+The shared RISC-V models handle width, compressed boundaries, and ABI registers, while a vendor adapter preserves instructions outside the standard encoding. This gives users a choice between convenient binary analysis and lower-level labeled dataflow without pretending their coverage is identical. Each layer can be extended independently as decoder or CFG support improves. Structural pseudo-C aids reading, labels aid reasoning, and neither replaces verification of the original instructions.
+
 ## Structural lifting
 
 ```python
