@@ -209,27 +209,54 @@ class WikiPublisher:
         output.append(self._rewrite_segment(line[position:], source))
         return "".join(output)
 
+    @staticmethod
+    def _heading_anchor(line: str) -> str:
+        match = re.match(r"^#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$", line)
+        if not match:
+            return ""
+        heading = re.sub(r"<[^>]+>", "", match.group(1))
+        heading = re.sub(r"[`*_~]", "", heading)
+        heading = re.sub(r"[^\w\- ]", "", heading, flags=re.UNICODE)
+        return heading.strip().lower().replace(" ", "-")
+
+    @staticmethod
+    def _mermaid_link(source: PurePosixPath, anchor: str) -> str:
+        path = quote(f"docs/{source.as_posix()}", safe="/")
+        fragment = f"#{anchor}" if anchor else ""
+        return (
+            f"> [View the rendered Mermaid diagram]({REPOSITORY_URL}/blob/{BRANCH}/{path}{fragment})\n\n"
+        )
+
     def rewrite(self, text: str, source: PurePosixPath) -> str:
         output = []
         fence_character = ""
         fence_length = 0
+        mermaid_fence = False
+        heading_anchor = ""
         for line in text.splitlines(keepends=True):
             marker = FENCE_RE.match(line)
             if fence_character:
-                output.append(line)
+                if not mermaid_fence:
+                    output.append(line)
                 if marker:
                     fence = marker.group("fence")
                     remainder = line[marker.end():].strip()
                     if fence[0] == fence_character and len(fence) >= fence_length and not remainder:
                         fence_character = ""
                         fence_length = 0
+                        mermaid_fence = False
                 continue
             if marker:
                 fence = marker.group("fence")
                 fence_character = fence[0]
                 fence_length = len(fence)
-                output.append(line)
+                language = line[marker.end():].strip().split(maxsplit=1)
+                mermaid_fence = bool(language) and language[0].casefold() == "mermaid"
+                output.append(self._mermaid_link(source, heading_anchor) if mermaid_fence else line)
                 continue
+            anchor = self._heading_anchor(line)
+            if anchor:
+                heading_anchor = anchor
             output.append(self._rewrite_line(line, source))
         return "".join(output)
 

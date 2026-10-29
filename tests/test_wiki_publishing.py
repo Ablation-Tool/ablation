@@ -128,6 +128,22 @@ def test_rejects_links_outside_repository(tmp_path: Path):
         publisher.rewrite(source, PurePosixPath("reference-modules/broken.md"))
 
 
+def test_replaces_mermaid_with_rendered_diagram_link(tmp_path: Path):
+    docs, home = _fixture(tmp_path)
+    source = "# bFLT\n\n## How it works\n\n```mermaid\nflowchart TD\n    A --> B\n```\n"
+    _write(docs / "reference-modules" / "bflt.md", source)
+
+    result = WikiPublisher(docs, home).rewrite(source, PurePosixPath("reference-modules/bflt.md"))
+
+    expected = (
+        "> [View the rendered Mermaid diagram]"
+        "(https://github.com/Ablation-Tool/ablation/blob/main/docs/reference-modules/bflt.md#how-it-works)"
+    )
+    assert expected in result
+    assert "```mermaid" not in result
+    assert "flowchart TD" not in result
+
+
 def test_requires_an_empty_output_directory(tmp_path: Path):
     docs, home = _fixture(tmp_path)
     _write(tmp_path / "wiki" / "existing.md")
