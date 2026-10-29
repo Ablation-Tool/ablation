@@ -18,6 +18,7 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 | ISA | Variants |
 |---|---|
 | [**x86**](docs/reference-modules/x86.md) | x86-32 · x86-64 |
+| [**S/390**](docs/reference-modules/zos-re.md) | Big-endian S/390 · LE/C++ PPA · XPLINK prologs |
 | [**ARM**](docs/reference-modules/binary-lifter.md) | ARM-32 · ARM-64 · Thumb |
 | [**MIPS**](docs/reference-modules/mips.md) | MIPS-32 · [nanoMIPS](docs/reference-modules/nanomips.md) · MIPS-64 |
 | [**PowerPC**](docs/reference-modules/ppc32-taint-tracker.md) | PPC-32 · PPC-64 · [VLE](docs/reference-modules/ecu-vle-decoder.md) · [PPC476 Book E](docs/reference-modules/ppc476-lifter.md) · [XCOFF32 / AIX](docs/reference-modules/xcoff32-decompiler.md) |
@@ -134,6 +135,7 @@ For an introduction to container, filesystem, and executable parsing, see [Firmw
 | [**bFLT ARM32 Link-Time References**](docs/reference-modules/bflt-arm32.md) | [1](ablation/analyzers/bflt_arm32.py) | Recovers aligned stored pointers and two-level ARM32 literal-pool references with explicit pointer endianness and no runtime-relocation guesses. |
 | [**JFFS2 Filesystem Recovery**](docs/reference-modules/jffs2.md) | [1](ablation/parsers/jffs2.py) | Reconstructs little-endian JFFS2 files with CRC and extent validation, without mounting or creating device nodes. |
 | [**IBM AIX Binary Analysis**](docs/reference-modules/aix-xcoff32-64-analysis.md) | [1](ablation/core/xcoff_parser.py)&nbsp;[2](ablation/core/bff_extractor.py) | Parses XCOFF32/64 sections and symbols and extracts BFF package archives without the AIX toolchain. |
+| [**IBM z/OS Artifact Analysis**](docs/reference-modules/zos-re.md) | [1](ablation/zos_re/netdata.py)&nbsp;[2](ablation/zos_re/loadmodule.py)&nbsp;[3](ablation/zos_re/functions.py)&nbsp;[4](ablation/zos_re/sid.py) | Decodes NETDATA and PDS/PDSE members, reconstructs IEWPLMH and PDS load images, recovers S/390 functions, and normalizes IBM C++ side-decks without external RE tools. |
 | [**ECU Architecture Detection**](docs/reference-modules/ecu-architecture-detector.md) | [1](ablation/analyzers/ecu_arch_detector.py)&nbsp;[2](ablation/analyzers/ecu_rom_layout_analyzer.py) | Identifies raw-ROM architectures and classifies code, calibration data, and interrupt-vector regions before disassembly. |
 | [**Embedded Architecture Decoding**](docs/reference-modules/c166-c167-decoding.md) | [1](ablation/analyzers/ecu_c166_decoder.py)&nbsp;[2](ablation/analyzers/ecu_c28x_decoder.py) | Decodes C166/C167 and TI C28x instructions and recovers function starts from ECU firmware. |
 | [**ECU Security Analysis**](docs/reference-modules/ecu-security-access-scanner.md) | [1](ablation/analyzers/ecu_security_access_scanner.py)&nbsp;[2](ablation/analyzers/taint_tracker_tricore.py) | Detects predictable UDS and KWP2000 seeds and traces diagnostic input to memory writes on TriCore. |
