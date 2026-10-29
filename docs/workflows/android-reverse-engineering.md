@@ -23,7 +23,7 @@ For complete command and output-field references, see [Android Cross-Layer Analy
 
 ---
 
-## Before you start <sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
+## Before you start<sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
 
 You need:
 
@@ -34,7 +34,7 @@ You need:
 
 The examples use `app.xapk` and a `reports/` directory. Replace them with your paths. Do not run optional intent tests against a production device or an application you are not authorized to test.
 
-## The review loop <sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
+## The review loop<sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
 
 Use this sequence:
 
@@ -50,7 +50,7 @@ Inventory
 
 Do not begin with a dangerous function name and assume it is exploitable. First establish what exists, then reachability, then attacker control, then impact.
 
-## Stage 1: Inventory the package <sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
+## Stage 1: Inventory the package<sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
 
 Create a report directory and run:
 
@@ -81,7 +81,7 @@ The actual report is JSON, not this abbreviated display. Preserve the base APK f
 
 **Stop condition:** if the base manifest cannot be decoded or every APK record has an error, fix the input/container issue before interpreting downstream results.
 
-## Stage 2: Review manifest and network security <sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
+## Stage 2: Review manifest and network security<sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
 
 Decode the base manifest:
 
@@ -111,7 +111,7 @@ A resource reference such as `@0x7f140005` does not itself prove a configuration
 
 **Evidence checkpoint:** an exported activity with no permission is reachable attack surface. It is not yet an authorization bypass. Continue into its intent handling and authorization logic.
 
-## Stage 3: Decompile security-relevant classes <sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
+## Stage 3: Decompile security-relevant classes<sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
 
 Start with classes named by exported components, authentication/enrollment code, deep-link handlers, notification handlers, camera callbacks, and native declarations.
 
@@ -142,7 +142,7 @@ Review for:
 
 The output is pseudocode. Obfuscation and register reuse can produce misleading types or expressions. When a condition matters, verify it against `DEXDisasm` and exact `method_idx` call edges rather than relying on the emitted text alone.
 
-## Stage 4: Map the JNI boundary before native review <sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
+## Stage 4: Map the JNI boundary before native review<sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
 
 Run:
 
@@ -184,7 +184,7 @@ Do not select the first candidate from `ambiguous_registrations`. Use loader and
 
 If the package contains multiple DEX shards, the mapper rejects it. General DEX parsing still works, but shard-local method indices must not be combined into one graph. Supply a supported single-DEX package or use per-shard inspection while the composite model is unavailable.
 
-## Stage 5: Inspect native implementations <sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
+## Stage 5: Inspect native implementations<sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
 
 The JNI report is read directly from embedded libraries. For standalone `elf-disasm`, extract a specific library to your report directory without extracting the whole package:
 
@@ -221,7 +221,7 @@ Check:
 
 A resolved PLT name such as `memcpy` identifies the callee. It does not prove an overflow. Establish source, length, and destination independently.
 
-## Stage 6: Run a cross-layer trace <sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
+## Stage 6: Run a cross-layer trace<sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
 
 Start with the default:
 
@@ -260,7 +260,7 @@ Zero source-tainted JNI entries can mean:
 
 It does not mean the application is safe.
 
-## Stage 7: Confirm or reject candidates manually <sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
+## Stage 7: Confirm or reject candidates manually<sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
 
 For each candidate, create a short evidence record:
 
@@ -276,7 +276,7 @@ For each candidate, create a short evidence record:
 
 Reject a candidate when the exact instructions disprove the source/value relationship or when a validation check reliably blocks the impact. Record why; do not simply delete it.
 
-## Optional runtime verification <sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
+## Optional runtime verification<sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
 
 Use runtime testing only in an isolated, authorized environment and only after static review identifies a concrete question.
 
@@ -300,7 +300,7 @@ Useful observations:
 
 Runtime success in reaching an activity is still not proof of authentication bypass. The security-sensitive state transition must be demonstrated safely.
 
-## Stage 8: Write the report <sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
+## Stage 8: Write the report<sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
 
 A useful final report separates these sections:
 
@@ -315,7 +315,7 @@ A useful final report separates these sections:
 
 Do not turn `native_sink_surface` into a vulnerability count. Do not report a missing taint path as a safety certification.
 
-## Worked integration example: B-Unit <sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
+## Worked integration example: B-Unit<sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
 
 The real Bloomberg B-Unit review followed this workflow:
 
@@ -330,7 +330,7 @@ No runtime intent injection was performed. The report therefore labels exported 
 
 Read the target-specific report at [Bloomberg B-Unit Android Reverse Engineering](../../re/bloomberg/ANDROID_BUNIT_RE.md).
 
-## Performance and resource guidance <sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
+## Performance and resource guidance<sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
 
 - Keep default archive limits for untrusted packages. Raise them deliberately for trusted large inputs.
 - Use inventory before full tracing to avoid running an expensive analysis on the wrong artifact.
@@ -339,7 +339,7 @@ Read the target-specific report at [Bloomberg B-Unit Android Reverse Engineering
 - Preserve warnings and any unresolved/ambiguous records with the report.
 - Member limits do not cap total CPU or memory for a large package.
 
-## Troubleshooting checklist <sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
+## Troubleshooting checklist<sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
 
 - **Wrong base APK:** use the exact embedded filename from `inventory`.
 - **Method not found:** check class form, overload name, APK, and DEX shard.
@@ -349,7 +349,7 @@ Read the target-specific report at [Bloomberg B-Unit Android Reverse Engineering
 - **Bad disassembly:** verify VA mapping, function boundary, architecture, and Thumb mode.
 - **No taint results:** check convergence, API coverage, obfuscation, and indirect paths before concluding safety.
 
-## Related documentation <sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
+## Related documentation<sup>[↑](#android-cross-layer-analysis-tutorial)</sup>
 
 - [Complete Android capability reference](../reference-modules/android-cross-layer.md)
 - [Known anomalies](../reference-anomalies/cross-layer-taint.md)
