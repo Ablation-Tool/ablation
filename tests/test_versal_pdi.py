@@ -556,6 +556,13 @@ class TestCdoCommands:
         vp = VersalPdi.from_bytes(b"\x00" * 4 + cdo + b"\x00" * 4)
         assert vp.git_hash() == "035a2cc3"
 
+    def test_git_hash_ignores_zero_loader_set_image_info(self):
+        cmd_word = (0x0004 << 16) | (CDO_MOD_LOADER << 8) | CDO_CMD_LOADER_SET_IMAGE_INFO
+        words = [cmd_word, 0x18700001, 0xD5694935, 0x91C727A2, 0]
+        cdo = _make_cdo(words)
+        vp = VersalPdi.from_bytes(b"\x00" * 4 + cdo + b"\x00" * 4)
+        assert vp.git_hash() == ""
+
     def test_xilpm_init_node(self):
         cmd_word = (0x0002 << 16) | (CDO_MOD_XILPM << 8) | CDO_CMD_XILPM_INIT_NODE
         section = self._parse_cdo([cmd_word, 0x04210002, 0x00000001])

@@ -12,6 +12,12 @@
 - FORGE review fixed silent multi-DEX misattribution, unbounded archive/parser reads, repeated-mapper state, duplicate canonical selection, and initialization cleanup. All eleven touched Python files pass FORGE with zero unresolved findings.
 - Validated all 25 B-Unit JNI bindings and a converged 16-iteration trace. Android-focused tests and real-package integration pass; multi-DEX mapping and indirect/stack native precision limits are explicit.
 
+**Versal PDI provenance correction.**
+
+- `VersalPdi.git_hash()` now returns an empty string when every candidate Git word is zero instead of reporting the false identifier `00000000`.
+- Corrected the reference to describe Git metadata as optional and DMA-loaded bytes as unidentified until their architecture and purpose are established.
+- Added a zero-valued `LOADER/SET_IMAGE_INFO` regression test and validated the correction against the reviewed GEP GCM4 boot images.
+
 ---
 
 ## v2.93.0

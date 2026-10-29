@@ -457,7 +457,7 @@ class VersalPdi:
         for cdo in self.result.cdo_sections:
             for cmd in cdo.commands:
                 if cmd.module_id == CDO_MOD_LOADER and cmd.cmd_id == CDO_CMD_LOADER_SET_IMAGE_INFO:
-                    if len(cmd.payload) >= 4:
+                    if len(cmd.payload) >= 4 and cmd.payload[3]:
                         return f"{cmd.payload[3]:08x}"
         return ""
 

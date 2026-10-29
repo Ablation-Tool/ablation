@@ -18,7 +18,7 @@
 
 2. **Two physically distinct PDI sub-formats exist in the collection.** `bootgen` produces different headers depending on the output type. A PL-only pld PDI has 4 sync words followed by a plaintext Image Header Table. A full-system boot PDI has 5 sync words and an "XLNX" identification word; its IHT is partially opaque because the MetaHeader CDO wraps it. Both are present in the ATLAS GEP/FELIX collection; a parser that only handles one type silently fails on the other.
 
-3. **Git hashes are embedded in two independent locations.** Every PDI built by `bootgen` embeds the 4-byte truncated commit hash at image header offset +0x2c for pld PDIs and as the fourth payload word of a `LOADER/SET_IMAGE_INFO` CDO command. This dual-embedding means `VersalPdi.git_hash()` can recover the build commit for both PDI types and for arbitrary CDO blobs extracted from encrypted partitions.
+3. **Some images carry an optional truncated Git identifier in two possible locations.** In the reviewed Hog-generated GCI builds, the identifier occurs at image header offset +0x2c for pld PDIs and as the fourth payload word of a `LOADER/SET_IMAGE_INFO` CDO command. Newer GEP GCM4 images leave both fields zero, proving that a filename suffix is not guaranteed to be embedded. `VersalPdi.git_hash()` returns the nonzero identifier when present and an empty string when absent.
 
 4. **CDO sections carry all high-value register and configuration data.** A PDI's entire NoC/PL interface initialization, error-handling setup, and image metadata lives in CDO sections. Parsing CDO commands exposes register write sequences, NPI addresses touched during boot, module identifiers, and loader image metadata. For security research into boot-time privilege escalation, PL misconfiguration, and register backdoors, the CDO command stream is the primary artifact.
 
@@ -77,9 +77,9 @@ Image headers (0x40 bytes each) are at `img_hdr_off × 4` bytes from file start.
 | +0x0C | img_attrb | Image attribute flags |
 | +0x10 | img_name[16] | Null-terminated ASCII; "CONFIG_MASTER" for PL images |
 | +0x20 | img_id | 32-bit image identifier |
-| +0x2C | git_hash | 4-byte truncated commit hash, confirmed vs. filename suffix |
+| +0x2C | git_hash | Optional 4-byte truncated commit hash; zero means absent |
 
-The `git_hash` at +0x2C was independently verified: `GCI_GCM415_pld-v0.159.38-35A2CC3.pdi` → `img_hdr[+0x2C] = 0x035A2CC3` (filename suffix `35A2CC3`). Same for `GEP_2ACC_GCM3_pld-v0.159.40-F119A21.pdi` → `0x0F119A21` (suffix `F119A21`).
+The `git_hash` at +0x2C was independently verified: `GCI_GCM415_pld-v0.159.38-35A2CC3.pdi` → `img_hdr[+0x2C] = 0x035A2CC3` (filename suffix `35A2CC3`). Same for `GEP_2ACC_GCM3_pld-v0.159.40-F119A21.pdi` → `0x0F119A21` (suffix `F119A21`). The reviewed GEP GCM4 v0.159.66 PLD instead stores zero.
 
 ### Partition headers
 
@@ -158,10 +158,10 @@ Important module/command combinations found in GEP/FELIX PDIs:
 | XILPM | 0x02 | ADD_NODE | 0x39 | node ID and class-specific arguments |
 | XILPM | 0x02 | ADD_NODE_PARENT | 0x3A | node ID, parent IDs |
 | XILPM | 0x02 | INIT_NODE | 0x3E | node ID, function, arguments |
-| LOADER | 0x07 | SET_IMAGE_INFO | 0x04 | imgid, hash1, hash2, **git_hash** |
+| LOADER | 0x07 | SET_IMAGE_INFO | 0x04 | image ID, two metadata words, optional Git identifier |
 | ERROR | 0x08 | various |: | error/event config |
 
-The LOADER `SET_IMAGE_INFO` command uses module `0x07` and command `0x04`. It carries 4 words: the image ID and 3 hash/version words, with the git hash always at payload[3] (confirmed from GCI GCM415 builds). XILPM `INIT_NODE` handles power-domain, PL-device, and AIE-device initialization; it does not decode XPPU/XMPU protection configuration. AMD XilPM 2024.2 and later silently ignores deprecated protection-class `ADD_NODE` records, so protection conclusions require actual register writes rather than topology or marker names.
+The LOADER `SET_IMAGE_INFO` command uses module `0x07` and command `0x04`. It carries an image ID and three metadata words. In the reviewed GCI GCM415 builds, the fourth word is a truncated Git identifier. GEP GCM4 v0.159.66 images leave it zero, and `git_hash()` skips zero values. The second and third words should remain metadata until their target-specific semantics are established. XILPM `INIT_NODE` handles power-domain, PL-device, and AIE-device initialization; it does not decode XPPU/XMPU protection configuration. AMD XilPM 2024.2 and later silently ignores deprecated protection-class `ADD_NODE` records, so protection conclusions require actual register writes rather than topology or marker names.
 
 ---
 
@@ -306,26 +306,25 @@ for off, addr, val in npi_writes[:10]:
     print(f"  @{off:#x}  NPI[{addr:#010x}] = {val:#010x}")
 ```
 
-**Reconstruct and disassemble PLM load segments:**
+**Reconstruct and inspect DMA load segments:**
 
 ```python
-from ablation.analyzers.microblaze_decoder import MicroBlazeDecoder
-
 segments = sorted(vp.dma_write_segments(), key=lambda segment: segment.address)
-plm = [s for s in segments if 0xF6130000 <= s.address < 0xF6140000]
-image = b"".join(s.data for s in plm)  # the two GEP segments are contiguous
-for insn in MicroBlazeDecoder(image, plm[0].address, byte_order="little").disassemble()[:20]:
-    print(insn)
+loads = [s for s in segments if 0xF6130000 <= s.address < 0xF6140000]
+if loads:
+    image = b"".join(s.data for s in loads)
+    print(f"Recovered {len(image)} bytes at {loads[0].address:#x}")
 ```
 
-`DmaWriteSegment` also records `command_offset`, `section_offset`, and `end_address`. The bytes are linked load data, not necessarily an ELF container. Use `byte_order="little"` for these CDO DMA words; the decoder defaults to normal big-endian MicroBlaze instruction bytes.
+`DmaWriteSegment` also records `command_offset`, `section_offset`, and `end_address`. The bytes are addressed payload data, not necessarily code, PLM, or an ELF container. Establish the architecture and purpose before disassembly. For independently validated MicroBlaze code, use `MicroBlazeDecoder` with `byte_order="little"` for these CDO DMA words.
 
-**Recover git hash from a boot PDI:**
+**Recover an optional Git identifier from a boot PDI:**
 
 ```python
 vp = VersalPdi.from_path('/media/cowboy/research/facility/fw/gep/GCI_GCM415_boot-v0.159.38-35A2CC3.pdi')
 print(vp.git_hash())  # → "035a2cc3"
 # Works via LOADER/SET_IMAGE_INFO even when IHT image header offsets are opaque
+# Returns "" when every candidate Git word is zero
 ```
 
 **Batch-parse a firmware directory:**
@@ -413,7 +412,7 @@ Additional command decoders can be added as their layouts are validated. Unsuppo
 | `fw/gep/GEP_2ACC_GCM3_pld-v0.159.40-F119A21.pdi` | pld | `0f119a21` | Larger PL fabric (GCM3), 12 MB |
 | `fw/felix/FLX182_STRIPS_..._1448.pdi` | boot |: | FELIX FLX182 boot image, 35 MB |
 
-**Build provenance:** All known GCI/GEP pld PDIs contain `img_name = "CONFIG_MASTER"`. In the reviewed files, the `git_hash` at image header +0x2C matches the hexadecimal filename suffix. This is a build-provenance clue, not tamper evidence: the truncated identifier and filename can both be modified, and the header checksum does not authenticate the payload.
+**Build provenance:** All known GCI/GEP pld PDIs contain `img_name = "CONFIG_MASTER"`. In the reviewed GCI and GEP GCM3 files, the `git_hash` at image header +0x2C matches the hexadecimal filename suffix. The reviewed GEP GCM4 v0.159.66 boot and PLD images instead leave their candidate Git words zero. A nonzero match is a build-provenance clue, not tamper evidence: the truncated identifier and filename can both be modified, and the header checksum does not authenticate the payload.
 
 ---
 
