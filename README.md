@@ -125,7 +125,7 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**bFLT (Binary Flat Format)**](docs/reference-modules/bflt.md) | [1](ablation/parsers/bflt.py)&nbsp;[2](ablation/analyzers/bflt_arm32.py)&nbsp;[3](ablation/analyzers/bflt_context.py) | Loads binary Flat (not bfloat16) executables, recovers ARM32 link-time references, applies Linux RAM relocations, and builds analysis contexts with explicit unresolved outcomes. |
+| [**bFLT (Binary Flat Format)**](docs/reference-modules/bflt.md) | [1](ablation/parsers/bflt.py)&nbsp;[2](ablation/analyzers/bflt_arm32.py)&nbsp;[3](ablation/analyzers/bflt_context.py) | Loads binary Flat executables, recovers ARM32 link-time references, applies Linux RAM relocations, and builds analysis contexts with explicit unresolved outcomes. |
 | [**CAEN ASCII-Hex Containers**](docs/reference-modules/caen-ascii-hex.md) | [1](ablation/parsers/caen_hex.py) | Decodes CAEN firmware payloads and verifies their additive checksums without treating integrity checks as signatures. |
 | [**Calibration & CAN Analysis**](docs/reference-modules/calibration-parsers.md) | [1](ablation/analyzers/ecu_xdf_parser.py)&nbsp;[2](ablation/analyzers/ecu_a2l_parser.py)&nbsp;[3](modules/can_dbc_parser.py) | Parses ECU calibration definitions and maps CAN frames to named signals using DBC layouts and scaling metadata. |
 | [**ECU Architecture Detection**](docs/reference-modules/ecu-architecture-detector.md) | [1](ablation/analyzers/ecu_arch_detector.py)&nbsp;[2](ablation/analyzers/ecu_rom_layout_analyzer.py) | Identifies raw-ROM architectures and classifies code, calibration data, and interrupt-vector regions before disassembly. |
