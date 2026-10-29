@@ -122,6 +122,8 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 <details>
 <summary>Firmware Analysis</summary>
 
+For an introduction to container, filesystem, and executable parsing, see [Firmware Parsing: From Artifacts to Analysis](docs/reference-modules/firmware-parsing.md).
+
 | Capability | Code | Description |
 |:---|:---|:---|
 | [**Fortinet Firmware Analysis**](docs/reference-modules/firmware-extraction.md) | [1](ablation/analyzers/fortios_firmware_extractor.py)&nbsp;[2](ablation/analyzers/firmware_container_key_extractor.py) | Recovers FortiOS partition keys and extracts firmware containers into analyzable ELF and filesystem images. |
