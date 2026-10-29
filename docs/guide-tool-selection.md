@@ -177,6 +177,9 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | Task | First reach |
 |---|---|
 | "Parse Intel HEX with strict checksum and overlap checks" | `IntelHexImage.from_path(path)`; use `.to_sparse()` for spans or `.to_bytes(fill=0xFF, base=0)` for bounded absolute images; see `docs/reference-modules/intel-hex.md` |
+| "Decode CAEN ASCII-hex firmware and verify its trailer" | `CaenHexFirmware.from_path(path)`; validates the LF-excluding additive checksum; see `docs/reference-modules/caen-ascii-hex.md` |
+| "Load a bFLT v4 embedded-Linux executable" | `BfltImage.from_path(path)`; use `.text_bytes`, `.data_bytes`, and bounded `.read_memory()`; see `docs/reference-modules/bflt.md` |
+| "Recover files from a little-endian JFFS2 image without mounting" | `Jffs2Image.from_path(path).read_file('/path')`; validates node, filename, inode, and stored-payload CRCs; see `docs/reference-modules/jffs2.md` |
 | "Decode C166/C167 flat or boot-loaded firmware" | `EcuC166Decoder(data, base_pa=...)`; use `parse_ivt(start_pa=...)`, `disassemble()`, and explicit DPP helpers for data references; see `docs/reference-modules/c166-c167-decoding.md` |
 | "nanoMIPS: walk frame boundaries" | `NanoMIPSDecoder(endian='little').decode_framesdata, base_addr` |
 | "Disassemble Xilinx MicroBlaze / Versal PLM firmware" | `MicroBlazeDecoder(data, base_va=..., byte_order='little').disassemble()`; extract PDI load bytes first with `VersalPdi.dma_write_segments()` |

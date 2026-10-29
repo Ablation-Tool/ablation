@@ -2,6 +2,18 @@
 
 ---
 
+## v2.90.0
+
+**CAEN firmware containers and embedded filesystem recovery.**
+
+- Added strict CAEN ASCII-hex payload decoding and independently verified LF-excluding additive checksums.
+- Added bounded bFLT v4 parsing with flat memory addressing and gzip support, including physical relocation-table offsets.
+- Added read-only little-endian JFFS2 reconstruction with node, filename, inode, and stored-payload CRC checks, versioned extents, hard links, implicit roots, and explicit resource limits.
+- Added negative format tests, complete module references, and tool-selection guidance.
+- Verified 42 focused parser tests and the full suite: 2,573 passed and 92 skipped. All eight new Python files pass FORGE with zero findings. Clean-wheel installation and original-artifact smoke tests pass.
+
+---
+
 ## v2.89.0
 
 **Embedded reverse-engineering foundations from CERN artifact analysis.**
