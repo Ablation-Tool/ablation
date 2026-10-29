@@ -1,4 +1,4 @@
-<img src="../../../assets/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
+<img src="../../../assets/branding/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
@@ -10,7 +10,7 @@ Ablation 是一个逆向工程框架，提供与 Ghidra、IDA Pro 和 Binary Nin
 
 ---
 
-![Codex 演示](../../../assets/screencast-2026-09-30.gif)
+![Codex 演示](../../../assets/demos/screencast-2026-09-30.gif)
 
 ## 功能特性
 

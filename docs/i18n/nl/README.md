@@ -1,4 +1,4 @@
-<img src="../../../assets/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
+<img src="../../../assets/branding/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
@@ -10,7 +10,7 @@ Gecombineerd met Claude Code of OpenAI Codex wordt het een volledig autonoom rev
 
 ---
 
-![Codex demo](../../../assets/screencast-2026-09-30.gif)
+![Codex demo](../../../assets/demos/screencast-2026-09-30.gif)
 
 ## Mogelijkheden
 

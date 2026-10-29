@@ -1,4 +1,4 @@
-<img src="../../../assets/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
+<img src="../../../assets/branding/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
@@ -10,7 +10,7 @@ Combinado con Claude Code u OpenAI Codex, se convierte en una herramienta de ing
 
 ---
 
-![Demo de Codex](../../../assets/screencast-2026-09-30.gif)
+![Demo de Codex](../../../assets/demos/screencast-2026-09-30.gif)
 
 ## Capacidades
 

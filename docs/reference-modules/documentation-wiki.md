@@ -51,7 +51,7 @@ The two existing index files have explicit, distinct names: `docs/index.md` beco
 
 Relative Markdown document links become Wiki links, including their heading anchors. A link from a module reference to `../workflows/android-reverse-engineering.md` therefore remains inside the Wiki.
 
-Links to source files become absolute links to the corresponding file on `main`. Relative images, including existing HTML `<img>` tags, use GitHub's raw asset URLs. External URLs and local heading anchors are left alone. Fenced code blocks and inline code spans are preserved, so an example that looks like a Markdown link is not rewritten as though it were real navigation.
+Links to source files become absolute links to the corresponding file on `main`. Relative images, including existing HTML `<img>` tags, use GitHub's raw asset URLs and must exist in the repository. External URLs and local heading anchors are left alone. Fenced code blocks and inline code spans are preserved, so an example that looks like a Markdown link is not rewritten as though it were real navigation.
 
 The publisher handles ordinary inline and reference-style Markdown links. Documents with unusually complex multiline link syntax should use a simple inline destination or an explicit GitHub URL so the result remains easy to verify.
 

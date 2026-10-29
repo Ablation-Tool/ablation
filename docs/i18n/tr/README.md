@@ -1,4 +1,4 @@
-<img src="../../../assets/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
+<img src="../../../assets/branding/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
@@ -10,7 +10,7 @@ Claude Code veya OpenAI Codex ile birleştirildiğinde tam otonom bir tersine m�
 
 ---
 
-![Codex demosu](../../../assets/screencast-2026-09-30.gif)
+![Codex demosu](../../../assets/demos/screencast-2026-09-30.gif)
 
 ## Özellikler
 

@@ -1,6 +1,6 @@
 # Ablation Documentation
 
-Ablation is an AI-assisted reverse engineering framework for firmware, stripped binaries, protocols, and source code.
+Ablation is an AI-assisted reverse engineering (AIARE) framework.
 
 This Wiki contains **{{DOCUMENT_COUNT}} documents** published from the latest `main` branch. Start with a guide, browse by task, or explore the complete module reference.
 

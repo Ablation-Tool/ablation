@@ -172,6 +172,8 @@ class WikiPublisher:
                 if len(parts) == 2 and parts[0] == "docs" and parts[1] in self.category_slugs:
                     return self.category_slugs[parts[1]]
                 return f"{REPOSITORY_URL}/tree/{BRANCH}/{quote(repository_path.as_posix(), safe='/')}{suffix}"
+        if image and not (self.repository_root / Path(repository_path)).is_file():
+            raise ValueError(f"{source}: unresolved image link: {target}")
         base = RAW_URL if image else f"{REPOSITORY_URL}/blob"
         return f"{base}/{BRANCH}/{quote(repository_path.as_posix(), safe='/')}{suffix}"
 

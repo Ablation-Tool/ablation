@@ -1,4 +1,4 @@
-<img src="../../../assets/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
+<img src="../../../assets/branding/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
@@ -10,7 +10,7 @@ Claude CodeまたはOpenAI Codexと組み合わせることで、自律的なリ
 
 ---
 
-![Codexデモ](../../../assets/screencast-2026-09-30.gif)
+![Codexデモ](../../../assets/demos/screencast-2026-09-30.gif)
 
 ## 機能
 

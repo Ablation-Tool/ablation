@@ -107,6 +107,16 @@ def test_rejects_missing_document_target(tmp_path: Path):
         publisher.rewrite(source, PurePosixPath("reference-modules/broken.md"))
 
 
+def test_rejects_missing_image_target(tmp_path: Path):
+    docs, home = _fixture(tmp_path)
+    source = "![Missing](../../assets/missing.png)\n"
+    _write(docs / "reference-modules" / "broken.md", source)
+
+    publisher = WikiPublisher(docs, home)
+    with pytest.raises(ValueError, match="unresolved image link"):
+        publisher.rewrite(source, PurePosixPath("reference-modules/broken.md"))
+
+
 def test_rejects_links_outside_repository(tmp_path: Path):
     docs, home = _fixture(tmp_path)
     source = "[Outside](../../../outside.md)\n"
