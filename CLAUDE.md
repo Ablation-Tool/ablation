@@ -51,6 +51,8 @@ See `docs/guide-tool-selection.md` for the full task→tool lookup table.
 
 See `docs/reference-modules/` for per-module constructor patterns and key methods. Also `docs/INDEX.md`.
 
+**README ordering:** Keep capability rows alphabetical by display name within each table. Insert new capabilities at the correct position rather than appending by recency, and verify the order before committing.
+
 ---
 
 ## RE workflow

@@ -71,6 +71,8 @@ A capability reference should describe the implementation in the current checkou
 
 When code behavior changes, update the affected purpose, mechanism, examples, output fields, limitations, and related workflow documents in the same change. A correct API table beside an obsolete conceptual explanation is still obsolete documentation.
 
+Keep README capability rows alphabetical by display name within each table. Insert a new capability at its alphabetical position rather than appending by recency, and verify the ordering before committing.
+
 Review local links, relative anchors, prose, and deterministic examples. Keep audit evidence in [Capability Documentation Audit](capability-audit/CAPABILITY_DOCUMENTATION.md). The three firmware parser references demonstrate the intended style:
 
 - [CAEN ASCII-Hex Firmware Containers](reference-modules/caen-ascii-hex.md)
