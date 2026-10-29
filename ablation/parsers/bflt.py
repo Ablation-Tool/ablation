@@ -10,11 +10,12 @@ from pathlib import Path
 _HEADER_SIZE = 64
 _HEADER = struct.Struct(">4s15I")
 _FLAG_RAM = 0x01
-_FLAG_ROM = 0x02
-_FLAG_GOTPIC = 0x04
-_FLAG_GZIP = 0x08
-_FLAG_GZIP_EXEC = 0x10
-_KNOWN_FLAGS = _FLAG_RAM | _FLAG_ROM | _FLAG_GOTPIC | _FLAG_GZIP | _FLAG_GZIP_EXEC
+_FLAG_GOTPIC = 0x02
+_FLAG_GZIP = 0x04
+_FLAG_GZDATA = 0x08
+_FLAG_KTRACE = 0x10
+_KNOWN_FLAGS = _FLAG_RAM | _FLAG_GOTPIC | _FLAG_GZIP | _FLAG_GZDATA | _FLAG_KTRACE
+_COMPRESSED_FLAGS = _FLAG_GZIP | _FLAG_GZDATA
 _MAX_INPUT_BYTES = 64 * 1024 * 1024
 _MAX_MEMORY_BYTES = 64 * 1024 * 1024
 
@@ -91,10 +92,10 @@ class BfltImage:
             raise BfltError("reserved bFLT header fields are nonzero")
         if flags & ~_KNOWN_FLAGS:
             raise BfltError(f"unsupported bFLT flags {flags:#x}")
-        if flags & _FLAG_GZIP_EXEC:
-            raise BfltError("gzip-exec bFLT images are not supported")
-        if flags & (_FLAG_ROM | _FLAG_GOTPIC):
-            raise BfltError("ROM and GOT-PIC bFLT layouts are not supported")
+        if flags & _FLAG_GOTPIC:
+            raise BfltError("GOT-PIC bFLT layouts are not supported")
+        if flags & _COMPRESSED_FLAGS == _COMPRESSED_FLAGS:
+            raise BfltError("multiple compressed bFLT layouts are specified")
         if not _HEADER_SIZE <= entry < data_start:
             raise BfltError("entry point lies outside the text segment")
         if not data_start <= data_end <= bss_end:
@@ -103,21 +104,39 @@ class BfltImage:
             raise BfltError(
                 f"memory size {bss_end} exceeds {max_memory_bytes} byte limit"
             )
-        minimum_reloc = _HEADER_SIZE if flags & _FLAG_GZIP else data_end
-        if reloc_start < minimum_reloc or reloc_start > len(data):
-            raise BfltError("relocation table lies outside the file")
-        reloc_end = reloc_start + reloc_count * 4
-        if reloc_end > len(data):
-            raise BfltError("truncated relocation table")
 
-        if flags & _FLAG_GZIP:
-            memory = data[:_HEADER_SIZE] + _decompress_exact(
-                data[_HEADER_SIZE:reloc_start], data_end - _HEADER_SIZE
-            )
+        compressed_layout = flags & _COMPRESSED_FLAGS
+        if compressed_layout:
+            if reloc_start != data_end:
+                raise BfltError("compressed bFLT relocation offset does not match data_end")
+            if compressed_layout == _FLAG_GZIP:
+                expanded = _decompress_exact(
+                    data[_HEADER_SIZE:],
+                    data_end - _HEADER_SIZE + reloc_count * 4,
+                )
+                memory = data[:_HEADER_SIZE] + expanded[:data_end - _HEADER_SIZE]
+                relocations = expanded[data_end - _HEADER_SIZE:]
+            else:
+                expanded = _decompress_exact(
+                    data[data_start:],
+                    data_end - data_start + reloc_count * 4,
+                )
+                memory = (
+                    data[:data_start] + expanded[:data_end - data_start]
+                )
+                relocations = expanded[data_end - data_start:]
+            trailing_bytes = 0
         else:
+            if reloc_start < data_end or reloc_start > len(data):
+                raise BfltError("relocation table lies outside the file")
+            reloc_end = reloc_start + reloc_count * 4
+            if reloc_end > len(data):
+                raise BfltError("truncated relocation table")
             if data_end > len(data):
                 raise BfltError("flat memory image extends beyond the file")
             memory = data[:data_end]
+            relocations = data[reloc_start:reloc_end]
+            trailing_bytes = len(data) - reloc_end
         if len(memory) != data_end:
             raise BfltError("flat memory image size does not match data_end")
         return cls(
@@ -131,9 +150,9 @@ class BfltImage:
             flags=flags,
             build_date=build_date,
             memory_image=memory,
-            relocations=data[reloc_start:reloc_end],
+            relocations=relocations,
             file_size=len(data),
-            trailing_bytes=len(data) - reloc_end,
+            trailing_bytes=trailing_bytes,
         )
 
     @property
@@ -148,7 +167,15 @@ class BfltImage:
 
     @property
     def compressed(self) -> bool:
-        return bool(self.flags & _FLAG_GZIP)
+        return bool(self.flags & _COMPRESSED_FLAGS)
+
+    @property
+    def compression(self) -> str | None:
+        if self.flags & _FLAG_GZIP:
+            return "gzip"
+        if self.flags & _FLAG_GZDATA:
+            return "gzdata"
+        return None
 
     def read_memory(self, address: int, size: int) -> bytes:
         """Read from the flat address space, whose first byte is the header."""
@@ -171,6 +198,7 @@ class BfltImage:
             "relocation_count": self.reloc_count,
             "flags": self.flags,
             "compressed": self.compressed,
+            "compression": self.compression,
             "file_size": self.file_size,
             "trailing_bytes": self.trailing_bytes,
         }

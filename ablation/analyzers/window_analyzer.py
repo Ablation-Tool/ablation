@@ -39,6 +39,7 @@ except ImportError:
     _LIEF_OK = False
 
 _RIP_RE = re.compile(r'\[rip [+-] (0x[0-9a-f]+)\]')
+_ARM32_PC_RE = re.compile(r'\[pc,\s*#(-?(?:0x[0-9a-fA-F]+|\d+))\]')
 _ENDBR64 = bytes([0xf3, 0x0f, 0x1e, 0xfa])
 _STD_R2_SAVE = 0xF8410018  # std r2, 0x18(r1) in LE storage — ppc64le ELFv2 TOC save
 _MAX_TEXT_SCAN_WORDS = 4_000_000  # ~16 MB .text; guard against adversarially large sections
@@ -306,6 +307,8 @@ class WindowAnalyzer:
         self._text_start: int = 0
         self._text_end: int = 0
         self._md: Optional[capstone.Cs] = None
+        self._direct_calls: List[Tuple[int, int, str]] = []
+        self._sections = []
         if self.arch in ('mips32', 'mips64') and data:
             self._load_mips()
         elif _LIEF_OK and data:
@@ -315,6 +318,21 @@ class WindowAnalyzer:
     def from_path(cls, path: str) -> "WindowAnalyzer":
         data = Path(path).read_bytes()
         inst = cls(data, path=path)
+        return inst
+
+    @classmethod
+    def from_bflt(cls, ctx) -> "WindowAnalyzer":
+        from ablation.analyzers.bflt_context import BfltBinaryContext
+        if not isinstance(ctx, BfltBinaryContext):
+            raise TypeError("ctx must be a BfltBinaryContext")
+        inst = cls(ctx.memory_image, base_va=ctx.base_va, path=ctx.path)
+        inst.arch = 'arm32'
+        inst._text_start = ctx.base_va + 0x40
+        inst._text_end = ctx.base_va + ctx.source_image.data_start
+        inst.plt = dict(ctx.plt)
+        inst.strings = dict(ctx.strings)
+        inst._sections = []
+        inst._is_pie = False
         return inst
 
     def _load_mips(self) -> None:
@@ -363,6 +381,16 @@ class WindowAnalyzer:
         if not isinstance(binary, lief.ELF.Binary):
             return
 
+        try:
+            from io import BytesIO
+            from elftools.elf.elffile import ELFFile
+            elf = ELFFile(BytesIO(self.data))
+            self._sections = [
+                (section['sh_addr'], section['sh_offset'], section['sh_size'])
+                for section in elf.iter_sections()
+            ]
+        except Exception:
+            self._sections = []
         self.base_va = binary.imagebase
         # ET_DYN (PIE executable or shared object): file offsets == VAs for the
         # first PT_LOAD, so the fallback in _va_to_offset must use `va` not
@@ -451,6 +479,9 @@ class WindowAnalyzer:
                 start = end + 1
 
     def _build_plt(self, binary) -> None:
+        if self.arch == 'arm32':
+            self._build_plt_arm32(binary)
+            return
         if self.arch == 'ppc64le':
             self._build_plt_ppc64le_elfv2(binary)
             return
@@ -531,6 +562,42 @@ class WindowAnalyzer:
                         self.plt[stub_va] = got_to_sym[got_va]
                 elif chunk[start:start + 2] == b'\xff\xa3':  # jmp [rbx+disp] unlikely
                     pass
+
+    def _build_plt_arm32(self, binary) -> None:
+        names = []
+        try:
+            rel_plt = binary.get_section('.rel.plt')
+            if rel_plt:
+                content = bytes(rel_plt.content)
+                for off in range(0, len(content) - 7, 8):
+                    _, r_info = struct.unpack_from('<II', content, off)
+                    try:
+                        names.append(binary.dynamic_symbols[r_info >> 8].name)
+                    except Exception:
+                        names.append('')
+        except Exception:
+            pass
+
+        if names:
+            try:
+                plt_sec = binary.get_section('.plt')
+            except Exception:
+                plt_sec = None
+            if plt_sec:
+                plt_va = int(plt_sec.virtual_address)
+                for index, name in enumerate(names):
+                    if name:
+                        self.plt[plt_va + 20 + index * 12] = name
+                return
+
+        try:
+            for relocation in binary.relocations:
+                if not relocation.has_symbol:
+                    continue
+                if 'JUMP_SLOT' in str(relocation.type) and relocation.symbol.name:
+                    self.plt[relocation.address] = relocation.symbol.name
+        except Exception:
+            pass
 
     def _build_plt_x86_32(self, binary, got_to_sym: Dict[int, str]) -> None:
         # i386 PLT: each stub is 16 bytes, first stub is PLT[0] trampoline (skip it).
@@ -796,6 +863,8 @@ class WindowAnalyzer:
             else:
                 self._md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
             self._md.detail = False
+            if self.arch == 'arm32':
+                self._md.skipdata = True
         return self._md
 
     def _va_to_offset(self, va: int) -> int:
@@ -807,16 +876,7 @@ class WindowAnalyzer:
             return va if getattr(self, '_is_pie', False) else va - self.base_va
         if not _LIEF_OK or not self.base_va:
             return va
-        if not hasattr(self, '_sections'):
-            try:
-                binary = lief.parse(self.data)
-                self._sections = list(binary.sections) if binary else []
-            except Exception:
-                self._sections = []
-        for sec in getattr(self, '_sections', []):
-            s_va = sec.virtual_address
-            s_off = sec.offset
-            s_sz = sec.size
+        for s_va, s_off, s_sz in self._sections:
             if s_va <= va < s_va + s_sz:
                 return s_off + (va - s_va)
         # PIE (ET_DYN): file offsets equal VAs in the first PT_LOAD segment, so
@@ -826,6 +886,12 @@ class WindowAnalyzer:
         if getattr(self, '_is_pie', False):
             return va
         return va - self.base_va
+
+    def _read_u32_le(self, va: int) -> Optional[int]:
+        offset = self._va_to_offset(va)
+        if offset < 0 or offset + 4 > len(self.data):
+            return None
+        return struct.unpack_from('<I', self.data, offset)[0]
 
     def dump(
         self,
@@ -863,6 +929,7 @@ class WindowAnalyzer:
             return [f"; no data at va=0x{start_va:x} offset=0x{offset:x}"]
 
         lines: List[str] = []
+        self._direct_calls = []
         md = self._cs()
         for insn in md.disasm(chunk, start_va):
             mnemonic = insn.mnemonic
@@ -878,7 +945,6 @@ class WindowAnalyzer:
                 if 'lr' in op_str.lower() or 'x29' in op_str.lower():
                     annotations.append("[FUNC_START?]")
 
-            # Annotate calls with PLT symbol name
             if self.arch == 'x86_64':
                 call_mnems = {'call'}
             elif self.arch == 'ppc64le':
@@ -889,21 +955,32 @@ class WindowAnalyzer:
                 call_mnems = {'bl', 'blx', 'blr'}
             if mnemonic.lower().split('.')[0] in call_mnems:
                 try:
-                    target = int(op_str.strip().lstrip('#'), 16)
+                    target_text = op_str.strip().split(',')[0].strip().lstrip('#')
+                    target = int(target_text, 0)
+                except ValueError:
+                    target = None
+                if target is not None:
+                    self._direct_calls.append((addr, target, self.plt.get(target, '')))
                     if target in self.plt:
                         annotations.append(f"PLT -> {self.plt[target]}")
                     elif target in self.strings:
                         annotations.append(f"-> {self.strings[target]!r}")
-                except ValueError:
-                    pass
 
-            # Annotate RIP-relative LEA/MOV with string content (x86_64 only)
             if self.arch == 'x86_64' and mnemonic in ("lea", "mov") and "[rip" in op_str:
                 rip_target = _parse_rip_target(addr, insn.size, op_str)
                 if rip_target is not None and rip_target in self.strings:
                     s = self.strings[rip_target]
                     snippet = s[:64] + "..." if len(s) > 64 else s
                     annotations.append(f'"{snippet}"')
+            elif self.arch == 'arm32' and mnemonic == 'ldr':
+                match = _ARM32_PC_RE.search(op_str)
+                if match:
+                    literal = addr + 8 + int(match.group(1), 0)
+                    pointer = self._read_u32_le(literal)
+                    if pointer in self.strings:
+                        s = self.strings[pointer]
+                        snippet = s[:64] + "..." if len(s) > 64 else s
+                        annotations.append(f'"{snippet}"')
 
             if annotations:
                 line += "  ; " + " | ".join(annotations)
@@ -939,29 +1016,10 @@ class WindowAnalyzer:
         return starts
 
     def calls_in_window(self, va: int, window: int = 1536, align_back: int = 0) -> List[Tuple[int, int, str]]:
-        """
-        Return (call_site_va, target_va, label) for all call/bl instructions in the window.
-        label is the PLT symbol name if known, else ''.
-        """
-        call_marker = ': call' if self.arch == 'x86_64' else ': bl'
-        calls = []
-        for line in self.dump(va, window=window, align_back=align_back):
-            if call_marker not in line:
-                continue
-            parts = line.split(":")
-            try:
-                site_va = int(parts[0], 16)
-                rest = ":".join(parts[1:])
-                op_part = rest.split(";")[0].strip()
-                target_str = op_part.replace("call", "").strip()
-                target_va = int(target_str, 16)
-                label = ""
-                if "PLT ->" in line:
-                    label = line.split("PLT ->")[1].split("|")[0].strip().rstrip('"')
-                calls.append((site_va, target_va, label))
-            except (ValueError, IndexError):
-                pass
-        return calls
+        """Return direct call sites, targets, and known PLT labels."""
+        self._direct_calls = []
+        self.dump(va, window=window, align_back=align_back)
+        return list(self._direct_calls)
 
     def align_to_func_start(self, call_site_va: int, search_back: int = 512) -> int:
         """
@@ -976,6 +1034,8 @@ class WindowAnalyzer:
         Returns `call_site_va - search_back` as a last-resort fallback (no alignment,
         same as plain dump) so callers always get a valid start VA.
         """
+        if self.arch in ('arm32', 'arm64'):
+            return call_site_va - search_back
         try:
             with open(self.path, 'rb') as f:
                 raw = f.read()

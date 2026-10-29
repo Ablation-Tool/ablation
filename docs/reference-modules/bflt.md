@@ -41,11 +41,12 @@ This separation prevents common mistakes: reading a string from BSS as though it
 2. Require revision 4, zero reserved fields, supported flags, and coherent entry, text, data, BSS, and relocation ranges.
 3. Enforce input and memory limits before constructing the flat image. Both default to 64 MiB.
 4. For RAM-style images, copy the initialized image through `data_end`.
-5. For gzip images, decompress exactly `data_end - 64` bytes after the unchanged header.
-6. Use `reloc_start` as a physical file offset and validate the complete relocation table.
-7. Expose bounded slices and reads. Preserve trailing-byte counts instead of silently classifying them.
+5. For GZIP (`0x04`), decompress everything after the header, including relocation data, and split it at `data_end`.
+6. For GZDATA (`0x08`), preserve header and text, then decompress data and relocation data and split them at `data_end`.
+7. For uncompressed input, validate the physical relocation table. For compressed input, require `reloc_start == data_end`, the logical uncompressed offset.
+8. Expose bounded slices and reads. Preserve trailing-byte counts for uncompressed input instead of silently classifying them.
 
-Compressed input has two layouts at once. `data_end` describes the expanded memory image, while `reloc_start` points into the stored file. Confusing those coordinate systems can truncate the gzip stream or place the relocation table at a nonexistent memory address.
+`GOTPIC` (`0x02`) is rejected until its relocation model is implemented. `KTRACE` (`0x10`) is metadata only. Simultaneous compression modes are rejected. Compressed input therefore has two coordinate systems: physical bytes in the stored file and logical bytes after decompression. Confusing those coordinate systems can truncate the stream or place the relocation table at a nonexistent address.
 
 Malformed headers, unsupported flags, truncated relocations, invalid gzip streams, and output-size mismatches raise `BfltError`.
 
@@ -99,9 +100,9 @@ For independently confirmed little-endian ARM32 images, [BfltArm32](bflt-arm32.m
 
 The parser turns a previously manual loading exercise into a reusable, bounded API. A user can inspect service configuration and code in an embedded Linux filesystem without first rebuilding its runtime or writing a one-off header decoder.
 
-This is a small enabling component, not a bFLT decompiler. It does not currently produce `BinaryContext`, apply relocations, discover functions, or infer an ISA. A future adapter could connect the memory image to those facilities; the parser would then serve as that adapter's format backend.
+This is a small enabling component, not a bFLT decompiler. The parser itself does not apply relocations or infer an ISA. For the larger next step, [BfltBinaryContext](bflt-context.md) applies supported relocations and recovers function candidates, direct calls, strings, and literal references through the normal context interface.
 
-Such an adapter should be added only with relocation-aware tests. Extending the loader is preferable to guessing addresses that could make later security analysis look precise while being wrong.
+That separation keeps the loader bounded and the address model explicit. The adapter should be used with relocation-aware tests rather than guesses that could make later security analysis look precise while being wrong.
 
 ---
 
@@ -112,7 +113,7 @@ Such an adapter should be added only with relocation-aware tests. Extending the 
 3. Disassemble from flat address `image.entry`, not an assumed ELF virtual base.
 4. Resolve target-specific relocation semantics before trusting absolute pointers. Relocations are exposed but not applied.
 5. Account for zero-filled BSS when interpreting globals; it is not included in `memory_image`.
-6. RAM layouts and gzip (`0x08`) are supported. ROM (`0x02`), GOT-PIC (`0x04`), and gzip-exec (`0x10`) fail explicitly.
+6. RAM, GZIP (`0x04`), GZDATA (`0x08`), and KTRACE (`0x10`) are supported. GOT-PIC (`0x02`) and simultaneous compression modes fail explicitly.
 7. Nonzero trailing bytes are counted, not silently treated as code or relocations.
 8. A valid layout does not prove safe code, complete firmware, or suitability for a particular board.
 
@@ -121,6 +122,7 @@ Such an adapter should be added only with relocation-aware tests. Extending the 
 ## See also
 
 - [bFLT ARM32 Link-Time References](bflt-arm32.md)
+- [Relocation-Aware bFLT BinaryContext](bflt-context.md)
 - [Firmware Parsing: From Artifacts to Analysis](firmware-parsing.md)
 - [JFFS2 Filesystem Reader](jffs2.md)
 - [CAEN ASCII-Hex Firmware Containers](caen-ascii-hex.md)

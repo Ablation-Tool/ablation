@@ -182,6 +182,7 @@ Analyze hardware description language source files: extract constants, compare v
 | [CAEN ASCII-Hex Containers](reference-modules/caen-ascii-hex.md) | CaenHexFirmware: strict uppercase ASCII-hex decoding, board extraction, LF-excluding additive checksum validation, bounded payloads, and explicit non-authenticity limitations |
 | [bFLT v4 Executables](reference-modules/bflt.md) | BfltImage: bounded revision-4 headers, flat text/data/BSS layout, physical relocation offsets, bounded gzip expansion, and address-checked memory reads |
 | [bFLT ARM32 Link-Time References](reference-modules/bflt-arm32.md) | BfltArm32: explicit pointer endianness, bounded ARM32 disassembly, aligned pointer candidates, and two-level PC-relative literal references without applying runtime relocations |
+| [Relocation-Aware bFLT BinaryContext](reference-modules/bflt-context.md) | BfltBinaryContext and relocate_bflt: Linux RAM relocation, strict and explicit unresolved outcomes, function candidates, direct calls, strings, and literal references from relocated images |
 | [JFFS2 Filesystem Reader](reference-modules/jffs2.md) | Jffs2Image: read-only little-endian reconstruction with node/dirent/name/inode/payload CRCs, versioned extents, implicit roots, hard links, and explicit resource limits |
 | [ECU C166/C167 Decoder](reference-modules/c166-c167-decoding.md) | EcuC166Decoder: corrected two-/four-byte decoding, arbitrary image sizes, selectable IVT bases, direct CALLS targets, explicit 64 KiB code segments and 16 KiB DPP data pages, and CERN-byte regression coverage |
 | [ECU ROM Layout Analyzer](reference-modules/ecu-rom-layout-analyzer.md) | EcuROMLayoutAnalyzer: entropy-based arch-agnostic ROM region classifier; four-variable decision entropy + fill ratio + entropy floor + PPC density; ERASED/CODE/CALIBRATION/MIXED/PADDING; `is_calibration_only()` detects OBD cal-only dumps EDC16C34 confirmed; validated on GM E38 PCM (PPC32) and Bosch EDC16C34 |
@@ -271,6 +272,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
 | Version | Summary |
 |---|---|
+| v2.93.0 | Added relocation-aware BfltBinaryContext with strict and explicit unresolved outcomes, corrected GZIP/GZDATA layouts, added bFLT-backed WindowAnalyzer support, and recovered legacy ARM PLT symbols and direct calls without the A1676 LIEF crash. |
 | v2.92.0 | Expanded C166 dispatch decoding and corrected condition/shift operands; resolved A3801 and N1470 update variants; added BfltArm32 link-time pointer and literal recovery with complete documentation. |
 | v2.91.0 | Added immediate SUBB decoding, bFLT pointer-endianness guidance, corrected A1676 update gating, confirmed C111C command-listener evidence, and documented the ALICE control FPGA command decoder. |
 | v2.90.0 | CAEN ASCII-hex payload and additive-checksum decoding, bounded bFLT v4 loading with gzip support, and CRC-checked read-only JFFS2 reconstruction with versioned extents and complete module documentation. |

@@ -2,6 +2,20 @@
 
 ---
 
+## v2.93.0
+
+**Relocation-aware bFLT analysis and legacy ARM WindowAnalyzer support.**
+
+- Added `BfltBinaryContext`, a `BinaryContext` subclass with explicit load-base selection, immutable relocation records, strict failure on unmapped values, and opt-in unresolved results. Recovers function candidates, direct calls, strings, and literal references from relocated images.
+- Corrected bFLT v4 flags and implemented both full-image GZIP and data-only GZDATA layouts with bounded decompression and logical relocation offsets.
+- Applied the Linux contiguous-RAM relocation model to all six C111C executables with zero unresolved entries. The `WS_CMD` slot at `0x1938` relocates from `0x3D204` to `0x3D244` (`CLMR`), demonstrating why link-time and relocated pointers require separate evidence.
+- Added `WindowAnalyzer.from_bflt()` for relocated-image disassembly without ELF reparsing.
+- Added legacy ARM `.rel.plt` recovery with 20-byte resolver and 12-byte stub layouts. A1676 now recovers all 39 PLT symbols, including `strcmp` at `0x89D4`, and direct call `0x10980 -> 0x10D38`.
+- Replaced legacy LIEF section reparsing/access with a pyelftools address map, eliminating the A1676 disassembly crash. Added typed direct-call collection and bounded ARM literal-string annotation.
+- Added independent parser, relocation, context, and legacy ARM tests, original-artifact assertions, full capability documentation, README visibility, and tool-selection guidance.
+
+---
+
 ## v2.92.0
 
 **C166 table-driven update dispatch and decoding correctness.**

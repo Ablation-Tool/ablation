@@ -101,6 +101,20 @@ The arch is detected from the ELF header: `e_machine == 21` EM_PPC64 with `EI_DA
 
 ---
 
+## Legacy ARM32 and bFLT support
+
+Legacy 32-bit ARM uses `.rel.plt` with 8-byte relocation records. The ARM resolver maps those records to the 20-byte PLT resolver followed by 12-byte stubs. A `JUMP_SLOT` fallback covers images without a normal PLT layout. A1676 now recovers all 39 of its PLT symbols.
+
+`calls_in_window()` collects direct calls while disassembling instead of trying to parse formatted text. This is what makes ARM `bl` operands usable: the C111C comparison call at `0x1788` and A1676's `0x10980 -> 0x10D38` call are returned with their actual targets. Register-indirect destinations are not invented.
+
+ARM32 literal loads can annotate strings by computing the PC-relative literal address, reading a bounded 32-bit pointer, and checking it against the string map. ARM32 `skipdata` allows a window to continue through inline literal pools, but valid-looking data can still be decoded as instructions and needs review.
+
+The address map comes from `pyelftools` rather than repeated LIEF parsing or section access. This removes the legacy A1676 crash while retaining bounds checks. LIEF remains available for symbol and relocation extraction.
+
+For a relocated bFLT image, construct `BfltBinaryContext` first and call `WindowAnalyzer.from_bflt(ctx)`. The window then uses the adapter's text bounds, strings, and load base instead of treating bFLT as ELF. Relocated strings can differ from their stored file targets, so link-time and runtime evidence should not be conflated.
+
+---
+
 ## Assumptions and failure modes
 
 **Assumption: lief is installed.** Without lief, PLT and string maps are empty so instructions disassemble without annotations. Capstone is still used for disassembly.
@@ -115,9 +129,7 @@ The arch is detected from the ELF header: `e_machine == 21` EM_PPC64 with `EI_DA
 
 ## FORGE status
 
-Gate: **PASS**. No CRITICAL or HIGH findings. One open item tracked for follow-up:
-
-1. `calls_in_window()` uses the string marker `": bl"` rather than `call_mnems`, so `bctrl` indirect calls do not appear in its output even though `bctrl` is now in `call_mnems`.
+Gate: **PASS**. No CRITICAL or HIGH findings. Legacy ARM PLT recovery, typed direct calls, bounded literal annotation, and bFLT-backed windows are covered. Register-indirect targets such as `bctrl` remain unresolved rather than being assigned invented destinations.
 
 ---
 
@@ -160,7 +172,7 @@ Not applicable: `WindowAnalyzer` is a display tool, not a scanner. It produces d
 
 ## Reading output
 
-`WindowAnalyzer.from_context(ctx).dump_text(va, window=1536, align_back=0)` returns a formatted string block: a disassembly listing with annotations. There is no typed finding dataclass; output is text for manual analysis.
+`WindowAnalyzer.from_bflt(ctx).dump_text(va, window=1536, align_back=0)` returns a formatted string block: a disassembly listing with annotations from a relocated bFLT context. `WindowAnalyzer.from_path(path)` handles ELF input. There is no typed finding dataclass; output is text for manual analysis.
 
 Use the helper methods to extract structured data from the window:
 

@@ -93,9 +93,9 @@ Use `dereference=False` when the question is “which instructions read this lit
 
 This is a small enabling component. It turns a repetitive manual calculation into a tested API that can support command-handler tracing, global-reference recovery, and later bFLT function analysis.
 
-Its likely architectural role is a backend for a richer bFLT adapter. It does not need to become a second general-purpose disassembler, and a future broader `BinaryContext` integration could absorb its interface. Until then, keeping the component narrow makes its evidence and limitations easy to audit.
+Its architectural role is the link-time reader behind [BfltBinaryContext](bflt-context.md). The adapter applies relocations and constructs the shared analysis context; this class remains useful when the question is specifically about stored pointers and literal pools. Keeping those responsibilities separate makes address provenance easier to audit.
 
-The important user-facing distinction is that it provides **link-time references**, not relocated runtime addresses or proof that an instruction executes.
+The important user-facing distinction is that it provides **link-time references**, not relocated runtime addresses or proof that an instruction executes. For relocated images, use `BfltBinaryContext` rather than passing loaded bytes back to this class with file-endian assumptions.
 
 ---
 
@@ -121,6 +121,7 @@ Scanning is linear in the selected text or initialized-memory range. Returned ma
 ## See also
 
 - [bFLT v4 Executables](bflt.md)
+- [Relocation-Aware bFLT BinaryContext](bflt-context.md)
 - [JFFS2 Filesystem Reader](jffs2.md)
 - [WindowAnalyzer](window-analyzer.md)
 - [Firmware Parsing: From Artifacts to Analysis](firmware-parsing.md)

@@ -75,6 +75,7 @@ Review local links, relative anchors, prose, and deterministic examples. Keep au
 
 - [CAEN ASCII-Hex Firmware Containers](reference-modules/caen-ascii-hex.md)
 - [bFLT v4 Executables](reference-modules/bflt.md)
+- [Relocation-Aware bFLT BinaryContext](reference-modules/bflt-context.md)
 - [JFFS2 Filesystem Reader](reference-modules/jffs2.md)
 
 For the shared parsing example, see [Firmware Parsing: From Artifacts to Analysis](reference-modules/firmware-parsing.md).

@@ -32,7 +32,8 @@ JFFS2 filesystem image
   -> directory and inode reconstruction
   -> file bytes
   -> bFLT loader
-  -> flat-address instruction analysis
+  -> relocation-aware BinaryContext
+  -> instruction and literal analysis
 ```
 
 Not every target uses every stage. The CAEN A1676 update contains an ELF after its wrapper is removed. The CAEN C111C image instead contains a JFFS2 filesystem with six bFLT programs. Reusing the right small parser avoids a custom extraction script for each investigation.
@@ -64,7 +65,7 @@ These parsers are modest pieces of infrastructure, not independent reverse-engin
 
 That small scope also permits change. A future common loader could use these parsers as backends. A parser could remain a specialist utility, gain support for another observed variant, or be replaced if a better implementation becomes available. None of those possibilities requires every consumer to understand the underlying format.
 
-The current APIs are intentionally explicit. They do not claim automatic format detection, relocation-aware decompilation, or a universal firmware extraction pipeline.
+The current APIs are intentionally explicit. They do not claim automatic format detection or a universal firmware extraction pipeline. Relocation is an explicit analysis step with a selected load base and recorded outcomes, not a silent side effect of parsing.
 
 ---
 
@@ -73,6 +74,7 @@ The current APIs are intentionally explicit. They do not claim automatic format 
 - [CAEN ASCII-Hex Firmware Containers](caen-ascii-hex.md): remove and validate the vendor update wrapper.
 - [JFFS2 Filesystem Reader](jffs2.md): recover paths and file contents from a little-endian filesystem.
 - [bFLT v4 Executables](bflt.md): obtain a bounded flat memory image for disassembly.
+- [Relocation-Aware bFLT BinaryContext](bflt-context.md): apply supported relocations and recover functions, calls, strings, and literal references.
 - [Strict Intel HEX Parser](intel-hex.md): preserve sparse addresses from record-oriented firmware text.
 
 For architectural analysis after extraction, see [Understanding Ablation](../overview.md) and the [Tool Selection Guide](../guide-tool-selection.md).

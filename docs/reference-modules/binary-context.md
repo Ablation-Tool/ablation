@@ -100,6 +100,9 @@ flowchart TD
 | LoongArch64 | ELF | Full support |
 | PowerPC32 / PowerPC64 | ELF XCOFF32 via separate extractor | |
 | RISC-V 32 / 64 | ELF | |
+| ARM32 | bFLT via `BfltBinaryContext` | Explicit load base, stored pointer endianness, and strict or explicitly unresolved relocation |
+
+`BfltBinaryContext.from_path()` and `from_image()` construct the bFLT variant directly; it is not inferred by generic `BinaryContext.load_or_build()`. It exposes the same core context fields and query methods, but does not make ELF-only reparsers understand bFLT. See [Relocation-Aware bFLT BinaryContext](bflt-context.md) for its evidence model and limitations.
 
 ### String cross-reference index
 
