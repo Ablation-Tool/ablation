@@ -72,13 +72,21 @@ _FOUR_BYTE_OPS: frozenset[int] = frozenset({
 # Instruction type tags
 _MOV_IMM  = 'MOV_IMM'    # MOV Rwn, #data16
 _MOV_IMM4 = 'MOV_IMM4'   # MOV Rwn, #data4
-_CMP_IMM  = 'CMP_IMM'    # CMP Rwn, #data16
+_CMP_IMM  = 'CMP_IMM'    # CMP reg, #data16
+_CMP_IMM3 = 'CMP_IMM3'   # CMP Rwn, #data3
+_CMP_REG  = 'CMP_REG'    # CMP Rwn, Rwm
+_CMP_MEM  = 'CMP_MEM'    # CMP reg, mem or register-indirect memory
+_CMPB_IMM = 'CMPB_IMM'   # CMPB reg, #data8 (low byte of data16)
+_CMPB_IMM3 = 'CMPB_IMM3'  # CMPB Rbn, #data3
+_CMPB_REG = 'CMPB_REG'   # CMPB Rbn, Rbm
+_CMPB_MEM = 'CMPB_MEM'   # CMPB reg, mem or register-indirect memory
 _CMPD     = 'CMPD'       # CMPD1/CMPD2 Rwn, mem
 _AND_IMM  = 'AND_IMM'    # AND Rwn, #data16
 _ADD_IMM  = 'ADD_IMM'    # ADD Rwn, #data16
 _JMPS     = 'JMPS'       # JMPS seg, caddr
 _CALLS    = 'CALLS'      # CALLS seg, caddr
 _JMPA     = 'JMPA'       # JMPA cc, caddr
+_JMPI     = 'JMPI'       # JMPI cc, [Rwn]; target is not statically resolved
 _CALLA    = 'CALLA'      # CALLA cc, caddr
 _MOV_LD   = 'MOV_LD'     # load from direct/indirect memory address
 _MOV_ST   = 'MOV_ST'     # store to direct/indirect memory address
@@ -101,10 +109,10 @@ _JMPR     = 'JMPR'       # JMPR cc, rel8 — relative conditional branch (2-byte
 _UNKNOWN2 = 'UNKNOWN_2B'
 _UNKNOWN4 = 'UNKNOWN_4B'
 
-# Condition code names for JMPR (index = cc nibble 0–F)
+# Condition codes from the C166 Family Instruction Set Manual, Table 4-4.
 _JMPR_CC = (
-    'UC', 'Z', 'NZ', 'V', 'NV', 'N', 'NN', 'C',
-    'NC', 'UGT', 'ULE', 'SGT', 'SLE', 'SLT', 'SGE', 'NET',
+    'UC', 'NET', 'Z', 'NZ', 'V', 'NV', 'N', 'NN',
+    'C', 'NC', 'SGT', 'SLE', 'SLT', 'SGE', 'UGT', 'ULE',
 )
 
 
@@ -131,7 +139,7 @@ class C166Insn:
 
     @property
     def is_branch(self) -> bool:
-        return self.insn_type in (_JMPS, _JMPA, _JMPR)
+        return self.insn_type in (_JMPS, _JMPA, _JMPR, _JMPI)
 
     @property
     def is_call(self) -> bool:
@@ -141,6 +149,7 @@ class C166Insn:
     def is_load(self) -> bool:
         return self.insn_type in (
             _MOV_IMM, _MOV_IMM4, _MOV_LD, _MOV_REG, _MOVBZ, _MOVBS,
+            'MOVB_REG', 'MOVB_IMM',
         )
 
     @property
@@ -338,7 +347,7 @@ class EcuC166Decoder:
         hi = (xram_addr >> 8) & 0xFF
         for off in range(0, size - 3):
             op = data[off]
-            if op == 0xF6 and data[off + 2] == lo and data[off + 3] == hi:
+            if op in (0xF6, 0xF7, 0xC5, 0xD5) and data[off + 2] == lo and data[off + 3] == hi:
                 results.append(
                     self._decode4(self._base_pa + off, data[off: off + 4])
                 )
@@ -446,6 +455,38 @@ class EcuC166Decoder:
                 reg=reg, imm=imm,
             )
 
+        if op in (0x42, 0x43):
+            reg = b1 & 0x0F
+            byte = op == 0x43
+            operand = _byte_reg_name(reg) if byte else f'R{reg:X}'
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'{"CMPB" if byte else "CMP"} {operand}, [{imm:#06x}]',
+                insn_type=_CMPB_MEM if byte else _CMP_MEM,
+                reg=reg, imm=imm,
+            )
+
+        if op in (0x07, 0x47, 0xE7):
+            reg = b1 & 0x0F
+            value = raw[2]
+            mnemonic = {0x07: 'ADDB', 0x47: 'CMPB', 0xE7: 'MOVB'}[op]
+            insn_type = {0x07: 'ADDB_IMM', 0x47: _CMPB_IMM, 0xE7: 'MOVB_IMM'}[op]
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'{mnemonic} {_byte_reg_name(reg)}, #{value:#04x}',
+                insn_type=insn_type,
+                reg=reg, imm=value,
+            )
+
+        if op == 0x26:
+            reg = b1 & 0x0F
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'SUB R{reg:X}, #{imm:#06x}',
+                insn_type='SUB_IMM',
+                reg=reg, imm=imm,
+            )
+
         if op == 0x06:
             reg = b1 & 0x0F
             return C166Insn(
@@ -472,9 +513,10 @@ class EcuC166Decoder:
             target = (pa & 0xFF0000) | imm
             mnemonic = 'CALLA' if op == 0xCA else 'JMPA'
             insn_type = _CALLA if op == 0xCA else _JMPA
+            condition = _JMPR_CC[(b1 >> 4) & 0xF]
             return C166Insn(
                 pa=pa, raw=raw,
-                mnemonic=f'{mnemonic} {(b1 >> 4):X}, #{imm:#06x}  -> PA {target:#08x}',
+                mnemonic=f'{mnemonic} {condition}, #{imm:#06x}  -> PA {target:#08x}',
                 insn_type=insn_type,
                 seg=pa >> 16, imm=imm, target=target,
             )
@@ -573,6 +615,44 @@ class EcuC166Decoder:
                 imm=imm,
             )
 
+        if op in (0x28, 0x48, 0x49):
+            dst = (b1 >> 4) & 0xF
+            mnemonic = {0x28: 'SUB', 0x48: 'CMP', 0x49: 'CMPB'}[op]
+            operand = f'R{dst:X}' if op != 0x49 else _byte_reg_name(dst)
+            if b1 & 0x08:
+                base = b1 & 0x03
+                suffix = '+' if b1 & 0x04 else ''
+                source = f'[R{base:X}{suffix}]'
+                imm = None
+                insn_type = {
+                    0x28: 'SUB_MEM', 0x48: _CMP_MEM, 0x49: _CMPB_MEM,
+                }[op]
+            else:
+                imm = b1 & 0x07
+                source = f'#{imm}'
+                insn_type = {
+                    0x28: 'SUB_IMM3', 0x48: _CMP_IMM3, 0x49: _CMPB_IMM3,
+                }[op]
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'{mnemonic} {operand}, {source}',
+                insn_type=insn_type,
+                reg=dst, imm=imm,
+            )
+
+        if op in (0x40, 0x41):
+            dst = (b1 >> 4) & 0xF
+            src = b1 & 0xF
+            byte = op == 0x41
+            source = _byte_reg_name(src) if byte else f'R{src:X}'
+            operand = _byte_reg_name(dst) if byte else f'R{dst:X}'
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'{"CMPB" if byte else "CMP"} {operand}, {source}',
+                insn_type=_CMPB_REG if byte else _CMP_REG,
+                reg=dst,
+            )
+
         # ADD Rwn, Rwm: opcode 0x00, byte1 = (dst<<4)|src.
         # From PDF opcode table: lower-nibble-0 col, upper-nibble-0 row = ADD.
         # Cross-check: 0x50 (XOR) and 0xF0 (MOV) are at rows 5 and F of the same column.
@@ -599,30 +679,17 @@ class EcuC166Decoder:
                 reg=dst,
             )
 
-        # MOVBZ Rwn, Rbm: opcode 0xC0, byte1 = (dst<<4)|src.
-        # Move byte register Rbm with zero extension into word register Rwn.
-        # From PDF opcode table: lower-nibble-0 col, upper-nibble-C row = MOVBZ.
-        # Seen in MS43 LFSR step function as 'C0 C2' (MOVBZ R12, Rb2) and 'C0 C4' (MOVBZ R12, Rb4).
-        if op == 0xC0:
+        # MOVBZ/MOVBS Rwn, Rbm: high nibble is the word destination.
+        if op in (0xC0, 0xD0):
             dst = (b1 >> 4) & 0xF
             src = b1 & 0xF
             return C166Insn(
                 pa=pa, raw=raw,
-                mnemonic=f'MOVBZ R{dst:X}, Rb{src:X}',
-                insn_type=_MOVBZ,
-                reg=dst,
-            )
-
-        # MOVBS Rwn, Rbm: opcode 0xD0, byte1 = (dst<<4)|src.
-        # Move byte register Rbm with sign extension into word register Rwn.
-        # From PDF opcode table: lower-nibble-0 col, upper-nibble-D row = MOVBS.
-        if op == 0xD0:
-            dst = (b1 >> 4) & 0xF
-            src = b1 & 0xF
-            return C166Insn(
-                pa=pa, raw=raw,
-                mnemonic=f'MOVBS R{dst:X}, Rb{src:X}',
-                insn_type=_MOVBS,
+                mnemonic=(
+                    f'{"MOVBZ" if op == 0xC0 else "MOVBS"} '
+                    f'R{dst:X}, {_byte_reg_name(src)}'
+                ),
+                insn_type=_MOVBZ if op == 0xC0 else _MOVBS,
                 reg=dst,
             )
 
@@ -666,13 +733,11 @@ class EcuC166Decoder:
                 reg=dst,
             )
 
-        # SHL Rwn, #data4: opcode 0x5C, byte1 = (n<<4)|count.
-        # Logical shift left of Rwn by immediate count 0–15.
-        # From PDF table row xC, position 5 (upper nibble 5, lower nibble C).
-        # Seen as '5c 25' (SHL R2, #5) in the MS43 seed-key outer loop.
+        # SHL Rwn, #data4: opcode 0x5C, byte1 = (count<<4)|n.
+        # Seen as '5c 25' (SHL R5, #2) in the MS43 seed-key outer loop.
         if op == 0x5C:
-            dst = (b1 >> 4) & 0xF
-            cnt = b1 & 0xF
+            dst = b1 & 0xF
+            cnt = (b1 >> 4) & 0xF
             return C166Insn(
                 pa=pa, raw=raw,
                 mnemonic=f'SHL R{dst:X}, #{cnt}',
@@ -682,8 +747,6 @@ class EcuC166Decoder:
             )
 
         # SHR Rwn, Rwm: opcode 0x6C, byte1 = (n<<4)|m.
-        # Logical shift right of Rwn by shift count in Rwm (count mod 16).
-        # From PDF table row xC, position 6 (upper nibble 6, lower nibble C).
         if op == 0x6C:
             dst = (b1 >> 4) & 0xF
             cnt = b1 & 0xF
@@ -694,12 +757,10 @@ class EcuC166Decoder:
                 reg=dst,
             )
 
-        # SHR Rwn, #data4: opcode 0x7C, byte1 = (n<<4)|count.
-        # Logical shift right of Rwn by immediate count 0–15.
-        # From PDF table row xC, position 7 (upper nibble 7, lower nibble C).
+        # SHR Rwn, #data4: opcode 0x7C, byte1 = (count<<4)|n.
         if op == 0x7C:
-            dst = (b1 >> 4) & 0xF
-            cnt = b1 & 0xF
+            dst = b1 & 0xF
+            cnt = (b1 >> 4) & 0xF
             return C166Insn(
                 pa=pa, raw=raw,
                 mnemonic=f'SHR R{dst:X}, #{cnt}',
@@ -719,6 +780,21 @@ class EcuC166Decoder:
                 mnemonic, insn_type = f'MOV R{reg:X}, [R{base:X}+]', _MOV_LD
             else:
                 mnemonic, insn_type = f'MOV R{reg:X}, [R{base:X}]', _MOV_LD
+            return C166Insn(pa=pa, raw=raw, mnemonic=mnemonic,
+                            insn_type=insn_type, reg=reg)
+
+        if op in (0x89, 0x99, 0xA9, 0xB9):
+            reg = (b1 >> 4) & 0xF
+            base = b1 & 0xF
+            operand = _byte_reg_name(reg)
+            if op == 0x89:
+                mnemonic, insn_type = f'MOVB [-R{base:X}], {operand}', _MOV_ST
+            elif op == 0xB9:
+                mnemonic, insn_type = f'MOVB [R{base:X}], {operand}', _MOV_ST
+            elif op == 0x99:
+                mnemonic, insn_type = f'MOVB {operand}, [R{base:X}+]', _MOV_LD
+            else:
+                mnemonic, insn_type = f'MOVB {operand}, [R{base:X}]', _MOV_LD
             return C166Insn(pa=pa, raw=raw, mnemonic=mnemonic,
                             insn_type=insn_type, reg=reg)
 
@@ -752,13 +828,26 @@ class EcuC166Decoder:
                 imm=rel,
             )
 
-        if op == 0xF0:
-            dst = (b1 >> 4) & 0xF
-            src = b1 & 0xF
+        if op == 0x9C:
+            reg = (b1 >> 4) & 0xF
+            base = b1 & 0xF
             return C166Insn(
                 pa=pa, raw=raw,
-                mnemonic=f'MOV R{dst:X}, R{src:X}',
-                insn_type=_MOV_REG,
+                mnemonic=f'JMPI {_JMPR_CC[reg]}, [R{base:X}]',
+                insn_type=_JMPI,
+                reg=base,
+            )
+
+        if op in (0xF0, 0xF1):
+            dst = (b1 >> 4) & 0xF
+            src = b1 & 0xF
+            byte = op == 0xF1
+            destination = _byte_reg_name(dst) if byte else f'R{dst:X}'
+            source = _byte_reg_name(src) if byte else f'R{src:X}'
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'{"MOVB" if byte else "MOV"} {destination}, {source}',
+                insn_type='MOVB_REG' if byte else _MOV_REG,
                 reg=dst,
             )
 

@@ -30,6 +30,18 @@ flowchart LR
 
 Immediate `SUBB` is decoded when `0x29` has bit 3 of the second byte clear. The high nibble selects the destination byte register and the low three bits select the immediate value. For example, `29 81` becomes `SUBB RL8, #1` and `29 82` becomes `SUBB RL8, #2`. Other `SUBB` addressing modes remain explicit unknowns rather than being assigned invented semantics. This support makes immediate-count dispatch chains readable without treating every `0x29` form as an immediate instruction.
 
+The decoder also covers the word and byte comparisons, short subtraction, byte moves, and indirect jumps used by table-driven command dispatch. These are small mechanical pieces with a useful result: an analyst can follow a selector from a comparison through a computed table entry instead of disassembling operands as unrelated byte strings.
+
+Three encoding details matter:
+
+- In the short `CMP`, `CMPB`, and `SUB` forms, the high nibble selects the destination. Bit 3 distinguishes register-indirect memory from a three-bit immediate; the low two bits select the indirect register.
+- In `ADDB`, `CMPB`, and `MOVB` four-byte immediate forms, only the first immediate byte is significant. The ISA notation is `RR ## xx`; the `xx` byte is not part of the 8-bit value. For example, `07 F8 0F FF` is `ADDB RL4, #0x0f`, not addition of `0xff0f`.
+- `JMPI` records an indirect branch but leaves `target` as `None`. A table address must be established from surrounding register arithmetic and validated table bytes before assigning a destination.
+
+Condition names now follow the vendor condition-code table: codes 0 through 15 are `UC`, `NET`, `Z`, `NZ`, `V`, `NV`, `N`, `NN`, `C`, `NC`, `SGT`, `SLE`, `SLT`, `SGE`, `UGT`, and `ULE`. Immediate shifts use the high nibble for the count and the low nibble for the destination. These correct earlier renderings; they are decoding fixes, not claims that a firmware security property changed.
+
+Direct stores found by `scan_xram_stores()` include word, byte, zero-extension, and sign-extension forms. As with load scans, a matching immediate is a candidate reference, not proof of an access on every execution path.
+
 Power-of-two images retain the original ROM-mirror folding behavior. Other image sizes are accepted without applying a mirror mask. An image may occupy at most the 24-bit C166 physical address space.
 
 ---
@@ -118,22 +130,24 @@ A power-of-two image size does not prove that ROM mirroring is active. Review th
 | `insn_type` | Machine-readable operation class |
 | `reg` | Selected register number, when applicable |
 | `imm` | Immediate value or direct address, when applicable |
-| `target` | Resolved branch or call target, when applicable |
+| `target` | Resolved branch or call target, when applicable; `None` for an unresolved `JMPI` |
 | `is_call` | True for `CALLS` and `CALLA` |
-| `is_branch` | True for `JMPS`, `JMPA`, and `JMPR` |
+| `is_branch` | True for `JMPS`, `JMPA`, `JMPR`, and `JMPI` |
 
 ---
 
 ## Limitations
 
 - Semantic decoding remains a useful subset, not a complete C166 lifter or decompiler.
-- Unknown instructions do not prove invalid code.
+- Unknown instructions do not prove invalid code. Not every operand, SFR alias, or ISA form is named.
 - Direct scans do not recover every indirect call or computed data reference.
+- `JMPI` does not automatically resolve a table; proving a table target requires surrounding code and bytes.
 - Physical addresses, buffer offsets, code segments, and DPP offsets must not be mixed.
 - Security-relevant results require byte verification and target-specific memory-map review.
 
 ## See also
 
+- [C166 Family Instruction Set Manual](https://www.keil.com/dd/docs/datashts/infineon/c166ism.pdf)
 - [ECU Architecture Detector](ecu-arch-detector.md)
 - [Strict Intel HEX Parser](intel-hex.md)
 - [TI TMS320C28x Decoding](ecu-c28x-decoder.md)

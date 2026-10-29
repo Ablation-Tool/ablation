@@ -91,6 +91,8 @@ for insn in decoder.disasm(code[entry_offset:], image.entry):
 
 Instruction endianness does not determine pointer or relocation endianness. The recovered C111C programs use little-endian ARM instructions but big-endian pointer tables and big-endian relocation entries. Read those words with their observed format, not with the instruction decoder's byte order. Relocations remain unapplied by `BfltImage`, so a pointer found in the file is link-time evidence rather than proof of a runtime address after the self-relocation stub runs.
 
+For independently confirmed little-endian ARM32 images, [BfltArm32](bflt-arm32.md) can resolve aligned pointer candidates and two-level PC-relative literal references. It preserves this link-time/runtime distinction and does not apply the missing runtime load base.
+
 ---
 
 ## What this adds for the user
@@ -118,6 +120,7 @@ Such an adapter should be added only with relocation-aware tests. Extending the 
 
 ## See also
 
+- [bFLT ARM32 Link-Time References](bflt-arm32.md)
 - [Firmware Parsing: From Artifacts to Analysis](firmware-parsing.md)
 - [JFFS2 Filesystem Reader](jffs2.md)
 - [CAEN ASCII-Hex Firmware Containers](caen-ascii-hex.md)

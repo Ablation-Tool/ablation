@@ -2,6 +2,21 @@
 
 ---
 
+## v2.92.0
+
+**C166 table-driven update dispatch and decoding correctness.**
+
+- Added C166 word/byte comparisons, short subtraction, byte immediates and moves, and conditional indirect jumps needed to follow table-driven command dispatch.
+- Corrected condition-code names, immediate-shift operand order, and byte-register names against the vendor ISA reference. `JMPI` remains a branch with an unresolved target until surrounding table evidence resolves it.
+- Direct-reference store scans now include byte, zero-extension, and sign-extension forms as well as word stores.
+- Confirmed A3801 command value 7 through its own jump table at `0x20996`; entry 7 targets `0x2119C`. No `0x8F5A` password-unlock read occurs in its reviewed table/update range.
+- Resolved N1470's update sequence independently: `U`/`u` reaches the prompt at `0x26444`, saves menu state `0xF6`, and its confirmation wrapper requires mode byte `0x8652 != 0` and `Y`/`y` before the same handler copies `update req`. Its direct update route does not read password-unlock byte `0x89AA`.
+- Added independent instruction-form tests and original-artifact assertions for the selector, mode, confirmation, and copy-bound transitions.
+- Added `BfltArm32` for bounded ARM32 disassembly, explicit-endian stored pointers, and two-level PC-relative literal references without applying unknown runtime relocations. Added tests, complete documentation, README capability visibility, and tool-selection guidance.
+- Corrected the C111C `WS_CMD` comparison-call citation to `0x1788`, with its literal load at `0x1780` and result test at `0x178C`. The six recovered executables contain no `/flash` or `update_flash` reference, and the external `/data/mainscript.dat` content is absent, so remote credential mutation and update-script reachability remain a static evidence ceiling rather than a confirmed capability.
+
+---
+
 ## v2.91.0
 
 **C166 update-dispatch recovery and C111C command-socket evidence.**

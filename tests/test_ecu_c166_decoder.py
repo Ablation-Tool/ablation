@@ -683,39 +683,39 @@ def test_decode_jmpr_uc_forward():
     assert insn is not None
     assert insn.insn_type == 'JMPR'
     assert insn.is_branch is True
-    # target = 0 + 2 + 6*2 = 14 = 0x00000E
     assert insn.target == 14
     assert insn.imm == 6
     assert 'UC' in insn.mnemonic
 
 
 def test_decode_jmpr_nz_condition():
-    """JMPR NZ, +16: 0x2D 0x10 — confirmed post-CMP branch in init_ds2_sa_ctx."""
-    raw = _jmpr(cc=2, rel=16)  # 2D 10
+    """Condition code 3 is NZ in the C166 condition-code table."""
+    raw = _jmpr(cc=3, rel=16)  # 3D 10
     dec = EcuC166Decoder(_make_rom(raw))
     insn = dec.decode_one(0)
     assert insn is not None
     assert insn.insn_type == 'JMPR'
-    assert insn.target == 2 + 32  # 0 + 2 + 16*2
+    assert insn.target == 2 + 32
     assert 'NZ' in insn.mnemonic
 
 
 def test_decode_jmpr_backward_branch():
     """JMPR with negative rel — backward loop-back branch."""
-    # cd ed: cc=C=SLE, rel=0xED=-19 (signed) → target = 0 + 2 + (-19)*2 = -36
     raw = bytes([0xCD, 0xED])
     dec = EcuC166Decoder(_make_rom(raw))
     insn = dec.decode_one(0)
     assert insn is not None
     assert insn.insn_type == 'JMPR'
-    # target = 0 + 2 + (-19)*2 = -36 (wraps in 32-bit, fine for a 24-bit addr space)
     assert insn.imm == -19
-    assert 'SLE' in insn.mnemonic
+    assert 'SLT' in insn.mnemonic
 
 
 def test_decode_jmpr_all_conditions():
-    """JMPR decodes all 16 condition codes without error."""
-    cc_names = ['UC','Z','NZ','V','NV','N','NN','C','NC','UGT','ULE','SGT','SLE','SLT','SGE','NET']
+    """All 16 conditions use the vendor encoding, not ordinal flag names."""
+    cc_names = [
+        'UC', 'NET', 'Z', 'NZ', 'V', 'NV', 'N', 'NN',
+        'C', 'NC', 'SGT', 'SLE', 'SLT', 'SGE', 'UGT', 'ULE',
+    ]
     for cc, name in enumerate(cc_names):
         raw = _jmpr(cc=cc, rel=1)
         dec = EcuC166Decoder(_make_rom(raw))
@@ -866,3 +866,76 @@ def test_subb_other_addressing_modes_remain_explicitly_unknown():
     insn = dec.decode_one(0)
     assert insn is not None
     assert insn.insn_type == 'UNKNOWN_2B'
+
+
+@pytest.mark.parametrize('hex_bytes, insn_type, reg, imm, mnemonic', [
+    ('07 F8 0F FF', 'ADDB_IMM', 8, 0x0F, 'ADDB RL4, #0x0f'),
+    ('26 F4 20 00', 'SUB_IMM', 4, 0x20, 'SUB R4, #0x0020'),
+    ('28 45', 'SUB_IMM3', 4, 5, 'SUB R4, #5'),
+    ('28 A9', 'SUB_MEM', 10, None, 'SUB RA, [R1]'),
+    ('28 CE', 'SUB_MEM', 12, None, 'SUB RC, [R2+]'),
+    ('40 48', 'CMP_REG', 4, None, 'CMP R4, R8'),
+    ('48 40', 'CMP_IMM3', 4, 0, 'CMP R4, #0'),
+    ('48 A9', 'CMP_MEM', 10, None, 'CMP RA, [R1]'),
+    ('42 F4 09 00', 'CMP_MEM', 4, 9, 'CMP R4, [0x0009]'),
+    ('41 84', 'CMPB_REG', 8, None, 'CMPB RL4, RL2'),
+    ('49 87', 'CMPB_IMM3', 8, 7, 'CMPB RL4, #7'),
+    ('49 A9', 'CMPB_MEM', 10, None, 'CMPB RL5, [R1]'),
+    ('43 F8 74 8F', 'CMPB_MEM', 8, 0x8F74, 'CMPB RL4, [0x8f74]'),
+    ('47 F8 51 00', 'CMPB_IMM', 8, 0x51, 'CMPB RL4, #0x51'),
+    ('E7 F8 F1 00', 'MOVB_IMM', 8, 0xF1, 'MOVB RL4, #0xf1'),
+    ('F1 84', 'MOVB_REG', 8, None, 'MOVB RL4, RL2'),
+    ('B9 C4', 'MOV_ST', 12, None, 'MOVB [R4], RL6'),
+    ('C0 84', 'MOVBZ', 8, None, 'MOVBZ R8, RL2'),
+    ('D0 E5', 'MOVBS', 14, None, 'MOVBS RE, RH2'),
+    ('4C 48', 'SHL_REG', 4, None, 'SHL R4, R8'),
+    ('5C 24', 'SHL_IMM', 4, 2, 'SHL R4, #2'),
+    ('6C 48', 'SHR_REG', 4, None, 'SHR R4, R8'),
+    ('7C 24', 'SHR_IMM', 4, 2, 'SHR R4, #2'),
+])
+def test_decode_dispatch_instruction_forms(hex_bytes, insn_type, reg, imm, mnemonic):
+    raw = bytes.fromhex(hex_bytes)
+    insn = EcuC166Decoder(_make_rom(raw)).decode_one(0)
+    assert insn is not None
+    assert insn.insn_type == insn_type
+    assert insn.reg == reg
+    assert insn.imm == imm
+    assert insn.mnemonic == mnemonic
+    assert insn.raw == raw
+
+
+def test_jmpi_preserves_unresolved_target():
+    insn = EcuC166Decoder(_make_rom(bytes.fromhex('9C 04'))).decode_one(0)
+    assert insn is not None
+    assert insn.insn_type == 'JMPI'
+    assert insn.mnemonic == 'JMPI UC, [R4]'
+    assert insn.reg == 4
+    assert insn.target is None
+    assert insn.is_branch is True
+    assert insn.is_call is False
+
+
+def test_jmpa_uses_vendor_condition_names():
+    raw = bytes.fromhex('EA 90 A4 88')
+    insn = EcuC166Decoder(_make_rom(raw), base_pa=0x20000).decode_one(0)
+    assert insn is not None
+    assert insn.mnemonic == 'JMPA NC, #0x88a4  -> PA 0x0288a4'
+    assert insn.target == 0x288A4
+
+
+def test_scan_xram_stores_includes_direct_byte_and_extend_forms():
+    body = (
+        bytes.fromhex('F6 F4 52 86')
+        + bytes.fromhex('F7 F8 52 86')
+        + bytes.fromhex('C5 F8 52 86')
+        + bytes.fromhex('D5 F8 52 86')
+    )
+    hits = EcuC166Decoder(_make_rom(body)).scan_xram_stores(0x8652)
+    assert [hit.pa for hit in hits] == [0, 4, 8, 12]
+    assert [hit.mnemonic for hit in hits] == [
+        'MOV [0x8652], R4',
+        'MOVB [0x8652], RL4',
+        'MOVBZ [0x8652], RL4',
+        'MOVBS [0x8652], RL4',
+    ]
+    assert all(hit.is_store for hit in hits)
