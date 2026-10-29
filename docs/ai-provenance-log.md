@@ -47,6 +47,9 @@ The following modules had significant AI-assisted development. All have passed F
 
 | Module | File | AI-assisted | FORGE gate | Session date | Notes |
 |---|---|---|---|---|---|
+| Android cross-layer stack | `android_package.py`, `dex_decompiler.py`, `elf_disassembler.py`, `apk_jni_mapper.py`, `cross_layer_taint.py` | YES | PASS | 2026-10-29 | Bounded XAPK/DEX/ELF analysis, exact JNI mapping, DEX-to-native taint |
+| Android parser/lifter/CLI updates | `apk_parser.py`, `dex_disasm.py`, `dex_lifter.py`, `analyzers/__init__.py`, `cli.py` | YES | PASS | 2026-10-29 | AXML bounds, payload skipping, overload/super handling, Android commands |
+| Android tests and documentation | `tests/test_android_re_tools.py`, `android-cross-layer*.md`, `reference-anomalies/cross-layer-taint.md` | YES | PASS (test module); N/A (docs) | 2026-10-29 | Regression coverage, capability placement, known anomalies, FORGE closure |
 | RH850TaintTracker | `ablation/analyzers/taint_tracker_rh850.py` | YES | PASS | 2026-10-10 | v2.57.0; GHS CC-RH ABI; see rh850-taint-tracker.md |
 | TriCoreTaintTracker | `ablation/analyzers/taint_tracker_tricore.py` | YES | PASS | 2026-10-10 | v2.56.0; AURIX EABI; see tricore-taint-tracker.md |
 | PS3OPDVtableScanner | `ablation/analyzers/ps3_opd_vtable_scanner.py` | YES | PASS | 2026-10-10 | v2.58.0; PS3 Cell PPC64 OPD vtable resolution |
@@ -78,3 +81,4 @@ AI-generated documentation known-anomaly files, safety manual, this log is revie
 | Date | Version | Change |
 |---|---|---|
 | 2026-10-10 | 1.0.0 | Initial committed artifact; closes DOWI-AI-SEC |
+| 2026-10-29 | 1.1.0 | Added Android cross-layer modules, parser/CLI updates, tests, anomalies, and FORGE audit closure |

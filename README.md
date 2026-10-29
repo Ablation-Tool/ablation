@@ -46,7 +46,7 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 |---|---|
 | [**ARK**](docs/reference-modules/harmonyos.md) | ArkTS |
 | [**BEAM**](docs/reference-modules/beam.md) | Erlang BEAM bytecode |
-| [**DEX**](docs/reference-modules/dex.md) | Dalvik · ART |
+| [**DEX**](docs/reference-modules/android-cross-layer.md) | Dalvik · ART · Java-like pseudocode · JNI |
 | [**Java**](docs/reference-modules/java-class-jar-parsing.md) | .class · JAR |
 | [**MicroPython**](docs/reference-modules/micropython.md) | .mpy v6 |
 | [**Python**](docs/reference-modules/python-pyc-scanning.md) | .pyc (3.8–3.12) |
@@ -103,7 +103,7 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 |:---|:---|:---|
 | [**Compiler Defects & Hardening**](docs/reference-modules/compiler-defects.md) | [1](ablation/analyzers/loongarch64_max_not_min_scanner.py)&nbsp;[2](ablation/analyzers/compiler_security_gate.py) | Detects LoongArch64 min/max miscompilations and missing or inconsistent binary hardening. |
 | [**Dangerous Call Classification**](docs/reference-modules/sink-arg-classifier.md) | [1](ablation/analyzers/sink_arg_classifier.py)&nbsp;[2](ablation/analyzers/sink_arg_classifier_arm32.py)&nbsp;[3](ablation/analyzers/sink_arg_classifier_loongarch64.py) | Classifies sink arguments on x86-64, ARM32, and LoongArch64 and filters constant-format calls before taint analysis. |
-| [**Data-Flow Taint Analysis**](docs/reference-modules/taint-analysis.md) | [1](ablation/analyzers/taint_tracker.py)&nbsp;[2](ablation/analyzers/taint_tracker_arm64.py) | Traces attacker-controlled data with function-level analysis on x86-64 and intra- or interprocedural analysis on ARM64. |
+| [**Data-Flow Taint Analysis**](docs/reference-modules/taint-analysis.md) | [1](ablation/analyzers/taint_tracker.py)&nbsp;[2](ablation/analyzers/taint_tracker_arm64.py)&nbsp;[3](ablation/analyzers/cross_layer_taint.py) | Traces attacker-controlled data on x86-64, ARM64, and through DEX/JNI boundaries into direct native sinks. |
 | [**Exploit Development & Scoring**](docs/reference-modules/shellcode-templates.md) | [1](ablation/core/shellcode_utils.py)&nbsp;[2](modules/bare_adapter.py) | Builds encoded shellcode and ROP chains, calculates cyclic offsets, and scores findings with BARE for Metasploit modules. |
 | [**Exploit Path Validation**](docs/reference-modules/finding-validation.md) | [1](modules/path_solver.py)&nbsp;[2](ablation/analyzers/finding_registry.py) | Checks path feasibility with bounded Z3 solving and stores reviewed findings for later analysis and export. |
 | [**Format-String Vulnerabilities**](docs/reference-modules/format-string-scanner.md) | [1](ablation/analyzers/format_string_scanner.py) | Finds non-constant format arguments in logging calls and includes provenance traces for assessing attacker control. |
@@ -150,7 +150,7 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**Android App Analysis**](docs/reference-modules/android-apk-analysis.md) | [1](ablation/core/apk_parser.py)&nbsp;[2](ablation/analyzers/dex_analyzer.py) | Parses APK manifests and DEX metadata and audits exported components, secrets, dangerous APIs, and native interfaces. |
+| [**Android Reverse Engineering**](docs/reference-modules/android-cross-layer.md) | [1](ablation/core/android_package.py)&nbsp;[2](ablation/analyzers/dex_decompiler.py)&nbsp;[3](ablation/analyzers/elf_disassembler.py)&nbsp;[4](ablation/analyzers/apk_jni_mapper.py)&nbsp;[5](ablation/analyzers/cross_layer_taint.py) | Analyzes Android applications end to end: inventories APK/XAPK splits, decodes Android XML, decompiles DEX into Java-like pseudocode, disassembles bundled ELF libraries, maps canonical and dynamically registered JNI methods, and traces network, camera, biometric, and IPC inputs into native sinks. |
 | [**Browser Extension Security**](docs/reference-modules/browser-extension-auditing.md) | [1](ablation/analyzers/browser_extension_auditor.py) | Detects externally connectable extensions whose privileged message handlers process web requests without verifying sender identity. |
 | [**C++ Call Recovery**](docs/reference-modules/cpp-vtable-reconstructor.md) | [1](modules/cpp_vtable_reconstructor.py)&nbsp;[2](ablation/analyzers/vtable_resolver.py) | Reconstructs C++ class hierarchies and resolves ARM64 and x86-64 virtual calls for accurate call graphs. |
 | [**Erlang & MicroPython Analysis**](docs/reference-modules/beam.md) | [1](ablation/analyzers/beam_context.py)&nbsp;[2](modules/mpy_lifter.py) | Lifts BEAM and MicroPython bytecode to pseudocode and flags dynamic execution and controlled hardware or network operations. |

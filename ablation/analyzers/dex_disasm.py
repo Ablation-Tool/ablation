@@ -340,10 +340,11 @@ class DEXInstruction:
     ref_idx:   int = -1   # reference table index, or -1
     literal:   int = 0    # literal value (signed)
     branch:    int = 0    # branch offset in code units (signed, relative to this insn)
+    payload_size: int = 0
 
     def size_cu(self) -> int:
         """Code unit count for this instruction."""
-        return _FMT_SIZE.get(self.fmt, 1)
+        return self.payload_size or _FMT_SIZE.get(self.fmt, 1)
 
     def smali(
         self,
@@ -560,6 +561,34 @@ def decode_code_item(
         word0 = struct.unpack_from("<H", data, raw_off)[0]
         opcode = word0 & 0xFF
         hi_byte = (word0 >> 8) & 0xFF
+
+        if opcode == 0 and hi_byte in (1, 2, 3):
+            if raw_off + 8 > len(data):
+                break
+            if hi_byte == 1:
+                count = struct.unpack_from("<H", data, raw_off + 2)[0]
+                payload_size = 4 + count * 2
+                mnemonic = "packed-switch-payload"
+            elif hi_byte == 2:
+                count = struct.unpack_from("<H", data, raw_off + 2)[0]
+                payload_size = 2 + count * 4
+                mnemonic = "sparse-switch-payload"
+            else:
+                width = struct.unpack_from("<H", data, raw_off + 2)[0]
+                count = struct.unpack_from("<I", data, raw_off + 4)[0]
+                payload_size = 4 + (width * count + 1) // 2
+                mnemonic = "array-data-payload"
+            if payload_size <= 0 or cu + payload_size > insns_size:
+                raise ValueError(f"Invalid DEX payload at code unit {cu}")
+            insns.append(DEXInstruction(
+                cu_offset=cu,
+                opcode=0,
+                mnemonic=mnemonic,
+                fmt="payload",
+                payload_size=payload_size,
+            ))
+            cu += payload_size
+            continue
 
         entry = _OPCODES.get(opcode)
         if entry is None:

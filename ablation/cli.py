@@ -28,6 +28,7 @@ claude.ai workflow (no Claude Code access):
 """
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -1172,6 +1173,92 @@ def cmd_junos(args):
             print(f"{change['delta']:>10} {change['status']:<8} {change['path']}")
 
 
+def _emit_json(report, output=None):
+    text = json.dumps(report, indent=2)
+    if output:
+        Path(output).write_text(text + '\n')
+        print(f"Wrote JSON to {output}")
+    else:
+        print(text)
+
+
+def cmd_android(args):
+    from ablation.core.android_package import AndroidPackage
+    from ablation.analyzers.apk_jni_mapper import APKJNIMapper
+
+    with AndroidPackage.from_path(str(_require_binary(args.package))) as package:
+        if args.android_command == 'inventory':
+            _emit_json(package.to_dict(), args.json)
+            return
+        if args.android_command == 'xml':
+            print(package.decode_xml(args.apk_name, args.entry))
+            return
+        if args.android_command == 'decompile':
+            from ablation.core.apk_parser import APKParser
+            from ablation.analyzers.dex_decompiler import DEXDecompiler
+
+            apk_name = args.apk_name
+            if not apk_name:
+                apk_name = next(
+                    (name for name in package.apk_names() if package.split_id(name) == 'base'),
+                    package.apk_names()[0],
+                )
+            with APKParser.from_bytes(package.read_apk(apk_name), name=apk_name) as apk:
+                decompiler = DEXDecompiler(apk.read_dex(args.dex))
+            if args.class_name:
+                if args.method:
+                    class_name = args.class_name if args.class_name.startswith('L') else 'L' + args.class_name.replace('.', '/') + ';'
+                    matches = [
+                        method for method in decompiler.iter_methods()
+                        if method.class_name == class_name and method.name == args.method
+                    ]
+                    if not matches:
+                        raise SystemExit('error: method not found')
+                    text = '\n\n'.join(decompiler.decompile_method(method) for method in matches)
+                else:
+                    text = decompiler.decompile_class(args.class_name)
+            else:
+                text = json.dumps({
+                    'classes': len(decompiler.classes),
+                    'methods': len(list(decompiler.iter_methods())),
+                    'native_methods': len(list(decompiler.iter_native_methods())),
+                    'hint': 'use --class and optionally --method to emit Java-like source',
+                }, indent=2)
+            if args.output:
+                Path(args.output).write_text(text + '\n')
+                print(f"Wrote decompilation to {args.output}")
+            else:
+                print(text)
+            return
+        if args.android_command == 'jni':
+            mapper = APKJNIMapper(package)
+            graph = mapper.analyze()
+            _emit_json(graph.to_dict(), args.json)
+            return
+        if args.android_command == 'trace':
+            from ablation.analyzers.cross_layer_taint import CrossLayerTaintAnalyzer
+
+            analyzer = CrossLayerTaintAnalyzer(APKJNIMapper(package), max_iterations=args.iterations)
+            report = analyzer.analyze()
+            _emit_json(report.to_dict(), args.json)
+            return
+        raise SystemExit(f"error: unsupported Android command: {args.android_command}")
+
+
+def cmd_elf_disasm(args):
+    from ablation.analyzers.elf_disassembler import ELFDisassembler
+
+    elf = ELFDisassembler.from_path(str(_require_binary(args.binary)))
+    address = int(args.va, 0)
+    if args.function:
+        instructions = elf.disassemble_function(address, thumb=args.thumb)
+    else:
+        instructions = elf.disassemble(address, args.size, thumb=args.thumb)
+    print(f"{elf.name}: {elf.architecture}, {len(instructions)} instructions")
+    for insn in instructions:
+        print(insn.text())
+
+
 def cmd_news(args):
     print(_RECENT_UPDATES)
 
@@ -1212,6 +1299,44 @@ def main():
     p_analyze.add_argument('binary')
     p_analyze.add_argument('--entropy', action='store_true', help='include entropy scan')
     p_analyze.set_defaults(func=cmd_analyze)
+
+    p_android = sub.add_parser('android', help='APK/XAPK, DEX, JNI, and cross-layer analysis')
+    android_sub = p_android.add_subparsers(dest='android_command', metavar='<command>')
+    android_sub.required = True
+    p_android_inventory = android_sub.add_parser('inventory', help='decode package and split APK metadata')
+    p_android_inventory.add_argument('package')
+    p_android_inventory.add_argument('--json', help='write JSON to FILE')
+    p_android_inventory.set_defaults(func=cmd_android)
+    p_android_xml = android_sub.add_parser('xml', help='decode binary Android XML')
+    p_android_xml.add_argument('package')
+    p_android_xml.add_argument('apk_name')
+    p_android_xml.add_argument('entry')
+    p_android_xml.set_defaults(func=cmd_android)
+    p_android_decompile = android_sub.add_parser('decompile', help='emit Java-like DEX source')
+    p_android_decompile.add_argument('package')
+    p_android_decompile.add_argument('--apk', dest='apk_name', help='embedded APK name (default: base)')
+    p_android_decompile.add_argument('--dex', default='classes.dex')
+    p_android_decompile.add_argument('--class', dest='class_name')
+    p_android_decompile.add_argument('--method')
+    p_android_decompile.add_argument('--output', help='write source to FILE')
+    p_android_decompile.set_defaults(func=cmd_android)
+    p_android_jni = android_sub.add_parser('jni', help='map Java native methods to ELF implementations')
+    p_android_jni.add_argument('package')
+    p_android_jni.add_argument('--json', help='write JSON to FILE')
+    p_android_jni.set_defaults(func=cmd_android)
+    p_android_trace = android_sub.add_parser('trace', help='trace DEX sources through JNI to native sinks')
+    p_android_trace.add_argument('package')
+    p_android_trace.add_argument('--iterations', type=int, default=6)
+    p_android_trace.add_argument('--json', help='write JSON to FILE')
+    p_android_trace.set_defaults(func=cmd_android)
+
+    p_elf_disasm = sub.add_parser('elf-disasm', help='disassemble an ELF virtual address')
+    p_elf_disasm.add_argument('binary')
+    p_elf_disasm.add_argument('va', help='virtual address, hexadecimal accepted')
+    p_elf_disasm.add_argument('--size', type=lambda value: int(value, 0), default=0x80)
+    p_elf_disasm.add_argument('--function', action='store_true', help='use symbol/function boundaries')
+    p_elf_disasm.add_argument('--thumb', action='store_true', default=None, help='force ARM Thumb mode')
+    p_elf_disasm.set_defaults(func=cmd_elf_disasm)
 
     p_junos = sub.add_parser('junos', help='Junos package, signature, inventory, and diff workflows')
     junos_sub = p_junos.add_subparsers(dest='junos_command', metavar='<command>')

@@ -92,6 +92,17 @@ for f in findings:
         print("  Direct disassembly from symbol names")
 ```
 
+### Exact bindings and cross-layer tracing
+
+`APKJNIMapper` extends the surface scan with canonical signature matching, `JNINativeMethod` table recovery, loader-based disambiguation, ARM/Thumb disassembly, and Java-to-native call edges. `CrossLayerTaintAnalyzer` propagates network, camera, biometric, and IPC tags through DEX calls and into register-passed JNI arguments, then checks native command, memory, and crypto sinks.
+
+```bash
+ablation android jni app.xapk --json jni-graph.json
+ablation android trace app.xapk --iterations 8 --json taint-report.json
+```
+
+Results are static candidates, not exploitability conclusions. Stack-passed native arguments, indirect calls, unresolved dynamic dispatch, and unsupported ISAs are limitations; iteration limits and unmodeled stack arguments are included in report warnings.
+
 ---
 
 ## Example output

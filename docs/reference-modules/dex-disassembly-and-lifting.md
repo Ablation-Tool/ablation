@@ -22,6 +22,8 @@ print(lifter.lift_class(class_name))
 
 Class names use DEX descriptors such as `Lcom/example/Foo;`. Method selection uses the method name. `dex_index=0` selects `classes.dex`; increment it for additional shards.
 
+`DEXDecompiler` adds an overload-aware class model and selects methods by `method_idx`, avoiding first-name matches for overloaded methods. It also emits native declarations and exact call edges. Switch and array payloads are skipped as data rather than linear-swept as instructions.
+
 ## Output
 
 `disasm_method()` returns a string containing a method signature and decoded instructions. `decode_code_item()` is the lower-level route that yields `DEXInstruction` objects with code-unit offset, opcode, mnemonic, format, registers, reference index, literal, and branch metadata. `disasm_method()` itself does not return that object list.

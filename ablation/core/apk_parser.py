@@ -441,6 +441,11 @@ def _axml_read_string_pool(data: bytes, base: int) -> Tuple[List[str], int]:
     flags         = struct.unpack_from("<I", data, base + 16)[0]
     strings_start = struct.unpack_from("<I", data, base + 20)[0]
 
+    if header_size < 28 or chunk_size < header_size or base + chunk_size > len(data):
+        raise ValueError("Invalid AXML string-pool bounds")
+    if string_count > (chunk_size - header_size) // 4:
+        raise ValueError("AXML string count exceeds its chunk")
+
     offsets_base = base + header_size
     strings_base = base + strings_start  # relative to chunk start, not file start
     # Actually strings_start is relative to the string pool header start
@@ -499,63 +504,71 @@ def _parse_axml(data: bytes) -> Dict:
         raise ValueError(f"Not an XML chunk: {chunk_type:#x}")
 
     strings: List[str] = []
-    pos = 8  # skip outer XML chunk header (type + header_size + chunk_size)
+    namespaces: Dict[int, str] = {}
+    pos = 8
 
-    # --- scan chunks ---
     root: Optional[Dict] = None
-    stack: List[Dict]    = []
+    stack: List[Dict] = []
 
     while pos < len(data) - 7:
         ctype = struct.unpack_from("<H", data, pos)[0]
-        cheader = struct.unpack_from("<H", data, pos + 2)[0]
-        csize  = struct.unpack_from("<I", data, pos + 4)[0]
+        csize = struct.unpack_from("<I", data, pos + 4)[0]
         if csize < 8 or pos + csize > len(data):
             break
 
         if ctype == _CHUNK_STRING_POOL:
             strings, _ = _axml_read_string_pool(data, pos)
 
-        elif ctype in (_CHUNK_XML_START_NS, _CHUNK_XML_END_NS):
-            pass  # namespace mapping not needed for manifest parsing
+        elif ctype == _CHUNK_XML_START_NS:
+            body = pos + 8
+            prefix_idx, uri_idx = struct.unpack_from("<II", data, body + 8)
+            if prefix_idx < len(strings) and uri_idx < len(strings):
+                namespaces[uri_idx] = strings[uri_idx]
 
         elif ctype == _CHUNK_XML_START_ELM:
-            # body starts after 8-byte chunk header
             body = pos + 8
-            _line  = struct.unpack_from("<I", data, body)[0]
-            _comm  = struct.unpack_from("<I", data, body + 4)[0]
             ns_idx = struct.unpack_from("<I", data, body + 8)[0]
             nm_idx = struct.unpack_from("<I", data, body + 12)[0]
-
-            _attr_start = struct.unpack_from("<H", data, body + 16)[0]
-            _attr_size  = struct.unpack_from("<H", data, body + 18)[0]
-            attr_count  = struct.unpack_from("<H", data, body + 20)[0]
+            attr_start = struct.unpack_from("<H", data, body + 16)[0]
+            attr_count = struct.unpack_from("<H", data, body + 20)[0]
 
             tag_name = strings[nm_idx] if nm_idx < len(strings) else f"<tag#{nm_idx}>"
-            node: Dict = {"tag": tag_name, "attrs": {}, "children": []}
+            node: Dict = {
+                "tag": tag_name,
+                "attrs": {},
+                "children": [],
+                "namespace": namespaces.get(ns_idx, ""),
+                "attr_namespaces": {},
+            }
 
-            # ResXMLTree_attrExt starts at body+8; attributeStart is relative to it
-            attr_base = body + 8 + _attr_start
+            attr_base = body + 8 + attr_start
             for i in range(attr_count):
                 ap = attr_base + i * 20
                 if ap + 20 > len(data):
                     break
-                _a_ns     = struct.unpack_from("<I", data, ap)[0]
-                a_name_i  = struct.unpack_from("<I", data, ap + 4)[0]
-                _a_raw    = struct.unpack_from("<I", data, ap + 8)[0]
-                a_val_sz  = struct.unpack_from("<H", data, ap + 12)[0]
-                _a_res0   = data[ap + 14]
+                a_ns = struct.unpack_from("<I", data, ap)[0]
+                a_name_i = struct.unpack_from("<I", data, ap + 4)[0]
+                a_raw = struct.unpack_from("<I", data, ap + 8)[0]
                 a_val_typ = data[ap + 15]
                 a_val_dat = struct.unpack_from("<I", data, ap + 16)[0]
 
                 attr_name = strings[a_name_i] if a_name_i < len(strings) else f"<attr#{a_name_i}>"
-                attr_val  = _aval_to_str(a_val_typ, a_val_dat, strings)
-                node["attrs"][attr_name] = attr_val
+                if a_raw != 0xFFFFFFFF and a_raw < len(strings):
+                    node["attrs"][attr_name] = strings[a_raw]
+                else:
+                    node["attrs"][attr_name] = _aval_to_str(a_val_typ, a_val_dat, strings)
+                node["attr_namespaces"][attr_name] = namespaces.get(a_ns, "")
 
             if stack:
                 stack[-1]["children"].append(node)
             else:
                 root = node
             stack.append(node)
+
+        elif ctype == _CHUNK_XML_TEXT and stack:
+            text_idx = struct.unpack_from("<I", data, pos + 16)[0]
+            if text_idx < len(strings):
+                stack[-1]["text"] = strings[text_idx]
 
         elif ctype == _CHUNK_XML_END_ELM:
             if stack:
@@ -564,6 +577,37 @@ def _parse_axml(data: bytes) -> Dict:
         pos += csize
 
     return root or {}
+
+
+def decode_axml(data: bytes) -> Dict:
+    """Decode Android binary XML into a lossless attribute/element tree."""
+    return _parse_axml(data)
+
+
+def axml_to_xml(data: bytes) -> str:
+    """Decode Android binary XML and serialize it as namespace-aware XML."""
+    import xml.etree.ElementTree as ET
+
+    tree = _parse_axml(data)
+    if not tree:
+        return ""
+
+    ET.register_namespace("android", "http://schemas.android.com/apk/res/android")
+
+    def convert(node: Dict) -> ET.Element:
+        ns = node.get("namespace", "")
+        tag = f"{{{ns}}}{node['tag']}" if ns else node["tag"]
+        element = ET.Element(tag)
+        for name, value in node.get("attrs", {}).items():
+            attr_ns = node.get("attr_namespaces", {}).get(name, "")
+            key = f"{{{attr_ns}}}{name}" if attr_ns else name
+            element.set(key, value)
+        element.text = node.get("text")
+        for child in node.get("children", []):
+            element.append(convert(child))
+        return element
+
+    return ET.tostring(convert(tree), encoding="unicode")
 
 
 # ── Manifest builder from AXML tree ─────────────────────────────────────────
@@ -614,6 +658,7 @@ def _build_manifest(tree: Dict) -> ManifestInfo:
             mf.allow_backup = bak != "false"
             clr = _attr(node, "usesCleartextTraffic")
             mf.uses_cleartext_traffic = clr == "true"
+            mf.network_security_config = _attr(node, "networkSecurityConfig") or None
 
         elif tag in ("activity", "service", "receiver", "provider"):
             name = _attr(node, "name")
@@ -648,17 +693,19 @@ def _build_manifest(tree: Dict) -> ManifestInfo:
 # ── DEX parser internals ─────────────────────────────────────────────────────
 
 def _uleb128(data: bytes, off: int) -> Tuple[int, int]:
-    """Read a ULEB128 integer from data at offset. Returns (value, next_offset)."""
+    """Read a bounded 32-bit ULEB128 integer from data at offset."""
     result = 0
-    shift  = 0
-    while True:
+    shift = 0
+    for _ in range(5):
+        if off >= len(data):
+            raise ValueError("Truncated ULEB128 value")
         b = data[off]
         off += 1
         result |= (b & 0x7F) << shift
         if not (b & 0x80):
-            break
+            return result, off
         shift += 7
-    return result, off
+    raise ValueError("ULEB128 value exceeds 32 bits")
 
 
 def _dex_read_string(data: bytes, off: int) -> str:
@@ -779,6 +826,15 @@ class APKParser:
         inst._zf = zipfile.ZipFile(p, "r")
         return inst
 
+    @classmethod
+    def from_bytes(cls, data: bytes, name: str = "classes.apk") -> "APKParser":
+        """Open an APK held in memory, including an APK embedded in an XAPK."""
+        import io
+
+        inst = cls(Path(name))
+        inst._zf = zipfile.ZipFile(io.BytesIO(data), "r")
+        return inst
+
     def close(self) -> None:
         if self._zf:
             self._zf.close()
@@ -793,7 +849,7 @@ class APKParser:
 
     def parse_manifest(self) -> ManifestInfo:
         """Parse AndroidManifest.xml and return a ManifestInfo."""
-        raw = self._zf.read("AndroidManifest.xml")
+        raw = self.read_file("AndroidManifest.xml")
         tree = _parse_axml(raw)
         return _build_manifest(tree)
 
@@ -806,12 +862,12 @@ class APKParser:
             if re.match(r"^classes\d*\.dex$", n)
         )
         for name in names:
-            data = self._zf.read(name)
+            data = self.read_file(name)
             yield _parse_dex(data, filename=name)
 
     def read_dex(self, name: str = "classes.dex") -> DEXFile:
         """Read a specific DEX file by name."""
-        data = self._zf.read(name)
+        data = self.read_file(name)
         return _parse_dex(data, filename=name)
 
     # ── native libs ───────────────────────────────────────────────────────────
@@ -831,7 +887,7 @@ class APKParser:
         """Extract a native lib by its in-APK path to dest directory."""
         dest.mkdir(parents=True, exist_ok=True)
         out = dest / Path(entry_path).name
-        out.write_bytes(self._zf.read(entry_path))
+        out.write_bytes(self.read_file(entry_path))
         return out
 
     # ── assets / misc ─────────────────────────────────────────────────────────
@@ -839,7 +895,11 @@ class APKParser:
     def list_assets(self) -> List[str]:
         return [n for n in self._zf.namelist() if n.startswith("assets/")]
 
-    def read_file(self, name: str) -> bytes:
+    def read_file(self, name: str, max_size: int = 256 * 1024 * 1024) -> bytes:
+        if max_size <= 0:
+            raise ValueError("max_size must be positive")
+        if self._zf.getinfo(name).file_size > max_size:
+            raise ValueError(f"APK member {name!r} exceeds the {max_size}-byte limit")
         return self._zf.read(name)
 
     def namelist(self) -> List[str]:

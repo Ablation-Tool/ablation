@@ -183,7 +183,7 @@ Columns: **parse** = format recognized and structurally parsed; **extract** = em
 | **NE (Win16)** | ✓ | ✓ | ✗ | ~ [g] | `ne_format_parser.py`, `win16_ne_sweep.py` |
 | **LE/VxD** | ✓ | ✗ | ✗ | ~ [g] | `win16_le_vxd_sweep.py`; VMM service resolution |
 | **MZ/DOS** | ✓ | ✗ | ✗ | ~ [g] | `win16_mz_dos_sweep.py`; heuristic scoring |
-| **APK/DEX** | ✓ | ✓ | ✓ | ~ [h] | `dex_disasm`, `dex_analyzer`, `dex_lifter`, `java_jar_scanner` |
+| **APK/DEX** | ✓ | ✓ | ✓ | ✓ [h] | `android_package`, `dex_decompiler`, `apk_jni_mapper`, `cross_layer_taint` |
 | **ArkTS ABC** | ✓ | ✓ | ✓ | ~ [h] | `abc_parser`, `abc_disasm`, `abc_decompiler` |
 | **JAR/class** | ✓ | ✓ | ~ | ~ [h] | `java_jar_scanner`, `java_decompiler` (modules/) |
 | **BFF+AIX-installp** | ✓ | ✓ | ✗ | ✓ [i] | `aix_bff_extractor`, `aix_big_ar_extractor`, `aix_type0f_stream_splitter` |
@@ -218,7 +218,7 @@ Columns: **parse** = format recognized and structurally parsed; **extract** = em
 
 [g] Win16 NE/LE/MZ formats: sweep drivers exist (`win16_ne_sweep.py`, `win16_le_vxd_sweep.py`, `win16_mz_dos_sweep.py`) providing heuristic scoring. LE/VxD has VMM service resolution (100+ entries). No taint analysis.
 
-[h] DEX/ArkTS/Java: lifters produce pseudo-code. No taint tracker for JVM/Dalvik/ARK bytecode ISAs.
+[h] DEX has fixed-point source propagation and direct ARM JNI/native sink tracing in `cross_layer_taint.py`; JNI mapping currently requires one DEX, and indirect/stack/native-alias precision is limited. ArkTS and JVM class lifters produce pseudo-code but have no equivalent taint tracker.
 
 [i] BFF extraction leads to XCOFF32/XCOFF64 which then uses the XCOFF analysis path.
 
@@ -270,6 +270,9 @@ Columns: **parse** = format recognized and structurally parsed; **extract** = em
 | 22 | RISC-V 64 | `taint_tracker_riscv64.py` | analyzers/ | implemented | RV64GC; lp64/lp64d ABI; `from_context()`; `*w` arithmetic sign-extends tracked conservatively; no stack taint |
 | 23 | TriCore TC1.6x | `taint_tracker_tricore.py` | analyzers/ | implemented | FCALL/FRET leaf-function convention; D[]/A[] register duality; SSOV/SAT/MOV suffix variants; flat ROM via `from_bytes()` |
 | 24 | V850 / RH850 | `taint_tracker_v850.py` | analyzers/ | implemented | labeled `Taint(labels,bound)` model; `prepare`/`dispose` save-LP-slot tracking; flat ROM via `from_bytes()`; andi zero-extends and bounds |
+| — | DEX → JNI → ARM (supplement) | `cross_layer_taint.py` | analyzers/ | implemented (partial) | single-DEX only; fixed-point DEX propagation; direct ARM calls; indirect calls, complex aliases, and some stack arguments unmodeled |
+
+The cross-layer supplement is excluded from the `taint_tracker*.py` filename-count convention below.
 
 ### Taint tracker count summary
 

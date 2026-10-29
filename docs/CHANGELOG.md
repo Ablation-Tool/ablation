@@ -2,6 +2,18 @@
 
 ---
 
+## Unreleased
+
+**Android APK/XAPK, DEX, JNI, and cross-layer taint workflow.**
+
+- Added bounded in-memory APK/XAPK split decoding, namespace/text-aware AXML, overload-aware Java-like DEX decompilation, and byte-backed ARM/Thumb ELF disassembly with PLT/direct-call resolution.
+- Added canonical and `JNINativeMethod` JNI binding recovery with ambiguity reporting, Java-to-native call graphs, and fixed-point network/camera/biometric/IPC tracing into direct native sinks.
+- Added `ablation android inventory|xml|decompile|jni|trace` and `ablation elf-disasm` commands, structured JSON output, an extensive capability reference, a hands-on Android workflow tutorial, and known-anomaly records.
+- FORGE review fixed silent multi-DEX misattribution, unbounded archive/parser reads, repeated-mapper state, duplicate canonical selection, and initialization cleanup. All eleven touched Python files pass FORGE with zero unresolved findings.
+- Validated all 25 B-Unit JNI bindings and a converged 16-iteration trace. Android-focused tests and real-package integration pass; multi-DEX mapping and indirect/stack native precision limits are explicit.
+
+---
+
 ## v2.93.0
 
 **Relocation-aware bFLT analysis and legacy ARM WindowAnalyzer support.**

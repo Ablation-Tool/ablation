@@ -13,6 +13,7 @@ Semantic firmware analysis for vulnerability researchers.
 | [Capability Documentation Standard](documentation-standard.md) | Purpose, concepts, mechanism, rationale, examples, user value, architectural role, limitations, navigation, and evidence rules for every listed capability |
 | [Capability Documentation Audit](capability-audit/CAPABILITY_DOCUMENTATION.md) | Review ledger for all 115 README-linked capability documents, revisions, example-evidence status, and remaining uncertainty |
 | [Ablation Standards](standards-ablation.md) | Tool qualification and security engineering standards: ISO 26262 TCL3, NIST SSDF, CISA SbD, MIL-HDBK-115C; compliance matrix and implementation roadmap |
+| [Known Anomalies: CrossLayerTaintAnalyzer](reference-anomalies/cross-layer-taint.md) | Multi-DEX indices, obfuscated dispatch, native stack arguments, indirect calls, API catalogs, fixed-point limits |
 | [Known Anomalies: ARM32TaintTracker](reference-anomalies/arm32-taint-tracker.md) | Thumb interworking, IT block conditions, indirect BLX, loop fixpoint, VFP/NEON |
 | [Known Anomalies: ARM64TaintTracker](reference-anomalies/arm64-taint-tracker.md) | Stripped binary function discovery, indirect BLR, SVE/NEON, loop fixpoint, kernel module relocs |
 | [Known Anomalies: MIPS32TaintTracker](reference-anomalies/mips32-taint-tracker.md) | O32 mandatory homing, delay slot edge case, indirect JALR, endian default, loop fixpoint |
@@ -52,6 +53,7 @@ Step-by-step guides for common research tasks.
 | [Vulnerability Hunting](workflows/vuln-hunting.md) | Full loop: sweep to confirmed finding to disclosure |
 | [Cross-Version Diffing](workflows/cross-version.md) | Track a function across firmware patch releases |
 | [Go Binary RE](workflows/go-binaries.md) | Stripped Go binaries: pclntab recovery, garbled builds |
+| [Android Reverse Engineering](workflows/android-reverse-engineering.md) | End-to-end APK/XAPK → manifest → DEX → JNI → native taint tutorial, with confirmation and reporting guidance |
 | [Crypto Analysis](workflows/crypto.md) | Encrypted firmware, XOR key recovery, JWT cracking |
 | [Source Code Audit](workflows/source-code-audit.md) | Compress a repo → rank files → confirm findings; full worked example |
 | [KASAN-Oracle](workflows/kasan-oracle.md) | Scan KASAN debug build first; verify candidates in stripped production build |
@@ -136,6 +138,7 @@ Analyze hardware description language source files: extract constants, compare v
 | [Huawei Squashfs Extractor](reference-modules/huawei-squashfs-extractor.md) | HuaweiSquashfsExtractor: pure-Python squashfs v4 XZ reader; ARM64 BCJ filter bypass via FORMAT_RAW; Huawei VRP V600R024+ S6750-H confirmed |
 | [AMI CramFS Extractor](reference-modules/ami-cramfs-extractor.md) | AmiCramFSExtractor: pure-Python reader for AMI-modified CramFS ASPEED AST2xxx BMC; 16-byte inode format: namelen@bits[8:13], data_off in w3; from_image with path and offset; extract_file/extract_all; QTECH G4DCL BMC confirmed |
 | [Android / APK](reference-modules/android.md) | APKParser AXML+DEX, DexAnalyzer, JniBridgeScanner (JNI_OnLoad/Java_*/opaque peer), BinderScanner: exported services, AIDL Stubs, onTransact; LibraryInventory: native.so scanner; arch, exports, JNI count, PLT hook detection, security score, classify_internals |
+| [Android Reverse Engineering Workflow](reference-modules/android-cross-layer.md) | End-to-end AndroidPackage base/split XAPK inventory; namespace/text AXML; overload-aware Java-like DEX; byte-backed ARM/Thumb ELF; exact canonical/JNINativeMethod bindings; fixed-point DEX-to-native taint; single-DEX mapper limit and known anomalies |
 | [SPU Disassembler](reference-modules/spu-disassembler.md) | Cell BE SPU (PS3) instruction decoder: all formats RRR/RI18/RI16/RI10/RR/RI7, confirmed opcode table, frequency/coverage report, embedded SPU ELF extraction |
 | [HarmonyOS / ArkTS](reference-modules/harmonyos.md) | ABCParser Ark Bytecode v9–v13+: header, class walk, method iteration, CodeItem (ULEB128), native/string queries; ARKDisasm: 324-opcode ISA, smali output, call/string-load queries; ABCDecompiler: JS-like pseudocode, accumulator tracking, property/global name resolution via method_idx |
 | [LLM Analyst](reference-modules/llm.md) | LlmAnalyst ReAct agent loop |
@@ -272,6 +275,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
 | Version | Summary |
 |---|---|
+| Unreleased | Added bounded APK/XAPK decoding, overload-aware Java-like DEX decompilation, byte-backed ARM/Thumb ELF disassembly, exact JNI mapping, and converged DEX-to-native taint analysis with FORGE closure and capability documentation. |
 | v2.93.0 | Added relocation-aware BfltBinaryContext with strict and explicit unresolved outcomes, corrected GZIP/GZDATA layouts, added bFLT-backed WindowAnalyzer support, and recovered legacy ARM PLT symbols and direct calls without the A1676 LIEF crash. |
 | v2.92.0 | Expanded C166 dispatch decoding and corrected condition/shift operands; resolved A3801 and N1470 update variants; added BfltArm32 link-time pointer and literal recovery with complete documentation. |
 | v2.91.0 | Added immediate SUBB decoding, bFLT pointer-endianness guidance, corrected A1676 update gating, confirmed C111C command-listener evidence, and documented the ALICE control FPGA command decoder. |

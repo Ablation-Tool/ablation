@@ -221,6 +221,7 @@ def _format_invoke(
     class_short = jtype(class_desc)
 
     is_static   = ins.opcode in (0x71, 0x77)
+    is_super    = ins.opcode in (0x6f, 0x75)
     is_range    = ins.opcode in (0x74, 0x75, 0x76, 0x77, 0x78)
     regs = ins.regs
 
@@ -228,7 +229,7 @@ def _format_invoke(
         obj_expr = class_short
         arg_regs = regs
     else:
-        obj_expr = rv(regs[0]) if regs else 'this'
+        obj_expr = 'super' if is_super else (rv(regs[0]) if regs else 'this')
         arg_regs = regs[1:]
 
     args = [rv(r) for r in arg_regs]
@@ -275,18 +276,27 @@ class DEXLifter:
     def list_methods(self, class_name: str) -> List[str]:
         return self._disasm.list_methods(class_name)
 
-    def lift_method(self, class_name: str, method_name: str) -> str:
+    def lift_method(
+        self,
+        class_name: str,
+        method_name: str,
+        *,
+        method_idx: Optional[int] = None,
+        code_off: Optional[int] = None,
+        access_flags: Optional[int] = None,
+    ) -> str:
         """
         Return pseudo-Java source for a single DEX method.
-        Accepts 'Lcom/foo/Bar;' or 'com.foo.Bar'.
+        Accepts 'Lcom/foo/Bar;' or 'com.foo.Bar'. Supplying method_idx and
+        code_off selects one exact overload instead of the first name match.
         """
         if not class_name.startswith('L'):
             class_name = 'L' + class_name.replace('.', '/') + ';'
-        key = (class_name, method_name)
-        if key not in self._disasm._code_map:
-            return f'// not found: {class_name}->{method_name}'
-
-        code_off, access_flags = self._disasm._code_map[key]
+        if code_off is None or access_flags is None:
+            key = (class_name, method_name)
+            if key not in self._disasm._code_map:
+                return f'// not found: {class_name}->{method_name}'
+            code_off, access_flags = self._disasm._code_map[key]
         dex = self._dex
 
         try:
@@ -299,7 +309,12 @@ class DEXLifter:
         params_start = registers_size - ins_size
         is_static = bool(access_flags & 0x8)
 
-        param_types, ret_desc = _method_proto(dex, class_name, method_name)
+        if method_idx is not None and 0 <= method_idx < len(dex._method_ids):
+            _, proto_idx, _ = dex._method_ids[method_idx]
+            params_str, ret_desc = _proto_str(dex, proto_idx)
+            param_types, ret_desc = _split_proto_params(params_str), ret_desc
+        else:
+            param_types, ret_desc = _method_proto(dex, class_name, method_name)
         ret_type = jtype(ret_desc)
 
         # Initialise register state with parameters
@@ -309,22 +324,19 @@ class DEXLifter:
             r = params_start + i
             if not is_static and i == 0:
                 reg_state[r] = RegVal(jtype(class_name), 'this', True)
+                continue
+            pi = i if is_static else i - 1
+            if pi < len(param_types):
+                pd = param_types[pi]
+                pt = jtype(pd)
+                is_obj = pd not in 'ZBCSIFJD'
             else:
-                pi = i if is_static else i - 1
-                if pi < len(param_types):
-                    pd = param_types[pi]
-                    pt = jtype(pd)
-                    is_obj = pd not in 'ZBCSIFJD'
-                else:
-                    pt, is_obj = 'Object', True
-                pname = f'p{i}'
-                reg_state[r] = RegVal(pt, pname, is_obj)
-                param_decls.append(f'{pt} {pname}')
+                pt, is_obj = 'Object', True
+            pname = f'p{i}'
+            reg_state[r] = RegVal(pt, pname, is_obj)
+            param_decls.append(f'{pt} {pname}')
 
-        if is_static:
-            sig_params = ', '.join(param_decls)
-        else:
-            sig_params = ', '.join(param_decls)  # p0 = this, excluded below
+        sig_params = ', '.join(param_decls)
 
         # Block labels for goto targets
         block_labels = _block_entries(instrs)
@@ -335,11 +347,8 @@ class DEXLifter:
         # Method header
         class_short = class_name[1:-1].split('/')[-1].replace('$', '.')
         lines.append(f'// {class_name[1:-1].replace("/", ".")}.{method_name}')
-        if is_static:
-            lines.append(f'static {ret_type} {method_name}({sig_params}) {{')
-        else:
-            non_this_params = ', '.join(param_decls)
-            lines.append(f'{ret_type} {method_name}({non_this_params}) {{')
+        static = 'static ' if is_static else ''
+        lines.append(f'{static}{ret_type} {method_name}({sig_params}) {{')
         lines.append(f'    // registers={registers_size}  params={ins_size}  outs={outs_size}')
         if instrs:
             lines.append('')

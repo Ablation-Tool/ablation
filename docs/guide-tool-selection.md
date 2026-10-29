@@ -142,6 +142,11 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Detect BYOVD capability classes in a signed Windows kernel driver" | `ByovdDetector.from_pathdriver_path.detect()` |
 | "Analyze a Windows kernel.sys driver" | `KernelDriverAnalyzer.from_path(path).analyze()` |
 | "Decode a Windows IOCTL CTL_CODE value" | `decode_ioctl_code(value)` |
+| "Run end-to-end Android reverse engineering" | Follow `docs/workflows/android-reverse-engineering.md`: inventory → XML → DEX → JNI → native → converged taint |
+| "Inventory base/split APKs in an XAPK" | `ablation android inventory app.xapk --json inventory.json` |
+| "Decode Android binary XML" | `ablation android xml app.xapk base.apk AndroidManifest.xml` |
+| "Recover exact canonical and RegisterNatives JNI bindings" | `APKJNIMapper.from_path(app_xapk).analyze()`; multi-DEX rejected explicitly |
+| "Trace network/camera/biometric/IPC sources through DEX into native sinks" | `ablation android trace app.xapk --iterations 16 --json taint.json`; inspect warnings and sink surface separately |
 | "Find JNI bridge surface in Android APK" | `JniBridgeScanner.from_path(apk).scan()` |
 | "Map Binder service surface in Android APK" | `BinderScanner.from_path(apk).scan()` |
 | "Find 'safe now catastrophic later' rendering architecture risk" | `SourceArchRiskScanner.from_context(ctx).scan()` |
@@ -200,6 +205,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Lift a native function to pseudo-C IR 18 ISA variants" | `BinaryLifter.from_path(elf, arch='arm64').lift_function(va)` |
 | "Lift a SH-2A ECU function from flat ROM to pseudo-C IR" | `BinaryLifter.from_path(rom, arch='sh2a').lift_function(va)` |
 | "Disassemble a DEX method to smali" | `DEXDisasm(dex).disasm_method('Lcom/foo/Bar;', 'methodName')` |
+| "Decompile a DEX class or every overload of one method" | `ablation android decompile app.xapk --class com.example.Native --method process`; output is Java-like pseudocode |
 | "Lift a DEX method to pseudo-Java" | `DEXLifter(dex).lift_method('Lcom/foo/Bar;', 'methodName')` |
 | "Lift a MicroPython.mpy v6 module to pseudo-Python" | `MpyLifter.from_path(mpy).lift_module()` |
 | "Scan Python.pyc bytecode in firmware for dangerous shell/eval calls no source needed" | `PycBytecodeScanner().scan_raw(raw, magic=PYC_MAGICS['3.4'])` |

@@ -138,10 +138,11 @@ The final ledger records all 115 documents in README order, their revisions, and
 | 113 | [dependency-and-supply-chain-tooling.md](../reference-modules/dependency-and-supply-chain-tooling.md) | Revised and reviewed | Target example retained; full-suite baseline |
 | 114 | [binary-ninja-plugin.md](../reference-modules/binary-ninja-plugin.md) | Revised and reviewed | Target example retained; full-suite baseline |
 | 115 | [analysis-rubric.md](../prompts/analysis-rubric.md) | Revised and reviewed | Guide review; API execution not applicable |
+| 116 | [android-cross-layer.md](../reference-modules/android-cross-layer.md) | Added and reviewed | Extensive CLI/API reference plus hands-on tutorial; B-Unit integration and converged trace; FORGE closure linked |
 
 ## Final verification
 
-- All 115 capability targets were reviewed; 65 were revised and 50 required no changes.
+- The original 115 capability targets were reviewed; 65 were revised and 50 required no changes. Entry 116 was added with the Android cross-layer implementation.
 - The related Guardian PAK reference was also rewritten because it documents a README-linked implementation and contained unrelated generic partition text.
 - The final scoped check covered 120 documents: all capability targets plus the standard, this audit, the Guardian reference, the document index, and README. It found zero prose violations.
 - All 1,793 local Markdown links and relative anchors in that scope resolve. Inline code and fenced examples are excluded from link detection.

@@ -112,6 +112,10 @@ from .jni_bridge_scanner import JniBridgeScanner, JniBridgeFinding
 from .binder_scanner import BinderScanner, BinderFinding
 from .dex_disasm import DEXDisasm, DEXInstruction, decode_code_item
 from .dex_lifter import DEXLifter, RegVal
+from .dex_decompiler import DEXDecompiler, DEXClass, DEXMethod, DEXCall
+from .elf_disassembler import ELFDisassembler, ELFSymbol, ELFInstruction, NativeCall
+from .apk_jni_mapper import APKJNIMapper, JNIBinding, JNIGraph
+from .cross_layer_taint import CrossLayerTaintAnalyzer, CrossLayerReport, CrossLayerFinding
 from .binary_lifter import BinaryLifter, NativeVal
 from .hypothesis_models import (
     ConfidenceState, EvidenceRelation, EVIDENCE_FAMILIES, HYPOTHESIS_KINDS,
@@ -234,6 +238,10 @@ __all__ = [
     "BinderScanner", "BinderFinding",
     "DEXDisasm", "DEXInstruction", "decode_code_item",
     "DEXLifter", "RegVal",
+    "DEXDecompiler", "DEXClass", "DEXMethod", "DEXCall",
+    "ELFDisassembler", "ELFSymbol", "ELFInstruction", "NativeCall",
+    "APKJNIMapper", "JNIBinding", "JNIGraph",
+    "CrossLayerTaintAnalyzer", "CrossLayerReport", "CrossLayerFinding",
     "BinaryLifter", "NativeVal",
     # ── Active Hypothesis Engine ────────────────────────────────────────────────
     "ConfidenceState", "EvidenceRelation", "EVIDENCE_FAMILIES", "HYPOTHESIS_KINDS",

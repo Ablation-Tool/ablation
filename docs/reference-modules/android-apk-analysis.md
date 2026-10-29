@@ -116,6 +116,17 @@ for f in critical:
     print(f.fmt())
 ```
 
+### XAPK, XML, and decompiler CLI
+
+`AndroidPackage` opens plain APKs and XAPKs, including in-memory base/configuration APKs. The CLI exposes split inventory, namespace/text-preserving binary XML decoding, overload-aware DEX models, and Java-like output:
+
+```bash
+ablation android inventory app.xapk --json inventory.json
+ablation android xml app.xapk base.apk AndroidManifest.xml
+ablation android decompile app.xapk --class com.example.Native --method process
+ablation elf-disasm libnative.so 0x1234 --function --thumb
+```
+
 ---
 
 ## Example output

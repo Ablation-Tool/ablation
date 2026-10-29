@@ -24,9 +24,9 @@ Android APK files are ZIP containers with binary XML manifests, DEX bytecode, an
 
 **Use the context manager form `APKParser.from_path()`.** The context manager closes the ZIP handle automatically. Without it, the ZIP file descriptor leaks on exception paths.
 
-**Run DEX analysis on all `classes*.dex` files.** `APKParser.dex_files()` returns every DEX in a multidex APK. Analyzing `classes.dex` only misses code split across secondary DEX files, including security-relevant classes in large apps.
+**Run DEX analysis on all `classes*.dex` files.** `APKParser.iter_dex()` yields every DEX in a multidex APK. Analyzing `classes.dex` only misses code split across secondary DEX files, including security-relevant classes in large apps. `APKJNIMapper` and `CrossLayerTaintAnalyzer` currently reject multi-DEX input rather than mixing shard-local method indices.
 
-**Distinguish JNI canonical naming from dynamic registration.** `JniBridgeScanner` flags `JNI_OnLoad` exports as dynamic registration. Dynamic registration means the bridge is not visible from symbol names alone and requires loading the native library to resolve.
+**Distinguish JNI canonical naming from dynamic registration.** `JniBridgeScanner` flags `JNI_OnLoad` exports as dynamic registration. Dynamic registration is not visible from symbol names alone; `APKJNIMapper` can recover `JNINativeMethod` tables statically, without loading the target library.
 
 **Expect name-based search to fail on obfuscated APKs.** Obfuscated APKs use single-letter class and method names. String pool scanning and dangerous-import detection remain effective on obfuscated APKs because they target bytecode patterns, not identifiers.
 
@@ -145,7 +145,7 @@ with APKParser.from_path('/path/to/app.apk') as apk:
     print(mf.package, mf.version_name, mf.version_code)
 ```
 
-XAPK containers are supported: the parser transparently unpacks the inner `base.apk` when the outer ZIP does not contain `AndroidManifest.xml` directly.
+Use `AndroidPackage` for XAPK containers: it reads the embedded base and configuration APKs in memory and returns an `APKParser` for each. `APKParser.from_path()` itself opens a single APK; `APKParser.from_bytes()` handles an already embedded APK without extraction.
 
 ### AXML binary format
 
