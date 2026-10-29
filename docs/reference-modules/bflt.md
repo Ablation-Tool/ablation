@@ -3,7 +3,7 @@
 
 `BfltImage`, `BfltArm32`, and `BfltBinaryContext` provide one bounded workflow for **binary Flat (`bFLT`)** executables: validate the container, recover text/data/BSS and link-time references, apply supported Linux RAM relocations, and build an analysis context with functions, calls, strings, and literal references.
 
-**bFLT means binary Flat. It does not mean binary Floating Point and is not bfloat16.** It is an executable container used mainly by uClinux and other embedded or no-MMU Linux environments. It is unrelated to IBM Granite foundation models, IBM Storage Scale, NVIDIA BlueField, floating-point data types, or machine-learning precision formats.
+**bFLT means binary Flat.** It is an executable container used mainly by uClinux and other embedded or no-MMU Linux environments.
 
 ---
 
