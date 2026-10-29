@@ -164,9 +164,12 @@ class S390Decoder:
             else:
                 operands = f"{_reg(mask)}, {immediate:#x}"
         elif first == 0xE3 and length == 6 and raw[5] in RXE:
-            mnemonic, fmt, known = RXE[raw[5]], "RXE", True
+            mnemonic, fmt, known = RXE[raw[5]], "RXY", True
             r1, x2 = raw[1] >> 4, raw[1] & 15
-            base, displacement = raw[2] >> 4, ((raw[2] & 15) << 8) | raw[3]
+            base = raw[2] >> 4
+            displacement = (raw[4] << 12) | ((raw[2] & 15) << 8) | raw[3]
+            if displacement & 0x80000:
+                displacement -= 0x100000
             operands = f"{_reg(r1)}, {_memory(base, displacement, x2)}"
         elif first == 0xEB and length == 6 and raw[5] in RSE:
             mnemonic, fmt, known = RSE[raw[5]], "RSE", True

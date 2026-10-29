@@ -2,7 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .errors import ZosReError
+from .errors import IbmZosError
 from .functions import recover_functions
 from .io_utils import ensure_directory, write_bytes, write_text
 from .loadmodule import parse_load_image, read_load_image
@@ -95,12 +95,12 @@ def _pipeline(args):
             item = {"dataset": dataset.name, "member": member.name, "raw": str(raw_path)}
             try:
                 image = parse_load_image(member.data, f"{dataset.name}({member.name})")
-            except ZosReError:
+            except IbmZosError:
                 item.update({"kind": "uninterpreted"})
                 if dataset.record_format.startswith("F") and dataset.logical_record_length == 80:
                     try:
                         deck = read_side_deck(raw_path)
-                    except ZosReError:
+                    except IbmZosError:
                         pass
                     else:
                         deck.write(root / member.name)
@@ -120,7 +120,7 @@ def _pipeline(args):
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(prog="python3 -m ablation.zos_re", description="Dependency-free z/OS artifact analysis")
+    parser = argparse.ArgumentParser(prog="python3 -m ablation.ibm_zos", description="Dependency-free z/OS artifact analysis")
     subparsers = parser.add_subparsers(dest="command", required=True)
     commands = (
         ("netdata-list", _netdata_list, "input"),
@@ -163,7 +163,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         return args.handler(args)
-    except (ZosReError, OSError, ValueError, KeyError) as error:
+    except (IbmZosError, OSError, ValueError, KeyError) as error:
         parser.exit(2, f"error: {error}\n")
 
 

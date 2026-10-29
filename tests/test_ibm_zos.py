@@ -6,16 +6,16 @@ import unittest
 from collections import OrderedDict
 from pathlib import Path
 
-from ablation.zos_re.cli import main
-from ablation.zos_re.errors import FormatError, SafetyError
-from ablation.zos_re.functions import decode_cfg, prolog_candidates, recover_functions
-from ablation.zos_re.image import LoadImage
-from ablation.zos_re.loadmodule import parse_load_image
-from ablation.zos_re.netdata import (
+from ablation.ibm_zos.cli import main
+from ablation.ibm_zos.errors import FormatError, SafetyError
+from ablation.ibm_zos.functions import decode_cfg, prolog_candidates, recover_functions
+from ablation.ibm_zos.image import LoadImage
+from ablation.ibm_zos.loadmodule import parse_load_image
+from ablation.ibm_zos.netdata import (
     Member, _extract_members, _parse_directory_record, parse_netdata, parse_text_units,
 )
-from ablation.zos_re.s390 import S390Decoder
-from ablation.zos_re.sid import compare_inventories, demangle_ibm_cpp, parse_side_deck
+from ablation.ibm_zos.s390 import S390Decoder
+from ablation.ibm_zos.sid import compare_inventories, demangle_ibm_cpp, parse_side_deck
 
 
 IBM_RE = Path(os.environ.get("IBM_RE", "/media/cowboy/research/IBM-RE"))
@@ -176,6 +176,12 @@ class S390Tests(unittest.TestCase):
         store = self.decoder.decode(bytes.fromhex("50e0484c"))
         self.assertEqual(store.mnemonic, "st")
 
+    def test_rxy_signed_displacement(self):
+        positive = self.decoder.decode(bytes.fromhex("e30003451250"))
+        self.assertEqual((positive.format, positive.operands), ("RXY", "%r0, 0x12345"))
+        negative = self.decoder.decode(bytes.fromhex("e3000fffff50"))
+        self.assertEqual(negative.operands, "%r0, -0x1")
+
     def test_unknown_instruction_preserves_bytes(self):
         instruction = self.decoder.decode(b"\xff" * 6)
         self.assertFalse(instruction.known)
@@ -251,6 +257,16 @@ class OutputSafetyTests(unittest.TestCase):
                 ppa_image().write(output)
             self.assertEqual(outside.read_bytes(), b"unchanged")
 
+    def test_existing_regular_file_is_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "output"
+            output.mkdir()
+            existing = output / "text.bin"
+            existing.write_bytes(b"unchanged")
+            with self.assertRaises(FileExistsError):
+                ppa_image().write(output)
+            self.assertEqual(existing.read_bytes(), b"unchanged")
+
 
 class CliTests(unittest.TestCase):
     def test_sequential_cli_pipeline(self):
@@ -274,14 +290,14 @@ class IbmGoldenTests(unittest.TestCase):
             "IOC_DLL.sclbsid": ("TSKRIK.SCLBSID", 10, "CLBEIOC", "0d6a244d5cd1cef7de7c70f1f5c1a1c58f2c3130eeedd36ea17dd20dd6d8cf0b"),
         }
         import hashlib
-        from ablation.zos_re.netdata import read_netdata
+        from ablation.ibm_zos.netdata import read_netdata
         for filename, (dsn, count, member, digest) in cases.items():
             parsed = read_netdata(IBM_RE / "zOS-IOC" / filename)
             self.assertEqual(len(parsed.datasets[dsn].members), count)
             self.assertEqual(hashlib.sha256(parsed.datasets[dsn].member_bytes(member)).hexdigest(), digest)
 
     def test_load_image_golden(self):
-        from ablation.zos_re.loadmodule import read_load_image
+        from ablation.ibm_zos.loadmodule import read_load_image
         cases = [
             ("analysis/zos-ioc/3b1b5a8d5eba036b/20261029T031210Z-goff-r2/input/iocchk", 72343, 0xAFC),
             ("analysis/zos-ioc/3b1b5a8d5eba036b/20261029T031210Z-goff-r2/input/iocchk-zip", 72431, 0x69C),
@@ -300,7 +316,7 @@ class IbmGoldenTests(unittest.TestCase):
             self.assertEqual(image.entry_rva, entry, source)
 
     def test_function_golden(self):
-        from ablation.zos_re.loadmodule import read_load_image
+        from ablation.ibm_zos.loadmodule import read_load_image
         cases = [
             ("analysis/zos-ioc/3b1b5a8d5eba036b/20261029T031210Z-goff-r2/input/iocchk", "PPA_LE", 89),
             ("analysis/zos-ioc/3b1b5a8d5eba036b/20261029T031210Z-goff-r2/input/iocchk-zip", "PPA_LE", 85),
@@ -314,7 +330,7 @@ class IbmGoldenTests(unittest.TestCase):
             self.assertEqual(sum(function.kind == kind for function in recovery.functions), count, source)
 
     def test_sid_golden(self):
-        from ablation.zos_re.sid import read_side_deck
+        from ablation.ibm_zos.sid import read_side_deck
         total = 0
         inventories = {}
         for name in ("CLB3D003", "CLB3D004", "CLB3D008", "CLBECOLL", "CLBEIOC"):
