@@ -53,7 +53,7 @@ Relative Markdown document links become Wiki links, including their heading anch
 
 Links to source files become absolute links to the corresponding file on `main`. Relative images, including existing HTML `<img>` tags, use GitHub's raw asset URLs and must exist in the repository. External URLs and local heading anchors are left alone. Fenced code blocks and inline code spans are preserved, so an example that looks like a Markdown link is not rewritten as though it were real navigation.
 
-Mermaid fences become prominent links to the rendered diagram in the canonical repository document, anchored to the current section. This avoids the blank Mermaid frame produced by the Wiki renderer while keeping the visual workflow and its source one click away. Other fenced code blocks and inline code spans are preserved.
+Mermaid fences become prominent links to the rendered diagram in the canonical repository document, anchored to the current section. Their source remains visible in a plain-text code block. This avoids the blank Mermaid frame produced by the Wiki renderer without discarding documentation content or adding a rendering dependency. Other fenced code blocks and inline code spans are preserved.
 
 The publisher handles ordinary inline and reference-style Markdown links. Documents with unusually complex multiline link syntax should use a simple inline destination or an explicit GitHub URL so the result remains easy to verify.
 

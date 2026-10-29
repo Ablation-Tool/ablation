@@ -231,28 +231,28 @@ class WikiPublisher:
         output = []
         fence_character = ""
         fence_length = 0
-        mermaid_fence = False
         heading_anchor = ""
         for line in text.splitlines(keepends=True):
             marker = FENCE_RE.match(line)
             if fence_character:
-                if not mermaid_fence:
-                    output.append(line)
+                output.append(line)
                 if marker:
                     fence = marker.group("fence")
                     remainder = line[marker.end():].strip()
                     if fence[0] == fence_character and len(fence) >= fence_length and not remainder:
                         fence_character = ""
                         fence_length = 0
-                        mermaid_fence = False
                 continue
             if marker:
                 fence = marker.group("fence")
                 fence_character = fence[0]
                 fence_length = len(fence)
                 language = line[marker.end():].strip().split(maxsplit=1)
-                mermaid_fence = bool(language) and language[0].casefold() == "mermaid"
-                output.append(self._mermaid_link(source, heading_anchor) if mermaid_fence else line)
+                if language and language[0].casefold() == "mermaid":
+                    output.append(self._mermaid_link(source, heading_anchor))
+                    output.append(f"{line[:marker.start()]}{fence}text\n")
+                else:
+                    output.append(line)
                 continue
             anchor = self._heading_anchor(line)
             if anchor:

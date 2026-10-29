@@ -141,7 +141,7 @@ def test_replaces_mermaid_with_rendered_diagram_link(tmp_path: Path):
     )
     assert expected in result
     assert "```mermaid" not in result
-    assert "flowchart TD" not in result
+    assert "```text\nflowchart TD\n    A --> B\n```" in result
 
 
 def test_requires_an_empty_output_directory(tmp_path: Path):
