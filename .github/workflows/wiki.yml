@@ -1,0 +1,67 @@
+name: Documentation Wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/wiki/**"
+      - ".github/workflows/wiki.yml"
+      - "tools/publish_wiki.py"
+      - "tests/test_wiki_publishing.py"
+  pull_request:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/wiki/**"
+      - ".github/workflows/wiki.yml"
+      - "tools/publish_wiki.py"
+      - "tests/test_wiki_publishing.py"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: documentation-wiki
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install the test dependency
+        run: python -m pip install pytest
+
+      - name: Test the Wiki publisher
+        run: python -m pytest -q tests/test_wiki_publishing.py
+
+      - name: Build and validate all documentation
+        run: python tools/publish_wiki.py --output "$RUNNER_TEMP/wiki-generated"
+
+      - name: Publish to GitHub Wiki
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          wiki_dir="$RUNNER_TEMP/ablation.wiki"
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" "$wiki_dir"
+          rm -f "$wiki_dir"/*.md
+          cp "$RUNNER_TEMP/wiki-generated/"*.md "$wiki_dir/"
+          git -C "$wiki_dir" config user.name "Nicholas Michael Kloster"
+          git -C "$wiki_dir" config user.email "ablation@nuclide-research.com"
+          git -C "$wiki_dir" add --all
+          if git -C "$wiki_dir" diff --cached --quiet; then
+            echo "Wiki is already current."
+            exit 0
+          fi
+          git -C "$wiki_dir" commit -m "docs: sync Wiki from ${GITHUB_SHA::7}"
+          git -C "$wiki_dir" push origin "HEAD:$(git -C "$wiki_dir" symbolic-ref --short HEAD)"

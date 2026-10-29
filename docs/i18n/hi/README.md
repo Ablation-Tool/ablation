@@ -1,4 +1,4 @@
-<img src="../../../assets/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
+<img src="../../../assets/branding/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
@@ -10,7 +10,7 @@ Claude Code या OpenAI Codex के साथ मिलाने पर य�
 
 ---
 
-![Codex डेमो](../../../assets/screencast-2026-09-30.gif)
+![Codex डेमो](../../../assets/demos/screencast-2026-09-30.gif)
 
 ## क्षमताएं
 

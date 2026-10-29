@@ -1,4 +1,4 @@
-<img src="../../../assets/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
+<img src="../../../assets/branding/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
@@ -10,7 +10,7 @@ Claude Code 또는 OpenAI Codex와 결합하면 완전 자율 리버스 엔지�
 
 ---
 
-![Codex 데모](../../../assets/screencast-2026-09-30.gif)
+![Codex 데모](../../../assets/demos/screencast-2026-09-30.gif)
 
 ## 기능
 
