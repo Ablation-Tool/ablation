@@ -121,9 +121,19 @@ def read_side_deck(path):
 
 
 OPERATORS = {
-    "__aad": "operator+=", "__ad": "operator+", "__asu": "operator-=", "__su": "operator-",
-    "__amu": "operator*=", "__mu": "operator*", "__adv": "operator/=", "__dv": "operator/",
+    "__aad": "operator+=", "__ad": "operator+", "__pl": "operator+",
+    "__asu": "operator-=", "__su": "operator-", "__mi": "operator-",
+    "__amu": "operator*=", "__mu": "operator*", "__ml": "operator*",
+    "__adv": "operator/=", "__dv": "operator/", "__amd": "operator%=",
     "__as": "operator=", "__als": "operator<<", "__ars": "operator>>",
+    "__eq": "operator==", "__ne": "operator!=", "__lt": "operator<",
+    "__gt": "operator>", "__le": "operator<=", "__ge": "operator>=",
+    "__aa": "operator&&", "__oo": "operator||", "__nt": "operator!",
+    "__pp": "operator++", "__mm": "operator--", "__cm": "operator,",
+    "__vc": "operator[]", "__cl": "operator()", "__rf": "operator->",
+    "__rm": "operator->*", "__er": "operator&", "__or": "operator|",
+    "__co": "operator~", "__nw": "operator new", "__dl": "operator delete",
+    "__nwa": "operator new[]", "__dla": "operator delete[]",
 }
 BASIC_TYPES = {
     "v": "void", "b": "bool", "c": "char", "s": "short", "i": "int", "l": "long",
@@ -146,7 +156,7 @@ def _identifier(text, offset):
     return name, end
 
 
-def _qualified_name(text, offset=0):
+def _qualified_name(text, offset=0, types=None):
     names = []
     if text.startswith("Q", offset):
         match = re.match(r"Q(\d+)_", text[offset:])
@@ -160,46 +170,73 @@ def _qualified_name(text, offset=0):
     else:
         name, offset = _identifier(text, offset)
         names.append(name)
+    if text.startswith("XT", offset):
+        offset += 2
+        arguments = []
+        while True:
+            if offset >= len(text):
+                raise ValueError("unterminated template")
+            if text[offset] == "_":
+                offset += 1
+                break
+            argument, offset = _type(text, offset, types)
+            arguments.append(argument)
+        if not arguments:
+            raise ValueError("empty template argument list")
+        names[-1] += "<" + ", ".join(arguments) + ">"
     return "::".join(names), offset
 
 
-def _type(text, offset):
+def _type(text, offset, types=None):
     const = False
     unsigned = False
-    pointer = False
-    reference = False
+    signed = False
+    pointers = 0
+    references = 0
     while offset < len(text):
         qualifier = text[offset]
         if qualifier == "C":
             const = True
         elif qualifier == "U":
             unsigned = True
+        elif qualifier == "S":
+            signed = True
         elif qualifier == "P":
-            pointer = True
+            pointers += 1
         elif qualifier == "R":
-            reference = True
+            references += 1
         else:
             break
         offset += 1
     if offset < len(text) and text[offset] in BASIC_TYPES:
         name = BASIC_TYPES[text[offset]]
         offset += 1
+    elif offset < len(text) and text[offset] == "T":
+        match = re.match(r"T(\d+)", text[offset:])
+        if match is None:
+            raise ValueError("type reference expected")
+        number = int(match.group(1))
+        if types and 1 <= number <= len(types):
+            name = types[number - 1]
+            offset += len(match.group(0))
+        else:
+            name, offset = _qualified_name(text, offset + 1, types)
     elif offset < len(text) and (text[offset].isdigit() or text.startswith("Q", offset)):
-        name, offset = _qualified_name(text, offset)
+        name, offset = _qualified_name(text, offset, types)
     else:
         raise ValueError("unsupported type")
-    prefix = "unsigned " if unsigned else ""
+    prefix = "unsigned " if unsigned else "signed " if signed else ""
     const_prefix = "const " if const else ""
-    suffix = ("*" if pointer else "") + ("&" if reference else "")
+    suffix = "*" * pointers + "&" * references
     return f"{prefix}{const_prefix}{name}{suffix}", offset
 
 
-def _arguments(text, offset):
-    arguments = []
+def _arguments(text, offset, types=None):
+    arguments = [] if types is None else types
     if offset < len(text) and text[offset] == "v" and offset + 1 == len(text):
         return arguments, offset + 1
     while offset < len(text):
-        argument, offset = _type(text, offset)
+        argument, offset = _type(text, offset, arguments)
         arguments.append(argument)
     return arguments, offset
 
@@ -208,14 +245,15 @@ def _method_or_global(operator, text):
     class_name = None
     const_method = False
     offset = 0
+    types = []
     if text and text[0] != "F":
-        class_name, offset = _qualified_name(text, offset)
+        class_name, offset = _qualified_name(text, offset, types)
         if offset < len(text) and text[offset] == "C" and offset + 1 < len(text) and text[offset + 1] == "F":
             const_method = True
             offset += 1
     if offset >= len(text) or text[offset] != "F":
         raise ValueError("function marker expected")
-    arguments, offset = _arguments(text, offset + 1)
+    arguments, offset = _arguments(text, offset + 1, types)
     if offset != len(text):
         raise ValueError("trailing function encoding")
     prefix = f"{class_name}::" if class_name else ""
@@ -223,34 +261,51 @@ def _method_or_global(operator, text):
     return f"{prefix}{operator}({', '.join(arguments)}){suffix}"
 
 
+def _class_basename(class_name):
+    return class_name.split("::")[-1].split("<", 1)[0]
+
+
 def demangle_ibm_cpp(symbol):
     try:
-        if symbol.startswith("__vft"):
+        if symbol.startswith(("__vft", "__vtt")):
             return None, "virtual_table"
+        if symbol.startswith("__ti"):
+            return None, "typeinfo"
+        if symbol.startswith("__fsm_tab__"):
+            return None, "static_table"
+        if symbol.startswith("__op"):
+            encoded, separator, remainder = symbol[4:].partition("__")
+            if separator:
+                conversion, offset = _type(encoded, 0, [])
+                if offset == len(encoded):
+                    return _method_or_global(f"operator {conversion}", remainder), "demangled"
         for prefix, operator in OPERATORS.items():
             marker = prefix + "__"
             if symbol.startswith(marker):
                 return _method_or_global(operator, symbol[len(marker):]), "demangled"
         if symbol.startswith("__ct__"):
-            class_name, offset = _qualified_name(symbol, 6)
+            types = []
+            class_name, offset = _qualified_name(symbol, 6, types)
             if offset >= len(symbol) or symbol[offset] != "F":
                 raise ValueError("constructor marker expected")
-            arguments, offset = _arguments(symbol, offset + 1)
+            arguments, offset = _arguments(symbol, offset + 1, types)
             if offset != len(symbol):
                 raise ValueError("trailing constructor encoding")
-            return f"{class_name}::{class_name.split('::')[-1]}({', '.join(arguments)})", "demangled"
+            return f"{class_name}::{_class_basename(class_name)}({', '.join(arguments)})", "demangled"
         if symbol.startswith("__dt__"):
-            class_name, offset = _qualified_name(symbol, 6)
-            arguments, offset = _arguments(symbol, offset + 1)
+            types = []
+            class_name, offset = _qualified_name(symbol, 6, types)
+            arguments, offset = _arguments(symbol, offset + 1, types)
             if offset != len(symbol) or arguments:
                 raise ValueError("unsupported destructor")
-            return f"{class_name}::~{class_name.split('::')[-1]}()", "demangled"
+            return f"{class_name}::~{_class_basename(class_name)}()", "demangled"
         match = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)__(.+)$", symbol)
         if match:
             name, remainder = match.groups()
-            class_name, offset = _qualified_name(remainder, 0)
+            types = []
+            class_name, offset = _qualified_name(remainder, 0, types)
             if offset < len(remainder) and remainder[offset] == "F":
-                arguments, offset = _arguments(remainder, offset + 1)
+                arguments, offset = _arguments(remainder, offset + 1, types)
                 if offset == len(remainder):
                     return f"{class_name}::{name}({', '.join(arguments)})", "demangled"
         return None, "unparsed"

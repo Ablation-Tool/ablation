@@ -2,11 +2,16 @@ import argparse
 import json
 from pathlib import Path
 
+from .callgraph import build_call_graph
+from .compare import compare_images, compare_side_decks
+from .decompiler import S390Decompiler
 from .errors import IbmZosError
 from .functions import recover_functions
+from .inventory import instruction_inventory
 from .io_utils import ensure_directory, write_bytes, write_text
 from .loadmodule import parse_load_image, read_load_image
 from .netdata import extract_dataset, read_netdata
+from .relocation import relocate_image
 from .s390 import S390Decoder
 from .sid import correlate_functions, read_side_deck
 
@@ -112,10 +117,79 @@ def _pipeline(args):
                     recovery = recover_functions(image, args.cfg, args.maximum)
                     recovery.write(root / f"{member.name}-functions", args.cfg)
                     item["function_count"] = len(recovery.functions)
+                    if args.cfg:
+                        graph = build_call_graph(image, recovery)
+                        graph.write(root / f"{member.name}-callgraph")
+                        item["callgraph_edges"] = len(graph.edges)
             results.append(item)
     summary = {"source": args.input, "items": results}
     write_text(output / "pipeline.json", json.dumps(summary, indent=2) + "\n", args.overwrite)
     _print(summary)
+    return 0
+
+
+def _relocate(args):
+    image = read_load_image(args.input)
+    relocated, report = relocate_image(image, int(args.base, 0))
+    output = ensure_directory(args.output)
+    write_bytes(output / "relocated-text.bin", relocated)
+    write_text(output / "relocations.json", json.dumps(report, indent=2) + "\n")
+    _print({key: value for key, value in report.items() if key != "entries"})
+    return 0
+
+
+def _callgraph(args):
+    image = read_load_image(args.input)
+    recovery = recover_functions(image, True, args.maximum)
+    graph = build_call_graph(image, recovery)
+    graph.write(args.output)
+    result = graph.to_dict()
+    _print({key: value for key, value in result.items() if key not in ("nodes", "edges", "unresolved_calls")})
+    return 0
+
+
+def _decompile(args):
+    image = read_load_image(args.input)
+    recovery = recover_functions(image, True, args.maximum)
+    graph = build_call_graph(image, recovery)
+    decompiler = S390Decompiler(image, recovery, graph)
+    output = ensure_directory(args.output)
+    functions = recovery.functions
+    if args.function is not None:
+        address = int(args.function, 0)
+        functions = [function for function in functions if address in (function.entry_rva, function.code_rva)]
+        if not functions:
+            raise ValueError(f"no function at {address:#x}")
+    results = [decompiler.write(function, output) for function in functions]
+    summary = {
+        "function_count": len(results),
+        "structured_loop_count": sum(result.structured_loop_count for result in results),
+        "unknown_statement_count": sum(result.unknown_statement_count for result in results),
+        "functions": [{key: value for key, value in result.to_dict().items() if key != "pseudo_c"} for result in results],
+    }
+    write_text(output / "decompilation.json", json.dumps(summary, indent=2) + "\n")
+    _print({key: value for key, value in summary.items() if key != "functions"})
+    return 0
+
+
+def _compare(args):
+    result = compare_images(read_load_image(args.left), read_load_image(args.right), args.maximum)
+    write_text(args.output, json.dumps(result, indent=2) + "\n")
+    _print({key: value for key, value in result.items() if not isinstance(value, list)})
+    return 0
+
+
+def _sid_compare(args):
+    result = compare_side_decks(read_side_deck(args.left), read_side_deck(args.right))
+    write_text(args.output, json.dumps(result, indent=2) + "\n")
+    _print(result)
+    return 0
+
+
+def _opcode_inventory(args):
+    result = instruction_inventory(read_load_image(args.input), args.maximum)
+    write_text(args.output, json.dumps(result, indent=2) + "\n")
+    _print({key: value for key, value in result.items() if key not in ("mnemonic_counts", "format_counts", "unknown_opcodes")})
     return 0
 
 
@@ -131,6 +205,12 @@ def build_parser():
         ("sid", _sid, "input output"),
         ("correlate", _correlate, "input output sid"),
         ("pipeline", _pipeline, "input output"),
+        ("relocate", _relocate, "input output"),
+        ("callgraph", _callgraph, "input output"),
+        ("decompile", _decompile, "input output"),
+        ("compare", _compare, "left right output"),
+        ("sid-compare", _sid_compare, "left right output"),
+        ("opcode-inventory", _opcode_inventory, "input output"),
     )
     for name, handler, arguments in commands:
         sub = subparsers.add_parser(name)
@@ -154,6 +234,10 @@ def build_parser():
         sub = subparsers.choices[name]
         sub.add_argument("--cfg", action="store_true")
         sub.add_argument("--maximum", type=int, default=20000)
+    for name in ("callgraph", "decompile", "compare", "opcode-inventory"):
+        subparsers.choices[name].add_argument("--maximum", type=int, default=20000)
+    subparsers.choices["relocate"].add_argument("--base", default="0")
+    subparsers.choices["decompile"].add_argument("--function")
     subparsers.choices["pipeline"].add_argument("--deep", action="store_true")
     return parser
 

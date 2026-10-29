@@ -129,10 +129,17 @@ def prolog_candidates(data, decoder):
                 or base == 4
             )
         )
-        if not save_store:
+        extended_xplink = (
+            base == 4 and second >> 4 == 0x0E and address + 6 <= len(data)
+            and (
+                (first == 0xE3 and data[address + 5] in (0x24, 0x50))
+                or (first == 0xEB and data[address + 5] == 0x24)
+            )
+        )
+        if not save_store and not extended_xplink:
             continue
         instruction = decoder.decode(data, address)
-        if instruction.mnemonic not in ("stm", "st"):
+        if instruction.mnemonic not in ("stm", "st", "stg", "stmg", "sty"):
             continue
         kind = "XPLINK_SAVE_STORE" if base == 4 else "SAVE_STORE_PROLOG"
         result.append(FunctionInfo(address, address, None, kind, "medium"))
@@ -188,7 +195,10 @@ def recover_functions(image, include_cfg=False, maximum_per_function=20000):
     candidates = {}
     for function in ppa_candidates(data):
         candidates[function.entry_rva] = function
+    ppa_code_addresses = {function.code_rva for function in candidates.values()}
     for function in prolog_candidates(data, decoder):
+        if function.entry_rva in ppa_code_addresses:
+            continue
         existing = candidates.get(function.entry_rva)
         if existing is None:
             candidates[function.entry_rva] = function

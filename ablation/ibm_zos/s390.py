@@ -27,6 +27,7 @@ RS = {
     0x86: "bxh", 0x87: "bxle", 0x88: "srl", 0x89: "sll", 0x8A: "sra",
     0x8B: "sla", 0x8C: "srdl", 0x8D: "sldl", 0x8E: "srda", 0x8F: "slda",
     0x90: "stm", 0x98: "lm", 0x99: "trace", 0x9A: "lam", 0x9B: "stam",
+    0xBD: "clm", 0xBF: "icm",
 }
 SI = {0x91: "tm", 0x92: "mvi", 0x93: "ts", 0x94: "ni", 0x95: "cli", 0x96: "oi", 0x97: "xi"}
 SS = {
@@ -36,23 +37,74 @@ SS = {
     0xF3: "unpk", 0xF8: "zap", 0xF9: "cp", 0xFA: "ap", 0xFB: "sp", 0xFC: "mp", 0xFD: "dp",
 }
 RRE = {
-    0xB900: "lpgr", 0xB901: "lngr", 0xB902: "ltgr", 0xB903: "lcgr", 0xB904: "lgr",
+    0xB255: "mvst", 0xB25D: "clst", 0xB25E: "srst",
+    0xB900: "lpgr", 0xB901: "lngr", 0xB902: "ltgr",
+    0xB903: "lcgr", 0xB904: "lgr", 0xB988: "alcgr",
+    0xB998: "alcr", 0xB9BE: "srstu",
 }
-RIL = {0x00: "larl", 0x04: "brcl", 0x05: "brasl"}
+RIL = {
+    0xC0: {
+        0x0: "larl", 0x1: "lgfi", 0x4: "brcl", 0x5: "brasl",
+        0x6: "xihf", 0x7: "xilf", 0x8: "iihf", 0x9: "iilf",
+        0xA: "nihf", 0xB: "nilf", 0xC: "oihf", 0xD: "oilf",
+        0xE: "llihf", 0xF: "llilf",
+    },
+    0xC2: {
+        0x0: "msgfi", 0x1: "msfi", 0x4: "slgfi", 0x5: "slfi",
+        0x8: "agfi", 0x9: "afi", 0xA: "algfi", 0xB: "alfi",
+        0xC: "cgfi", 0xD: "cfi", 0xE: "clgfi", 0xF: "clfi",
+    },
+    0xC4: {
+        0x2: "llhrl", 0x4: "lghrl", 0x5: "lhrl", 0x6: "llghrl",
+        0x7: "sthrl", 0x8: "lgrl", 0xB: "stgrl", 0xC: "lgfrl",
+        0xD: "lrl", 0xE: "llgfrl", 0xF: "strl",
+    },
+    0xC6: {
+        0x0: "exrl", 0x2: "pfdrl", 0x4: "cghrl", 0x5: "chrl",
+        0x6: "clghrl", 0x7: "clhrl", 0x8: "cgrl", 0xA: "clgrl",
+        0xC: "cgfrl", 0xD: "crl", 0xE: "clgfrl", 0xF: "clrl",
+    },
+    0xCC: {
+        0x6: "brcth", 0x8: "aih", 0xA: "alsih", 0xB: "alsihn",
+        0xD: "cih", 0xF: "clih",
+    },
+}
+RIL_PC = {
+    "larl", "llhrl", "lghrl", "lhrl", "llghrl", "sthrl", "lgrl", "stgrl",
+    "lgfrl", "lrl", "llgfrl", "strl", "exrl", "pfdrl", "cghrl", "chrl",
+    "clghrl", "clhrl", "cgrl", "clgrl", "cgfrl", "crl", "clgfrl", "clrl",
+}
+RIL_UNSIGNED = {
+    "xihf", "xilf", "iihf", "iilf", "nihf", "nilf", "oihf", "oilf",
+    "llihf", "llilf", "algfi", "alfi", "slgfi", "slfi", "clgfi", "clfi", "clih",
+}
 RI = {
+    0x0: "tmlh", 0x1: "tmll", 0x2: "tmhh", 0x3: "tmhl",
     0x4: "brc", 0x5: "bras", 0x6: "brct", 0x7: "brctg", 0x8: "lhi",
     0x9: "lghi", 0xA: "ahi", 0xB: "aghi", 0xC: "mhi", 0xD: "mghi",
     0xE: "chi", 0xF: "cghi",
 }
+RI_A5 = {
+    0x0: "iihh", 0x1: "iihl", 0x2: "iilh", 0x3: "iill",
+    0x4: "nihh", 0x5: "nihl", 0x6: "nilh", 0x7: "nill",
+    0x8: "oihh", 0x9: "oihl", 0xA: "oilh", 0xB: "oill",
+    0xC: "llihh", 0xD: "llihl", 0xE: "llilh", 0xF: "llill",
+}
 RXE = {
-    0x50: "sty", 0x54: "ny", 0x55: "cly", 0x56: "oy", 0x57: "xy",
+    0x04: "lg", 0x14: "lgf", 0x15: "lgh", 0x16: "llgf",
+    0x20: "cg", 0x21: "clg", 0x24: "stg", 0x30: "cgf", 0x31: "clgf",
+    0x32: "ltgf", 0x34: "cgh", 0x47: "bic", 0x50: "sty",
+    0x54: "ny", 0x55: "cly", 0x56: "oy", 0x57: "xy",
     0x58: "ly", 0x59: "cy", 0x5A: "ay", 0x5B: "sy", 0x5E: "aly",
     0x5F: "sly", 0x70: "stey", 0x71: "lay", 0x78: "ley", 0x79: "cey",
-    0x7A: "aey", 0x7B: "sey", 0x7E: "auy", 0x7F: "suy",
+    0x7A: "aey", 0x7B: "sey", 0x7E: "auy", 0x7F: "suy", 0x91: "llgh",
 }
-RSE = {0x04: "lmg", 0x24: "stmg"}
+RSE = {
+    0x04: "lmg", 0x20: "clmh", 0x21: "clm", 0x24: "stmg",
+    0x80: "icmh", 0x81: "icm",
+}
 CALLS = {"bal", "balr", "bas", "basr", "bassm", "bras", "brasl"}
-CONDITIONAL = {"bct", "bctr", "brct", "brctg", "bxh", "bxle", "brxh", "brxle"}
+CONDITIONAL = {"bct", "bctr", "brct", "brctg", "brcth", "bxh", "bxle", "brxh", "brxle"}
 
 
 @dataclass
@@ -113,7 +165,7 @@ class S390Decoder:
         if address + length > len(data):
             raise ValueError("truncated S/390 instruction")
         raw = data[address:address + length]
-        opcode2 = raw[:2].hex().upper() if length >= 2 else ""
+        opcode2 = int.from_bytes(raw[:2], "big")
         mnemonic = "unknown"
         operands = raw.hex()
         fmt = "unknown"
@@ -133,7 +185,8 @@ class S390Decoder:
             mnemonic, fmt, known = RS[first], "RS", True
             r1, r3 = raw[1] >> 4, raw[1] & 15
             base, displacement = raw[2] >> 4, ((raw[2] & 15) << 8) | raw[3]
-            operands = f"{_reg(r1)}, {_reg(r3)}, {_memory(base, displacement)}"
+            second = f"{r3:#x}" if mnemonic in ("clm", "icm") else _reg(r3)
+            operands = f"{_reg(r1)}, {second}, {_memory(base, displacement)}"
         elif first in SI and length == 4:
             mnemonic, fmt, known = SI[first], "SI", True
             base, displacement = raw[2] >> 4, ((raw[2] & 15) << 8) | raw[3]
@@ -143,24 +196,32 @@ class S390Decoder:
             b1, d1 = raw[2] >> 4, ((raw[2] & 15) << 8) | raw[3]
             b2, d2 = raw[4] >> 4, ((raw[4] & 15) << 8) | raw[5]
             operands = f"{_memory(b1, d1)}, {_memory(b2, d2)}, {raw[1]:#x}"
+        elif first == 0xA5 and length == 4:
+            mnemonic, fmt, known = RI_A5[raw[1] & 15], "RI", True
+            register = raw[1] >> 4
+            operands = f"{_reg(register)}, {int.from_bytes(raw[2:4], 'big'):#x}"
         elif first == 0xA7 and length == 4 and (raw[1] & 15) in RI:
             extension = raw[1] & 15
             mnemonic, fmt, known = RI[extension], "RI", True
             mask = raw[1] >> 4
-            immediate = _signed(raw[2:4])
+            immediate = int.from_bytes(raw[2:4], "big") if extension < 4 else _signed(raw[2:4])
             if mnemonic in ("brc", "bras", "brct", "brctg"):
                 target = address + immediate * 2
                 operands = f"{mask:#x}, {target:#x}"
             else:
                 operands = f"{_reg(mask)}, {immediate:#x}"
-        elif first == 0xC0 and length == 6 and (raw[1] & 15) in RIL:
+        elif first in RIL and length == 6 and (raw[1] & 15) in RIL[first]:
             extension = raw[1] & 15
-            mnemonic, fmt, known = RIL[extension], "RIL", True
+            mnemonic, fmt, known = RIL[first][extension], "RIL", True
             mask = raw[1] >> 4
-            immediate = _signed(raw[2:6])
-            if mnemonic in ("brcl", "brasl"):
+            immediate = int.from_bytes(raw[2:6], "big") if mnemonic in RIL_UNSIGNED else _signed(raw[2:6])
+            if mnemonic in ("brcl", "brasl", "brcth"):
                 target = address + immediate * 2
-                operands = f"{mask:#x}, {target:#x}"
+                first_operand = _reg(mask) if mnemonic == "brcth" else f"{mask:#x}"
+                operands = f"{first_operand}, {target:#x}"
+            elif mnemonic in RIL_PC:
+                target = address + immediate * 2
+                operands = f"{_reg(mask)}, {target:#x}"
             else:
                 operands = f"{_reg(mask)}, {immediate:#x}"
         elif first == 0xE3 and length == 6 and raw[5] in RXE:
@@ -171,16 +232,22 @@ class S390Decoder:
             if displacement & 0x80000:
                 displacement -= 0x100000
             operands = f"{_reg(r1)}, {_memory(base, displacement, x2)}"
+            mask = r1
         elif first == 0xEB and length == 6 and raw[5] in RSE:
             mnemonic, fmt, known = RSE[raw[5]], "RSE", True
             r1, r3 = raw[1] >> 4, raw[1] & 15
             base, displacement = raw[2] >> 4, ((raw[2] & 15) << 8) | raw[3]
-            operands = f"{_reg(r1)}, {_reg(r3)}, {_memory(base, displacement)}"
+            second = f"{r3:#x}" if mnemonic in ("clm", "clmh", "icm", "icmh") else _reg(r3)
+            operands = f"{_reg(r1)}, {second}, {_memory(base, displacement)}"
         elif first in (0xB2, 0xB3, 0xB9) and length == 4 and opcode2 in RRE:
             mnemonic, fmt, known = RRE[opcode2], "RRE", True
             operands = f"{_reg(raw[2] >> 4)}, {_reg(raw[2] & 15)}"
         flow = "next"
-        if mnemonic in CALLS:
+        if mnemonic in ("balr", "basr") and raw[1] & 15 == 0:
+            flow = "next"
+        elif mnemonic == "balr" and raw[1] >> 4 != 14 and raw[1] & 15 == 14:
+            flow = "return"
+        elif mnemonic in CALLS:
             flow = "call"
         elif mnemonic in CONDITIONAL:
             flow = "conditional_jump"
@@ -188,15 +255,17 @@ class S390Decoder:
             condition = raw[1] >> 4
             register = raw[1] & 15
             mask = condition
-            if condition == 15 and register == 14:
+            if condition == 0:
+                flow = "next"
+            elif condition == 15 and register == 14:
                 flow = "return"
             elif condition == 15:
                 flow = "jump"
             else:
                 flow = "conditional_jump"
-        elif mnemonic in ("bc", "brc", "brcl"):
-            flow = "jump" if mask == 15 else "conditional_jump"
-        if mnemonic in ("bc", "bal", "bct") and x2 == 0 and base == 0:
+        elif mnemonic in ("bc", "brc", "brcl", "bic"):
+            flow = "jump" if mask == 15 else "conditional_jump" if mask else "next"
+        if mnemonic in ("bc", "bal", "bct", "bic") and x2 == 0 and base == 0:
             target = displacement
         elif mnemonic in ("brxh", "brxle") and base == 0:
             target = displacement

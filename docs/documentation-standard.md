@@ -76,8 +76,7 @@ Keep README capability rows alphabetical by display name within each table. Inse
 Review local links, relative anchors, prose, and deterministic examples. Keep audit evidence in [Capability Documentation Audit](capability-audit/CAPABILITY_DOCUMENTATION.md). The three firmware parser references demonstrate the intended style:
 
 - [CAEN ASCII-Hex Firmware Containers](reference-modules/caen-ascii-hex.md)
-- [bFLT v4 Executables](reference-modules/bflt.md)
-- [Relocation-Aware bFLT BinaryContext](reference-modules/bflt-context.md)
+- [bFLT (Binary Flat Format)](reference-modules/bflt.md)
 - [JFFS2 Filesystem Reader](reference-modules/jffs2.md)
 
 For the shared parsing example, see [Firmware Parsing: From Artifacts to Analysis](reference-modules/firmware-parsing.md).

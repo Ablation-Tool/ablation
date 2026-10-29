@@ -115,5 +115,5 @@ Its narrow scope is intentional. A future firmware auto-detection layer could ca
 
 - [Firmware Parsing: From Artifacts to Analysis](firmware-parsing.md)
 - [Strict Intel HEX Parser](intel-hex.md)
-- [bFLT v4 Executables](bflt.md)
+- [bFLT (Binary Flat Format)](bflt.md)
 - [JFFS2 Filesystem Reader](jffs2.md)
