@@ -3,6 +3,10 @@ from collections import Counter
 from .functions import recover_functions
 
 
+def _unknown_key(raw):
+    return (raw[0], raw[1] if len(raw) > 1 else None, raw[-1] if raw[0] in (0xE3, 0xEB, 0xED) else None, len(raw))
+
+
 def instruction_inventory(image, maximum_per_function=20000):
     recovery = recover_functions(image, True, maximum_per_function)
     mnemonics = Counter()
@@ -22,7 +26,7 @@ def instruction_inventory(image, maximum_per_function=20000):
                 formats[instruction.format] += 1
                 continue
             raw = instruction.data
-            key = (raw[0], raw[1] if len(raw) > 1 else None, raw[-1] if raw[0] in (0xE3, 0xEB) else None, len(raw))
+            key = _unknown_key(raw)
             unknown[key] += 1
             examples.setdefault(key, raw.hex())
     unknown_records = [

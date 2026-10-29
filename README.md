@@ -25,7 +25,7 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 | [**MIPS**](docs/reference-modules/mips.md) | MIPS-32 · [nanoMIPS](docs/reference-modules/nanomips.md) · MIPS-64 |
 | [**PowerPC**](docs/reference-modules/ppc32-taint-tracker.md) | PPC-32 · PPC-64 · [VLE](docs/reference-modules/ecu-vle-decoder.md) · [PPC476 Book E](docs/reference-modules/ppc476-lifter.md) · [XCOFF32 / AIX](docs/reference-modules/xcoff32-decompiler.md) |
 | [**RISC-V**](docs/reference-modules/risc-v.md) | RV32 · RV64 · [HiSilicon ext](docs/reference-modules/hisi-rv32-ext.md) |
-| [**S/390**](docs/reference-modules/s390.md) | Big-endian S/390 · z/Arch subset · LE/C++ PPA · XPLINK · Pseudo-C |
+| [**S/390**](docs/reference-modules/s390.md) | Big-endian S/390 · z/Arch subset · LE/C++ PPA · XPLINK · BFP · Pseudo-C |
 | [**x86**](docs/reference-modules/x86.md) | x86-32 · x86-64 |
 | [**Xilinx**](docs/reference-modules/microblaze-decoder.md) | MicroBlaze · [Versal PDI/CDO](docs/reference-modules/versal-pdi.md) · [ZynqMP BOOT.BIN](docs/reference-modules/zynqmp-boot-image.md) |
 

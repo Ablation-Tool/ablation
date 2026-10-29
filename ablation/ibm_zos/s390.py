@@ -27,22 +27,27 @@ RS = {
     0x86: "bxh", 0x87: "bxle", 0x88: "srl", 0x89: "sll", 0x8A: "sra",
     0x8B: "sla", 0x8C: "srdl", 0x8D: "sldl", 0x8E: "srda", 0x8F: "slda",
     0x90: "stm", 0x98: "lm", 0x99: "trace", 0x9A: "lam", 0x9B: "stam",
-    0xA9: "clcle", 0xBD: "clm", 0xBF: "icm",
+    0xA9: "clcle", 0xBA: "cs", 0xBD: "clm", 0xBF: "icm",
 }
 SI = {0x91: "tm", 0x92: "mvi", 0x93: "ts", 0x94: "ni", 0x95: "cli", 0x96: "oi", 0x97: "xi"}
 SS = {
-    0xD0: "trtr", 0xD2: "mvc", 0xD3: "mvz", 0xD4: "nc", 0xD5: "clc", 0xD6: "oc", 0xD7: "xc",
+    0xD0: "trtr", 0xD1: "mvn", 0xD2: "mvc", 0xD3: "mvz", 0xD4: "nc",
+    0xD5: "clc", 0xD6: "oc", 0xD7: "xc",
     0xD9: "mvck", 0xDA: "mvcp", 0xDB: "mvcs", 0xDC: "tr", 0xDD: "trt",
     0xDE: "ed", 0xDF: "edmk", 0xF0: "srp", 0xF1: "mvo", 0xF2: "pack",
     0xF3: "unpk", 0xF8: "zap", 0xF9: "cp", 0xFA: "ap", 0xFB: "sp", 0xFC: "mp", 0xFD: "dp",
 }
 RRE = {
     0xB252: "msr", 0xB255: "mvst", 0xB25D: "clst", 0xB25E: "srst",
-    0xB305: "lxdbr", 0xB349: "cxbr",
+    0xB302: "ltebr", 0xB304: "ldebr", 0xB305: "lxdbr",
+    0xB312: "ltdbr", 0xB319: "cdbr", 0xB31A: "adbr",
+    0xB342: "ltxbr", 0xB349: "cxbr",
     0xB900: "lpgr", 0xB901: "lngr", 0xB902: "ltgr",
     0xB903: "lcgr", 0xB904: "lgr", 0xB988: "alcgr",
     0xB998: "alcr", 0xB9BE: "srstu",
 }
+RRFE_BFP = {0xB35F: "fidbr", 0xB399: "cfdbr"}
+RXE_BFP = {0x19: "cdb", 0x1A: "adb", 0x1C: "mdb", 0x1D: "ddb"}
 RIL = {
     0xC0: {
         0x0: "larl", 0x1: "lgfi", 0x4: "brcl", 0x5: "brasl",
@@ -113,6 +118,7 @@ FPR_MNEMONICS = {
     "mder", "der", "aur", "sur", "std", "ld", "cd", "ad", "sd", "md", "dd",
     "aw", "sw", "ste", "le", "ce", "ae", "se", "mde", "de", "au", "su",
     "stey", "ley", "cey", "aey", "sey", "auy", "suy", "axr", "lxdbr", "cxbr",
+    "ltebr", "ldebr", "ltdbr", "cdbr", "adbr", "ltxbr",
 }
 
 
@@ -249,6 +255,11 @@ class S390Decoder:
             first_register = _fpr(r1) if mnemonic in FPR_MNEMONICS else _reg(r1)
             operands = f"{first_register}, {_memory(base, displacement, x2)}"
             mask = r1
+        elif first == 0xED and length == 6 and raw[4] == 0 and raw[5] in RXE_BFP:
+            mnemonic, fmt, known = RXE_BFP[raw[5]], "RXE", True
+            r1, x2 = raw[1] >> 4, raw[1] & 15
+            base, displacement = raw[2] >> 4, ((raw[2] & 15) << 8) | raw[3]
+            operands = f"{_fpr(r1)}, {_memory(base, displacement, x2)}"
         elif first == 0xEB and length == 6 and raw[5] in RSE:
             mnemonic, fmt, known = RSE[raw[5]], "RSE", True
             r1, r3 = raw[1] >> 4, raw[1] & 15
@@ -258,7 +269,11 @@ class S390Decoder:
         elif first in (0xB2, 0xB3, 0xB9) and length == 4 and opcode2 in RRE:
             mnemonic, fmt, known = RRE[opcode2], "RRE", True
             register = _fpr if mnemonic in FPR_MNEMONICS else _reg
-            operands = f"{register(raw[2] >> 4)}, {register(raw[2] & 15)}"
+            operands = f"{register(raw[3] >> 4)}, {register(raw[3] & 15)}"
+        elif first == 0xB3 and length == 4 and opcode2 in RRFE_BFP and raw[2] & 15 == 0:
+            mnemonic, fmt, known = RRFE_BFP[opcode2], "RRF-e", True
+            first_register = _reg if mnemonic == "cfdbr" else _fpr
+            operands = f"{first_register(raw[3] >> 4)}, {raw[2] >> 4:#x}, {_fpr(raw[3] & 15)}"
         flow = "next"
         if mnemonic in ("balr", "basr") and raw[1] & 15 == 0:
             flow = "next"

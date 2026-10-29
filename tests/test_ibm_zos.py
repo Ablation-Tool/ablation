@@ -13,7 +13,7 @@ from ablation.ibm_zos.decompiler import S390Decompiler, _branch_parts
 from ablation.ibm_zos.errors import FormatError, SafetyError
 from ablation.ibm_zos.functions import FunctionInfo, Recovery, decode_cfg, prolog_candidates, recover_functions
 from ablation.ibm_zos.image import LoadImage, Symbol
-from ablation.ibm_zos.inventory import instruction_inventory
+from ablation.ibm_zos.inventory import _unknown_key, instruction_inventory
 from ablation.ibm_zos.loadmodule import _program_object_symbols, parse_load_image
 from ablation.ibm_zos.netdata import (
     Member, _extract_members, _parse_directory_record, parse_netdata, parse_text_units,
@@ -191,7 +191,7 @@ class S390Tests(unittest.TestCase):
         samples = {
             "a5f60000": "nilh", "a7010001": "tmll", "bd71e000": "clm",
             "bf0f400c": "icm", "b2520016": "msr", "b25e0018": "srst",
-            "b3050000": "lxdbr", "b3490004": "cxbr", "3604": "axr",
+            "b3050000": "lxdbr", "b3490004": "cxbr", "b90400fe": "lgr", "3604": "axr",
             "c20000000001": "msgfi", "e3e040000024": "stg",
             "51514100": "lae", "7120b040": "ms", "d0b85880c1f4": "trtr",
             "a90e0040": "clcle",
@@ -203,8 +203,34 @@ class S390Tests(unittest.TestCase):
         self.assertEqual(self.decoder.decode(bytes.fromhex("51514100")).operands, "%r5, 0x100(%r1,%r4)")
         self.assertEqual(self.decoder.decode(bytes.fromhex("a90e0040")).operands, "%r0, %r14, 0x40")
         self.assertEqual(self.decoder.decode(bytes.fromhex("3604")).operands, "%f0, %f4")
-        self.assertEqual(self.decoder.decode(bytes.fromhex("b3490004")).operands, "%f0, %f0")
+        self.assertEqual(self.decoder.decode(bytes.fromhex("b3490004")).operands, "%f0, %f4")
+        self.assertEqual(self.decoder.decode(bytes.fromhex("b2520016")).operands, "%r1, %r6")
+        self.assertEqual(self.decoder.decode(bytes.fromhex("b90400fe")).operands, "%r15, %r14")
         self.assertEqual(self.decoder.decode(bytes.fromhex("c01000000002")).target, 4)
+
+    def test_bfp_and_atomic_formats(self):
+        samples = {
+            "ba201004": ("cs", "RS", "%r2, %r0, 0x4(%r1)"),
+            "d130482041a2": ("mvn", "SS", "0x820(%r4), 0x1a2(%r4), 0x30"),
+            "b3020000": ("ltebr", "RRE", "%f0, %f0"),
+            "b3040042": ("ldebr", "RRE", "%f4, %f2"),
+            "b3120000": ("ltdbr", "RRE", "%f0, %f0"),
+            "b3190004": ("cdbr", "RRE", "%f0, %f4"),
+            "b31a0002": ("adbr", "RRE", "%f0, %f2"),
+            "b3420000": ("ltxbr", "RRE", "%f0, %f0"),
+            "b35f5000": ("fidbr", "RRF-e", "%f0, 0x5, %f0"),
+            "b3995060": ("cfdbr", "RRF-e", "%r6, 0x5, %f0"),
+            "ed00d2800019": ("cdb", "RXE", "%f0, 0x280(%r13)"),
+            "ed00d010001a": ("adb", "RXE", "%f0, 0x10(%r13)"),
+            "ed00b000001c": ("mdb", "RXE", "%f0, 0x0(%r11)"),
+            "ed00b000001d": ("ddb", "RXE", "%f0, 0x0(%r11)"),
+        }
+        for encoded, expected in samples.items():
+            with self.subTest(encoded=encoded):
+                instruction = self.decoder.decode(bytes.fromhex(encoded))
+                self.assertEqual((instruction.mnemonic, instruction.format, instruction.operands), expected)
+        self.assertFalse(self.decoder.decode(bytes.fromhex("ed00d2800119")).known)
+        self.assertFalse(self.decoder.decode(bytes.fromhex("b3995160")).known)
 
     def test_linkage_and_never_branch_semantics(self):
         self.assertEqual(self.decoder.decode(bytes.fromhex("051e")).flow, "return")
@@ -420,6 +446,21 @@ class CallGraphTests(unittest.TestCase):
         self.assertEqual(graph.edges[1].evidence, "summary:0x80")
         self.assertEqual(graph.edges[1].target_name, "target")
 
+    def test_rre_return_summary(self):
+        target_raw = bytes.fromhex("c01000000040b90400f107fe")
+        target = FunctionInfo(0x80, 0x80, "target", "PPA_CPP", "high", instructions=list(S390Decoder().linear(target_raw)), complete=True)
+        caller_raw = bytes.fromhex("c0e50000004005ef051e")
+        caller = FunctionInfo(0, 0, "caller", "PPA_CPP", "high", instructions=list(S390Decoder().linear(caller_raw)), complete=True)
+        text = caller_raw + bytes(0x90 - len(caller_raw))
+        text = text[:0x80] + target_raw + text[0x80 + len(target_raw):]
+        image = LoadImage(
+            "rre_summary", "", "PDS_LOAD_MODULE", text,
+            [Symbol("caller", 0, "LR"), Symbol("target", 0x80, "LR")], [], None, [],
+        )
+        graph = build_call_graph(image, Recovery([caller, target], []))
+        self.assertEqual(len(graph.edges), 2)
+        self.assertEqual(graph.edges[1].evidence, "summary:0x80")
+
     def test_unresolved_external_and_binder_links(self):
         raw = bytes.fromhex("053058f0301005ef051e")
         function = FunctionInfo(0, 0, "caller", "PPA_CPP", "high", instructions=list(S390Decoder().linear(raw)), complete=True)
@@ -453,6 +494,11 @@ class DecompilerTests(unittest.TestCase):
         self.assertIn("stack_4", result.stack_variables)
         self.assertIn("return (stack_4 + (r13 + 0x8));", result.pseudo_c)
 
+    def test_rre_register_expression(self):
+        image, function = self.function(bytes.fromhex("b90400fe07fe"))
+        result = S390Decompiler(image).decompile(function)
+        self.assertIn("return r14;", result.pseudo_c)
+
     def test_simple_loop_structuring(self):
         image, function = self.function(bytes.fromhex("a71e0000a7840006a71affffa7f4fffa07fe"))
         result = S390Decompiler(image).decompile(function)
@@ -470,6 +516,15 @@ class DecompilerTests(unittest.TestCase):
         self.assertGreaterEqual(result.structured_loop_count, 1)
         self.assertIn("for (;;)", result.pseudo_c)
         self.assertIn("continue;", result.pseudo_c)
+
+    def test_structured_labels_are_defined(self):
+        for encoded in ("a71e0000a7840004a7000001a700000207fe", "a71e0000a7840006a71affffa7f4fffa07fe"):
+            image, function = self.function(bytes.fromhex(encoded))
+            result = S390Decompiler(image).decompile(function)
+            lines = [line.strip() for line in result.pseudo_c.splitlines()]
+            labels = {line[:-1] for line in lines if line.startswith("loc_") and line.endswith(":")}
+            targets = {line.split("goto ", 1)[1].rstrip(";") for line in lines if "goto loc_" in line}
+            self.assertEqual(targets - labels, set())
 
     def test_function_pointer_and_width_types(self):
         image, function = self.function(bytes.fromhex("58f0d00405ef051e"))
@@ -520,6 +575,7 @@ class ComparisonAndInventoryTests(unittest.TestCase):
         self.assertEqual(result["function_count"], 1)
         self.assertEqual(result["unknown_instruction_count"], 0)
         self.assertGreaterEqual(result["known_instruction_count"], 1)
+        self.assertEqual(_unknown_key(bytes.fromhex("ed00d2800019")), (0xED, 0, 0x19, 6))
 
 
 class OutputSafetyTests(unittest.TestCase):

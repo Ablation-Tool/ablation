@@ -108,7 +108,8 @@ def _writes_register(instruction, register):
     ):
         return operand[0] == register
     if instruction.format in ("RR", "RRE") and instruction.mnemonic not in ("cr", "clr", "cgr", "ltr", "ltgr"):
-        return instruction.data[1] >> 4 == register
+        operand_byte = 1 if instruction.format == "RR" else 3
+        return instruction.data[operand_byte] >> 4 == register
     if instruction.format == "RI" and instruction.mnemonic not in ("brc", "bras", "brct", "brctg", "brcth"):
         return instruction.data[1] >> 4 == register
     if instruction.format == "RIL" and instruction.mnemonic not in ("brcl", "brasl", "brcth"):
@@ -151,8 +152,9 @@ def _return_summaries(recovery, relocations):
                 values[instruction.data[1] >> 4] = instruction.target
                 continue
             if instruction.format in ("RR", "RRE") and instruction.mnemonic in ("lr", "lgr"):
-                destination = instruction.data[1] >> 4
-                source = instruction.data[1] & 15
+                encoded = instruction.data[1] if instruction.format == "RR" else instruction.data[3]
+                destination = encoded >> 4
+                source = encoded & 15
                 if source in values:
                     values[destination] = values[source]
                 else:
@@ -302,8 +304,9 @@ def build_call_graph(image, recovery, decks=()):
                 external_values.pop(instruction.data[1] >> 4, None)
                 continue
             if instruction.format in ("RR", "RRE") and instruction.mnemonic in ("lr", "lgr"):
-                destination = instruction.data[1] >> 4
-                source = instruction.data[1] & 15
+                encoded = instruction.data[1] if instruction.format == "RR" else instruction.data[3]
+                destination = encoded >> 4
+                source = encoded & 15
                 if source in values:
                     values[destination] = values[source]
                 else:

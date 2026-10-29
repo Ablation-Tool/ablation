@@ -218,7 +218,8 @@ class S390Decompiler:
                 registers[destination] = f"({registers.get(destination, f'r{destination}')} {operations[mnemonic]} ({instruction.operands.split(', ')[-1]}))"
                 return True
         if instruction.format in ("RR", "RRE"):
-            left, right = raw[1] >> 4, raw[1] & 15
+            encoded = raw[1] if instruction.format == "RR" else raw[3]
+            left, right = encoded >> 4, encoded & 15
             if mnemonic in ("balr", "basr") and right == 0:
                 registers[left] = _hex(instruction.end)
                 return True
@@ -425,11 +426,13 @@ class S390Decompiler:
         if join in consumed or join == block.start:
             return None
         condition = _branch_parts(block.condition, block.branch_mask)
-        lines = [f"  if ({condition}) {{"]
+        lines = [f"loc_{block.start:x}:", f"  if ({condition}) {{"]
+        lines.append(f"    loc_{true_block.start:x}:")
         lines.extend(self._emit_statements(true_block, 4))
         if true_block.terminator.flow == "return":
             lines.extend(self._emit_goto(true_block, 4))
         lines.append("  } else {")
+        lines.append(f"    loc_{false_block.start:x}:")
         lines.extend(self._emit_statements(false_block, 4))
         if false_block.terminator.flow == "return":
             lines.extend(self._emit_goto(false_block, 4))
@@ -513,6 +516,7 @@ class S390Decompiler:
             ):
                 condition = _branch_parts(block.condition, block.branch_mask)
                 lines.append("  do {")
+                lines.append(f"    loc_{block.start:x}:")
                 lines.extend(self._emit_statements(block, 4))
                 lines.append(f"  }} while ({condition});")
                 consumed.add(block.start)
@@ -534,7 +538,9 @@ class S390Decompiler:
                         if body_address != body_target:
                             condition = _negate(condition)
                         lines.append(f"  while ({condition}) {{")
+                        lines.append(f"    loc_{block.start:x}:")
                         lines.extend(self._emit_statements(block, 4))
+                        lines.append(f"    loc_{body.start:x}:")
                         lines.extend(self._emit_statements(body, 4))
                         lines.append("  }")
                         consumed.update((block.start, body.start))
