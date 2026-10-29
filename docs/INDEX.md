@@ -266,6 +266,7 @@ Analyze hardware description language source files: extract constants, compare v
 |---|---|
 | [Claude Code](integrations/claude-code.md) | Using Ablation inside a Claude Code session |
 | [Binary Ninja](integrations/binja.md) | Plugin installation and commands |
+| [Documentation Wiki](reference-modules/documentation-wiki.md) | Automatic, validated publication of the complete documentation library into a navigable GitHub Wiki |
 
 ---
 
