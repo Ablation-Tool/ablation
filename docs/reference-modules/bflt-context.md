@@ -22,6 +22,27 @@ Keeping those steps separate makes a wrong address assumption easier to see and 
 
 ---
 
+## End-to-end workflow
+
+```mermaid
+flowchart TD
+    A["bFLT file or recovered bytes"] --> B["BfltImage validates the layout"]
+    B --> C["Expand GZIP or GZDATA when present"]
+    C --> D["relocate_bflt maps slots and stored values"]
+    D --> E{"Can every value be mapped?"}
+    E -->|Yes| F["Relocated image; relocation_complete=True"]
+    E -->|No: strict default| G["BfltRelocationError"]
+    E -->|No: allow_unresolved| H["Partial image; relocation_complete=False"]
+    F --> I["BfltBinaryContext"]
+    H --> I
+    I --> J["Functions, calls, strings, and literal references"]
+    J --> K["WindowAnalyzer.from_bflt()"]
+```
+
+The central decision is whether a stored value has a valid mapping. Strict mode stops on the first unmapped value. The permissive path preserves that value and records why it was not relocated, so later analysis cannot silently mistake a partial image for a complete one.
+
+---
+
 ## Why this is a capability, not just another parser
 
 A capability is reusable analysis functionality, not merely a way to read a file format. `BfltImage` answers where text, initialized data, BSS, and relocation entries live. `BfltBinaryContext` answers what those bytes mean at a selected load base.
