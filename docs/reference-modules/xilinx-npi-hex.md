@@ -129,6 +129,8 @@ The feature is intentionally a cog rather than a second PDI analyzer. Its value 
 
 ## Known target
 
+**FELIX**, or Front-End LInk eXchange, is the ATLAS readout and control platform that moves detector data, timing, and configuration traffic between front-end lpGBT links and host computers. **FLX182** is the card and firmware target in this example, not the file format. This build targets an `xcvm1802` Versal AI Core FPGA and uses PDI as its packaged boot and configuration container. RNPI and RCDO represent the configuration side of that system, not the complete detector readout algorithm or a running-system inventory.
+
 The FELIX FLX182 XSA contains both supported representations:
 
 | Input | Decoded bytes | Decoded SHA-256 | CDO result |
