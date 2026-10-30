@@ -1,7 +1,9 @@
 import argparse
 import json
 
-from .errors import TimiError
+from .catalogue import parse_legacy_catalogue
+from .errors import FormatError, TimiError
+from .program import read_program_bytes, recover_program, recover_program_file
 from .savf import read_savf, read_qzrdpack_header
 
 
@@ -34,6 +36,28 @@ def _qzrdpack_info(args):
     return 0
 
 
+def _catalogue_info(args):
+    save = read_savf(args.input, args.maximum)
+    item = next((item for item in save.items if item.object_type == 0x19DB), None)
+    if item is None:
+        raise FormatError("SAVF has no legacy catalogue item")
+    _print(parse_legacy_catalogue(item, f"{args.input}:{item.name}").to_dict())
+    return 0
+
+
+def _program_info(args):
+    _print(recover_program_file(args.input).to_dict())
+    return 0
+
+
+def _program_extract(args):
+    data = read_program_bytes(args.input)
+    recovery = recover_program(data, str(args.input))
+    output = recovery.extract(data, args.output)
+    _print({"output": str(output), "code_start": recovery.code_start, "code_end_inclusive": recovery.code_end})
+    return 0
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="python3 -m ablation.ibm_timi", description="Dependency-free IBM i TIMI and SAVF analysis")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -41,13 +65,16 @@ def build_parser():
         ("savf-info", _savf_info, "input"),
         ("savf-extract", _savf_extract, "input output"),
         ("qzrd-info", _qzrdpack_info, "input"),
+        ("catalogue-info", _catalogue_info, "input"),
+        ("program-info", _program_info, "input"),
+        ("program-extract", _program_extract, "input output"),
     )
     for name, handler, arguments in commands:
         sub = subparsers.add_parser(name)
         for argument in arguments.split():
             sub.add_argument(argument)
         sub.set_defaults(handler=handler)
-        if name.startswith("savf-"):
+        if name in ("savf-info", "savf-extract", "catalogue-info"):
             sub.add_argument("--maximum", type=int, default=512 * 1024 * 1024)
         if name == "savf-info":
             sub.add_argument("--summary", action="store_true")

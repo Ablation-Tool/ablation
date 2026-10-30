@@ -99,6 +99,10 @@ class SaveItem:
         return OBJECT_TYPES.get(self.object_type)
 
     @property
+    def metadata_length(self):
+        return int(self.metadata_field, 16)
+
+    @property
     def sha256(self):
         return hashlib.sha256(self.raw).hexdigest()
 
@@ -145,7 +149,7 @@ class SaveFile:
             "record_checksums": self.checksum_report,
             "global_checksum": self.global_checksum,
             "item_count": len(self.items),
-            "catalogue_status": "legacy catalogue not decoded; item evidence retained",
+            "catalogue_status": "catalogue-info supports the verified legacy layout; trailing metadata is undecoded",
             "items": [item.to_dict() for item in self.items],
         }
 
