@@ -143,6 +143,9 @@ def recover_program(data, source_name="<memory>"):
     if len(data) < 0x400:
         raise FormatError("program item is too short")
     object_header = parse_object_header(data)
+    if _u16(data, object_header.segment_offset) == 0x0181:
+        from .opm import recover_opm_program
+        return recover_opm_program(data, source_name, object_header)
     header = object_header.program_header_offset
     pointers = {}
     for name, offset in POINTER_FIELDS.items():

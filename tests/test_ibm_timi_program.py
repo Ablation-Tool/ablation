@@ -87,12 +87,6 @@ class ProgramRecoveryTests(unittest.TestCase):
             with self.subTest(offset=offset):
                 self.assertEqual(data[offset:offset + 4].hex(), encoding)
 
-    def test_cl_variants_are_rejected(self):
-        for filename in ("02-QZRDPDSPCL.bin", "04-QZRDPEXTCL.bin"):
-            with self.subTest(filename=filename):
-                with self.assertRaises(UnsupportedFormatError):
-                    recover_program((RUN / "input" / filename).read_bytes())
-
     def test_malformed_headers_and_pointers(self):
         data = bytearray((RUN / "input/01-QZRDPDSP.bin").read_bytes())
         data[0x222:0x224] = b"\x00\x00"

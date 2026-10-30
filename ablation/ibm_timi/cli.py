@@ -2,7 +2,7 @@ import argparse
 import json
 
 from .catalogue import parse_legacy_catalogue
-from .errors import FormatError, TimiError
+from .errors import FormatError, TimiError, UnsupportedFormatError
 from .program import read_program_bytes, recover_program, recover_program_file
 from .savf import read_savf, read_qzrdpack_header
 
@@ -58,6 +58,15 @@ def _program_extract(args):
     return 0
 
 
+def _opm_decode(args):
+    data = read_program_bytes(args.input)
+    recovery = recover_program(data, str(args.input))
+    if not hasattr(recovery, "decode_at"):
+        raise UnsupportedFormatError("OPM instruction decoding requires an OPM program")
+    _print(recovery.decode_at(data, int(args.offset, 0)))
+    return 0
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="python3 -m ablation.ibm_timi", description="Dependency-free IBM i TIMI and SAVF analysis")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -68,6 +77,7 @@ def build_parser():
         ("catalogue-info", _catalogue_info, "input"),
         ("program-info", _program_info, "input"),
         ("program-extract", _program_extract, "input output"),
+        ("opm-decode", _opm_decode, "input offset"),
     )
     for name, handler, arguments in commands:
         sub = subparsers.add_parser(name)
