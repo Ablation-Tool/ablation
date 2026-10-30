@@ -12,6 +12,13 @@
 - FORGE review fixed silent multi-DEX misattribution, unbounded archive/parser reads, repeated-mapper state, duplicate canonical selection, and initialization cleanup. All eleven touched Python files pass FORGE with zero unresolved findings.
 - Validated all 25 B-Unit JNI bindings and a converged 16-iteration trace. Android-focused tests and real-package integration pass; multi-DEX mapping and indirect/stack native precision limits are explicit.
 
+**Versal embedded CDO recovery.**
+
+- Added `VersalPdi.embedded_cdo_sections()` to reconstruct checksum-valid CDO images from three-word-prefixed keyhole payloads with original offsets and container provenance.
+- Added bounded `trailing_words` support for analyzing declarations that end before the actual command stream without hiding the original parse error.
+- Recovered four SLR1 images from the FLX155 package and confirmed a one-word NPI length shortfall with a derived normalized validation image.
+- Added synthetic reconstruction, invalid-checksum, rejection, trailing-data, and large-section tests plus capability and tool-selection documentation.
+
 **FELIX firmware capability documentation.**
 
 - Added a dedicated FELIX Firmware Analysis reference covering PDI, XSA, RNPI/RCDO, MicroBlaze boot ELFs, source diffs, and build metadata.

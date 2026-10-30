@@ -358,6 +358,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Determine PDI type (pld/boot) and extract sync word count" | `vp.result.pdi_type`, `vp.result.sync_word_count` |
 | "Recover an optional Git identifier from a Versal PDI" | `VersalPdi.from_path(path).git_hash()`; returns an empty string when all candidate words are zero |
 | "List all CDO sections in a PDI and their command counts" | `VersalPdi.from_path(path).cdo_sections()` — each `CdoSection` has `.offset`, `.length_words`, `.commands` |
+| "Recover CDO images embedded in keyhole payloads" | `vp.embedded_cdo_sections()`; returns original offsets, reconstructed data, container provenance, and parse errors; use `trailing_words` for bounded length analysis |
 | "Extract all NPI register writes from a PDI's CDO sections" | iterate `cdo.commands` filtering `cmd.npi_addr is not None` |
 | "Find all CFICDR/PL partitions (bitstream) in a PDI" | `[ph for ph in vp.partitions() if ph.is_pl]` |
 | "Batch-parse all .pdi files in a directory for build provenance" | `VersalPdi.scan_directory(dir, '*.pdi')` — each result has `.git_hash()` |

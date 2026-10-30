@@ -258,6 +258,21 @@ class CdoSection:
 
 
 @dataclass(frozen=True)
+class EmbeddedCdoSection:
+    """A CDO image reconstructed from consecutive keyhole payloads."""
+
+    offset: int
+    container_offset: int
+    command_offset: int
+    data: bytes
+    section: CdoSection
+
+    @property
+    def complete(self) -> bool:
+        return not self.section.parse_error and self.section.consumed_words == self.section.length_words
+
+
+@dataclass(frozen=True)
 class DmaWriteSegment:
     """One memory load described by a GENERIC DmaWrite command."""
 
@@ -402,6 +417,8 @@ class VersalPdi:
 
     MAX_CDO_COMMANDS = 50_000  # safety cap per CDO section
     MAX_PDI_BYTES = 512 * 1024 * 1024
+    MAX_EMBEDDED_CDO_SECTIONS = 64
+    MAX_EMBEDDED_CDO_BYTES = MAX_PDI_BYTES
 
     def __init__(self, data: bytes, label: str = "") -> None:
         if len(data) > self.MAX_PDI_BYTES:
@@ -904,6 +921,83 @@ class VersalPdi:
                     section_offset=sec.offset,
                 ))
         return segments
+
+    def embedded_cdo_sections(self, trailing_words: int = 0) -> List[EmbeddedCdoSection]:
+        """Reconstruct embedded CDO images, with optional trailing words for length analysis."""
+        if not 0 <= trailing_words <= 16:
+            raise ValueError("trailing_words must be between 0 and 16")
+        embedded: List[EmbeddedCdoSection] = []
+        embedded_bytes = 0
+        seen = set()
+        for container in self.result.cdo_sections:
+            if len(embedded) >= self.MAX_EMBEDDED_CDO_SECTIONS or embedded_bytes >= self.MAX_EMBEDDED_CDO_BYTES:
+                break
+            commands = container.commands
+            for start_index, start in enumerate(commands):
+                if len(embedded) >= self.MAX_EMBEDDED_CDO_SECTIONS or embedded_bytes >= self.MAX_EMBEDDED_CDO_BYTES:
+                    break
+                if start.module_id != CDO_MOD_GENERIC or start.cmd_id != CDO_CMD_KEYHOLE:
+                    continue
+                first = self.command_payload(start)
+                search = 16
+                while True:
+                    if len(embedded) >= self.MAX_EMBEDDED_CDO_SECTIONS or embedded_bytes >= self.MAX_EMBEDDED_CDO_BYTES:
+                        break
+                    magic_offset = first.find(CDO_MAGIC, search)
+                    if magic_offset < 0:
+                        break
+                    search = magic_offset + 1
+                    prefix_offset = magic_offset - 4
+                    if prefix_offset < 12 or magic_offset + 16 > len(first):
+                        continue
+                    prefix, magic, version, length_w, checksum = struct.unpack_from(
+                        "<5I", first, prefix_offset)
+                    if (version >> 16) > 10:
+                        continue
+                    calculated = (~(prefix + magic + version + length_w)) & 0xFFFFFFFF
+                    if calculated != checksum:
+                        continue
+                    declared_size = 20 + length_w * 4
+                    output_size = declared_size + trailing_words * 4
+                    if output_size > self.MAX_PDI_BYTES:
+                        continue
+                    offset = start.payload_offset + magic_offset
+                    if offset in seen:
+                        continue
+                    output = bytearray()
+                    for command_index in range(start_index, len(commands)):
+                        command = commands[command_index]
+                        payload = self.command_payload(command)
+                        if command_index == start_index:
+                            output += payload[prefix_offset:]
+                        elif command.module_id == CDO_MOD_GENERIC and command.cmd_id == CDO_CMD_KEYHOLE:
+                            if len(payload) < 12:
+                                break
+                            output += payload[12:]
+                        else:
+                            output += payload
+                        if len(output) >= output_size:
+                            break
+                    if len(output) < output_size:
+                        continue
+                    data = bytes(output[:output_size])
+                    nested = VersalPdi.from_bytes(data[:declared_size], f"{self._label}:embedded@{offset:#x}")
+                    sections = nested.cdo_sections()
+                    if (len(sections) != 1 or sections[0].offset != 4
+                            or sections[0].header_checksum_valid is not True):
+                        continue
+                    if embedded_bytes + len(data) > self.MAX_EMBEDDED_CDO_BYTES:
+                        continue
+                    embedded_bytes += len(data)
+                    embedded.append(EmbeddedCdoSection(
+                        offset=offset,
+                        container_offset=container.offset,
+                        command_offset=start.offset,
+                        data=data,
+                        section=sections[0],
+                    ))
+                    seen.add(offset)
+        return embedded
 
     # ------------------------------------------------------------------
     # Reporting

@@ -35,6 +35,7 @@ from ablation.analyzers.versal_pdi import (
     CDO_CMD_WRITE,
     CDO_CMD_WRITE64,
     CDO_CMD_DMA_WRITE,
+    CDO_CMD_KEYHOLE,
     CDO_CMD_NOP,
     CDO_CMD_END_WORD,
     CDO_CMD_LOADER_SET_IMAGE_INFO,
@@ -116,6 +117,12 @@ def _make_write_cmd(addr: int, value: int) -> list:
     """Return WRITE32 command words: header + addr + value."""
     cmd_word = (0x0002 << 16) | (CDO_MOD_GENERIC << 8) | CDO_CMD_WRITE
     return [cmd_word, addr, value]
+
+
+def _make_keyhole_cmd(data_words: list) -> list:
+    payload = [1, 0x0A100000, 0x4000] + data_words
+    header = (0xFF << 16) | (CDO_MOD_GENERIC << 8) | CDO_CMD_KEYHOLE
+    return [header, len(payload)] + payload
 
 
 # ---------------------------------------------------------------------------
@@ -1050,6 +1057,64 @@ class TestCdoValidationAndExtraction:
         data[0x104:0x108] = b"BAD!"
         vp = VersalPdi.from_bytes(bytes(data))
         assert vp.cdo_sections() == []
+
+
+class TestEmbeddedCdoSections:
+
+    def _wrap(self, inner: bytes) -> bytes:
+        words = list(struct.unpack(f"<{len(inner) // 4}I", inner))
+        outer = _make_cdo(_make_keyhole_cmd(words[:6]) + _make_keyhole_cmd(words[6:]))
+        return b"\x00" * 4 + outer
+
+    def test_split_keyhole_payloads_are_reconstructed(self):
+        inner = _u32le(4) + _make_cdo(
+            _make_write_cmd(0xF1000000, 0x12345678) + _make_nop_cmd(1), prefix=4)
+        vp = VersalPdi.from_bytes(self._wrap(inner))
+        assert len(vp.cdo_sections()) == 1
+        embedded = vp.embedded_cdo_sections()
+        assert len(embedded) == 1
+        assert embedded[0].offset == 44
+        assert embedded[0].container_offset == 4
+        assert embedded[0].command_offset == 20
+        assert embedded[0].data == inner
+        assert embedded[0].section.header_checksum_valid is True
+        assert embedded[0].complete
+
+    def test_invalid_embedded_checksum_is_rejected(self):
+        inner = bytearray(_u32le(4) + _make_cdo(_make_nop_cmd(1), prefix=4))
+        inner[16] ^= 1
+        vp = VersalPdi.from_bytes(self._wrap(bytes(inner)))
+        assert vp.embedded_cdo_sections() == []
+
+    def test_embedded_byte_limit_is_enforced(self, monkeypatch):
+        inner = _u32le(4) + _make_cdo(_make_nop_cmd(1), prefix=4)
+        monkeypatch.setattr(VersalPdi, "MAX_EMBEDDED_CDO_BYTES", 1)
+        vp = VersalPdi.from_bytes(self._wrap(inner))
+        assert vp.embedded_cdo_sections() == []
+
+    def test_non_keyhole_payload_is_not_scanned(self):
+        vp = VersalPdi.from_bytes(b"\x00" * 4 + _make_cdo([0x00060103, 0xF1000000, 0]))
+        assert vp.embedded_cdo_sections() == []
+
+    def test_declared_short_stream_preserves_parse_error(self):
+        prefix = 4
+        magic = struct.unpack("<I", CDO_MAGIC)[0]
+        command = _make_write_cmd(0xF1000000, 0x12345678)
+        length_words = 2
+        checksum = (~(prefix + magic + 0x200 + length_words)) & 0xFFFFFFFF
+        inner = b"".join(_u32le(word) for word in [prefix, magic, 0x200, length_words, checksum] + command)
+        vp = VersalPdi.from_bytes(self._wrap(inner))
+        embedded = vp.embedded_cdo_sections()
+        assert len(embedded) == 1
+        assert len(embedded[0].data) == 28
+        assert "truncated command" in embedded[0].section.parse_error
+        assert not embedded[0].complete
+        trailing = vp.embedded_cdo_sections(trailing_words=1)
+        assert len(trailing) == 1
+        assert trailing[0].data == inner
+        assert "truncated command" in trailing[0].section.parse_error
+        with pytest.raises(ValueError, match="between 0 and 16"):
+            vp.embedded_cdo_sections(trailing_words=17)
 
 
 @pytest.mark.skipif(not _have(_GCI_BOOT), reason="GCI boot PDI not found")

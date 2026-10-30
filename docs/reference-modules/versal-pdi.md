@@ -201,6 +201,7 @@ from ablation.analyzers.versal_pdi import (
 | `.git_hash()` | `str` | 8-char hex; "" if not found |
 | `.command_payload(cmd)` | `bytes` | Complete payload, including long commands |
 | `.dma_write_segments(section=None)` | `List[DmaWriteSegment]` | Reconstructed destination address and raw load bytes |
+| `.embedded_cdo_sections(trailing_words=0)` | `List[EmbeddedCdoSection]` | Reconstructed keyhole-contained CDO images with original offsets and parse errors preserved |
 | `.embedded_elf()` | `List[EmbeddedElf]` | Strictly validated embedded ELF payloads; empty if none pass |
 | `.report()` | `str` | Human-readable summary |
 
@@ -318,6 +319,18 @@ if loads:
 
 `DmaWriteSegment` also records `command_offset`, `section_offset`, and `end_address`. The bytes are addressed payload data, not necessarily code, PLM, or an ELF container. Establish the architecture and purpose before disassembly. For independently validated MicroBlaze code, use `MicroBlazeDecoder` with `byte_order="little"` for these CDO DMA words.
 
+**Recover CDO images embedded in keyhole payloads:**
+
+```python
+for embedded in vp.embedded_cdo_sections():
+    print(hex(embedded.offset), len(embedded.data), embedded.complete)
+    print(embedded.section.parse_error)
+```
+
+Multi-SLR packages can carry one CDO image inside another section's keyhole payloads. `embedded_cdo_sections()` searches only keyhole data for checksum-valid CDO headers, unwraps consecutive chunks, removes their three-word prefixes, and preserves non-keyhole commands. It does not blindly treat every `CDO\x00` string as an independent top-level image.
+
+Each `EmbeddedCdoSection` records `offset`, `container_offset`, `command_offset`, reconstructed `data`, and the parsed `section`. The `complete` property is true only when there is no parse error and the declared length is consumed. `trailing_words` accepts 0 through 16 for bounded analysis of a declared stream that ends before its actual command stream. The original parse error remains visible even when trailing data is returned.
+
 **Recover an optional Git identifier from a boot PDI:**
 
 ```python
@@ -411,6 +424,7 @@ Additional command decoders can be added as their layouts are validated. Unsuppo
 | `fw/gep/GCI_GCM415_boot-v0.159.38-35A2CC3.pdi` | boot | `035a2cc3` | Same build, full boot image with PLM, 1.3 MB |
 | `fw/gep/GEP_2ACC_GCM3_pld-v0.159.40-F119A21.pdi` | pld | `0f119a21` | Larger PL fabric (GCM3), 12 MB |
 | `fw/felix/FLX182_STRIPS_..._1448.pdi` | boot |: | FELIX FLX182 boot image, 35 MB |
+| `fw/felix/FLX155_..._2141.tar.gz` | boot |: | Two-SLR FELIX package with six top-level and four embedded CDO images |
 
 **Build provenance:** All known GCI/GEP pld PDIs contain `img_name = "CONFIG_MASTER"`. In the reviewed GCI and GEP GCM3 files, the `git_hash` at image header +0x2C matches the hexadecimal filename suffix. The reviewed GEP GCM4 v0.159.66 boot and PLD images instead leave their candidate Git words zero. A nonzero match is a build-provenance clue, not tamper evidence: the truncated identifier and filename can both be modified, and the header checksum does not authenticate the payload.
 
@@ -418,9 +432,9 @@ Additional command decoders can be added as their layouts are validated. Unsuppo
 
 ## FORGE audit <sup>[↑](#versalpdi)</sup>
 
-`FORGE.audit_module()` and the SAFE CODE 10-section review pass with zero open findings. File and buffer inputs are capped at 512 MiB, and command storage is capped at 50,000 commands per section. CDO payload length is bounded by the containing input rather than a separate eight-million-word ceiling. Regression tests cover malformed lengths, size limits, and a valid 8,000,001-word section.
+`FORGE.audit_module()` and the SAFE CODE 10-section review pass with zero open findings. File and buffer inputs are capped at 512 MiB, command storage is capped at 50,000 commands per section, and embedded recovery is capped at 64 images and 512 MiB of retained data. CDO payload length is bounded by the containing input rather than a separate eight-million-word ceiling. Regression tests cover malformed lengths, size limits, a valid 8,000,001-word section, split keyhole reconstruction, invalid embedded checksums, embedded byte limits, and trailing-word analysis.
 
-Residual limitations: boot IHT fields remain partially opaque, the header checksum does not authenticate the payload, and valid CDO streams without an END command are accepted when their declared length is consumed. Security conclusions about register semantics require independent validation.
+Residual limitations: boot IHT fields remain partially opaque, the header checksum does not authenticate the payload, and valid CDO streams without an END command are accepted when their declared length is consumed. Embedded recovery is limited to validated three-word-prefixed keyhole streams; other nesting layouts require separate evidence. Security conclusions about register semantics require independent validation.
 
 ---
 

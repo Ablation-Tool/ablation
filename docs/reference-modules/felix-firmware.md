@@ -134,6 +134,14 @@ The detailed CERN evidence is under:
 - `analysis/felix-flx182/findings.json`
 - `analysis/felix-flx182/extracted/`
 
+## Validated FLX155 evidence
+
+The FLX155 build 232 package provides a two-SLR example. It has six top-level CDO sections and four embedded images. `embedded_cdo_sections()` reconstructs the SLR1 PMC, NoC, RCDO, and NPI images with their original offsets and container provenance.
+
+The SLR1 NPI declares 114,316 words but requires 114,317. The original boundary error remains visible. A derived trailing-word read and length/checksum normalization confirms the complete 9,815-command stream without changing the original artifact.
+
+The FLX155 build disables direct decoding in its generics and enables all six listed decoding paths. Its supplied diff contains no decoder source files, so the DCS implementation is inherited rather than established by that diff. The build reports `Timing met: 0` and WNS -0.096 ns. Detailed evidence is under `analysis/felix-flx155/`.
+
 ## What this adds
 
 The capability gives FELIX users one place to start without hiding the underlying reusable tools. It explains which parser accepts each artifact, what the resulting evidence means, and where the analysis stops.
@@ -143,7 +151,7 @@ It also prevents common mistakes: treating FLX182 as a file format, treating boo
 ## Limitations
 
 - There is no unified `FelixAnalyzer` API. The reusable capability is the documented composition of parsers and analysis steps.
-- FLX182 build 637 is the validated example. Other FELIX cards and builds require their own evidence.
+- FLX182 build 637 and FLX155 build 232 are the validated examples. Other FELIX cards and builds require their own evidence.
 - `XilinxNpiHex` accepts hexadecimal RNPI/RCDO images, not command-script ASCII CDO.
 - The FLX182 archive supplies a diff rather than complete HDL. Other direct-input paths and integrated behavior remain unresolved.
 - No HDL simulation, hardware timing measurement, device-fuse read, or modified-image boot was performed.
@@ -151,6 +159,7 @@ It also prevents common mistakes: treating FLX182 as a file format, treating boo
 
 ## See also
 
+- [Official FELIX open-source firmware and software](https://atlas-project-felix.web.cern.ch/opensource.html)
 - [XilinxNpiHex](xilinx-npi-hex.md): strict RNPI/RCDO text ingestion
 - [VersalPdi](versal-pdi.md): binary PDI and CDO analysis
 - [MicroBlaze Decoder](microblaze-decoder.md): boot-firmware disassembly and control-flow analysis
