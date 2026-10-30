@@ -6,7 +6,7 @@
 - [Usage](#usage)
 - [What this adds](#what-this-adds)
 - [Limitations](#limitations)
-- [Known target](#known-target)
+- [Known platform](#known-platform)
 - [See also](#see-also)
 
 **File:** `ablation/analyzers/xilinx_npi.py`
@@ -127,9 +127,9 @@ The feature is intentionally a cog rather than a second PDI analyzer. Its value 
 - CDO command decoding does not by itself explain FPGA logic or prove runtime security policy.
 - A declared bit count and CDO checksum are integrity metadata, not provenance or authenticity evidence.
 
-## Known target
+## Known platform
 
-**FELIX**, or Front-End LInk eXchange, is the ATLAS readout and control platform that moves detector data, timing, and configuration traffic between front-end lpGBT links and host computers. **FLX182** is the card and firmware target in this example, not the file format. This build targets an `xcvm1802` Versal AI Core FPGA and uses PDI as its packaged boot and configuration container. RNPI and RCDO represent the configuration side of that system, not the complete detector readout algorithm or a running-system inventory.
+**FELIX**, or Front-End LInk eXchange, is the ATLAS readout and control platform that moves detector data, timing, and configuration traffic between front-end lpGBT links and host computers. **FLX182** identifies the card and firmware configuration in this example, not the file format. This build is configured for an `xcvm1802` Versal AI Core FPGA and uses PDI as its packaged boot and configuration container. RNPI and RCDO represent the configuration side of that system, not the complete detector readout algorithm or a running-system inventory.
 
 The FELIX FLX182 XSA contains both supported representations:
 

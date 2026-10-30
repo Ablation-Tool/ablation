@@ -5,7 +5,7 @@
   - [API reference](#api-reference)
   - [Usage](#usage)
   - [Example output](#example-output)
-  - [Known targets](#known-targets)
+  - [Known platforms](#known-platforms)
   - [See also](#see-also)
 
 **File:** `ablation/analyzers/versal_pdi.py`
@@ -14,7 +14,7 @@
 
 ## Why this exists <sup>[↑](#versalpdi)</sup>
 
-1. **Versal PDI is the primary firmware delivery format for Xilinx Versal ACAP.** Versal devices such as VC1902 and VCK5000 package programmable images as PDIs, including the PL bitstream, PLM bootloader, AI Engine CDO, and NoC configuration. The facility ATLAS ITk FELIX and GEP boards use Versal; understanding the PDI format is prerequisite to firmware RE and build-provenance tracking on those targets.
+1. **Versal PDI is the primary firmware delivery format for Xilinx Versal ACAP.** Versal devices such as VC1902 and VCK5000 package programmable images as PDIs, including the PL bitstream, PLM bootloader, AI Engine CDO, and NoC configuration. The facility ATLAS ITk FELIX and GEP boards use Versal; understanding the PDI format is prerequisite to firmware RE and build-provenance tracking on those platforms.
 
 2. **Two physically distinct PDI sub-formats exist in the collection.** `bootgen` produces different headers depending on the output type. A PL-only pld PDI has 4 sync words followed by a plaintext Image Header Table. A full-system boot PDI has 5 sync words and an "XLNX" identification word; its IHT is partially opaque because the MetaHeader CDO wraps it. Both are present in the ATLAS GEP/FELIX collection; a parser that only handles one type silently fails on the other.
 
@@ -161,7 +161,7 @@ Important module/command combinations found in GEP/FELIX PDIs:
 | LOADER | 0x07 | SET_IMAGE_INFO | 0x04 | image ID, two metadata words, optional Git identifier |
 | ERROR | 0x08 | various |: | error/event config |
 
-The LOADER `SET_IMAGE_INFO` command uses module `0x07` and command `0x04`. It carries an image ID and three metadata words. In the reviewed GCI GCM415 builds, the fourth word is a truncated Git identifier. GEP GCM4 v0.159.66 images leave it zero, and `git_hash()` skips zero values. The second and third words should remain metadata until their target-specific semantics are established. XILPM `INIT_NODE` handles power-domain, PL-device, and AIE-device initialization; it does not decode XPPU/XMPU protection configuration. AMD XilPM 2024.2 and later silently ignores deprecated protection-class `ADD_NODE` records, so protection conclusions require actual register writes rather than topology or marker names.
+The LOADER `SET_IMAGE_INFO` command uses module `0x07` and command `0x04`. It carries an image ID and three metadata words. In the reviewed GCI GCM415 builds, the fourth word is a truncated Git identifier. GEP GCM4 v0.159.66 images leave it zero, and `git_hash()` skips zero values. The second and third words should remain metadata until their platform-specific semantics are established. XILPM `INIT_NODE` handles power-domain, PL-device, and AIE-device initialization; it does not decode XPPU/XMPU protection configuration. AMD XilPM 2024.2 and later silently ignores deprecated protection-class `ADD_NODE` records, so protection conclusions require actual register writes rather than topology or marker names.
 
 ---
 
@@ -403,7 +403,7 @@ VersalPdi: GCI_GCM415_boot-v0.159.38-35A2CC3.pdi
 
 Additional command decoders can be added as their layouts are validated. Unsupported or partially opaque fields should remain explicit; a parsed header does not establish protection policy, a recovered register write does not establish its runtime effect, and a git identifier does not authenticate the image.
 
-## Known targets <sup>[↑](#versalpdi)</sup>
+## Known platforms <sup>[↑](#versalpdi)</sup>
 
 | PDI file | Type | Git hash | Description |
 |---|---|---|---|
