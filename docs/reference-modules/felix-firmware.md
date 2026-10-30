@@ -1,4 +1,4 @@
-# FELIX Firmware Analysis
+# FELIX
 
 - [Why this exists](#why-this-exists)
 - [Platform background](#platform-background)
