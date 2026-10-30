@@ -79,6 +79,7 @@ Analyze hardware description language source files: extract constants, compare v
 | Document | Covers |
 |---|---|
 | [DocxReExtractor](reference-modules/docx-re-extractor.md) | Extract paragraphs, register tables, and named constants from .docx ASIC specifications using only the standard library |
+| [FELIX Firmware Analysis](reference-modules/felix-firmware.md) | Analyze FELIX PDI and XSA packages with VersalPdi, XilinxNpiHex, MicroBlaze boot ELFs, source diffs, and build metadata |
 | [HdlHtmlExtractor](reference-modules/hdl-html-extractor.md) | Extract VHDL/Verilog from HDL Designer HTML exports (ContentFrame0.htm files) and feed into VerilogSemantic |
 | [LatexReExtractor](reference-modules/latex-re-extractor.md) | Extract sections, \\newcommand constants, tabular tables, inline numeric parameters, and labeled items from LaTeX ASIC/firmware specs |
 | [LpgbtDecoder](reference-modules/lpgbt-decoder.md) | Decode lpGBT e-link serial protocols: LCB 6B/8B downlink (L0A/BCR/CMD frames), STAR FLINK 4-bit uplink, HCC 8B/10B uplink |

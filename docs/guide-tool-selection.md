@@ -353,6 +353,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Extract tabular register-map tables from a LaTeX spec" | `LatexReExtractor.from_path(tex).tables()` |
 | "Navigate section hierarchy of a LaTeX spec" | `LatexReExtractor.from_path(tex).sections()` |
 | "Extract \\textbf{label}: description pairs from LaTeX itemize lists" | `LatexReExtractor.from_path(tex).labeled_items()` |
+| "Analyze a FELIX FLX182 PDI and XSA package" | Start with `VersalPdi`, then decode RNPI/RCDO with `XilinxNpiHex`; see `docs/reference-modules/felix-firmware.md` for the complete workflow |
 | "Parse a Xilinx Versal PDI firmware image (pld or boot type)" | `VersalPdi.from_path(path).report()` |
 | "Determine PDI type (pld/boot) and extract sync word count" | `vp.result.pdi_type`, `vp.result.sync_word_count` |
 | "Recover an optional Git identifier from a Versal PDI" | `VersalPdi.from_path(path).git_hash()`; returns an empty string when all candidate words are zero |

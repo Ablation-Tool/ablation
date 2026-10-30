@@ -12,6 +12,11 @@
 - FORGE review fixed silent multi-DEX misattribution, unbounded archive/parser reads, repeated-mapper state, duplicate canonical selection, and initialization cleanup. All eleven touched Python files pass FORGE with zero unresolved findings.
 - Validated all 25 B-Unit JNI bindings and a converged 16-iteration trace. Android-focused tests and real-package integration pass; multi-DEX mapping and indirect/stack native precision limits are explicit.
 
+**FELIX firmware capability documentation.**
+
+- Added a dedicated FELIX Firmware Analysis reference covering PDI, XSA, RNPI/RCDO, MicroBlaze boot ELFs, source diffs, and build metadata.
+- Added alphabetized README capability visibility and navigation for the validated FLX182 workflow, with explicit limits and reusable-component links.
+
 **Xilinx ASCII NPI and large CDO ingestion.**
 
 - Added `XilinxNpiHex` for bounded RNPI/RCDO metadata validation and little-endian binary conversion, with direct `VersalPdi` integration and negative tests.
