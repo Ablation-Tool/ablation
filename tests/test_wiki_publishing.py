@@ -29,6 +29,12 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
             "reference-modules": "Module-Reference",
             "workflows": "Workflows",
         },
+        "sequences": [
+            {
+                "title": "Guided learning path",
+                "steps": ["getting-started.md", "overview.md", "workflows/android.md"],
+            }
+        ],
         "pages": [
             {
                 "slug": "Workflows",
@@ -88,6 +94,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
         tmp_path / ".github" / "wiki" / "_Sidebar.md",
         "- [Home](Home)\n- [Workflows](Workflows)\n- [Module Reference](Module-Reference)\n",
     )
+    _write(tmp_path / ".github" / "wiki" / "_Footer.md", "[Source](https://example.com)\n")
     return docs, home
 
 
@@ -99,16 +106,36 @@ def test_complete_build_and_navigation(tmp_path: Path):
 
     assert result.documents == 8
     assert result.categories == 6
-    assert result.pages == len(list(output.glob("*.md"))) == 17
+    assert result.pages == len(list(output.glob("*.md"))) == 18
     assert "[bFLT Loader](Reference-Modules-Bflt)" in (output / "Capabilities-Firmware.md").read_text()
     assert "[ARM32 Limitations](Reference-Anomalies-Arm32)" in (output / "Known-Limitations.md").read_text()
     assert "[Workflows](Workflows)" in (output / "_Sidebar.md").read_text()
+    assert "[Source](https://example.com)" in (output / "_Footer.md").read_text()
     assert "8 documents" in (output / "Home.md").read_text()
     assert (output / "Documentation-Index.md").exists()
     assert (output / "Document-Library.md").exists()
     assert not (output / "Browse-Reference-Modules.md").exists()
     breadcrumb = "[Home](Home) › [Capabilities](Capabilities) › [Firmware Formats](Capabilities-Firmware)"
     assert breadcrumb in (output / "Reference-Modules-Bflt.md").read_text()
+
+
+def test_adds_previous_and_next_links_to_sequence_documents(tmp_path: Path):
+    docs, home = _fixture(tmp_path)
+
+    WikiPublisher(docs, home).build(tmp_path / "wiki")
+
+    first = (tmp_path / "wiki" / "Getting-Started.md").read_text()
+    middle = (tmp_path / "wiki" / "Overview.md").read_text()
+    last = (tmp_path / "wiki" / "Workflows-Android.md").read_text()
+    unrelated = (tmp_path / "wiki" / "Guide-Tool-Selection.md").read_text()
+    assert "Guided learning path** · Step 1 of 3" in first
+    assert "Previous:" not in first
+    assert "[Next: Overview →](Overview)" in first
+    assert "[← Previous: Getting Started](Getting-Started)" in middle
+    assert "[Next: Android Workflow →](Workflows-Android)" in middle
+    assert "Guided learning path** · Step 3 of 3" in last
+    assert "Next:" not in last
+    assert "Guided learning path" not in unrelated
 
 
 def test_rewrites_links_without_touching_code(tmp_path: Path):
@@ -179,6 +206,14 @@ def test_rejects_missing_navigation_target(tmp_path: Path):
         WikiPublisher(docs, home)
 
 
+def test_rejects_missing_template_link_target(tmp_path: Path):
+    docs, home = _fixture(tmp_path)
+    _write(tmp_path / ".github" / "wiki" / "_Sidebar.md", "[Missing](Not-A-Page)\n")
+
+    with pytest.raises(ValueError, match="Wiki template link not found"):
+        WikiPublisher(docs, home).build(tmp_path / "wiki")
+
+
 def test_rejects_unsafe_navigation_slug(tmp_path: Path):
     docs, home = _fixture(tmp_path)
     navigation_path = tmp_path / ".github" / "wiki" / "navigation.json"
@@ -247,6 +282,30 @@ def test_rejects_unclosed_mermaid_fence(tmp_path: Path):
         publisher.rewrite(source, PurePosixPath("reference-modules/bflt.md"))
 
 
+def test_rejects_missing_sequence_target(tmp_path: Path):
+    docs, home = _fixture(tmp_path)
+    navigation_path = tmp_path / ".github" / "wiki" / "navigation.json"
+    navigation = json.loads(navigation_path.read_text())
+    navigation["sequences"][0]["steps"].append("workflows/missing.md")
+    navigation_path.write_text(json.dumps(navigation))
+
+    with pytest.raises(ValueError, match="Navigation sequence target not found"):
+        WikiPublisher(docs, home)
+
+
+def test_rejects_document_in_multiple_sequences(tmp_path: Path):
+    docs, home = _fixture(tmp_path)
+    navigation_path = tmp_path / ".github" / "wiki" / "navigation.json"
+    navigation = json.loads(navigation_path.read_text())
+    navigation["sequences"].append(
+        {"title": "Another path", "steps": ["overview.md", "guide-tool-selection.md"]}
+    )
+    navigation_path.write_text(json.dumps(navigation))
+
+    with pytest.raises(ValueError, match="multiple navigation sequences"):
+        WikiPublisher(docs, home)
+
+
 def test_splits_and_orders_module_index(tmp_path: Path):
     docs, home = _fixture(tmp_path)
     _write(docs / "reference-modules" / "alpha.md", "# Alpha Loader\n")
@@ -260,7 +319,7 @@ def test_splits_and_orders_module_index(tmp_path: Path):
     assert "[Alpha Loader](Reference-Modules-Alpha)" in (tmp_path / "wiki" / "Module-Index-A.md").read_text()
     assert "[Zeta Loader](Reference-Modules-Zeta)" in (tmp_path / "wiki" / "Module-Index-Z.md").read_text()
     assert "Alpha Loader" not in reference
-    assert result.pages == 21
+    assert result.pages == 22
 
 
 def test_requires_an_empty_output_directory(tmp_path: Path):

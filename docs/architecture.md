@@ -6,28 +6,24 @@ How Ablation is structured and why.
 
 ## Data flow
 
-A complete analysis session moves through four stages:
+A complete analysis session shares one binary context across several analysis paths:
 
-```
-Binary (ELF · PE · XCOFF · flat ROM)
-  │
-  ▼
-BinaryContext                  ← section map, PLT/IAT, func_starts, call_edges,
-  │                              string table, SHA-256 cache
-  │
-  ├─► SemanticSearcher          ← BERT embeddings over function disassembly
-  │     └─► PatternLibrary      ← cross-engagement pattern replay
-  │
-  ├─► SinkArgClassifier         ← classify all exec-sink call sites before taint
-  │
-  ├─► TaintTracker (ISA)        ← interprocedural data-flow from network entry to sink
-  │     └─► PathSolver          ← Z3 symbolic execution; confirms exploitable path
-  │
-  └─► BinaryLifter              ← pseudo-C for manual review of flagged functions
-        └─► LlmAnalyst          ← ReAct agent over lifted output
+```mermaid
+flowchart TD
+    A["Binary<br/>ELF, PE, XCOFF, or flat ROM"] --> B["BinaryContext<br/>Section map, symbols, functions, strings, call graph"]
+    B --> C["SemanticSearcher<br/>Behavioral embeddings"]
+    C --> D["PatternLibrary<br/>Cross-engagement pattern replay"]
+    B --> E["SinkArgClassifier<br/>Classify execution sinks"]
+    E --> F["TaintTracker<br/>Interprocedural data flow"]
+    F --> G["PathSolver<br/>Path feasibility"]
+    B --> H["BinaryLifter<br/>Pseudocode for manual review"]
+    H --> I["LlmAnalyst<br/>Tool-assisted analysis"]
 ```
 
-Each stage consumes the output of the stage before it. No stage runs in isolation.
+`BinaryContext` supplies the shared parsed state. Semantic search supports candidate discovery,
+sink classification and taint analysis follow attacker-controlled data, and lifting supports
+manual review. Path solving and pattern replay add feasibility evidence and prior knowledge to
+those analysis paths.
 
 ---
 

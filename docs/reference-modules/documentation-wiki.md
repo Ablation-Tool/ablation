@@ -16,7 +16,7 @@ The `Documentation Wiki` workflow then:
 
 1. Runs the publisher tests.
 2. Converts and validates the complete documentation library.
-3. Stops if a document link cannot be resolved.
+3. Stops if a document, Home, sidebar, or footer link cannot be resolved.
 4. Publishes the generated pages to `Ablation-Tool/ablation.wiki.git`.
 5. Removes generated pages whose source documents were renamed or deleted.
 
@@ -24,9 +24,11 @@ Pull requests run validation only. Their contents do not reach the Wiki before m
 
 ## What readers get
 
-The Home page has six clear destinations: Getting Started, Choose a Workflow, Explore Capabilities, Module Reference, Known Limitations, and What's New. It uses the standard AIARE tagline and does not repeat a long inventory of documentation categories.
+The branded Home page starts with the reader's goal and provides a four-step guided learning path. Task-focused links lead to installation, workflows, tool selection, capabilities, module lookup, and limitations without repeating the complete documentation inventory.
 
-The sidebar has ten primary links. Workflows lead readers by artifact or research goal. Capability pages group useful modules by analysis domain rather than by repository directory or processor family. Breadcrumbs show the way back to those curated pages.
+The sidebar groups a small set of primary destinations into six sections: Start, Analyze, Reference, Internals, Project, and More. A global footer repeats essential navigation and links to the source repository, documentation source, contributing guide, and security policy.
+
+Workflows lead readers by artifact or research goal. Capability pages group useful modules by analysis domain rather than by repository directory or processor family. Breadcrumbs show the way back to curated pages, while documents in the guided learning path receive generated previous and next links.
 
 The complete module inventory remains available through alphabetical `Module Index` pages split by letter. This keeps direct lookup practical without placing nearly 600 links on one page. Smaller supporting indexes cover anomalies, translations, audits, integrations, release updates, and other material without crowding the primary sidebar.
 
@@ -34,7 +36,7 @@ The Wiki represents the latest `main` branch. For documentation tied to an older
 
 ## Maintaining navigation
 
-`.github/wiki/navigation.json` defines the curated reading paths. `.github/wiki/Home.md` controls the six Home destinations, and `.github/wiki/_Sidebar.md` controls the ten primary links. Keep these entry points small; adding every document to them would recreate the navigation problem.
+`.github/wiki/navigation.json` defines the curated reading paths and sequential guides. `.github/wiki/Home.md` controls the Home destinations and banner, `.github/wiki/_Sidebar.md` controls the grouped primary navigation, and `.github/wiki/_Footer.md` controls the global footer. Keep these entry points small; adding every document to them would recreate the navigation problem.
 
 Each manifest page has a `slug`, `title`, and `intro`. Its optional `sections` contain entries with either a `path` to a source document or a `page` linking another curated page. A `description` tells the reader when to use that destination.
 
@@ -56,7 +58,9 @@ Each manifest page has a `slug`, `title`, and `intro`. Its optional `sections` c
 
 A page can instead use `directory_index` for a smaller supporting inventory, or `module_index` for the split A–Z module lookup. The `directories` mapping converts existing relative directory links to the curated destinations.
 
-New documents are always mirrored, even when they are not listed in the manifest. Add a manifest entry only when the document belongs in a curated reading path. Missing targets, duplicate page names, and hierarchy cycles stop publication rather than producing a partially broken Wiki.
+The optional top-level `sequences` array defines genuinely ordered reading paths. Each sequence has a `title` and at least two document paths in `steps`. A document can belong to only one sequence. The publisher appends the path title, step position, and available previous and next links.
+
+New documents are always mirrored, even when they are not listed in the manifest. Add a manifest entry only when the document belongs in a curated reading path. Missing targets, duplicate page names, conflicting sequence membership, and hierarchy cycles stop publication rather than producing a partially broken Wiki.
 
 ## How page names work
 
@@ -108,6 +112,6 @@ The workflow's token permission is limited to repository contents. It clones the
 
 Treat the Wiki as generated output. Direct Wiki edits are replaced by the next synchronization. Make every documentation correction in `docs/` instead.
 
-The first Wiki page must be created once through GitHub's web interface to initialize the Wiki repository. After that, the workflow owns `Home.md`, `_Sidebar.md`, and all generated pages.
+The first Wiki page must be created once through GitHub's web interface to initialize the Wiki repository. After that, the workflow owns `Home.md`, `_Sidebar.md`, `_Footer.md`, and all generated pages.
 
 The manifest provides a small explicit hierarchy for navigation; it does not infer semantic relationships automatically. That hierarchy is maintained separately from the documents, so a module can have a useful curated destination without changing its source filename. Unlisted documents remain available through directory indexes, the complete document library, and the A–Z module reference.

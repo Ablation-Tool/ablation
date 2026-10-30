@@ -22,6 +22,28 @@ A short utility needs the same conceptual honesty as a large analyzer. Its expla
 
 ---
 
+## Structure task guides for scanning
+
+A task-focused guide should include, when applicable:
+
+1. A short introduction naming the artifact, goal, and expected result.
+2. Prerequisites, including installation, inputs, permissions, and prior reading.
+3. A numbered procedure or clearly ordered phases.
+4. Concrete commands, API examples, and expected output.
+5. Verification requirements, unsupported cases, and relevant limitations.
+6. Related pages and the next useful step.
+
+Keep the opening concise enough that readers can choose the guide without scrolling through a
+module inventory. Use a Mermaid diagram when it clarifies a pipeline or decision that would
+otherwise require a dense text diagram. Do not add decorative diagrams that repeat prose without
+improving comprehension.
+
+For a genuinely sequential reading path, register the ordered documents under `sequences` in
+`.github/wiki/navigation.json`. The Wiki publisher adds previous and next links; do not duplicate
+those links by hand in source documents.
+
+---
+
 ## Explain the system in layers
 
 Prefer a progression from problem to mechanism to API:

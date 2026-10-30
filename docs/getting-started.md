@@ -1,13 +1,24 @@
 # Getting Started
 
-Go from install to your first vulnerability candidate in 15 minutes. Any stripped ELF binary
-works.
+Go from installation to your first vulnerability candidate in 15 minutes. This guide uses a
+stripped ELF binary and finishes with a candidate to investigate, not a confirmed vulnerability.
+
+## Prerequisites
+
+- Python 3.10 or newer and `pip` (`pipx` also works on macOS)
+- A stripped ELF binary that you are authorized to analyze
+- Enough disk space for Ablation's analysis and embedding caches
+
+## What you will do
+
+1. Install and verify Ablation.
+2. Build a reusable `BinaryContext` for the binary.
+3. Run a semantic sweep and triage high-scoring candidates.
+4. Preserve confirmed function names and patterns for later sessions.
 
 ---
 
 ## Install
-
-**Requirements:** Python 3.10+, pip
 
 ```bash
 pip install ablation-tool
@@ -179,9 +190,18 @@ fr.list_findings(binary_sha=ctx.sha256[:16])
 
 ---
 
+## Review results before relying on them
+
+Semantic-search scores prioritize candidates; they do not establish reachability or
+exploitability. Confirm attacker control, guards, and the complete path to the sink. Review
+[Known limitations](reference-anomalies/) for architecture-specific false-negative conditions and
+use the [vulnerability hunting workflow](workflows/vuln-hunting.md) for the confirmation loop.
+
 ## Next steps
 
+- [CLI and user guide](user-guide.md) -- sessions, commands, configuration, and worked examples
 - [Vulnerability hunting workflow](workflows/vuln-hunting.md) -- full loop from sweep to
  disclosure-ready finding
-- [Module reference](reference-modules/) -- all 50+ analyzers with parameters and examples
+- [Finding validation](reference-modules/finding-validation.md) -- path feasibility and finding records
+- [Module reference](reference-modules/) -- analyzer parameters and examples
 - [CONTRIBUTING.md](../.github/CONTRIBUTING.md) -- how to add patterns, sweeps, and analyzer modules

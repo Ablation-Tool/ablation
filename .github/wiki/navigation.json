@@ -10,6 +10,17 @@
     "updates": "Release-Updates",
     "workflows": "Workflows"
   },
+  "sequences": [
+    {
+      "title": "Guided learning path",
+      "steps": [
+        "getting-started.md",
+        "user-guide.md",
+        "workflows/vuln-hunting.md",
+        "reference-modules/finding-validation.md"
+      ]
+    }
+  ],
   "pages": [
     {
       "slug": "Workflows",

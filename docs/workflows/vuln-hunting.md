@@ -1,46 +1,37 @@
 # Vulnerability Hunting Workflow
 
 Ablation's core workflow starts from a stripped binary with no symbols and ends with a
-confirmed, disclosure-ready finding.
+confirmed, disclosure-ready finding. Follow it after completing [Getting Started](../getting-started.md).
 
 **Time to first candidate:** under 5 minutes.
 **Time to confirmed finding:** 30 to 90 minutes.
+
+## Prerequisites
+
+- A verified Ablation installation
+- A stripped binary that you are authorized to analyze
+- A `BinaryContext` built from that binary
+
+## Expected result
+
+A confirmed finding records the root cause, attacker-controlled input, reachable instruction
+address, and reproducible trigger condition. Candidates that do not meet that standard remain
+unconfirmed.
 
 ---
 
 ## Overview
 
-```
-stripped binary
-      |
-      v
-[BinaryContext]    -- 0.5s: PLT, exports, strings, xref index, call graph
-      |
-      v
-[CorpusBuilder]    -- behavioral description per function (calls + strings + neighbors)
-      |
-      v
-[SemanticSearcher] -- BERT sweep: 35s for 19k functions
-      |
-      v
-  candidates       -- ranked list, top 5-10 per vuln class
-      |
-      v
-[manual triage]    -- callers, callees, strings: 2-3 min per candidate
-      |
-      v
-[capstone trace]   -- disassemble the suspicious function, trace the data flow
-      |
-      v
-[TaintTracker]     -- automated x86-64 taint from packet input to dangerous sink
-      |
-      v
-  confirmation     -- reproducible trigger condition, root cause, instruction address
-      |
-      v
-[NameRegistry]     -- register confirmed function names
-[PatternLibrary]   -- register confirmed query for replay on future targets
-[FindingRegistry]  -- log finding with CVSS, impact, trigger
+```mermaid
+flowchart TD
+    A["Stripped binary"] --> B["BinaryContext<br/>PLT, exports, strings, xrefs, call graph"]
+    B --> C["CorpusBuilder<br/>Behavioral function descriptions"]
+    C --> D["SemanticSearcher<br/>Ranked vulnerability candidates"]
+    D --> E["Candidate triage<br/>Callers, callees, and strings"]
+    E --> F["Manual trace<br/>Guards, data flow, and reachability"]
+    F --> G["TaintTracker and PathSolver<br/>Attacker control and path feasibility"]
+    G --> H["Confirmation<br/>Root cause and reproducible trigger"]
+    H --> I["Register evidence<br/>Names, patterns, and finding record"]
 ```
 
 ---

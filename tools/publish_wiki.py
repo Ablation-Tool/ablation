@@ -51,12 +51,14 @@ class WikiPublisher:
         home_template: Path,
         navigation_template: Path | None = None,
         sidebar_template: Path | None = None,
+        footer_template: Path | None = None,
     ) -> None:
         self.docs_root = docs_root.resolve()
         self.repository_root = self.docs_root.parent
         self.home_template = home_template
         self.navigation_template = navigation_template or self.repository_root / ".github/wiki/navigation.json"
         self.sidebar_template = sidebar_template or self.repository_root / ".github/wiki/_Sidebar.md"
+        self.footer_template = footer_template or self.repository_root / ".github/wiki/_Footer.md"
         self.documents = self._collect_documents()
         self.by_path = {document.path: document for document in self.documents}
         self.groups: dict[str, list[Document]] = {}
@@ -68,6 +70,7 @@ class WikiPublisher:
         self.page_by_slug = {page["slug"]: page for page in self.pages}
         self.directory_pages = self.navigation["directories"]
         self.parent_pages, self.parent_documents = self._navigation_relationships()
+        self.sequence_documents = self._navigation_sequences()
         self._validate_hierarchy()
         self._validate_generated_names()
 
@@ -180,6 +183,25 @@ class WikiPublisher:
                         parent_documents.setdefault(PurePosixPath(entry["path"]), page["slug"])
         return parent_pages, parent_documents
 
+    def _navigation_sequences(self) -> dict[PurePosixPath, tuple[str, list[Document], int]]:
+        sequence_documents = {}
+        for sequence in self.navigation.get("sequences", []):
+            title = sequence.get("title", "")
+            steps = sequence.get("steps", [])
+            if not title or not isinstance(steps, list) or len(steps) < 2:
+                raise ValueError(f"Invalid Wiki navigation sequence: {sequence!r}")
+            documents = []
+            for step in steps:
+                path = PurePosixPath(step)
+                if path not in self.by_path:
+                    raise ValueError(f"Navigation sequence target not found: {step}")
+                if path in sequence_documents:
+                    raise ValueError(f"Document appears in multiple navigation sequences: {step}")
+                documents.append(self.by_path[path])
+            for index, document in enumerate(documents):
+                sequence_documents[document.path] = (title, documents, index)
+        return sequence_documents
+
     def _validate_hierarchy(self) -> None:
         for slug in self.page_by_slug:
             seen = set()
@@ -192,7 +214,7 @@ class WikiPublisher:
 
     def _validate_generated_names(self) -> None:
         used = {document.slug.casefold(): document.path.as_posix() for document in self.documents}
-        generated = [*self.page_by_slug, *self._module_index_pages(), "Home", "_Sidebar"]
+        generated = [*self.page_by_slug, *self._module_index_pages(), "Home", "_Sidebar", "_Footer"]
         for name in generated:
             collision = used.get(name.casefold())
             if collision is not None:
@@ -375,6 +397,22 @@ class WikiPublisher:
             del lines[insertion]
         return "".join(lines[:insertion]) + breadcrumb + "".join(lines[insertion:])
 
+    def _with_sequential_navigation(self, text: str, document: Document) -> str:
+        sequence = self.sequence_documents.get(document.path)
+        if sequence is None:
+            return text
+        title, documents, index = sequence
+        lines = [f"**{title}** · Step {index + 1} of {len(documents)}", ""]
+        links = []
+        if index > 0:
+            previous = documents[index - 1]
+            links.append(f"[← Previous: {previous.title}]({previous.slug})")
+        if index + 1 < len(documents):
+            following = documents[index + 1]
+            links.append(f"[Next: {following.title} →]({following.slug})")
+        lines.append(" · ".join(links))
+        return f"{text.rstrip()}\n\n---\n\n" + "\n".join(lines) + "\n"
+
     def _module_index_pages(self) -> dict[str, str]:
         buckets: dict[str, list[Document]] = {}
         for document in self.groups.get("reference-modules", []):
@@ -444,6 +482,20 @@ class WikiPublisher:
             pages[slug] = "\n".join(lines)
         return pages
 
+    @staticmethod
+    def _validate_template_links(text: str, template: str, valid_pages: set[str]) -> None:
+        for match in LINK_RE.finditer(text):
+            if match.group("prefix").lstrip().startswith("!"):
+                continue
+            raw_target = match.group("target")
+            target = raw_target[1:-1] if raw_target.startswith("<") else raw_target
+            parsed = urlsplit(target)
+            if parsed.scheme or parsed.netloc or not parsed.path or parsed.path.startswith("/"):
+                continue
+            page = unquote(parsed.path)
+            if page not in valid_pages:
+                raise ValueError(f"{template}: Wiki template link not found: {target}")
+
     def build(self, output_root: Path) -> BuildResult:
         if output_root.exists() and any(output_root.iterdir()):
             raise ValueError(f"Output directory is not empty: {output_root}")
@@ -454,9 +506,9 @@ class WikiPublisher:
             source = self.docs_root / Path(document.path)
             text = source.read_text(encoding="utf-8")
             text = self.rewrite(text, document.path)
-            (output_root / f"{document.slug}.md").write_text(
-                self._with_breadcrumb(text, document), encoding="utf-8"
-            )
+            text = self._with_breadcrumb(text, document)
+            text = self._with_sequential_navigation(text, document)
+            (output_root / f"{document.slug}.md").write_text(text, encoding="utf-8")
         for slug, text in {**navigation_pages, **module_index_pages}.items():
             (output_root / f"{slug}.md").write_text(text, encoding="utf-8")
         category_links = "\n".join(
@@ -465,11 +517,22 @@ class WikiPublisher:
         home = self.home_template.read_text(encoding="utf-8")
         home = home.replace("{{CATEGORY_INDEXES}}", category_links)
         home = home.replace("{{DOCUMENT_COUNT}}", str(len(self.documents)))
+        sidebar = self.sidebar_template.read_text(encoding="utf-8")
+        footer = self.footer_template.read_text(encoding="utf-8")
+        valid_pages = {
+            *(document.slug for document in self.documents),
+            *navigation_pages,
+            *module_index_pages,
+            "Home",
+            "_Sidebar",
+            "_Footer",
+        }
+        for template, text in (("Home", home), ("_Sidebar", sidebar), ("_Footer", footer)):
+            self._validate_template_links(text, template, valid_pages)
         (output_root / "Home.md").write_text(home, encoding="utf-8")
-        (output_root / "_Sidebar.md").write_text(
-            self.sidebar_template.read_text(encoding="utf-8"), encoding="utf-8"
-        )
-        pages = len(self.documents) + len(navigation_pages) + len(module_index_pages) + 2
+        (output_root / "_Sidebar.md").write_text(sidebar, encoding="utf-8")
+        (output_root / "_Footer.md").write_text(footer, encoding="utf-8")
+        pages = len(self.documents) + len(navigation_pages) + len(module_index_pages) + 3
         return BuildResult(len(self.documents), pages, len(navigation_pages))
 
 
@@ -479,9 +542,10 @@ def main() -> None:
     parser.add_argument("--home", type=Path, default=Path(".github/wiki/Home.md"))
     parser.add_argument("--navigation", type=Path, default=Path(".github/wiki/navigation.json"))
     parser.add_argument("--sidebar", type=Path, default=Path(".github/wiki/_Sidebar.md"))
+    parser.add_argument("--footer", type=Path, default=Path(".github/wiki/_Footer.md"))
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    publisher = WikiPublisher(args.docs, args.home, args.navigation, args.sidebar)
+    publisher = WikiPublisher(args.docs, args.home, args.navigation, args.sidebar, args.footer)
     result = publisher.build(args.output)
     print(
         f"Built {result.pages} Wiki pages from {result.documents} documents "
