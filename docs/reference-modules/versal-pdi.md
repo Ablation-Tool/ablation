@@ -418,7 +418,7 @@ Additional command decoders can be added as their layouts are validated. Unsuppo
 
 ## FORGE audit <sup>[↑](#versalpdi)</sup>
 
-`FORGE.audit_module()` and the SAFE CODE 10-section review pass with zero open findings. File and buffer inputs are capped at 512 MiB. Pre-audit corrections also require CDO magic for direct CFICDR parsing and mask the command length to its defined eight bits; regression tests cover both behaviors and the size limit.
+`FORGE.audit_module()` and the SAFE CODE 10-section review pass with zero open findings. File and buffer inputs are capped at 512 MiB, and command storage is capped at 50,000 commands per section. CDO payload length is bounded by the containing input rather than a separate eight-million-word ceiling. Regression tests cover malformed lengths, size limits, and a valid 8,000,001-word section.
 
 Residual limitations: boot IHT fields remain partially opaque, the header checksum does not authenticate the payload, and valid CDO streams without an END command are accepted when their declared length is consumed. Security conclusions about register semantics require independent validation.
 
@@ -426,6 +426,7 @@ Residual limitations: boot IHT fields remain partially opaque, the header checks
 
 ## See also <sup>[↑](#versalpdi)</sup>
 
+- `XilinxNpiHex`: strict RNPI/RCDO ASCII-hex ingestion for this binary parser
 - `XilinxBitfile`: parser for Spartan-3/6/7-series `.bit` files (not for Versal PDI)
 - `XilinxFrameDecoder`: Type1/Type2 config packet decoder (not applicable to PDI)
 - `re/atlas/gep_re.py`: GEP/GCI build inventory and git hash timeline

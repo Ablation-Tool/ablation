@@ -12,6 +12,12 @@
 - FORGE review fixed silent multi-DEX misattribution, unbounded archive/parser reads, repeated-mapper state, duplicate canonical selection, and initialization cleanup. All eleven touched Python files pass FORGE with zero unresolved findings.
 - Validated all 25 B-Unit JNI bindings and a converged 16-iteration trace. Android-focused tests and real-package integration pass; multi-DEX mapping and indirect/stack native precision limits are explicit.
 
+**Xilinx ASCII NPI and large CDO ingestion.**
+
+- Added `XilinxNpiHex` for bounded RNPI/RCDO metadata validation and little-endian binary conversion, with direct `VersalPdi` integration and negative tests.
+- Removed the former eight-million-word CDO ceiling while retaining input and command bounds. The FELIX FLX182 PDI now yields all five CDO sections, including its 33.93 MB RCDO stream.
+- Added capability documentation, README and index visibility, tool-selection guidance, and a regression covering 8,000,001 CDO payload words.
+
 **Versal PDI provenance correction.**
 
 - `VersalPdi.git_hash()` now returns an empty string when every candidate Git word is zero instead of reporting the false identifier `00000000`.

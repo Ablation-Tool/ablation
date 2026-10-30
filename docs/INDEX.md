@@ -87,6 +87,7 @@ Analyze hardware description language source files: extract constants, compare v
 | [VerilogSemantic](reference-modules/verilog-semantic.md) | Extract constants, signal widths, FSM states from a single Verilog/VHDL source tree |
 | [HDLVersionDiff](reference-modules/hdl-version-diff.md) | Compare two HDL source versions: added/removed/changed constants, signals, ports, FSM states |
 | [OneHotFSMExtractor](reference-modules/one-hot-fsm-extractor.md) | Extract state transition tables from one-hot `assign d_next[N] = ...` Verilog FSMs |
+| [XilinxNpiHex](reference-modules/xilinx-npi-hex.md) | Decode Xilinx ASCII NPI RNPI/RCDO hex images into bounded binary CDO for VersalPdi analysis |
 
 ---
 

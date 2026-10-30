@@ -550,7 +550,7 @@ class VersalPdi:
                     version  = r(cdo_off + 4)
                     length_w = r(cdo_off + 8)
                     checksum = r(cdo_off + 12)
-                    if 0 <= length_w < 8_000_000 and (version >> 16) <= 10:
+                    if (version >> 16) <= 10:
                         section = CdoSection(
                             offset=cdo_off,
                             version=version,
@@ -768,7 +768,7 @@ class VersalPdi:
             length_w = r(pos + 8)
             checksum = r(pos + 12)
             declared_end = pos + 16 + length_w * 4
-            if length_w >= 8_000_000 or (version >> 16) > 10 or declared_end > len(data):
+            if (version >> 16) > 10 or declared_end > len(data):
                 pos += 1
                 continue
             checksum_valid = self._cdo_header_checksum_valid(pos)

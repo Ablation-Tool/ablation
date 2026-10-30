@@ -141,6 +141,7 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 | [**Juniper**](docs/reference-modules/junos.md) | [1](ablation/core/junos_package.py)&nbsp;[2](ablation/core/junos_signature.py)&nbsp;[3](ablation/analyzers/junos_function_diff.py)&nbsp;[4](ablation/analyzers/gencfg.py)&nbsp;[5](ablation/analyzers/mips_ownership.py)&nbsp;[6](ablation/analyzers/gencfg_provenance.py)&nbsp;[7](ablation/analyzers/mips_message_provenance.py) | Extracts and verifies signed Junos packages, compares bounded MIPS32/o32 functions, validates VRF gencfg messages, and analyzes ownership and caller/argument provenance. |
 | [**Legacy Binary Formats**](docs/reference-modules/motorola-88000-bcs-coff.md) | [1](ablation/core/coff_m88k_parser.py)&nbsp;[2](ablation/core/guardian_pak_extractor.py) | Parses Motorola M88K COFF binaries and extracts files from Tandem NonStop Guardian PAK archives. |
 | [**Texas Instruments**](docs/reference-modules/texas-instruments-firmware.md) | [1](ablation/analyzers/ti_coff_loader.py)&nbsp;[2](ablation/analyzers/ti_nnc_scanner.py) | Parses TI COFF2 symbols and detects embedded NNC/TVM models, weak normalization symbols, and NPU usage risks. |
+| [**Xilinx ASCII NPI Hex**](docs/reference-modules/xilinx-npi-hex.md) | [1](ablation/analyzers/xilinx_npi.py)&nbsp;[2](ablation/analyzers/versal_pdi.py) | Decodes RNPI/RCDO text into validated binary CDO and parses large Versal configuration streams. |
 
 </details>
 

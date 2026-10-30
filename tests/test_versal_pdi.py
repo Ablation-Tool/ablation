@@ -1031,6 +1031,20 @@ class TestCdoValidationAndExtraction:
         with pytest.raises(ValueError, match="exceeds 4 bytes"):
             VersalPdi.from_path(str(image))
 
+    def test_cdo_larger_than_former_word_cap(self):
+        length_words = 8_000_001
+        prefix = 4
+        magic = struct.unpack("<I", CDO_MAGIC)[0]
+        checksum = (~(prefix + magic + 0x200 + length_words)) & 0xFFFFFFFF
+        data = bytearray(20 + length_words * 4)
+        struct.pack_into("<5I", data, 0, prefix, magic, 0x200, length_words, checksum)
+        struct.pack_into("<I", data, 20, CDO_CMD_END_WORD)
+        vp = VersalPdi.from_bytes(data)
+        sections = vp.cdo_sections()
+        assert len(sections) == 1
+        assert sections[0].length_words == length_words
+        assert sections[0].end_detected
+
     def test_cficdr_direct_parse_requires_cdo_magic(self):
         data = bytearray(TestCficdrFalsePositiveSuppression()._build_cficdr_pdi_with_false_cdo())
         data[0x104:0x108] = b"BAD!"

@@ -355,12 +355,13 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Extract \\textbf{label}: description pairs from LaTeX itemize lists" | `LatexReExtractor.from_path(tex).labeled_items()` |
 | "Parse a Xilinx Versal PDI firmware image (pld or boot type)" | `VersalPdi.from_path(path).report()` |
 | "Determine PDI type (pld/boot) and extract sync word count" | `vp.result.pdi_type`, `vp.result.sync_word_count` |
-| "Extract git commit hash from a Versal PDI (works for both pld and boot)" | `VersalPdi.from_path(path).git_hash()` — recovers from image header OR XILPDI CDO command |
+| "Recover an optional Git identifier from a Versal PDI" | `VersalPdi.from_path(path).git_hash()`; returns an empty string when all candidate words are zero |
 | "List all CDO sections in a PDI and their command counts" | `VersalPdi.from_path(path).cdo_sections()` — each `CdoSection` has `.offset`, `.length_words`, `.commands` |
 | "Extract all NPI register writes from a PDI's CDO sections" | iterate `cdo.commands` filtering `cmd.npi_addr is not None` |
 | "Find all CFICDR/PL partitions (bitstream) in a PDI" | `[ph for ph in vp.partitions() if ph.is_pl]` |
 | "Batch-parse all .pdi files in a directory for build provenance" | `VersalPdi.scan_directory(dir, '*.pdi')` — each result has `.git_hash()` |
 | "Scan an arbitrary CDO blob for CDO sections (no MetaHeader)" | `VersalPdi.from_bytes(data).cdo_sections()` — scanner works even when pdi_type = 'unknown' |
+| "Decode Xilinx ASCII NPI .rnpi/.rcdo hex images" | `XilinxNpiHex.from_path(path).to_versal_pdi()`; validates metadata, bit count, words, and resource limits before CDO parsing |
 | "Decode LCB downlink byte buffer (L0A triggers, BCR, CMD frames)" | `LcbDecoder.decode_stream(data)` — returns `List[LcbFrame]` with frame_type, l0a_map, bcr, tag |
 | "Encode/decode SPECS frames or parse simulation headers" | `encode_frame()` / `decode_frame()` from `ablation.analyzers.specs_protocol`; use `parse_simulation_headers(text)` for archived vectors and explicit 128/129 long-frame behavior |
 | "Decode STAR FLINK 4-bit nibble uplink (PR/LP events with L0ID)" | `StarFlinkDecoder.decode_stream(nibbles)` — returns `List[StarFlinkEvent]` with l0id |
