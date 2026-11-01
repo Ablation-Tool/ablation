@@ -2,17 +2,21 @@
 import json
 import os
 from pathlib import Path
+import plistlib
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
 import tkinter as tk
 import unittest
+from unittest import mock
 
 from guiai.app import InvestigationApp
 from guiai.environment import configure_environment
 from guiai.events import Session
 from guiai.layout import LAYOUTS
+from guiai.macos_launcher import LauncherDialog, prepare_agent_path
 from metrix.desktop import TerminalPanel
 
 
@@ -125,6 +129,59 @@ class MacOSNativeCase(unittest.TestCase):
             application.close_preferences()
         finally:
             application.close()
+
+    def test_first_run_launcher(self):
+        launched = []
+        dialog = LauncherDialog(self.root, launched.append)
+        self.root.deiconify()
+        self.root.update_idletasks()
+        self.assertTrue(self.root.winfo_ismapped())
+        dialog.target.set(sys.executable)
+        dialog.session.set(str(self.session.root))
+        dialog.agent.set("")
+        self.assertNotIn("--agent", dialog.arguments())
+        dialog.agent.set(sys.executable)
+        expected = dialog.arguments()
+        self.assertEqual(expected[:2], ["desktop", sys.executable])
+        self.assertEqual(expected[-2:], ["--agent", sys.executable])
+        dialog.agent.set("guiai-agent-that-does-not-exist")
+        with self.assertRaises(ValueError):
+            dialog.arguments()
+        dialog.agent.set(sys.executable)
+        dialog.launch()
+        self.assertEqual(launched, [expected])
+
+    def test_launcher_path_has_no_empty_entries(self):
+        with mock.patch.dict(os.environ, {"PATH": ""}):
+            prepare_agent_path()
+            self.assertNotIn("", os.environ["PATH"].split(os.pathsep))
+
+    def test_application_bundle_and_relocation(self):
+        bundle = Path(__file__).resolve().parent / "Ablation.app"
+        executable = bundle / "Contents" / "MacOS" / "Ablation"
+        with (bundle / "Contents" / "Info.plist").open("rb") as stream:
+            metadata = plistlib.load(stream)
+        self.assertEqual(metadata["CFBundleIdentifier"], "re.ablation.guiai")
+        self.assertEqual(metadata["CFBundleExecutable"], "Ablation")
+        self.assertTrue((bundle / "Contents" / "Resources" / "Ablation.icns").is_file())
+        result = subprocess.run(
+            [str(executable), "--self-test"], capture_output=True, text=True, timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "GUIAI_MACOS_APP_OK")
+        moved = self.root_path / "moved with spaces" / "Ablation.app"
+        moved.parent.mkdir()
+        shutil.copytree(bundle, moved)
+        result = subprocess.run(
+            [str(moved / "Contents" / "MacOS" / "Ablation"), "--self-test"],
+            capture_output=True, text=True, timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        opened = subprocess.run(
+            ["open", "-n", str(bundle), "--args", "--self-test"],
+            capture_output=True, text=True, timeout=20,
+        )
+        self.assertEqual(opened.returncode, 0, opened.stderr)
 
 
 if __name__ == "__main__":

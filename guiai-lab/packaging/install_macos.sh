@@ -13,13 +13,16 @@ cd "$SOURCE"
 "$PYTHON" -m venv .venv
 . .venv/bin/activate
 python -m pip install --no-index --find-links "$SOURCE/vendor" "$SOURCE/guiai_lab-0.1.0-py3-none-any.whl"
+python -m guiai --help >/dev/null
+python "$SOURCE/create_macos_app.py" "$SOURCE"
 
 if [[ "${SKIP_TESTS:-0}" != "1" && -f "$SOURCE/macos_stress.py" ]]; then
     python "$SOURCE/macos_stress.py"
 fi
 
+printf '\nApplication: %s\n' "$SOURCE/Ablation.app"
 cat <<'EOF'
-GUIAI is installed. macOS uses the Tk interface.
+Open Ablation.app to choose a target, project directory, and optional AI Agent.
 
 Start it with:
   . .venv/bin/activate
