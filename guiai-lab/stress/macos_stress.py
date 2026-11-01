@@ -67,9 +67,8 @@ class MacOSNativeCase(unittest.TestCase):
         while time.monotonic() < deadline:
             if predicate():
                 return
-            print("MACOS_UPDATE_BEGIN", flush=True)
-            self.root.update()
-            print("MACOS_UPDATE_END", flush=True)
+            self.root.update_idletasks()
+            self.root.tk.dooneevent(tk._tkinter.DONT_WAIT)
             time.sleep(0.02)
         output = self.panels[-1].text.get("1.0", "end") if self.panels else ""
         self.fail(f"{message}: {output!r}")
@@ -91,29 +90,13 @@ class MacOSNativeCase(unittest.TestCase):
         self.assertEqual(self.session.workspace, self.root_path.resolve())
 
     def test_posix_interactive_terminal(self):
-        result = subprocess.run(
-            [sys.executable, "-u", "-c", FIXTURE],
-            input="check\rexit\r",
-            capture_output=True, text=True, timeout=10,
-        )
-        print("DIRECT_STDOUT", result.stdout, flush=True)
-        print("DIRECT_STDERR", result.stderr, flush=True)
         panel = self.make_panel([sys.executable, "-u", "-c", FIXTURE])
-        print("MACOS_WAIT_READY", flush=True)
-        self.wait_for(lambda: "READY" in panel.screen.display[0], "PTY bytes were not parsed")
-        print("MACOS_PARSED", repr(panel.screen.display), repr(panel.screen.dirty), flush=True)
-        self.root.update()
-        print("MACOS_RENDERED", repr(panel.text.get("1.0", "end")), flush=True)
         self.wait_for(lambda: "READY" in panel.text.get("1.0", "end"), "PTY fixture did not start")
-        print("MACOS_SEND_CHECK", flush=True)
         panel.write(b"check\r")
         self.wait_for(lambda: "STATE_RC=0" in panel.text.get("1.0", "end"), "session wrapper failed through PTY")
-        print("MACOS_SEND_EXIT", flush=True)
         panel.write(b"exit\r")
         self.wait_for(lambda: "BYE" in panel.text.get("1.0", "end"), "PTY input did not reach the fixture")
-        print("MACOS_WAIT_REAPED", flush=True)
         self.wait_for(lambda: panel.reaped, "PTY child was not reaped")
-        print("MACOS_STOP_PANEL", flush=True)
         panel.stop()
         self.assert_reaped(panel)
 
