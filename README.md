@@ -2,9 +2,8 @@
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey) [![NIST SP 800-218](https://img.shields.io/badge/NIST%20SP%20800--218-SSDF-grey)](docs/standards-ablation.md) [![CISA Secure by Design](https://img.shields.io/badge/CISA-Secure%20by%20Design-grey)](docs/standards-ablation.md) [![MIL-HDBK-115C](https://img.shields.io/badge/MIL--HDBK--115C-Compliant-grey)](docs/standards-ablation.md)
 
-Ablation is an AI-assisted reverse engineering (AIARE) framework.
+ABLⱯTION is an AI-assisted reverse engineering (AIARE) framework.
 
-ABLⱯTION /forall
 
 
 ---
@@ -254,7 +253,7 @@ guiai desktop /path/to/target --session /path/to/session --agent kimi
 <summary>Acknowledgments</summary>
 
 
-Ablation wouldn't exist without these creative individuals.
+Ablation couldn't exist without these creative individuals.
 
 Though no code was written by these authors, doctors, and engineers, their work has direct influence on the production of code, and the aesthetics that makes Ablation what it is.
 
