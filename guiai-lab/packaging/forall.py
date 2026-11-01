@@ -140,6 +140,8 @@ def main(arguments=None):
             raise RuntimeError(f"Unable to move the completed installation into {destination}: {error}") from error
     executable = destination / ".venv" / ("Scripts/guiai.exe" if sys.platform == "win32" else "bin/guiai")
     print(f"\nGUIAI is installed in {destination}")
+    if sys.platform == "darwin":
+        print(f"Application: {destination / 'Ablation.app'}")
     print("Launch it with your installed AI Agent:")
     print(f'  "{executable}" desktop TARGET --session SESSION --toolkit tk --agent kimi')
     if not sys.platform.startswith("linux"):
