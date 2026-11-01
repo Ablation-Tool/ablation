@@ -253,6 +253,7 @@ guiai desktop /path/to/target --session /path/to/session --agent kimi
 <details>
 <summary>Acknowledgments</summary>
 
+
 Ablation wouldn't exist without these creative individuals.
 
 Though no code was written by these authors, doctors, and engineers, their work has direct influence on the production of code, and the aesthetics that makes Ablation what it is.
