@@ -1,27 +1,34 @@
-<img src="https://raw.githubusercontent.com/Ablation-Tool/ablation/34cdce474c381739fd8185ee52036a8dd1a0c98c/assets/branding/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
+<img src="assets/branding/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey) [![NIST SP 800-218](https://img.shields.io/badge/NIST%20SP%20800--218-SSDF-grey)](docs/standards-ablation.md) [![CISA Secure by Design](https://img.shields.io/badge/CISA-Secure%20by%20Design-grey)](docs/standards-ablation.md) [![MIL-HDBK-115C](https://img.shields.io/badge/MIL--HDBK--115C-Compliant-grey)](docs/standards-ablation.md)
 
-Ablation is an AI-assisted reverse engineering (AIARE) framework
+Ablation is an SI-assisted reverse engineering (SIARE) framework.
 
 ---
 
-![demo](assets/demos/claude-code-demo.gif)
+![GUIAI native workbench demo](assets/demos/guiai-workbench-demo.gif)
 
 ## GUIAI native workbench
 
-GUIAI pairs an agent-grown investigation Lab with your real interactive AI agent in a native terminal. The workspace preserves discovery history, selection, bookmarks, and review state while you direct the analysis. It includes the required METRIX support package, so no separate METRIX checkout is needed.
+GUIAI pairs an investigation Lab with your real AI agent in one native window. METRIX is included.
 
-- [Installation and workbench guide](guiai-lab/README.md)
-- [One universal install prompt for any AI agent](guiai-lab/INSTALL-PROMPT.md)
+On Ubuntu or Debian, install the native dependencies and GUIAI:
 
 ```bash
+sudo apt install python3-gi python3-cairo python3-gi-cairo gir1.2-gtk-3.0 gir1.2-vte-2.91
+python3 -m venv .venv
+. .venv/bin/activate
 python -m pip install ./guiai-lab
-guiai desktop /path/to/target --session /path/to/session --agent kimi
-# Also works with --agent claude, --agent codex, or --agent-command 'your-agent-cli --flag'
 ```
 
-The embedded CLI uses its own authentication, permissions, and provider policy. GUIAI supplies no model or credentials and does not execute the RE target.
+Launch with your agent:
+
+```bash
+guiai desktop /path/to/target --session /path/to/session --agent kimi
+# Also: --agent claude, --agent codex, or --agent-command 'your-agent-cli --flag'
+```
+
+[Workbench guide](guiai-lab/README.md) · [Universal install prompt](guiai-lab/INSTALL-PROMPT.md) · [Windows (WSL) and macOS (Tk) packages](guiai-lab/packaging/README.md)
 
 ## Capabilities
 
@@ -73,7 +80,7 @@ The embedded CLI uses its own authentication, permissions, and provider policy. 
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**AI Knowledge-Graph Analysis**](docs/reference-modules/knowledge-graph.md) | [1](ablation/analyzers/knowledge_graph.py)&nbsp;[2](sweeps/build_ablation_graph.py) | Combines knowledge graphs with agent-driven retrieval to explore relationships and iteratively refine binary analysis. |
+| [**SI Knowledge-Graph Analysis**](docs/reference-modules/knowledge-graph.md) | [1](ablation/analyzers/knowledge_graph.py)&nbsp;[2](sweeps/build_ablation_graph.py) | Combines knowledge graphs with agent-driven retrieval to explore relationships and iteratively refine binary analysis. |
 | [**Analysis Context & Caching**](docs/reference-modules/on-demand-analysis.md) | [1](ablation/analyzers/binary_context.py)&nbsp;[2](ablation/analyzers/xref_graph.py) | Reuses analysis results and session state across runs to avoid redundant processing. |
 | [**Architecture & ABI Models**](docs/reference-modules/isa-models.md) | [1](ablation/analyzers/insn_x86.py)&nbsp;[2](ablation/analyzers/isa_x86.py) | Normalizes x86 instructions and models register aliases, calling conventions, and Linux syscalls in 32-bit and 64-bit modes. |
 | [**Architecture Definition Language**](docs/reference-modules/encoding-dag.md) | [1](ablation/analyzers/encoding_dag.py) | Describes ISA encodings and semantics as reusable graphs, allowing new architectures without changing the core analysis engines. |
@@ -99,7 +106,7 @@ The embedded CLI uses its own authentication, permissions, and provider policy. 
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**AI-Guided Analysis**](docs/reference-modules/llm-analyst-loop.md) | [1](ablation/analyzers/llm_analyst/agent_loop.py)&nbsp;[2](ablation/analyzers/llm_analyst/rag_retriever.py) | Pre-fetches function context and prior results for single-call LLM naming, role analysis, and patch hypotheses. |
+| [**SI-Guided Analysis**](docs/reference-modules/llm-analyst-loop.md) | [1](ablation/analyzers/llm_analyst/agent_loop.py)&nbsp;[2](ablation/analyzers/llm_analyst/rag_retriever.py) | Pre-fetches function context and prior results for single-call LLM naming, role analysis, and patch hypotheses. |
 | [**Approximate Function Matching**](docs/reference-modules/sax-approximate-indexing.md) | [1](ablation/analyzers/sax_index.py)&nbsp;[2](ablation/analyzers/subsequence_searcher.py) | Indexes opcode-category sequences for fast approximate matching and DTW-based similar-function search. |
 | [**Cross-Target Learning**](docs/reference-modules/flywheel.md) | [1](ablation/analyzers/pattern_library.py)&nbsp;[2](ablation/analyzers/finding_registry.py) | Reuses productive findings, queries, and vendor-specific sink patterns across related targets while discarding unproductive patterns. |
 | [**Evidence Scoring & Validation**](docs/reference-modules/evidence-scoring-and-probe-ranking.md) | [1](ablation/analyzers/probe_ranker.py)&nbsp;[2](ablation/analyzers/probe_adapters.py) | Ranks probes by expected information gain and executes approved adapters to gather evidence for competing hypotheses. |
@@ -150,15 +157,13 @@ The embedded CLI uses its own authentication, permissions, and provider policy. 
 | [**ECU Security Analysis**](docs/reference-modules/ecu-security-access-scanner.md) | [1](ablation/analyzers/ecu_security_access_scanner.py)&nbsp;[2](ablation/analyzers/taint_tracker_tricore.py) | Detects predictable UDS and KWP2000 seeds and traces diagnostic input to memory writes on TriCore. |
 | [**Embedded Architecture Decoding**](docs/reference-modules/c166-c167-decoding.md) | [1](ablation/analyzers/ecu_c166_decoder.py)&nbsp;[2](ablation/analyzers/ecu_c28x_decoder.py) | Decodes C166/C167 and TI C28x instructions and recovers function starts from ECU firmware. |
 | [**Extraction & Triage**](docs/reference-modules/firmware-signature-and-secret-triage.md) | [1](ablation/core/firmware_analyzer.py)&nbsp;[2](ablation/analyzers/firmware_container.py) | Scans firmware signatures, strings, and entropy and extracts partitions from supported vendor containers. |
-| [**FELIX**](docs/reference-modules/felix-firmware.md) | [1](ablation/analyzers/xilinx_npi.py)&nbsp;[2](ablation/analyzers/versal_pdi.py)&nbsp;[3](ablation/analyzers/microblaze_decoder.py) | Analyzes FELIX PDI and XSA packages, embedded CDO images, RNPI/RCDO configuration, MicroBlaze boot firmware, and source and build evidence. |
 | [**Firmware Steganography**](docs/reference-modules/proto-fsm.md) | [1](ablation/analyzers/lsb_stego_extractor.py) | Extracts cryptographic material hidden in firmware bitmap pixels. |
 | [**Fortinet**](docs/reference-modules/firmware-extraction.md) | [1](ablation/analyzers/fortios_firmware_extractor.py)&nbsp;[2](ablation/analyzers/firmware_container_key_extractor.py) | Recovers FortiOS partition keys and extracts firmware containers into analyzable ELF and filesystem images. |
-| [**IBM i / TIMI Save Files**](docs/reference-modules/ibm-timi.md) | [1](ablation/ibm_timi/savf.py)&nbsp;[2](ablation/ibm_timi/catalogue.py)&nbsp;[3](ablation/ibm_timi/program.py)&nbsp;[4](ablation/ibm_timi/opm.py)&nbsp;[5](ablation/ibm_timi/cli.py) | Verifies QSYS SAVF records and recovers catalogues, two non-CL and two OPM CL program layouts, and bounded MI instruction/ODV/OES components. Decodes individual CPYNV and CPYBLA instructions with explicit unsupported forms. |
+| [**IBM i / TIMI Save Files**](docs/reference-modules/ibm-timi.md) | [1](ablation/ibm_timi/savf.py)&nbsp;[2](ablation/ibm_timi/catalogue.py)&nbsp;[3](ablation/ibm_timi/program.py)&nbsp;[4](ablation/ibm_timi/cli.py) | Verifies QSYS SAVF records and extracts bounded MI objects; recovers legacy catalogue entries and two non-CL program layouts with explicit, bounded code ranges. TIMI instruction decoding is not yet claimed. |
 | [**JFFS2 Recovery**](docs/reference-modules/jffs2.md) | [1](ablation/parsers/jffs2.py) | Reconstructs little-endian JFFS2 files with CRC and extent validation, without mounting or creating device nodes. |
 | [**Juniper**](docs/reference-modules/junos.md) | [1](ablation/core/junos_package.py)&nbsp;[2](ablation/core/junos_signature.py)&nbsp;[3](ablation/analyzers/junos_function_diff.py)&nbsp;[4](ablation/analyzers/gencfg.py)&nbsp;[5](ablation/analyzers/mips_ownership.py)&nbsp;[6](ablation/analyzers/gencfg_provenance.py)&nbsp;[7](ablation/analyzers/mips_message_provenance.py) | Extracts and verifies signed Junos packages, compares bounded MIPS32/o32 functions, validates VRF gencfg messages, and analyzes ownership and caller/argument provenance. |
 | [**Legacy Binary Formats**](docs/reference-modules/motorola-88000-bcs-coff.md) | [1](ablation/core/coff_m88k_parser.py)&nbsp;[2](ablation/core/guardian_pak_extractor.py) | Parses Motorola M88K COFF binaries and extracts files from Tandem NonStop Guardian PAK archives. |
 | [**Texas Instruments**](docs/reference-modules/texas-instruments-firmware.md) | [1](ablation/analyzers/ti_coff_loader.py)&nbsp;[2](ablation/analyzers/ti_nnc_scanner.py) | Parses TI COFF2 symbols and detects embedded NNC/TVM models, weak normalization symbols, and NPU usage risks. |
-| [**Xilinx ASCII NPI Hex**](docs/reference-modules/xilinx-npi-hex.md) | [1](ablation/analyzers/xilinx_npi.py)&nbsp;[2](ablation/analyzers/versal_pdi.py) | Decodes RNPI/RCDO text into validated binary CDO and parses large Versal configuration streams. |
 
 </details>
 
@@ -187,7 +192,7 @@ The embedded CLI uses its own authentication, permissions, and provider policy. 
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**AI & Agent Security**](docs/reference-modules/inference-endpoint-enumeration.md) | [1](modules/llm_enum.py)&nbsp;[2](ablation/analyzers/mcp_tool_taint_scanner.py) | Audits AI endpoints, MCP tool flows, RAG stores, and agent-to-agent trust chains for injection and data exposure. |
+| [**SI & Agent Security**](docs/reference-modules/inference-endpoint-enumeration.md) | [1](modules/llm_enum.py)&nbsp;[2](ablation/analyzers/mcp_tool_taint_scanner.py) | Audits SI endpoints, MCP tool flows, RAG stores, and agent-to-agent trust chains for injection and data exposure. |
 | [**API Security Testing**](docs/reference-modules/unknown-http-api-mapping.md) | [1](modules/api_re.py) | Discovers undocumented APIs and tests major web transports for authorization, injection, SSRF, JWT, and OAuth weaknesses. |
 | [**CAN Signal Decoding**](docs/reference-modules/calibration-parsers.md) | [1](modules/can_dbc_parser.py) | Maps CAN frames to named signals using DBC layouts and scaling metadata. |
 | [**Nginx Security Testing**](docs/reference-modules/nginx-fingerprinting-and-exposure.md) | [1](modules/nginx_enum.py) | Fingerprints Nginx and probes for exposed status endpoints, alias traversal, proxy SSRF, and request smuggling. |
@@ -363,7 +368,7 @@ The US Department of Defense handbook for reverse engineering methodology define
 </details>
 
 <details>
-<summary>AI Agent Install</summary>
+<summary>SI Agent Install</summary>
 
 ```text
 Set up Ablation from https://github.com/Ablation-Tool/ablation for me.
