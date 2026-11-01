@@ -290,6 +290,10 @@ The code couldn't exist without their ideas. Though no code was written by these
 | Real-World Cryptography | David Wong |
 | Agentic GraphRAG | [Anthony Alcaraz](https://github.com/anthonyalcaraz), [Sam Julien](https://github.com/samjulien) |
 
+**GUIAI Design and Direction**
+
+[Dr. Helen Horkan] contributed ideas and design feedback that helped shape GUIAI’s development and the direction of its native workbench. I’m grateful for her insight and for the influence it had on the project.
+
 **Honorable Mention**
 
 [Microsoft Excel (Data Analysis ToolPak)](https://support.microsoft.com/en-us/office/use-the-analysis-toolpak-to-perform-complex-data-analysis-6c67ccf0-f4a9-487c-8dec-bdb5a2cefab6). When analyzing closed infrastructure or securing black-box systems, this exact process is called timing analysis or telemetry reverse engineering. Without source code, the Data Analysis ToolPak mathematically deconstructs how an application works on the backend by strictly observing its inputs and outputs.
