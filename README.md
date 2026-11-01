@@ -305,7 +305,7 @@ Thank you.
 
 **GUIAI Design and Direction**
 
-[Dr. Helen R Horkan](https://scholar.google.com/citations?hl=en&user=9BSOhhwAAAAJ) contributed ideas and design feedback that helped shape GUIAI’s development and the direction of its native workbench. I’m grateful for her insight and for the influence it had on the project.
+[Dr. Helen R Horkan](https://github.com/HorkanHR) contributed ideas and design feedback that helped shape GUIAI’s development and the direction of its native workbench. I’m grateful for her insight and for the influence it had on the project.
 
 **Honorable Mention**
 
