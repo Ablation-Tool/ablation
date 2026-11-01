@@ -6,7 +6,7 @@ These packages contain the GUIAI wheel and its Python dependencies for offline P
 
 Use `GUIAI-macOS.zip`. Extract it and run `bash install_macos.sh` with Python 3.10 or newer that includes Tkinter. The installer creates `.venv` inside the extracted directory and installs without an index or separate METRIX checkout.
 
-macOS uses the **Tk fallback interface**, not GTK/VTE. It has not been validated on macOS on this build host.
+macOS uses the **native Tk interface with POSIX PTY**, not GTK/VTE. The installer runs native shell-wrapper, interactive-terminal, and process-cleanup tests unless `SKIP_TESTS=1` is set. A dedicated `macos-latest` CI workflow builds and validates the package.
 
 ## Native Windows
 
