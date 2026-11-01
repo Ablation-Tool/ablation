@@ -4,7 +4,7 @@
 
 One thing was not possible before in Ablation:
 
-1. **Detect AI/LLM API calls without policy enforcement in firmware.** Traditional Ablation modules track `system()` without auth checks or `strcpy()` without bounds checks. AI-enabled firmware introduces a new class of structural gap: a binary that calls an LLM inference endpoint but has no observable rate limiting, input validation, authorization checks, or audit logging. `PolicyEngineAbsenceDetector` is the AI-agent analogue of pre-auth command injection detection: it finds the combination of AI API usage and absent policy layer as a single structural finding rather than requiring manual correlation.
+1. **Detect AI/LLM API calls without policy enforcement in firmware.** Traditional Ablation modules track `system()` without auth checks or `strcpy()` without bounds checks. AI-enabled firmware introduces a new class of structural gap: a binary that calls an LLM inference endpoint but has no observable rate limiting, input validation, authorization checks, or audit logging. `PolicyEngineAbsenceDetector` is the AI Agent analogue of pre-auth command injection detection: it finds the combination of AI API usage and absent policy layer as a single structural finding rather than requiring manual correlation.
 
 ## Usage
 
