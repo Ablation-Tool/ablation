@@ -200,6 +200,7 @@ class TerminalPanel(ttk.Frame):
                 while True:
                     try:
                         data = os.read(self.fd, 65536)
+                        print(f"MACOS_RAW {data!r}", flush=True)
                     except BlockingIOError:
                         break
                     except OSError as error:
