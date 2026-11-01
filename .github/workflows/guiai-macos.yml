@@ -19,6 +19,7 @@ jobs:
       - name: Extract package
         run: unzip -q guiai-lab/dist/GUIAI-macOS.zip -d /tmp/guiai-macos-native
       - name: Install and validate native macOS
+        timeout-minutes: 3
         run: bash /tmp/guiai-macos-native/install_macos.sh
       - name: Upload native package
         uses: actions/upload-artifact@v4

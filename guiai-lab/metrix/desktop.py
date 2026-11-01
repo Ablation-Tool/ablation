@@ -231,6 +231,7 @@ class TerminalPanel(ttk.Frame):
             self.poll_after_id = self.after(30, self.poll)
 
     def _feed(self, data):
+        print(f"MACOS_FEED_BEGIN {data!r}", flush=True)
         try:
             self.stream.feed(data)
         except Exception as error:
@@ -238,6 +239,7 @@ class TerminalPanel(ttk.Frame):
             if warning != self.parser_warning:
                 self.parser_warning = warning
                 self.status_callback(warning)
+        print("MACOS_FEED_END", flush=True)
 
     def finish(self, message):
         if self.exited:
