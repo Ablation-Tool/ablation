@@ -10,7 +10,7 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework
 
 ## GUIAI native workbench
 
-GUIAI pairs an agent-grown investigation Lab with your real interactive AI agent in a native terminal. The workspace preserves discovery history, selection, bookmarks, and review state while you direct the analysis. It includes the required METRIX support package, so no separate METRIX checkout is needed.
+GUIAI pairs an agent-grown investigation Lab with your real interactive AI agent in a native terminal. The workspace preserves discovery history, selection, bookmarks, and review state while you direct the analysis.
 
 - [Installation and workbench guide](guiai-lab/README.md)
 - [One universal install prompt for any AI agent](guiai-lab/INSTALL-PROMPT.md)
