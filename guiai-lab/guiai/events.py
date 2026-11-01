@@ -494,5 +494,53 @@ The user may select a node and request more work. Read `{state_command}` before 
         })
         return state
 
+    def save_project(self, labs, active_lab):
+        if type(active_lab) is not int or active_lab < 1:
+            raise ValueError("active Lab must be a positive integer")
+        records = []
+        for lab in labs:
+            number = lab["number"]
+            session = lab["session"]
+            if type(number) is not int or number < 1:
+                raise ValueError("Lab number must be a positive integer")
+            if not isinstance(session, Session) or session.target != self.target or session.target_kind != self.target_kind:
+                raise ValueError("every Lab must belong to the project target")
+            try:
+                relative = session.root.relative_to(self.root)
+            except ValueError as error:
+                raise ValueError("every Lab session must be inside the project directory") from error
+            state = session.current_state()
+            records.append({
+                "number": number,
+                "session": relative.as_posix(),
+                "workspace": str(session.workspace),
+                "selected_id": state["selected_id"],
+            })
+        if active_lab not in {record["number"] for record in records}:
+            raise ValueError("active Lab is not part of this project")
+        manifest = {
+            "schema_version": 1,
+            "saved_utc": utc_now(),
+            "active_lab": active_lab,
+            "labs": records,
+        }
+        path = self.root / "project.json"
+        atomic_write(path, json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
+        return manifest
+
+    def project_active_lab(self):
+        path = self.root / "project.json"
+        if not path.exists():
+            return None
+        if path.stat().st_size > 65536:
+            raise ValueError("project.json exceeds 64 KiB")
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+            raise ValueError("invalid project manifest")
+        active_lab = manifest.get("active_lab")
+        if type(active_lab) is not int or active_lab < 1:
+            raise ValueError("invalid active Lab in project manifest")
+        return active_lab
+
     def counts(self):
         return dict(sorted(Counter(event["status"] for event in self.events()).items()))
