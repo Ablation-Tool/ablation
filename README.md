@@ -1,16 +1,17 @@
-<img src="assets/branding/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
+<img src="https://raw.githubusercontent.com/Ablation-Tool/ablation/34cdce474c381739fd8185ee52036a8dd1a0c98c/assets/branding/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey) [![NIST SP 800-218](https://img.shields.io/badge/NIST%20SP%20800--218-SSDF-grey)](docs/standards-ablation.md) [![CISA Secure by Design](https://img.shields.io/badge/CISA-Secure%20by%20Design-grey)](docs/standards-ablation.md) [![MIL-HDBK-115C](https://img.shields.io/badge/MIL--HDBK--115C-Compliant-grey)](docs/standards-ablation.md)
 
-Ablation is an SI-assisted reverse engineering (SIARE) framework.
+Ablation is an AI-assisted reverse engineering (AIARE) framework.
 
 ---
 
 ![GUIAI native workbench demo](assets/demos/guiai-workbench-demo.gif)
 
-## GUIAI native workbench
+<details>
+<summary>GUIAI native workbench</summary>
 
-GUIAI pairs an investigation Lab with your real AI agent in one native window. The workspace preserves discovery history, selection, bookmarks, and review state. METRIX is included.
+GUIAI pairs an investigation Lab with your real AI agent in one native window. METRIX is included.
 
 On Ubuntu or Debian, install the native dependencies and GUIAI:
 
@@ -29,6 +30,8 @@ guiai desktop /path/to/target --session /path/to/session --agent kimi
 ```
 
 [Workbench guide](guiai-lab/README.md) · [Universal install prompt](guiai-lab/INSTALL-PROMPT.md) · [Windows (WSL) and macOS (Tk) packages](guiai-lab/packaging/README.md)
+
+</details>
 
 ## Capabilities
 
@@ -80,7 +83,7 @@ guiai desktop /path/to/target --session /path/to/session --agent kimi
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**SI Knowledge-Graph Analysis**](docs/reference-modules/knowledge-graph.md) | [1](ablation/analyzers/knowledge_graph.py)&nbsp;[2](sweeps/build_ablation_graph.py) | Combines knowledge graphs with agent-driven retrieval to explore relationships and iteratively refine binary analysis. |
+| [**AI Knowledge-Graph Analysis**](docs/reference-modules/knowledge-graph.md) | [1](ablation/analyzers/knowledge_graph.py)&nbsp;[2](sweeps/build_ablation_graph.py) | Combines knowledge graphs with agent-driven retrieval to explore relationships and iteratively refine binary analysis. |
 | [**Analysis Context & Caching**](docs/reference-modules/on-demand-analysis.md) | [1](ablation/analyzers/binary_context.py)&nbsp;[2](ablation/analyzers/xref_graph.py) | Reuses analysis results and session state across runs to avoid redundant processing. |
 | [**Architecture & ABI Models**](docs/reference-modules/isa-models.md) | [1](ablation/analyzers/insn_x86.py)&nbsp;[2](ablation/analyzers/isa_x86.py) | Normalizes x86 instructions and models register aliases, calling conventions, and Linux syscalls in 32-bit and 64-bit modes. |
 | [**Architecture Definition Language**](docs/reference-modules/encoding-dag.md) | [1](ablation/analyzers/encoding_dag.py) | Describes ISA encodings and semantics as reusable graphs, allowing new architectures without changing the core analysis engines. |
@@ -106,7 +109,7 @@ guiai desktop /path/to/target --session /path/to/session --agent kimi
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**SI-Guided Analysis**](docs/reference-modules/llm-analyst-loop.md) | [1](ablation/analyzers/llm_analyst/agent_loop.py)&nbsp;[2](ablation/analyzers/llm_analyst/rag_retriever.py) | Pre-fetches function context and prior results for single-call LLM naming, role analysis, and patch hypotheses. |
+| [**AI-Guided Analysis**](docs/reference-modules/llm-analyst-loop.md) | [1](ablation/analyzers/llm_analyst/agent_loop.py)&nbsp;[2](ablation/analyzers/llm_analyst/rag_retriever.py) | Pre-fetches function context and prior results for single-call LLM naming, role analysis, and patch hypotheses. |
 | [**Approximate Function Matching**](docs/reference-modules/sax-approximate-indexing.md) | [1](ablation/analyzers/sax_index.py)&nbsp;[2](ablation/analyzers/subsequence_searcher.py) | Indexes opcode-category sequences for fast approximate matching and DTW-based similar-function search. |
 | [**Cross-Target Learning**](docs/reference-modules/flywheel.md) | [1](ablation/analyzers/pattern_library.py)&nbsp;[2](ablation/analyzers/finding_registry.py) | Reuses productive findings, queries, and vendor-specific sink patterns across related targets while discarding unproductive patterns. |
 | [**Evidence Scoring & Validation**](docs/reference-modules/evidence-scoring-and-probe-ranking.md) | [1](ablation/analyzers/probe_ranker.py)&nbsp;[2](ablation/analyzers/probe_adapters.py) | Ranks probes by expected information gain and executes approved adapters to gather evidence for competing hypotheses. |
@@ -192,7 +195,7 @@ guiai desktop /path/to/target --session /path/to/session --agent kimi
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**SI & Agent Security**](docs/reference-modules/inference-endpoint-enumeration.md) | [1](modules/llm_enum.py)&nbsp;[2](ablation/analyzers/mcp_tool_taint_scanner.py) | Audits SI endpoints, MCP tool flows, RAG stores, and agent-to-agent trust chains for injection and data exposure. |
+| [**AI & Agent Security**](docs/reference-modules/inference-endpoint-enumeration.md) | [1](modules/llm_enum.py)&nbsp;[2](ablation/analyzers/mcp_tool_taint_scanner.py) | Audits AI endpoints, MCP tool flows, RAG stores, and agent-to-agent trust chains for injection and data exposure. |
 | [**API Security Testing**](docs/reference-modules/unknown-http-api-mapping.md) | [1](modules/api_re.py) | Discovers undocumented APIs and tests major web transports for authorization, injection, SSRF, JWT, and OAuth weaknesses. |
 | [**CAN Signal Decoding**](docs/reference-modules/calibration-parsers.md) | [1](modules/can_dbc_parser.py) | Maps CAN frames to named signals using DBC layouts and scaling metadata. |
 | [**Nginx Security Testing**](docs/reference-modules/nginx-fingerprinting-and-exposure.md) | [1](modules/nginx_enum.py) | Fingerprints Nginx and probes for exposed status endpoints, alias traversal, proxy SSRF, and request smuggling. |
@@ -368,7 +371,7 @@ The US Department of Defense handbook for reverse engineering methodology define
 </details>
 
 <details>
-<summary>SI Agent Install</summary>
+<summary>AI Agent Install</summary>
 
 ```text
 Set up Ablation from https://github.com/Ablation-Tool/ablation for me.
