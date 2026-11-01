@@ -21,7 +21,7 @@ metrix = "metrix.cli:main"
 license-files = ["NOTICE", "licenses/*.txt"]
 
 [tool.setuptools.package-data]
-guiai = ["icons/*.svg"]
+guiai = ["icons/*.svg", "icons/*.png"]
 metrix = ["templates/*.html", "gui/*.html", "gui/*.css", "gui/*.js"]
 
 [tool.setuptools.packages.find]
