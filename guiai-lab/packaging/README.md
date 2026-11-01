@@ -18,9 +18,11 @@ Linux can use the native GTK/VTE interface when the distribution's GTK, VTE, and
 
 ## macOS
 
-Use `GUIAI-macOS.zip` with Python 3.10 or newer that includes Tkinter. Extract it and run `bash install_macos.sh`. The installer creates `.venv` inside the extracted directory and installs without an index or separate METRIX checkout.
+Use `GUIAI-macOS.zip` with Python 3.10 or newer that includes Tkinter. Extract it and run `bash install_macos.sh`. The installer creates `.venv` inside the extracted directory, installs without an index or separate METRIX checkout, and creates `Ablation.app` beside it.
 
-macOS uses the **native Tk interface with POSIX PTY**, not GTK/VTE. The installer runs native shell-wrapper, interactive-terminal, and process-cleanup tests unless `SKIP_TESTS=1` is set. A dedicated `macos-latest` CI workflow builds and validates the package.
+Open **Ablation.app** to choose a binary or material directory, project directory, and optional installed AI Agent. The setup window opens the existing GUIAI workbench; it does not install a model or credentials. The app includes its Python environment and `Ablation.icns` icon and can be moved to another folder on the same Mac. For scripted use, `Contents/MacOS/Ablation` forwards arguments to `guiai`, including `desktop`, `--agent`, and `--agent-command`.
+
+macOS uses the **native Tk interface with POSIX PTY**, not GTK/VTE. The app is built locally and is not signed or Apple-notarized. The installer validates shell wrapping, interactive PTY, cleanup, branding/layout/project saving, first-run setup, bundle execution, relocation, and Launch Services opening unless `SKIP_TESTS=1` is set. A dedicated `macos-latest` CI workflow builds and validates the package.
 
 ## Native Windows
 

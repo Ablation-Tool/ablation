@@ -38,6 +38,16 @@
 
 ---
 
+## v2.93.1
+
+**Native macOS application bundle.**
+
+- Added `Ablation.app` with the offline Python environment, native ICNS branding, and a first-run chooser for the RE target, project directory, and optional installed AI Agent.
+- Added atomic application creation and relocation-safe launching on the same Mac, with command forwarding to the existing GUIAI workbench and no bundled model or credentials.
+- Added native macOS validation for app execution, Launch Services, relocation, launcher input, and the existing terminal and workspace behavior. The locally generated app is not signed or Apple-notarized.
+
+---
+
 ## v2.93.0
 
 **Relocation-aware bFLT analysis and legacy ARM WindowAnalyzer support.**
