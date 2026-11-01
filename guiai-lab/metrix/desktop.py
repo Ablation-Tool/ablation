@@ -178,7 +178,7 @@ class TerminalPanel(ttk.Frame):
                 data = self.process.read(65536)
                 if not data:
                     break
-                self.read_queue.put(data)
+                self.read_queue.put(data.encode("utf-8"))
         except (EOFError, OSError):
             pass
         finally:
@@ -263,7 +263,7 @@ class TerminalPanel(ttk.Frame):
         if self.reaped:
             return
         if os.name == "nt":
-            self.process.terminate()
+            self.process.terminate(force=True)
             return
         try:
             os.killpg(self.process, signal_number)
@@ -305,7 +305,7 @@ class TerminalPanel(ttk.Frame):
                 setattr(self, attribute, None)
         self.write_queue.clear()
         if self.process is not None and not self.reaped:
-            self.signal_process(signal.SIGHUP)
+            self.signal_process(getattr(signal, "SIGHUP", signal.SIGINT))
             if not self.wait_for_child(1.0):
                 self.signal_process(signal.SIGKILL)
                 if not self.wait_for_child(1.0):
@@ -323,6 +323,8 @@ class TerminalPanel(ttk.Frame):
         if self.reader_thread is not None:
             self.reader_thread.join(timeout=1)
             self.reader_thread = None
+        if os.name == "nt" and self.process is not None:
+            self.process.close()
         self.exited = True
 
     def write(self, data):
@@ -342,7 +344,7 @@ class TerminalPanel(ttk.Frame):
             return
         while self.write_queue:
             try:
-                written = self.process.write(bytes(self.write_queue)) if os.name == "nt" else os.write(self.fd, self.write_queue)
+                written = self.process.write(bytes(self.write_queue).decode("utf-8")) if os.name == "nt" else os.write(self.fd, self.write_queue)
             except BlockingIOError:
                 break
             except OSError as error:
@@ -423,7 +425,7 @@ class TerminalPanel(ttk.Frame):
             self.screen.dirty.update(range(lines))
         if self.fd is not None:
             if os.name == "nt":
-                self.process.set_size(lines, columns)
+                self.process.setwinsize(lines, columns)
             else:
                 import fcntl
                 fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", lines, columns, 0, 0))

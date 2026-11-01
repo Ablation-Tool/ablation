@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -76,7 +77,7 @@ class WindowsNativeCase(unittest.TestCase):
             capture_output=True, text=True, timeout=10,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(self.session.target, result.stdout)
+        self.assertEqual(json.loads(result.stdout)["target"], self.session.target)
         self.assertEqual(self.session.workspace, self.root_path)
 
     def test_conpty_interactive_terminal(self):
