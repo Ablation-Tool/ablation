@@ -1,7 +1,7 @@
 from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timezone
-import fcntl
+from ._filelock import LOCK_EX, LOCK_SH, LOCK_UN, file_lock
 import hashlib
 import json
 import os
@@ -66,7 +66,7 @@ class Session:
         self.events_path = self.root / "events.jsonl"
         self.state_path = self.root / "state.json"
         self.metadata_path = self.root / "session.json"
-        self.cli_path = self.root / "bin" / "guiai"
+        self.cli_path = self.root / "bin" / ("guiai.cmd" if os.name == "nt" else "guiai")
         self.lock_path = self.root / ".events.lock"
         self.init_lock_path = self.root / ".init.lock"
         self.events_path.touch(exist_ok=True)
@@ -101,11 +101,11 @@ class Session:
     @contextmanager
     def _lock(self, path, operation):
         with path.open("a") as stream:
-            fcntl.flock(stream.fileno(), operation)
+            file_lock(stream, operation)
             try:
                 yield
             finally:
-                fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+                file_lock(stream, LOCK_UN)
 
     @property
     def target(self):
@@ -140,7 +140,7 @@ class Session:
 
     def set_workspace(self, path):
         workspace = self.resolve_workspace(path)
-        with self._lock(self.init_lock_path, fcntl.LOCK_EX):
+        with self._lock(self.init_lock_path, LOCK_EX):
             metadata = self._load_metadata()
             if metadata is None:
                 raise ValueError(f"session is not initialized: {self.root}")
@@ -166,7 +166,7 @@ class Session:
         if not binary.is_file():
             raise ValueError(f"target is not a regular file or directory: {binary}")
         digest = sha256(binary)
-        with self._lock(self.init_lock_path, fcntl.LOCK_EX):
+        with self._lock(self.init_lock_path, LOCK_EX):
             self.metadata = self._load_metadata() or self.metadata
             if self.metadata and self.metadata.get("sha256") != digest:
                 raise ValueError("session already belongs to a different target")
@@ -189,7 +189,7 @@ class Session:
         if cancelled and cancelled():
             raise ValueError("directory rescan cancelled")
         directory_id = hashlib.sha256(os.fsencode(str(directory))).hexdigest()
-        with self._lock(self.init_lock_path, fcntl.LOCK_EX):
+        with self._lock(self.init_lock_path, LOCK_EX):
             self.metadata = self._load_metadata() or self.metadata
             if self.metadata and (self.target_kind != "directory" or self.target != str(directory)):
                 raise ValueError("session already belongs to a different target")
@@ -230,8 +230,11 @@ class Session:
     def _write_cli_launcher(self):
         if self.cli_path.parent.is_symlink() or self.cli_path.is_symlink():
             raise ValueError("session CLI launcher must not use symbolic links")
-        command = shlex.join([sys.executable, "-B", "-m", "guiai"])
-        script = f"#!/bin/sh\nexec {command} \"$@\"\n"
+        if os.name == "nt":
+            script = f'@echo off\r\n"{sys.executable}" -B -m guiai %*\r\n'
+        else:
+            command = shlex.join([sys.executable, "-B", "-m", "guiai"])
+            script = f"#!/bin/sh\nexec {command} \"$@\"\n"
         if not self.cli_path.exists() or self.cli_path.read_text(encoding="utf-8") != script:
             atomic_write(self.cli_path, script)
         self.cli_path.chmod(0o700)
@@ -241,6 +244,22 @@ class Session:
         path = self.root / "AGENTS.md"
         if path.exists():
             return
+        if os.name == "nt":
+            state_command = '"%GUIAI_CLI%" state --session "%GUIAI_SESSION%"'
+            tree_command = '"%GUIAI_CLI%" tree --session "%GUIAI_SESSION%"'
+            emit_command = '''"%GUIAI_CLI%" emit --session "%GUIAI_SESSION%" ^
+  --id observation:initial-triage --parent "%GUIAI_ROOT_ID%" ^
+  --type observation --label "Initial triage" --status in_progress ^
+  --evidence analysis/initial-triage.txt --note "Record inspected paths and actual tool output"'''
+            shell_name = "bat"
+        else:
+            state_command = '"$GUIAI_CLI" state --session "$GUIAI_SESSION"'
+            tree_command = '"$GUIAI_CLI" tree --session "$GUIAI_SESSION"'
+            emit_command = '''"$GUIAI_CLI" emit --session "$GUIAI_SESSION" \\
+  --id observation:initial-triage --parent "$GUIAI_ROOT_ID" \\
+  --type observation --label 'Initial triage' --status in_progress \\
+  --evidence analysis/initial-triage.txt --note 'Record inspected paths and actual tool output'''
+            shell_name = "bash"
         text = f"""# GUIAI session guide
 
 This directory is the authoritative investigation session for `{self.target}` ({self.target_kind}).
@@ -250,8 +269,8 @@ Directory initialization inventories only top-level entries. Inspect subdirector
 
 ## Read current context
 
-- `"$GUIAI_CLI" state --session "$GUIAI_SESSION"` prints the selected investigation node and target.
-- `"$GUIAI_CLI" tree --session "$GUIAI_SESSION"` prints the current investigation tree.
+- `{state_command}` prints the selected investigation node and target.
+- `{tree_command}` prints the current investigation tree.
 - `events.jsonl` is append-only history. `state.json` is the current selection.
 - `GUIAI_TARGET`, `GUIAI_TARGET_KIND`, and `GUIAI_ROOT_ID` identify the investigation target.
 - `GUIAI_SESSION` stores session state; `GUIAI_WORKSPACE` is this terminal's working directory. They are independent of the RE target.
@@ -262,11 +281,8 @@ Directory initialization inventories only top-level entries. Inspect subdirector
 
 Use the CLI rather than editing JSONL manually:
 
-```bash
-"$GUIAI_CLI" emit --session "$GUIAI_SESSION" \
-  --id observation:initial-triage --parent "$GUIAI_ROOT_ID" \
-  --type observation --label 'Initial triage' --status in_progress \
-  --evidence analysis/initial-triage.txt --note 'Record inspected paths and actual tool output'
+```{shell_name}
+{emit_command}
 ```
 
 Use stable IDs and parents. Supported types: artifact, function, evidence, observation, hypothesis, finding, note.
@@ -274,7 +290,7 @@ Supported statuses: not_started, in_progress, partial, blocked, reviewed, comple
 Use `--scope` with complete_scoped. Human review does not automatically confirm an agent hypothesis.
 Only emit discoveries supported by actual tool output or inspected evidence. Record blockers and untouched branches explicitly.
 
-The user may select a node and request more work. Read `"$GUIAI_CLI" state --session "$GUIAI_SESSION"` before continuing so you build on the selected node's existing evidence rather than rediscovering it.
+The user may select a node and request more work. Read `{state_command}` before continuing so you build on the selected node's existing evidence rather than rediscovering it.
 """
         atomic_write(path, text)
 
@@ -333,7 +349,7 @@ The user may select a node and request more work. Read `"$GUIAI_CLI" state --ses
         if not specifications:
             return []
         required = {"id", "parent_id", "type", "label", "status", "source", "evidence", "note", "scope"}
-        with self._lock(self.lock_path, fcntl.LOCK_EX):
+        with self._lock(self.lock_path, LOCK_EX):
             latest = self._events_by_id_unlocked()
             results = []
             appended = []
@@ -407,7 +423,7 @@ The user may select a node and request more work. Read `"$GUIAI_CLI" state --ses
         return latest
 
     def events_by_id(self):
-        with self._lock(self.lock_path, fcntl.LOCK_SH):
+        with self._lock(self.lock_path, LOCK_SH):
             return self._events_by_id_unlocked()
 
     def events(self):

@@ -33,7 +33,7 @@ guiai desktop /path/to/target --session /path/to/session --agent kimi
 # Also: --agent claude, --agent codex, or --agent-command 'your-agent-cli --flag'
 ```
 
-[Workbench guide](guiai-lab/README.md) · [Universal install prompt](guiai-lab/INSTALL-PROMPT.md) · [Windows (WSL) and macOS (Tk) packages](guiai-lab/packaging/README.md)
+[Workbench guide](guiai-lab/README.md) · [Universal install prompt](guiai-lab/INSTALL-PROMPT.md) · [Windows native and macOS (Tk) packages](guiai-lab/packaging/README.md)
 
 </details>
 

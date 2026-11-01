@@ -8,10 +8,14 @@ Use `GUIAI-macOS.zip`. Extract it and run `bash install_macos.sh` with Python 3.
 
 macOS uses the **Tk fallback interface**, not GTK/VTE. It has not been validated on macOS on this build host.
 
-## Windows
+## Native Windows
 
-Use `GUIAI-Windows-WSL.zip`. Review `Install-GUIAI.ps1`, then run it with PowerShell. The installer uses Ubuntu through WSL, installs the native GTK/VTE dependencies with `sudo`, clones Ablation into the Ubuntu home directory if needed, and installs the bundled wheel.
+Use `GUIAI-Windows-Native.zip` with Python 3.11 x64 and Tcl/Tk support. Extract it and run `Install-WindowsNative.ps1` with PowerShell. The installer creates `.venv` in the extracted directory and installs offline using the bundled wheels.
 
-Windows requires **WSL with WSLg or another X server**. It is not a native Windows GUI package and may require a restart and Ubuntu first-run setup. It has not been validated on Windows on this build host.
+This package uses the **native Tk interface with ConPTY**, not WSL. The installer runs native session-wrapper, interactive-terminal, and process-cleanup tests unless `-SkipTests` is supplied. A dedicated `windows-latest` CI workflow builds and validates the package.
 
-The current terminal implementation is POSIX-specific. A native Windows ConPTY port would be separate work.
+## Windows WSL alternative
+
+Use `GUIAI-Windows-WSL.zip`. Review `Install-GUIAI.ps1`, then run it with PowerShell. This alternative installs Ubuntu through WSL and the native Linux GTK/VTE dependencies with `sudo`.
+
+Windows WSL requires **WSL with WSLg or another X server** and may require a restart and Ubuntu first-run setup. It is not a native Windows GUI package. The native Windows terminal uses ConPTY; the GTK/VTE interface remains Linux-specific.

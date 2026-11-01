@@ -4,14 +4,22 @@ import errno
 import json
 import os
 from pathlib import Path
-import pty
 import shlex
 import signal
 import struct
+import subprocess
 import sys
-import termios
 import time
+import queue
+import threading
 import tkinter as tk
+
+if os.name == "nt":
+    pty = None
+    termios = None
+else:
+    import pty
+    import termios
 from tkinter import filedialog, font as tkfont, ttk
 
 from .agent import parse_agent_command
@@ -75,6 +83,8 @@ class TerminalPanel(ttk.Frame):
         self.status_callback = status_callback
         self.process = None
         self.fd = None
+        self.read_queue = None
+        self.reader_thread = None
         self.exited = False
         self.reaped = False
         self.write_queue = bytearray()
@@ -119,67 +129,114 @@ class TerminalPanel(ttk.Frame):
     def start(self):
         if self.closed or self.process is not None:
             return
-        try:
-            pid, descriptor = pty.fork()
-        except OSError as error:
-            self.status_callback(f"Unable to start CLI: {error}")
-            return
-        if pid == 0:
+        environment = os.environ.copy()
+        package_root = str(Path(__file__).resolve().parent.parent)
+        environment.update({
+            "TERM": "xterm-256color", "COLORTERM": "truecolor",
+            "METRIX_OUTPUT": str(self.output), "METRIX_WORKSPACE": str(self.workspace),
+            "METRIX_CLI": subprocess.list2cmdline([sys.executable, "-m", "metrix"]) if os.name == "nt" else shlex.join([sys.executable, "-m", "metrix"]),
+            "PYTHONPATH": package_root + (os.pathsep + environment["PYTHONPATH"] if environment.get("PYTHONPATH") else ""),
+        })
+        if os.name == "nt":
             try:
-                os.chdir(self.workspace)
-                environment = os.environ.copy()
-                package_root = str(Path(__file__).resolve().parent.parent)
-                environment.update({
-                    "TERM": "xterm-256color", "COLORTERM": "truecolor",
-                    "METRIX_OUTPUT": str(self.output), "METRIX_WORKSPACE": str(self.workspace),
-                    "METRIX_CLI": shlex.join([sys.executable, "-m", "metrix"]),
-                    "PYTHONPATH": package_root + (os.pathsep + environment["PYTHONPATH"] if environment.get("PYTHONPATH") else ""),
-                })
-                os.execvpe(self.command[0], self.command, environment)
-            except BaseException as error:
-                os.write(2, f"Unable to start CLI: {error}\r\n".encode())
-                os._exit(127)
-        self.process = pid
-        self.fd = descriptor
-        os.set_blocking(self.fd, False)
-        self.status_callback(f"Embedded CLI: {Path(self.command[0]).name} (interactive PTY)")
+                from winpty import PtyProcess
+                self.process = PtyProcess.spawn(
+                    self.command, cwd=str(self.workspace), env=environment,
+                    dimensions=(self.lines, self.columns),
+                )
+            except (ImportError, OSError, RuntimeError) as error:
+                self.status_callback(f"Unable to start CLI: {error}")
+                return
+            self.fd = True
+            self.read_queue = queue.Queue()
+            self.reader_thread = threading.Thread(target=self._read_windows, daemon=True)
+            self.reader_thread.start()
+        else:
+            try:
+                pid, descriptor = pty.fork()
+            except OSError as error:
+                self.status_callback(f"Unable to start CLI: {error}")
+                return
+            if pid == 0:
+                try:
+                    os.chdir(self.workspace)
+                    os.execvpe(self.command[0], self.command, environment)
+                except BaseException as error:
+                    os.write(2, f"Unable to start CLI: {error}\r\n".encode())
+                    os._exit(127)
+            self.process = pid
+            self.fd = descriptor
+            os.set_blocking(self.fd, False)
+        terminal_kind = "ConPTY" if os.name == "nt" else "PTY"
+        self.status_callback(f"Embedded CLI: {Path(self.command[0]).name} (interactive {terminal_kind})")
         self.text.focus_set()
         self.resize_terminal()
 
+    def _read_windows(self):
+        try:
+            while True:
+                data = self.process.read(65536)
+                if not data:
+                    break
+                self.read_queue.put(data.encode("utf-8"))
+        except (EOFError, OSError):
+            pass
+        finally:
+            self.read_queue.put(None)
+
     def poll(self):
         if self.fd is not None:
-            while True:
-                try:
-                    data = os.read(self.fd, 65536)
-                except BlockingIOError:
-                    break
-                except OSError as error:
-                    if error.errno == errno.EIO:
+            if os.name == "nt":
+                while True:
+                    try:
+                        data = self.read_queue.get_nowait()
+                    except queue.Empty:
+                        break
+                    if data is None:
                         self.finish("CLI session closed")
                         break
-                    self.finish(f"CLI read error: {error}")
-                    break
-                if not data:
-                    self.finish("CLI session closed")
-                    break
-                try:
-                    self.stream.feed(data)
-                except Exception as error:
-                    warning = f"Terminal display warning: {error}"
-                    if warning != self.parser_warning:
-                        self.parser_warning = warning
-                        self.status_callback(warning)
+                    self._feed(data)
+            else:
+                while True:
+                    try:
+                        data = os.read(self.fd, 65536)
+                    except BlockingIOError:
+                        break
+                    except OSError as error:
+                        if error.errno == errno.EIO:
+                            self.finish("CLI session closed")
+                            break
+                        self.finish(f"CLI read error: {error}")
+                        break
+                    if not data:
+                        self.finish("CLI session closed")
+                        break
+                    self._feed(data)
         if self.process is not None and not self.reaped:
-            try:
-                pid, status = os.waitpid(self.process, os.WNOHANG)
-            except ChildProcessError:
-                pid, status = self.process, 0
-            if pid:
-                self.reaped = True
-                code = os.waitstatus_to_exitcode(status) if hasattr(os, "waitstatus_to_exitcode") else status
-                self.finish(f"CLI exited ({code})")
+            if os.name == "nt":
+                if not self.process.isalive():
+                    self.reaped = True
+                    self.finish("CLI session closed")
+            else:
+                try:
+                    pid, status = os.waitpid(self.process, os.WNOHANG)
+                except ChildProcessError:
+                    pid, status = self.process, 0
+                if pid:
+                    self.reaped = True
+                    code = os.waitstatus_to_exitcode(status) if hasattr(os, "waitstatus_to_exitcode") else status
+                    self.finish(f"CLI exited ({code})")
         if not self.closed:
             self.poll_after_id = self.after(30, self.poll)
+
+    def _feed(self, data):
+        try:
+            self.stream.feed(data)
+        except Exception as error:
+            warning = f"Terminal display warning: {error}"
+            if warning != self.parser_warning:
+                self.parser_warning = warning
+                self.status_callback(warning)
 
     def finish(self, message):
         if self.exited:
@@ -193,16 +250,20 @@ class TerminalPanel(ttk.Frame):
             self.write_after_id = None
         self.write_queue.clear()
         if self.fd is not None:
-            try:
-                os.close(self.fd)
-            except OSError:
-                pass
+            if os.name != "nt":
+                try:
+                    os.close(self.fd)
+                except OSError:
+                    pass
             self.fd = None
         if not self.closed:
             self.status_callback(message)
 
     def signal_process(self, signal_number):
         if self.reaped:
+            return
+        if os.name == "nt":
+            self.process.terminate(force=True)
             return
         try:
             os.killpg(self.process, signal_number)
@@ -214,6 +275,11 @@ class TerminalPanel(ttk.Frame):
 
     def wait_for_child(self, timeout):
         deadline = time.monotonic() + timeout
+        if os.name == "nt":
+            while self.process.isalive() and time.monotonic() < deadline:
+                time.sleep(0.02)
+            self.reaped = not self.process.isalive()
+            return self.reaped
         while True:
             try:
                 pid, _ = os.waitpid(self.process, os.WNOHANG)
@@ -239,7 +305,7 @@ class TerminalPanel(ttk.Frame):
                 setattr(self, attribute, None)
         self.write_queue.clear()
         if self.process is not None and not self.reaped:
-            self.signal_process(signal.SIGHUP)
+            self.signal_process(getattr(signal, "SIGHUP", signal.SIGINT))
             if not self.wait_for_child(1.0):
                 self.signal_process(signal.SIGKILL)
                 if not self.wait_for_child(1.0):
@@ -248,11 +314,17 @@ class TerminalPanel(ttk.Frame):
                     except tk.TclError:
                         pass
         if self.fd is not None:
-            try:
-                os.close(self.fd)
-            except OSError:
-                pass
+            if os.name != "nt":
+                try:
+                    os.close(self.fd)
+                except OSError:
+                    pass
             self.fd = None
+        if self.reader_thread is not None:
+            self.reader_thread.join(timeout=1)
+            self.reader_thread = None
+        if os.name == "nt" and self.process is not None:
+            self.process.close()
         self.exited = True
 
     def write(self, data):
@@ -272,7 +344,7 @@ class TerminalPanel(ttk.Frame):
             return
         while self.write_queue:
             try:
-                written = os.write(self.fd, self.write_queue)
+                written = self.process.write(bytes(self.write_queue).decode("utf-8")) if os.name == "nt" else os.write(self.fd, self.write_queue)
             except BlockingIOError:
                 break
             except OSError as error:
@@ -352,8 +424,11 @@ class TerminalPanel(ttk.Frame):
             self.screen.cursor.y = max(0, min(previous_cursor.y - start, lines - 1))
             self.screen.dirty.update(range(lines))
         if self.fd is not None:
-            import fcntl
-            fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", lines, columns, 0, 0))
+            if os.name == "nt":
+                self.process.setwinsize(lines, columns)
+            else:
+                import fcntl
+                fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", lines, columns, 0, 0))
         self.render(force=True)
 
     def style_tag(self, character):
