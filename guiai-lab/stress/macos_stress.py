@@ -142,7 +142,7 @@ class MacOSNativeCase(unittest.TestCase):
         self.assertNotIn("--agent", dialog.arguments())
         dialog.agent.set(sys.executable)
         expected = dialog.arguments()
-        self.assertEqual(expected[:2], ["desktop", sys.executable])
+        self.assertEqual(expected[:2], ["desktop", str(Path(sys.executable).resolve())])
         self.assertEqual(expected[-2:], ["--agent", sys.executable])
         dialog.agent.set("guiai-agent-that-does-not-exist")
         with self.assertRaises(ValueError):
