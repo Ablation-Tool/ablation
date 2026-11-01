@@ -59,7 +59,7 @@ python -m pip install ./guiai-lab
 
 METRIX and `pyte` are included or installed automatically. No separate METRIX checkout is required. Install the full Ablation CLI only if you also need its analysis tools: `python -m pip install -e .`
 
-Start with the **[all-platform installation guide](INSTALL.md)** or copy the **[AI Agent Prompt Install](INSTALL-PROMPT.md)** into your agent.
+Start with the **[all-platform installation guide](INSTALL.md)** or copy the **[AI Agent Installation Prompt](INSTALL-PROMPT.md)** into your agent.
 
 ## Start a session
 
