@@ -14,6 +14,10 @@ cd "$SOURCE"
 . .venv/bin/activate
 python -m pip install --no-index --find-links "$SOURCE/vendor" "$SOURCE/guiai_lab-0.1.0-py3-none-any.whl"
 
+if [[ "${SKIP_TESTS:-0}" != "1" && -f "$SOURCE/macos_stress.py" ]]; then
+    python "$SOURCE/macos_stress.py"
+fi
+
 cat <<'EOF'
 GUIAI is installed. macOS uses the Tk interface.
 

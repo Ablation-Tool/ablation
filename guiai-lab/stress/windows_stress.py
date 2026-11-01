@@ -67,7 +67,8 @@ class WindowsNativeCase(unittest.TestCase):
                 return
             self.root.update()
             time.sleep(0.02)
-        self.fail(message)
+        output = self.panels[-1].text.get("1.0", "end") if self.panels else ""
+        self.fail(f"{message}: {output!r}")
 
     def test_cmd_wrapper_and_workspace(self):
         self.assertEqual(self.session.cli_path.suffix, ".cmd")

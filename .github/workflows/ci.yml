@@ -19,7 +19,7 @@ jobs:
           cache: pip
 
       - name: Install package and core deps
-        run: pip install -e ".[full]"
+        run: pip install -e ".[full]" pytest-cov
 
       - name: Import smoke test
         run: |
