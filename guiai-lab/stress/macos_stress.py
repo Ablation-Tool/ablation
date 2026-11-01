@@ -9,8 +9,10 @@ import time
 import tkinter as tk
 import unittest
 
+from guiai.app import InvestigationApp
 from guiai.environment import configure_environment
 from guiai.events import Session
+from guiai.layout import LAYOUTS
 from metrix.desktop import TerminalPanel
 
 
@@ -107,6 +109,22 @@ class MacOSNativeCase(unittest.TestCase):
         self.wait_for(lambda: "READY" in panel.text.get("1.0", "end"), "stubborn child did not start")
         panel.stop()
         self.assert_reaped(panel)
+
+    def test_workspace_branding_layout_and_save(self):
+        application = InvestigationApp(self.root, self.session)
+        try:
+            self.assertEqual(application.brand_header_image.width(), 32)
+            self.assertTrue(application.brand_header_image.transparency_get(0, 0))
+            application.show_preferences()
+            for layout in LAYOUTS:
+                self.assertTrue(application.select_layout(layout))
+                expected = "horizontal" if layout in {"lab-left", "lab-right"} else "vertical"
+                self.assertEqual(str(application.panes.cget("orient")), expected)
+            manifest = application.save_project()
+            self.assertEqual(manifest["active_lab"], 1)
+            application.close_preferences()
+        finally:
+            application.close()
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ from metrix.desktop import TerminalPanel
 
 from .environment import configure_environment
 from .events import STATUSES, Session
+from .layout import LAYOUTS, load_layout, save_layout
 
 
 UBUNTU = {
@@ -35,6 +36,16 @@ class InvestigationApp:
         self.session = session
         self.command = command
         self.workspace = Path(workspace).expanduser().resolve() if workspace else session.root
+        self.layout_error = None
+        try:
+            self.layout = load_layout(session.root)
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            self.layout = "lab-left"
+            self.layout_error = str(error)
+        self.applied_layout = None
+        self.layout_after_id = None
+        self.layout_buttons = {}
+        self.preferences_window = None
         self.events = []
         self.filter_variable = tk.StringVar(value="All")
         self.search_variable = tk.StringVar()
@@ -50,7 +61,14 @@ class InvestigationApp:
         self.configure_theme()
         header = ttk.Frame(self.root, style="Header.TFrame", padding=(12, 8))
         header.pack(fill="x")
+        icon_root = Path(__file__).resolve().parent / "icons"
+        self.brand_image = tk.PhotoImage(master=self.root, file=str(icon_root / "ablation-guiai-logo.png"))
+        self.brand_header_image = tk.PhotoImage(master=self.root, file=str(icon_root / "ablation-guiai-logo-32.png"))
+        self.root.iconphoto(True, self.brand_image)
+        ttk.Label(header, image=self.brand_header_image, style="Header.TLabel").pack(side="left")
         ttk.Label(header, textvariable=self.agent_variable, style="Header.TLabel").pack(side="right")
+        ttk.Button(header, text="Save project", command=self.save_project).pack(side="right", padx=6)
+        ttk.Button(header, text="Preferences", command=self.show_preferences).pack(side="right")
         ttk.Label(
             header, text="GUIAI Lab Workbench",
             style="HeaderTitle.TLabel", font=("TkDefaultFont", 16, "bold"),
@@ -60,14 +78,22 @@ class InvestigationApp:
             text=f"Target: {session.target}  ·  {session.target_kind}  ·  Session: {session.root}",
             wraplength=1400, justify="left", padding=(8, 4, 8, 0),
         ).pack(fill="x")
-        panes = ttk.Panedwindow(self.root, orient="horizontal")
-        panes.pack(fill="both", expand=True, padx=8, pady=8)
-        left = ttk.Frame(panes)
-        panes.add(left, weight=3)
-        self.build_tree(left)
-        self.terminal = TerminalPanel(panes, session.root, self.workspace, command, self.agent_variable.set)
+        if self.layout_error:
+            ttk.Label(
+                self.root, text=f"Preferences could not be loaded: {self.layout_error}",
+                foreground="#9a6700", padding=(8, 4, 8, 0),
+            ).pack(fill="x")
+        self.pane_host = ttk.Frame(self.root)
+        self.pane_host.pack(fill="both", expand=True, padx=8, pady=8)
+        self.panes = ttk.Panedwindow(self.pane_host, orient="horizontal")
+        self.panes.pack(fill="both", expand=True)
+        self.left = ttk.Frame(self.pane_host)
+        self.panes.add(self.left, weight=3)
+        self.build_tree(self.left)
+        self.terminal = TerminalPanel(self.pane_host, session.root, self.workspace, command, self.agent_variable.set)
         self.terminal.text.bind("<ButtonPress-1>", lambda _event: self.focus_agent(), add="+")
-        panes.add(self.terminal, weight=2)
+        self.panes.add(self.terminal, weight=2)
+        self.apply_layout()
         bottom = ttk.Frame(self.root, padding=(8, 0, 8, 8))
         bottom.pack(fill="x")
         ttk.Label(bottom, textvariable=self.counts_variable).pack(side="left")
@@ -76,6 +102,144 @@ class InvestigationApp:
             ttk.Button(bottom, text="Rescan directory", command=self.rescan_directory).pack(side="right", padx=(0, 6))
         self.reload()
         self.after_refresh()
+
+    def save_project(self):
+        try:
+            save_layout(self.session.root, self.layout)
+            manifest = self.session.save_project([
+                {"number": 1, "session": self.session, "workspace": self.workspace},
+            ], 1)
+        except (OSError, ValueError, KeyError, json.JSONDecodeError) as error:
+            self.counts_variable.set(f"Could not save project: {error}")
+            return None
+        self.counts_variable.set(f"Project saved · {self.session.root}")
+        return manifest
+
+    def show_preferences(self):
+        if self.preferences_window is not None and self.preferences_window.winfo_exists():
+            self.preferences_window.lift()
+            return
+        window = tk.Toplevel(self.root)
+        window.title("Preferences")
+        window.transient(self.root)
+        window.resizable(False, False)
+        self.preferences_window = window
+        window.protocol("WM_DELETE_WINDOW", self.close_preferences)
+        content = ttk.Frame(window, padding=14)
+        content.pack(fill="both", expand=True)
+        ttk.Label(content, text="Workspace layout", font=("TkDefaultFont", 12, "bold")).pack(anchor="w")
+        ttk.Label(content, text="1 Lab · 2 AI Agent").pack(anchor="w", pady=(4, 12))
+        grid = ttk.Frame(content)
+        grid.pack()
+        self.layout_buttons = {}
+        for index, layout in enumerate(LAYOUTS):
+            button = tk.Button(
+                grid, relief="groove", background=UBUNTU["surface"],
+                activebackground=UBUNTU["button"], highlightthickness=2,
+                command=lambda selected=layout: self.select_layout(selected),
+            )
+            canvas = tk.Canvas(
+                button, width=180, height=100, borderwidth=0, highlightthickness=0,
+                background=UBUNTU["surface"],
+            )
+            canvas.pack()
+            self.draw_layout_preview(canvas, layout)
+            canvas.bind("<Button-1>", lambda _event, selected=button: selected.invoke())
+            button.grid(row=index // 2, column=index % 2, padx=6, pady=6)
+            self.layout_buttons[layout] = button
+        self.update_layout_buttons()
+        ttk.Button(content, text="Close", command=self.close_preferences).pack(anchor="e", pady=(12, 0))
+
+    def close_preferences(self):
+        if self.preferences_window is not None:
+            self.preferences_window.destroy()
+            self.preferences_window = None
+
+    @staticmethod
+    def draw_layout_preview(canvas, layout):
+        canvas.delete("all")
+        horizontal = layout in {"lab-left", "lab-right"}
+        first_lab = layout in {"lab-left", "lab-top"}
+        first = (12, 12, 88, 88) if horizontal else (12, 12, 168, 48)
+        second = (96, 12, 168, 88) if horizontal else (12, 56, 168, 88)
+        for number, rectangle in enumerate((first, second) if first_lab else (second, first), 1):
+            canvas.create_rectangle(rectangle, fill=UBUNTU["button"], outline=UBUNTU["text"], width=1.4)
+            canvas.create_text(
+                (rectangle[0] + rectangle[2]) / 2, (rectangle[1] + rectangle[3]) / 2,
+                text=str(number), fill=UBUNTU["text"], font=("TkDefaultFont", 13, "bold"),
+            )
+
+    def update_layout_buttons(self):
+        for layout, button in self.layout_buttons.items():
+            selected = layout == self.layout
+            button.configure(
+                highlightbackground=UBUNTU["accent"] if selected else UBUNTU["border"],
+                background=UBUNTU["button"] if selected else UBUNTU["surface"],
+            )
+
+    def select_layout(self, layout):
+        try:
+            save_layout(self.session.root, layout)
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            self.counts_variable.set(f"Could not save layout: {error}")
+            return False
+        self.layout = layout
+        self.apply_layout()
+        self.update_layout_buttons()
+        self.counts_variable.set("Workspace layout saved")
+        return True
+
+    def apply_layout(self):
+        if self.layout == self.applied_layout:
+            return
+        horizontal = self.layout in {"lab-left", "lab-right"}
+        previous_horizontal = str(self.panes.cget("orient")) == "horizontal"
+        extent = self.panes.winfo_width() if previous_horizontal else self.panes.winfo_height()
+        position = self.panes.sashpos(0)
+        if self.applied_layout is None:
+            desired = 800 if horizontal else 450
+        else:
+            ratio = position / extent if extent > 0 else 0.6
+            previous_lab_first = self.applied_layout in {"lab-left", "lab-top"}
+            if previous_lab_first != (self.layout in {"lab-left", "lab-top"}):
+                ratio = 1 - ratio
+            new_extent = extent if horizontal == previous_horizontal else (
+                self.panes.winfo_height() if previous_horizontal else self.panes.winfo_width()
+            )
+            desired = round((new_extent if new_extent > 1 else (800 if horizontal else 450)) * ratio)
+        self.panes.destroy()
+        self.panes = ttk.Panedwindow(
+            self.pane_host, orient="horizontal" if horizontal else "vertical",
+        )
+        self.panes.pack(fill="both", expand=True)
+        first, second = (self.left, self.terminal) if self.layout in {"lab-left", "lab-top"} else (self.terminal, self.left)
+        self.panes.add(first, weight=3)
+        self.panes.add(second, weight=2)
+        self.applied_layout = self.layout
+        if self.layout_after_id is not None:
+            self.root.after_cancel(self.layout_after_id)
+        self.layout_after_id = self.root.after_idle(
+            lambda selected=self.layout: self.restore_layout_sash(selected, desired)
+        )
+
+    def restore_layout_sash(self, layout, position):
+        self.layout_after_id = None
+        if getattr(self, "closed", False) or self.applied_layout != layout:
+            return
+        if not self.panes.winfo_ismapped():
+            self.layout_after_id = self.root.after(
+                30, lambda: self.restore_layout_sash(layout, position)
+            )
+            return
+        horizontal = layout in {"lab-left", "lab-right"}
+        extent = self.panes.winfo_width() if horizontal else self.panes.winfo_height()
+        if extent <= 1:
+            self.layout_after_id = self.root.after(
+                30, lambda: self.restore_layout_sash(layout, position)
+            )
+            return
+        minimum = min(120, extent // 4)
+        self.panes.sashpos(0, max(minimum, min(position, extent - minimum)))
 
     def configure_environment(self):
         configure_environment(self.session)
@@ -431,7 +595,15 @@ class InvestigationApp:
     def close(self):
         if getattr(self, "closed", False):
             return
+        self.save_project()
+        self.close_preferences()
         self.closed = True
+        if self.layout_after_id is not None:
+            try:
+                self.root.after_cancel(self.layout_after_id)
+            except tk.TclError:
+                pass
+            self.layout_after_id = None
         if self.refresh_after_id is not None:
             try:
                 self.root.after_cancel(self.refresh_after_id)

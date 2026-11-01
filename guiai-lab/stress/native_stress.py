@@ -13,6 +13,7 @@ from unittest import mock
 
 from guiai.app import InvestigationApp
 from guiai.events import Session
+from guiai.layout import LAYOUTS
 from metrix.desktop import TerminalPanel, TerminalScreen
 import pyte
 
@@ -167,6 +168,60 @@ class NativeCase(unittest.TestCase):
         self.session.emit("function:café-雪", self.artifact, "function", "関数 🧪")
         self.app.reload()
         self.assertTrue(self.app.tree.exists("function:café-雪"))
+
+    def test_visual_layouts_and_project_restoration(self):
+        self.root.deiconify()
+        self.assertEqual(self.app.brand_image.width(), 512)
+        self.assertEqual(self.app.brand_header_image.width(), 32)
+        self.assertTrue(self.app.brand_header_image.transparency_get(0, 0))
+        self.app.show_preferences()
+        self.assertEqual(set(self.app.layout_buttons), set(LAYOUTS))
+        terminal = self.app.terminal
+        tree = self.app.tree
+        for layout in LAYOUTS:
+            with self.subTest(layout=layout):
+                self.assertTrue(self.app.select_layout(layout))
+                self.assertEqual(self.app.layout, layout)
+                expected_orientation = "horizontal" if layout in {"lab-left", "lab-right"} else "vertical"
+                self.assertEqual(str(self.app.panes.cget("orient")), expected_orientation)
+                expected_first = self.app.left if layout in {"lab-left", "lab-top"} else terminal
+                self.assertEqual(self.app.panes.panes()[0], str(expected_first))
+                self.assertIs(self.app.terminal, terminal)
+                self.assertIs(self.app.tree, tree)
+                self.assertIsInstance(self.app.layout_buttons[layout].winfo_children()[0], tk.Canvas)
+                deadline = time.monotonic() + 2
+                while time.monotonic() < deadline:
+                    self.root.update_idletasks()
+                    self.root.tk.dooneevent(tk._tkinter.DONT_WAIT)
+                    if self.app.layout_after_id is None and self.app.left.winfo_ismapped() and terminal.winfo_ismapped():
+                        if self.app.left.winfo_width() > 0 and self.app.left.winfo_height() > 0 and terminal.winfo_width() > 0 and terminal.winfo_height() > 0:
+                            break
+                    time.sleep(0.01)
+                geometry = (
+                    f"{layout}: left={self.app.left.winfo_width()}x{self.app.left.winfo_height()} "
+                    f"terminal={terminal.winfo_width()}x{terminal.winfo_height()} "
+                    f"mapped={self.app.left.winfo_ismapped()}/{terminal.winfo_ismapped()} "
+                    f"sash={self.app.panes.sashpos(0)}"
+                )
+                self.assertTrue(self.app.left.winfo_ismapped(), geometry)
+                self.assertTrue(terminal.winfo_ismapped(), geometry)
+                self.assertGreater(self.app.left.winfo_width(), 0, geometry)
+                self.assertGreater(self.app.left.winfo_height(), 0, geometry)
+                self.assertGreater(terminal.winfo_width(), 0, geometry)
+                self.assertGreater(terminal.winfo_height(), 0, geometry)
+        manifest = self.app.save_project()
+        self.assertEqual(manifest["active_lab"], 1)
+        self.assertEqual(manifest["labs"][0]["selected_id"], self.artifact)
+        self.assertEqual(self.app.session.project_active_lab(), 1)
+        self.app.close_preferences()
+        root = tk.Tk()
+        root.withdraw()
+        restored = InvestigationApp(root, Session(self.session.root, self.session.target))
+        self.addCleanup(restored.close)
+        self.assertEqual(restored.layout, "lab-bottom")
+        self.assertEqual(str(restored.panes.cget("orient")), "vertical")
+        self.assertEqual(restored.panes.panes()[0], str(restored.terminal))
+        self.assertIsNone(restored.layout_error)
 
     def test_private_device_status_sequence(self):
         screen = TerminalScreen(80, 24)
