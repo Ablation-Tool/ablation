@@ -46,13 +46,13 @@ The GTK interface uses `Gtk.Application`, `Gtk.Notebook`, `Gtk.TreeStore`, `Gtk.
 
 ## Install
 
-GUIAI requires Linux with X11 and Python 3.10 or newer. On Ubuntu or Debian:
+Native GTK/VTE requires Linux with X11 and Python 3.10 or newer. Native Windows and macOS packages use Tk with ConPTY or POSIX PTY; see the [platform packages](packaging/README.md). On Ubuntu or Debian:
 
 ```bash
-sudo apt install python3-gi python3-cairo python3-gi-cairo gir1.2-gtk-3.0 gir1.2-vte-2.91
+sudo apt install python3-venv python3-tk python3-gi python3-cairo python3-gi-cairo gir1.2-gtk-3.0 gir1.2-vte-2.91
 git clone https://github.com/Ablation-Tool/ablation.git
 cd ablation
-python3 -m venv .venv
+python3 -m venv --system-site-packages .venv
 . .venv/bin/activate
 python -m pip install ./guiai-lab
 ```
