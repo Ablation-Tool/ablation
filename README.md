@@ -4,6 +4,9 @@
 
 Ablation is an AI-assisted reverse engineering (AIARE) framework.
 
+ABLⱯTION /forall
+
+
 ---
 
 ![GUIAI native workbench demo](assets/demos/guiai-workbench-demo.gif)
