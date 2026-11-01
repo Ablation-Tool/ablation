@@ -67,7 +67,9 @@ class MacOSNativeCase(unittest.TestCase):
         while time.monotonic() < deadline:
             if predicate():
                 return
+            print("MACOS_UPDATE_BEGIN", flush=True)
             self.root.update()
+            print("MACOS_UPDATE_END", flush=True)
             time.sleep(0.02)
         output = self.panels[-1].text.get("1.0", "end") if self.panels else ""
         self.fail(f"{message}: {output!r}")
@@ -98,6 +100,10 @@ class MacOSNativeCase(unittest.TestCase):
         print("DIRECT_STDERR", result.stderr, flush=True)
         panel = self.make_panel([sys.executable, "-u", "-c", FIXTURE])
         print("MACOS_WAIT_READY", flush=True)
+        self.wait_for(lambda: "READY" in panel.screen.display[0], "PTY bytes were not parsed")
+        print("MACOS_PARSED", repr(panel.screen.display), repr(panel.screen.dirty), flush=True)
+        self.root.update()
+        print("MACOS_RENDERED", repr(panel.text.get("1.0", "end")), flush=True)
         self.wait_for(lambda: "READY" in panel.text.get("1.0", "end"), "PTY fixture did not start")
         print("MACOS_SEND_CHECK", flush=True)
         panel.write(b"check\r")
