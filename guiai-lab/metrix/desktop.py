@@ -85,6 +85,7 @@ class TerminalPanel(ttk.Frame):
         self.fd = None
         self.read_queue = None
         self.reader_thread = None
+        self.reader_eof = False
         self.exited = False
         self.reaped = False
         self.write_queue = bytearray()
@@ -193,7 +194,7 @@ class TerminalPanel(ttk.Frame):
                     except queue.Empty:
                         break
                     if data is None:
-                        self.finish("CLI session closed")
+                        self.reader_eof = True
                         break
                     self._feed(data)
             else:
@@ -216,7 +217,6 @@ class TerminalPanel(ttk.Frame):
             if os.name == "nt":
                 if not self.process.isalive():
                     self.reaped = True
-                    self.finish("CLI session closed")
             else:
                 try:
                     pid, status = os.waitpid(self.process, os.WNOHANG)
@@ -226,6 +226,8 @@ class TerminalPanel(ttk.Frame):
                     self.reaped = True
                     code = os.waitstatus_to_exitcode(status) if hasattr(os, "waitstatus_to_exitcode") else status
                     self.finish(f"CLI exited ({code})")
+        if self.process is not None and os.name == "nt" and self.reaped and self.reader_eof:
+            self.finish("CLI session closed")
         if not self.closed:
             self.poll_after_id = self.after(30, self.poll)
 

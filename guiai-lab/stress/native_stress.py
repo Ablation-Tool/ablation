@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import queue
 import tempfile
 import time
 import tkinter as tk
@@ -237,6 +238,23 @@ class TerminalLifecycleCase(unittest.TestCase):
         panel.stop()
         panel.update()
         self.assertIsNone(panel.process)
+
+    def test_windows_exit_waits_for_queued_output_and_reader_eof(self):
+        panel = self.make_panel()
+        with mock.patch("metrix.desktop.os.name", "nt"):
+            panel.process = mock.Mock()
+            panel.process.isalive.return_value = False
+            panel.fd = True
+            panel.read_queue = queue.Queue()
+            panel.poll()
+            self.assertTrue(panel.reaped)
+            self.assertFalse(panel.exited)
+            panel.read_queue.put(b"BYE\r\n")
+            panel.read_queue.put(None)
+            panel.poll()
+            self.assertTrue(panel.reader_eof)
+            self.assertTrue(panel.exited)
+            self.assertIn("BYE", panel.screen.display[0])
 
     def test_partial_and_blocked_writes_preserve_order(self):
         panel = self.make_panel()
