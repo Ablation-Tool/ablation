@@ -55,8 +55,10 @@ class MacOSNativeCase(unittest.TestCase):
         self.temporary.cleanup()
 
     def make_panel(self, command):
-        messages = []
-        panel = TerminalPanel(self.root, self.root_path, self.root_path, command, messages.append)
+        panel = TerminalPanel(
+            self.root, self.root_path, self.root_path, command,
+            lambda message: print(f"MACOS_STATUS {message}", flush=True),
+        )
         self.panels.append(panel)
         return panel
 
@@ -67,7 +69,8 @@ class MacOSNativeCase(unittest.TestCase):
                 return
             self.root.update()
             time.sleep(0.02)
-        self.fail(message)
+        output = self.panels[-1].text.get("1.0", "end") if self.panels else ""
+        self.fail(f"{message}: {output!r}")
 
     def assert_reaped(self, panel):
         self.assertTrue(panel.reaped)
