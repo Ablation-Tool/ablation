@@ -376,6 +376,9 @@ class InvestigationApp:
         if os.name == "nt":
             command = ["explorer.exe", f"/select,{path}"]
             options = {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
+        elif sys.platform == "darwin":
+            command = ["open", "-R", str(path)]
+            options = {"start_new_session": True}
         else:
             if not shutil.which("nautilus"):
                 self.counts_variable.set("Nautilus (Files) is not available")
