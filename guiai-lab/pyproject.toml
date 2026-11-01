@@ -8,7 +8,10 @@ version = "0.1.0"
 description = "Agent-grown investigation workspace for reverse-engineering sessions"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["pyte>=0.8.1,<1"]
+dependencies = [
+    "pyte>=0.8.1,<1",
+    "pywinpty>=2,<3; sys_platform == 'win32'",
+]
 
 [project.scripts]
 guiai = "guiai.cli:main"
