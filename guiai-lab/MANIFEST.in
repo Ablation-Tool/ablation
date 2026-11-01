@@ -2,7 +2,7 @@ include HARDENING.md
 include INSTALL-PROMPT.md
 include NOTICE
 recursive-include licenses *.txt
-recursive-include guiai/icons *.svg
+recursive-include guiai/icons *.svg *.png
 recursive-include metrix/templates *.html
 recursive-include metrix/gui *.html *.css *.js
 recursive-include stress *.py

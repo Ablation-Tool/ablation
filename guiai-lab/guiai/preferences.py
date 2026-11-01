@@ -7,6 +7,8 @@ import gi
 gi.require_version("Gdk", "3.0")
 from gi.repository import Gdk, Pango
 
+from .layout import LAYOUTS, layout_name
+
 
 TANGO_PALETTE = (
     "#2e3436", "#cc0000", "#4e9a06", "#c4a000", "#3465a4", "#75507b", "#06989a", "#d3d7cf",
@@ -68,7 +70,7 @@ class WorkbenchPreferences:
         self.path = Path(session_root) / "preferences.json"
         self.scheme = "system"
         self.font_name = default_font
-        self.layout = "horizontal"
+        self.layout = "lab-left"
         self.custom = {
             "foreground": "#d3d7cf", "background": "#2e3436", "palette": list(TANGO_PALETTE),
         }
@@ -91,16 +93,19 @@ class WorkbenchPreferences:
         palette = custom.get("palette", self.custom["palette"])
         if not isinstance(palette, list) or len(palette) != 16:
             raise ValueError("terminal palette must contain exactly 16 colors")
+        layout = data.get("layout", self.layout)
+        layout = {"horizontal": "lab-left", "vertical": "lab-top"}.get(layout, layout)
         self.update(
             scheme=data.get("scheme", self.scheme),
             font_name=data.get("font_name", self.font_name),
             foreground=custom.get("foreground", self.custom["foreground"]),
             background=custom.get("background", self.custom["background"]),
             palette=palette,
+            layout=layout,
             save=False,
         )
 
-    def update(self, scheme, font_name, foreground, background, palette, save=True):
+    def update(self, scheme, font_name, foreground, background, palette, layout=None, save=True):
         if scheme not in SCHEMES:
             raise ValueError(f"unknown terminal color scheme: {scheme}")
         if not isinstance(font_name, str) or not 1 <= len(font_name) <= 200:
@@ -110,20 +115,25 @@ class WorkbenchPreferences:
         Pango.FontDescription.from_string(font_name)
         if not isinstance(palette, (list, tuple)) or len(palette) != 16:
             raise ValueError("terminal palette must contain exactly 16 colors")
+        layout = layout_name(self.layout if layout is None else layout)
         custom = {
             "foreground": normalized_color(foreground),
             "background": normalized_color(background),
             "palette": [normalized_color(color) for color in palette],
         }
         if save:
-            self.save(scheme, font_name, custom)
+            self.save(scheme, font_name, custom, layout)
         self.scheme = scheme
         self.font_name = font_name
+        self.layout = layout
         self.custom = custom
         self.error = None
 
-    def save(self, scheme, font_name, custom):
-        data = {"version": 1, "scheme": scheme, "font_name": font_name, "custom": custom}
+    def save(self, scheme, font_name, custom, layout=None):
+        data = {
+            "version": 1, "scheme": scheme, "font_name": font_name,
+            "layout": layout or self.layout, "custom": custom,
+        }
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = None
         try:

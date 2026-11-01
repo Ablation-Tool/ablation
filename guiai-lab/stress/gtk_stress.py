@@ -17,6 +17,7 @@ from guiai.gtk_app import (
 )
 from guiai.environment import configure_environment
 from guiai.events import Session
+from guiai.layout import LAYOUTS
 from guiai.chart_colors import baobab_hex, readable_text_color
 from guiai.map_view import InvestigationMap, PAGE_SIZE, descendant_counts, treemap_layout
 from guiai.rings_view import (
@@ -263,7 +264,7 @@ with tempfile.TemporaryDirectory(prefix="guiai-application-run-") as temporary:
                 **window.preferences.custom,
             )
             window.apply_preferences()
-            assert all(workspace.layout == "horizontal" for workspace in window.workspaces)
+            assert all(workspace.layout == "lab-left" for workspace in window.workspaces)
             assert (first.agent_pid, second.agent_pid) == process_ids, "preference application restarted a CLI"
             assert all(workspace.terminal.get_parent() is not None for workspace in window.workspaces)
             assert all(workspace.map_stack.get_parent() is workspace.investigation_panes for workspace in window.workspaces)
@@ -374,7 +375,7 @@ with tempfile.TemporaryDirectory(prefix="guiai-tab-churn-") as temporary:
                 save=False, **window.preferences.custom,
             )
             window.apply_preferences()
-            assert all(workspace.layout == "horizontal" for workspace in window.workspaces)
+            assert all(workspace.layout == "lab-left" for workspace in window.workspaces)
             assert (first.agent_pid, second.agent_pid) == (first_pid, owned_pids[-1])
             second.session.emit(
                 "observation:churn", second.session.root_id, "observation", f"Churn {index}",
@@ -835,7 +836,7 @@ with tempfile.TemporaryDirectory(prefix="guiai-tab-churn-") as temporary:
         self.assertAlmostEqual(self.window.panes.get_position(), 600, delta=2)
         self.window.reload()
         self.assertAlmostEqual(self.window.panes.get_position(), 600, delta=2)
-        self.assertEqual(self.window.layout, "horizontal")
+        self.assertEqual(self.window.layout, "lab-left")
         self.assertIs(self.window.left.get_parent(), self.window.panes)
         self.assertIs(self.window.terminal.get_parent(), self.window.panes)
         self.assertIs(self.window.map_stack.get_parent(), self.window.investigation_panes)
@@ -1105,10 +1106,16 @@ with tempfile.TemporaryDirectory(prefix="guiai-tab-churn-") as temporary:
                 "observation:restored", second.session.root_id, "observation", "Restored observation",
                 "partial", "agent",
             )
+            second.session.select("observation:restored")
             first_window.preferences.update(
-                scheme="tango", font_name="Ubuntu Sans Mono 11",
+                scheme="tango", font_name="Ubuntu Sans Mono 11", layout="lab-right",
                 **first_window.preferences.custom,
             )
+            first_window.apply_preferences()
+            first_window.notebook.set_current_page(first_window.notebook.page_num(second))
+            manifest = first_window.save_project()
+            self.assertEqual(manifest["active_lab"], 2)
+            self.assertEqual(len(manifest["labs"]), 2)
             corrupt = root / "investigations" / "0009"
             corrupt.mkdir(parents=True)
             (corrupt / "session.json").write_text("{broken", encoding="utf-8")
@@ -1116,14 +1123,17 @@ with tempfile.TemporaryDirectory(prefix="guiai-tab-churn-") as temporary:
             restored = make_window()
             self.assertEqual(restored.notebook.get_n_pages(), 2)
             self.assertEqual(restored.preferences.scheme, "tango")
-            self.assertEqual(restored.preferences.layout, "horizontal")
+            self.assertEqual(restored.preferences.layout, "lab-right")
             self.assertIn("could not be restored", restored.preferences_error.get_text())
             labels = [
                 restored.notebook.get_tab_label(workspace).get_children()[0].get_text()
                 for workspace in restored.workspaces
             ]
             self.assertEqual(labels, ["Lab #1", "Lab #2"])
-            self.assertTrue(all(workspace.layout == "horizontal" for workspace in restored.workspaces))
+            self.assertTrue(all(workspace.layout == "lab-right" for workspace in restored.workspaces))
+            self.assertEqual(restored.current_workspace().investigation_number, 2)
+            self.assertEqual(restored.current_workspace().session.current_state()["selected_id"], "observation:restored")
+            self.assertIs(restored.current_workspace().panes.get_children()[0], restored.current_workspace().terminal)
             self.assertIn("observation:restored", restored.workspaces[1].node_iters)
             self.assertNotIn("observation:restored", restored.workspaces[0].node_iters)
             self.assertTrue((corrupt / "session.json").exists())
@@ -1141,7 +1151,7 @@ with tempfile.TemporaryDirectory(prefix="guiai-tab-churn-") as temporary:
         self.addCleanup(dialog.destroy)
         dialog.show_all()
         self.pump(0.05)
-        self.assertEqual(set(dialog.section_expanders), {"lab", "terminal", "palette"})
+        self.assertEqual(set(dialog.section_expanders), {"lab", "layout", "terminal", "palette"})
         for name, expander in dialog.section_expanders.items():
             child = expander.get_child()
             self.assertFalse(expander.get_expanded(), name)
@@ -1159,23 +1169,26 @@ with tempfile.TemporaryDirectory(prefix="guiai-tab-churn-") as temporary:
         ]
         self.assertIn(f"Target: {self.window.session.target}", labels)
         self.assertIn(f"Session: {self.window.session.root}", labels)
-        self.assertFalse(hasattr(dialog, "layout_buttons"))
+        self.assertEqual(set(dialog.layout_buttons), set(LAYOUTS))
+        for button in dialog.layout_buttons.values():
+            self.assertIsInstance(button.get_child(), Gtk.DrawingArea)
+            self.assertTrue(button.get_accessible().get_name())
         dialog.scheme_combo.set_active_id("solarized-dark")
         dialog.apply()
         self.assertEqual(applied, [True])
         self.assertEqual(preferences.scheme, "solarized-dark")
-        self.assertEqual(preferences.layout, "horizontal")
+        self.assertEqual(preferences.layout, "lab-left")
         self.assertTrue(preferences.path.exists())
-        self.assertNotIn("layout", json.loads(preferences.path.read_text(encoding="utf-8")))
+        self.assertEqual(json.loads(preferences.path.read_text(encoding="utf-8"))["layout"], "lab-left")
 
         loaded = WorkbenchPreferences(preferences.path.parent, "fallback")
         self.assertIsNone(loaded.error)
         self.assertEqual(loaded.scheme, "solarized-dark")
-        self.assertEqual(loaded.layout, "horizontal")
+        self.assertEqual(loaded.layout, "lab-left")
         self.window.preferences = loaded
         self.window.apply_preferences()
         self.assertEqual(self.window.panes.get_orientation(), Gtk.Orientation.HORIZONTAL)
-        self.assertEqual(self.window.layout, "horizontal")
+        self.assertEqual(self.window.layout, "lab-left")
         self.assertIs(self.window.panes.get_children()[0], self.window.left)
         self.assertIs(self.window.map_stack.get_parent(), self.window.investigation_panes)
         self.assertIsNotNone(self.window.terminal.get_parent())
@@ -1195,6 +1208,34 @@ with tempfile.TemporaryDirectory(prefix="guiai-tab-churn-") as temporary:
         self.assertEqual(self.window.terminal.get_font().to_string(), "Ubuntu Sans Mono 11")
         dialog.destroy()
         self.pump(0.05)
+
+    def test_visual_workspace_layouts(self):
+        preferences = WorkbenchPreferences(Path(self.temporary.name) / "layout-session", "Ubuntu Sans Mono 11")
+        self.window.preferences = preferences
+        dialog = PreferencesDialog(self.host, preferences, self.window.apply_preferences, session=self.window.session)
+        self.addCleanup(dialog.destroy)
+        dialog.section_expanders["layout"].set_expanded(True)
+        dialog.show_all()
+        terminal = self.window.terminal
+        tree = self.window.tree
+        for layout in LAYOUTS:
+            with self.subTest(layout=layout):
+                dialog.layout_buttons[layout].set_active(True)
+                self.assertTrue(dialog.layout_buttons[layout].get_active())
+                dialog.apply()
+                expected_horizontal = layout in {"lab-left", "lab-right"}
+                self.assertEqual(
+                    self.window.panes.get_orientation(),
+                    Gtk.Orientation.HORIZONTAL if expected_horizontal else Gtk.Orientation.VERTICAL,
+                )
+                expected_first = self.window.left if layout in {"lab-left", "lab-top"} else terminal
+                self.assertIs(self.window.panes.get_children()[0], expected_first)
+                self.assertIs(self.window.terminal, terminal)
+                self.assertIs(self.window.tree, tree)
+                self.assertIs(self.window.map_stack.get_parent(), self.window.investigation_panes)
+                self.pump(0.03)
+        loaded = WorkbenchPreferences(preferences.path.parent, "fallback")
+        self.assertEqual(loaded.layout, "lab-bottom")
 
     def test_preferences_validation_and_corruption(self):
         root = Path(self.temporary.name) / "invalid-preferences"
@@ -1218,9 +1259,17 @@ with tempfile.TemporaryDirectory(prefix="guiai-tab-churn-") as temporary:
         }), encoding="utf-8")
         legacy = WorkbenchPreferences(root, "fallback")
         self.assertIsNone(legacy.error)
-        self.assertEqual(legacy.layout, "horizontal")
+        self.assertEqual(legacy.layout, "lab-top")
         legacy.update(scheme="system", font_name="Ubuntu Sans Mono 11", **legacy.custom)
-        self.assertNotIn("layout", json.loads(preferences.path.read_text(encoding="utf-8")))
+        self.assertEqual(json.loads(preferences.path.read_text(encoding="utf-8"))["layout"], "lab-top")
+        with self.assertRaises(ValueError):
+            legacy.update(
+                scheme="system", font_name="Ubuntu Sans Mono 11", layout="diagonal", **legacy.custom,
+            )
+        with self.assertRaises(ValueError):
+            legacy.update(
+                scheme="system", font_name="Ubuntu Sans Mono 11", layout=[], **legacy.custom,
+            )
         preferences.path.write_text("{broken", encoding="utf-8")
         corrupt = WorkbenchPreferences(root, "Ubuntu Sans Mono 11")
         self.assertIsNotNone(corrupt.error)
