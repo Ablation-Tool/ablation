@@ -3,7 +3,7 @@
 ## GUIAI
 
 <details>
-<summary><strong>Prompt Install</strong></summary>
+<summary><strong>Installation Prompt</strong></summary>
 
 Copy this entire prompt into the AI Agent you want to use. It installs GUIAI and its dependencies directly; `/forall` can be used afterward as a short name for the same request.
 
