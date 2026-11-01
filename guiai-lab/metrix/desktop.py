@@ -198,12 +198,9 @@ class TerminalPanel(ttk.Frame):
                     self._feed(data)
             else:
                 while True:
-                    print("MACOS_READ_BEGIN", flush=True)
                     try:
                         data = os.read(self.fd, 65536)
-                        print(f"MACOS_RAW {data!r}", flush=True)
                     except BlockingIOError:
-                        print("MACOS_READ_AGAIN", flush=True)
                         break
                     except OSError as error:
                         if error.errno == errno.EIO:
@@ -221,12 +218,10 @@ class TerminalPanel(ttk.Frame):
                     self.reaped = True
                     self.finish("CLI session closed")
             else:
-                print("MACOS_WAITPID_BEGIN", flush=True)
                 try:
                     pid, status = os.waitpid(self.process, os.WNOHANG)
                 except ChildProcessError:
                     pid, status = self.process, 0
-                print("MACOS_WAITPID_END", flush=True)
                 if pid:
                     self.reaped = True
                     code = os.waitstatus_to_exitcode(status) if hasattr(os, "waitstatus_to_exitcode") else status
@@ -235,7 +230,6 @@ class TerminalPanel(ttk.Frame):
             self.poll_after_id = self.after(30, self.poll)
 
     def _feed(self, data):
-        print(f"MACOS_FEED_BEGIN {data!r}", flush=True)
         try:
             self.stream.feed(data)
         except Exception as error:
@@ -243,7 +237,6 @@ class TerminalPanel(ttk.Frame):
             if warning != self.parser_warning:
                 self.parser_warning = warning
                 self.status_callback(warning)
-        print("MACOS_FEED_END", flush=True)
 
     def finish(self, message):
         if self.exited:
@@ -470,7 +463,6 @@ class TerminalPanel(ttk.Frame):
             self.render_after_id = None
         if self.closed or not self.command:
             return
-        print(f"MACOS_RENDER_START {self.columns}x{self.lines} dirty={self.screen.dirty!r} force={force}", flush=True)
         if not self.screen.dirty and not force:
             self.schedule_render()
             return
