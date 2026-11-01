@@ -29,7 +29,7 @@ if [ ! -d "$HOME/ablation/.git" ]; then
     git clone https://github.com/Ablation-Tool/ablation.git "$HOME/ablation"
 fi
 cd "$HOME/ablation"
-python3 -m venv .venv
+python3 -m venv --system-site-packages .venv
 . .venv/bin/activate
 python -m pip install --no-index --find-links "$GUIAI_SOURCE/vendor" "$GUIAI_SOURCE/guiai_lab-0.1.0-py3-none-any.whl"
 guiai --help >/dev/null
