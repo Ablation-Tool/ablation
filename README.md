@@ -11,7 +11,8 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 <details>
 <summary>GUIAI</summary>
 
-Ablation + GUI + AI Agent = GUIAI
+Ablation's GUIAI unifies GUI with your AI agent in one native window.
+
 
 On Ubuntu or Debian, install the native dependencies and GUIAI:
 
