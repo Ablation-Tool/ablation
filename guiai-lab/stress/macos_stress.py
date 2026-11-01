@@ -87,12 +87,17 @@ class MacOSNativeCase(unittest.TestCase):
 
     def test_posix_interactive_terminal(self):
         panel = self.make_panel([sys.executable, "-u", "-c", FIXTURE])
+        print("MACOS_WAIT_READY", flush=True)
         self.wait_for(lambda: "READY" in panel.text.get("1.0", "end"), "PTY fixture did not start")
-        panel.write(b"check\n")
+        print("MACOS_SEND_CHECK", flush=True)
+        panel.write(b"check\r")
         self.wait_for(lambda: "STATE_RC=0" in panel.text.get("1.0", "end"), "session wrapper failed through PTY")
-        panel.write(b"exit\n")
+        print("MACOS_SEND_EXIT", flush=True)
+        panel.write(b"exit\r")
         self.wait_for(lambda: "BYE" in panel.text.get("1.0", "end"), "PTY input did not reach the fixture")
+        print("MACOS_WAIT_REAPED", flush=True)
         self.wait_for(lambda: panel.reaped, "PTY child was not reaped")
+        print("MACOS_STOP_PANEL", flush=True)
         panel.stop()
         self.assert_reaped(panel)
 
