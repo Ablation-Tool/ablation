@@ -277,6 +277,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full version history.
 | Version | Summary |
 |---|---|
 | Unreleased | Added bounded APK/XAPK decoding, overload-aware Java-like DEX decompilation, byte-backed ARM/Thumb ELF disassembly, exact JNI mapping, and converged DEX-to-native taint analysis with FORGE closure and capability documentation. |
+| v2.93.1 | Added the offline `Ablation.app` bundle with native ICNS branding, first-run target/project/agent selection, relocation-safe launching, and native macOS application validation. |
 | v2.93.0 | Added relocation-aware BfltBinaryContext with strict and explicit unresolved outcomes, corrected GZIP/GZDATA layouts, added bFLT-backed WindowAnalyzer support, and recovered legacy ARM PLT symbols and direct calls without the A1676 LIEF crash. |
 | v2.92.0 | Expanded C166 dispatch decoding and corrected condition/shift operands; resolved A3801 and N1470 update variants; added BfltArm32 link-time pointer and literal recovery with complete documentation. |
 | v2.91.0 | Added immediate SUBB decoding, bFLT pointer-endianness guidance, corrected A1676 update gating, confirmed C111C command-listener evidence, and documented the ALICE control FPGA command decoder. |
