@@ -78,7 +78,7 @@ class WindowsNativeCase(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["target"], self.session.target)
-        self.assertEqual(self.session.workspace, self.root_path)
+        self.assertEqual(self.session.workspace, self.root_path.resolve())
 
     def test_conpty_interactive_terminal(self):
         panel = self.make_panel([sys.executable, "-u", "-c", FIXTURE])
