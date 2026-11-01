@@ -373,14 +373,20 @@ class InvestigationApp:
         except OSError as error:
             self.counts_variable.set(f"Unable to locate evidence: {error}")
             return
-        if not shutil.which("nautilus"):
-            self.counts_variable.set("Nautilus (Files) is not available")
-            return
+        if os.name == "nt":
+            command = ["explorer.exe", f"/select,{path}"]
+            options = {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
+        else:
+            if not shutil.which("nautilus"):
+                self.counts_variable.set("Nautilus (Files) is not available")
+                return
+            command = ["nautilus", "--select", str(path)]
+            options = {"start_new_session": True}
         try:
             subprocess.Popen(
-                ["nautilus", "--select", str(path)],
+                command,
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                start_new_session=True,
+                **options,
             )
         except OSError as error:
             self.counts_variable.set(f"Unable to open Files: {error}")
