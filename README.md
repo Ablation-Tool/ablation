@@ -10,7 +10,7 @@ Ablation is an SI-assisted reverse engineering (SIARE) framework.
 
 ## GUIAI native workbench
 
-GUIAI pairs an investigation Lab with your real AI agent in one native window. METRIX is included.
+GUIAI pairs an investigation Lab with your real AI agent in one native window. The workspace preserves discovery history, selection, bookmarks, and review state. METRIX is included.
 
 On Ubuntu or Debian, install the native dependencies and GUIAI:
 
