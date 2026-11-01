@@ -66,7 +66,7 @@ from typing import List, Optional, Set
 # ── Scanned extensions ────────────────────────────────────────────────────────
 _SCAN_EXTS = frozenset({'.py', '.ts', '.js'})
 
-# ── Pre-filter — must have at least one MCP or AI-agent signal ───────────────
+# ── Pre-filter — must have at least one MCP or AI Agent signal ───────────────
 _MCP_QUICK_RE = re.compile(
     r'\b(?:McpServer|FastMCP|modelcontextprotocol|mcp_transport|'
     r'StdioServerParameters|StdioMCPClient|MCPClient|ALLOWED_METHODS|/mcp|'

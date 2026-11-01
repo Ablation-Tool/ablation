@@ -5,7 +5,7 @@ Detects binaries that call AI/LLM inference endpoints but lack observable
 policy enforcement imports: rate limiting, input validation, authorization
 checks, or audit logging.
 
-A binary with LLM API calls and no policy layer is the AI-agent analogue of
+A binary with LLM API calls and no policy layer is the AI Agent analogue of
 "command execution without authentication": the agent will forward any input
 to the model and act on the model response without guardrails.
 
