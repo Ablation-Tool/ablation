@@ -89,6 +89,13 @@ class MacOSNativeCase(unittest.TestCase):
         self.assertEqual(self.session.workspace, self.root_path.resolve())
 
     def test_posix_interactive_terminal(self):
+        result = subprocess.run(
+            [sys.executable, "-u", "-c", FIXTURE],
+            input="check\rexit\r",
+            capture_output=True, text=True, timeout=10,
+        )
+        print("DIRECT_STDOUT", result.stdout, flush=True)
+        print("DIRECT_STDERR", result.stderr, flush=True)
         panel = self.make_panel([sys.executable, "-u", "-c", FIXTURE])
         print("MACOS_WAIT_READY", flush=True)
         self.wait_for(lambda: "READY" in panel.text.get("1.0", "end"), "PTY fixture did not start")
