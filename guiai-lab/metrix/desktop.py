@@ -198,10 +198,12 @@ class TerminalPanel(ttk.Frame):
                     self._feed(data)
             else:
                 while True:
+                    print("MACOS_READ_BEGIN", flush=True)
                     try:
                         data = os.read(self.fd, 65536)
                         print(f"MACOS_RAW {data!r}", flush=True)
                     except BlockingIOError:
+                        print("MACOS_READ_AGAIN", flush=True)
                         break
                     except OSError as error:
                         if error.errno == errno.EIO:
@@ -219,10 +221,12 @@ class TerminalPanel(ttk.Frame):
                     self.reaped = True
                     self.finish("CLI session closed")
             else:
+                print("MACOS_WAITPID_BEGIN", flush=True)
                 try:
                     pid, status = os.waitpid(self.process, os.WNOHANG)
                 except ChildProcessError:
                     pid, status = self.process, 0
+                print("MACOS_WAITPID_END", flush=True)
                 if pid:
                     self.reaped = True
                     code = os.waitstatus_to_exitcode(status) if hasattr(os, "waitstatus_to_exitcode") else status
