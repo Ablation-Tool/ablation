@@ -470,6 +470,7 @@ class TerminalPanel(ttk.Frame):
             self.render_after_id = None
         if self.closed or not self.command:
             return
+        print(f"MACOS_RENDER_START {self.columns}x{self.lines} dirty={self.screen.dirty!r} force={force}", flush=True)
         if not self.screen.dirty and not force:
             self.schedule_render()
             return

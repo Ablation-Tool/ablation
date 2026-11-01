@@ -127,4 +127,6 @@ class MacOSNativeCase(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    import faulthandler
+    faulthandler.dump_traceback_later(20, repeat=True)
     unittest.main(verbosity=2)
