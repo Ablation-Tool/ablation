@@ -293,7 +293,7 @@ The code couldn't exist without their ideas. Though no code was written by these
 
 **GUIAI Design and Direction**
 
-[Dr. Helen Horkan](https://scholar.google.com/citations?view_op=search_authors&mauthors=Helen+R.+Horkan&hl=en) contributed ideas and design feedback that helped shape GUIAI’s development and the direction of its native workbench. I’m grateful for her insight and for the influence it had on the project.
+[Dr. Helen R Horkan](https://scholar.google.com/citations?hl=en&user=9BSOhhwAAAAJ) contributed ideas and design feedback that helped shape GUIAI’s development and the direction of its native workbench. I’m grateful for her insight and for the influence it had on the project.
 
 **Honorable Mention**
 
