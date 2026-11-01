@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import shlex
+import subprocess
 import sys
 
 
@@ -36,7 +37,7 @@ def agent_environment(session, workspace, metrix_root):
         "COLORTERM": "truecolor",
         "METRIX_OUTPUT": str(session.root),
         "METRIX_WORKSPACE": str(workspace),
-        "METRIX_CLI": shlex.join([sys.executable, "-m", "metrix"]),
+        "METRIX_CLI": subprocess.list2cmdline([sys.executable, "-m", "metrix"]) if os.name == "nt" else shlex.join([sys.executable, "-m", "metrix"]),
         "PYTHONPATH": package_root + (os.pathsep + environment["PYTHONPATH"] if environment.get("PYTHONPATH") else ""),
     })
     return [f"{key}={value}" for key, value in environment.items()]
