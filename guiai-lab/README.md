@@ -44,39 +44,22 @@ Each event log is authoritative for its investigation. The tree is a view of tha
 
 The GTK interface uses `Gtk.Application`, `Gtk.Notebook`, `Gtk.TreeStore`, `Gtk.ToggleButton`, `Gtk.Expander`, nested `Gtk.Paned` containers, `Gio.SimpleActionGroup`, GLib timeouts, `Vte.Terminal`, and a native Cairo drawing area for Rings. Native color, font, disclosure, and visual-preview widgets implement preferences. The Tk fallback reuses the bundled METRIX terminal component. Baobab 49.1's geometry and palette are adapted for investigation-node units; see `NOTICE` for attribution.
 
-## Requirements
+## Install
 
-- Linux with an X11 display and POSIX PTY support (the validated platform)
-- Python 3.10+
-- For the native Ubuntu interface: `python3-gi`, `python3-cairo`, `python3-gi-cairo`, `gir1.2-gtk-3.0`, and `gir1.2-vte-2.91`
-- Tkinter only for the fallback interface
-- An installed and configured interactive agent CLI when embedding an agent
-- Ablation’s CLI only when Ablation analysis is desired
-
-The Python package installs `guiai`, the bundled `metrix` package, and the `pyte` terminal dependency. No separate METRIX checkout is required.
-
-For an AI-agent-guided setup, use the **[one universal install prompt](INSTALL-PROMPT.md)**. It works with Kimi Code, Claude Code, Codex, and other interactive agent CLIs without separate prompts for each product.
-
-For a manual fresh-clone installation:
+GUIAI requires Linux with X11 and Python 3.10 or newer. On Ubuntu or Debian:
 
 ```bash
+sudo apt install python3-gi python3-cairo python3-gi-cairo gir1.2-gtk-3.0 gir1.2-vte-2.91
 git clone https://github.com/Ablation-Tool/ablation.git
 cd ablation
-
-# Native GTK/VTE dependencies on Ubuntu or Debian:
-sudo apt install python3-gi python3-cairo python3-gi-cairo gir1.2-gtk-3.0 gir1.2-vte-2.91
-
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install --upgrade pip
 python -m pip install ./guiai-lab
 ```
 
-Install the Ablation CLI only when its analysis capabilities are also wanted:
+METRIX and `pyte` are included or installed automatically. No separate METRIX checkout is required. Install the full Ablation CLI only if you also need its analysis tools: `python -m pip install -e .`
 
-```bash
-python -m pip install -e .
-```
+Prefer an AI-agent-guided setup? Use the **[universal install prompt](INSTALL-PROMPT.md)**.
 
 ## Start a session
 
