@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>METRIX Workbench</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body data-token="__METRIX_TOKEN__">
+<header class="topbar">
+<div><h1>METRIX Workbench</h1><p id="corpus-line">Loading corpus evidence…</p></div>
+<div id="agent-badge" class="agent-badge">Agent bridge: checking…</div>
+</header>
+<main class="workbench">
+<section class="dashboard" aria-label="Corpus dashboard">
+<div class="notice"><strong>Evidence first.</strong> Identification is not vulnerability analysis. <code>analysis_status=not_recorded</code> does not mean an artifact was never analyzed elsewhere.</div>
+<form id="filters" class="filters" aria-label="Artifact filters">
+<label class="search">Search every field<input id="query" type="search" placeholder="Path, SHA256, format, architecture, detection evidence…" autocomplete="off"></label>
+<div id="filter-controls" class="filter-grid"></div>
+<div class="actions"><button type="button" id="reset">Reset filters</button><button type="button" id="export">Export visible CSV</button><button type="button" id="select-visible">Select visible</button><button type="button" id="clear-selection">Clear selection</button></div>
+</form>
+<div class="result-line"><span id="result-count" role="status" aria-live="polite"></span><span id="selection-count"></span></div>
+<div class="table-wrap"><table id="matrix">
+<thead><tr><th>Select</th><th><button data-sort="path">Artifact</button></th><th><button data-sort="format">Format</button></th><th><button data-sort="architecture">Architecture</button></th><th><button data-sort="artifact_class">Class</button></th><th><button data-sort="size_bytes">Size</button></th><th><button data-sort="sha256">SHA256</button></th><th><button data-sort="status">Status</button></th><th>Evidence</th></tr></thead>
+<tbody id="matrix-body"></tbody>
+</table></div>
+<footer>JSONL is authoritative. No collected artifact is executed by METRIX.</footer>
+</section>
+<aside class="chat-panel" aria-label="External agent chat">
+<h2>Agent bridge</h2>
+<p class="bridge-copy">This is <strong>your configured AI CLI</strong>, not a METRIX model. The dashboard works without it.</p>
+<div id="agent-status" class="agent-status">Loading connection…</div>
+<details class="connection-details"><summary>Connection and data boundary</summary><div id="agent-details"></div></details>
+<div id="chat-messages" class="chat-messages" aria-live="polite"><p class="muted">Ask for help navigating this corpus. Filter suggestions can update the dashboard.</p></div>
+<form id="chat-form">
+<label for="chat-input">Message to your external agent</label>
+<textarea id="chat-input" rows="4" maxlength="8000" placeholder="Example: show unidentified PowerPC artifacts"></textarea>
+<div class="chat-context"><span id="chat-context-count">0 selected records</span><span>Max 25 per message</span></div>
+<button type="submit" id="chat-send">Send to external agent</button>
+</form>
+<p class="data-warning">Chat sends your message, active filters, recent chat, and explicitly selected records to the configured CLI. Its tools, permissions, and provider data policy apply.</p>
+</aside>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>
