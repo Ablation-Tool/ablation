@@ -7320,7 +7320,7 @@
     "name": "AgentAuthorityAudit",
     "category": "AI agent security / confused-deputy detection",
     "secondary_tags": [
-      "AI-agent",
+      "AI Agent",
       "confused-deputy",
       "PLT",
       "capabilities"
@@ -7349,7 +7349,7 @@
     "name": "AgentObservabilityAudit",
     "category": "AI agent security / audit trail absence detection",
     "secondary_tags": [
-      "AI-agent",
+      "AI Agent",
       "observability",
       "HITL",
       "logging"
@@ -7378,7 +7378,7 @@
     "name": "AgentToolSurfaceEnumerator",
     "category": "AI agent security / tool surface enumeration",
     "secondary_tags": [
-      "AI-agent",
+      "AI Agent",
       "MCP",
       "tool-definition",
       "JSON"
@@ -7407,7 +7407,7 @@
     "name": "AIControlIndicators",
     "category": "AI agent security / control-plane detection",
     "secondary_tags": [
-      "AI-agent",
+      "AI Agent",
       "control-plane",
       "API-key",
       "MCP"
@@ -7434,7 +7434,7 @@
     "name": "PolicyEngineAbsenceDetector",
     "category": "AI agent security / policy engine detection",
     "secondary_tags": [
-      "AI-agent",
+      "AI Agent",
       "policy",
       "guardrails"
     ],
