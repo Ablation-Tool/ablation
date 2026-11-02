@@ -227,7 +227,7 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 ## Setup & About
 
 <details>
-<summary>Universal Platform Installation Prompt</summary>
+<summary>Universal OS Installation Prompt</summary>
 
 Copy this prompt into your AI Agent. 
 
