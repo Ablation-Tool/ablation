@@ -35,7 +35,7 @@ guiai desktop /path/to/target --session /path/to/session --agent kimi
 # Also: --agent claude, --agent codex, or --agent-command 'your-agent-cli --flag'
 ```
 
-[Workbench guide](guiai-lab/README.md) · [Universal install prompt](guiai-lab/INSTALL-PROMPT.md) · [Windows native and macOS (Tk) packages](guiai-lab/packaging/README.md)
+[Installation Prompt](guiai-lab/INSTALL-PROMPT.md) · [Linux, MacOS, and Windows instructions](guiai-lab/INSTALL.md) · [Workbench guide](guiai-lab/README.md) · [Native packages](guiai-lab/packaging/README.md)
 
 </details>
 
@@ -384,6 +384,32 @@ The US Department of Defense handbook for reverse engineering methodology define
 **Contact:** Feel free to contact me if you have any questions, ideas, complaints, or bugs:
 * 📧 ablation@nuclide-research.com
 * 𝕏 [@showxlate](https://x.com/showxlate)
+
+</details>
+
+<details>
+<summary>Installation Prompt</summary>
+
+Copy this prompt into your AI Agent to install GUIAI and its dependencies:
+
+```text
+Install GUIAI for Ablation and launch it with you—the AI Agent I am currently using—embedded in its terminal.
+
+Check my operating system and Python first. Native Windows requires Python 3.11 x64 with Tcl/Tk; macOS and Linux require Python 3.10 or newer with Tkinter. If a prerequisite is missing, explain what is needed and ask before making system changes.
+
+Download and review this installer:
+https://github.com/Ablation-Tool/ablation/releases/latest/download/forall.py
+
+Run it with the checked Python. It selects the correct native package, verifies SHA256, installs GUIAI and its required Python dependencies offline, and runs native validation. Do not pipe a downloaded script into an interpreter, use sudo, overwrite an existing installation, skip failed tests, or bypass my permissions.
+
+Ask me for the RE target and project/session directory if needed. Keep the project outside the target. On macOS, open the generated Ablation.app. On Windows and macOS, use --toolkit tk when launching through the CLI. Use your actual executable for the embedded AI Agent; if you cannot identify it, ask me instead of substituting another agent.
+
+Do not install an AI model, credentials, optional analysis extras, or firmware analysis. Do not execute the RE target.
+
+Report the operating system, installed version, installation and project paths, validation result, and exact launch command. Confirm that the native window opens and your real CLI starts inside it.
+```
+
+[Linux](guiai-lab/INSTALL.md#linux) · [MacOS](guiai-lab/INSTALL.md#macos) · [Windows](guiai-lab/INSTALL.md#windows) · [CLI only](guiai-lab/INSTALL.md#cli-only)
 
 </details>
 
