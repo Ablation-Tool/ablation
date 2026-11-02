@@ -1,4 +1,4 @@
-# Independent workspaces
+# Independent Workspaces
 
 ## Purpose
 

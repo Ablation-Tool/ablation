@@ -1,4 +1,4 @@
-# Project memory
+# Project Memory
 
 ## Purpose
 

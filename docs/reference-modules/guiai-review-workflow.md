@@ -1,4 +1,4 @@
-# Review workflow
+# Review Workflow
 
 ## Purpose
 

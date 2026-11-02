@@ -1,4 +1,4 @@
-# Layout preferences
+# Layout Preferences
 
 ## Purpose
 

@@ -1,4 +1,4 @@
-# Directory inventory
+# Directory Inventory
 
 ## Purpose
 

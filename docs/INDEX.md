@@ -40,17 +40,17 @@ Native workspaces for agent-guided reverse engineering, with real agent terminal
 | Document | Description |
 |---|---|
 | [GUIAI workbench guide](../guiai-lab/README.md) | Lab/tree navigation, independent investigations, project saving, charts, review controls, preferences, session files, and validation |
-| [AI Agent bridge](reference-modules/guiai-agent-bridge.md) | Real interactive agent CLIs, session environments, terminal lifecycle, permissions, and validation |
-| [Investigation Lab](reference-modules/guiai-investigation-lab.md) | Event model, navigation, filtering, charts, evidence, and agent-grown investigation history |
-| [Project memory](reference-modules/guiai-project-memory.md) | Project manifests, session files, restoration, persistence, consistency, and corruption handling |
+| [AI Agent Bridge](reference-modules/guiai-agent-bridge.md) | Real interactive agent CLIs, session environments, terminal lifecycle, permissions, and validation |
 | [Token Allocation](reference-modules/guiai-token-allocation.md) | Scoped retrieval and workspace memory reduce repeated context while preserving full evidence and investigation coverage |
-| [Independent workspaces](reference-modules/guiai-independent-workspaces.md) | Independent Lab sessions, terminal directories, lifecycle, and restoration |
-| [Visual navigation](reference-modules/guiai-visual-navigation.md) | Tree, breadcrumbs, Rings, Treemap, shared selection, geometry, and validation |
-| [Review workflow](reference-modules/guiai-review-workflow.md) | Status meanings, human review, scoped completion, follow-ups, bookmarks, and append-only undo |
-| [Layout preferences](reference-modules/guiai-layout-preferences.md) | Four visual Lab/Agent arrangements, pane behavior, migration, persistence, and validation |
+| [Lab](reference-modules/guiai-investigation-lab.md) | Event model, navigation, filtering, charts, evidence, and agent-grown investigation history |
+| [Project Memory](reference-modules/guiai-project-memory.md) | Project manifests, session files, restoration, persistence, consistency, and corruption handling |
+| [Independent Workspaces](reference-modules/guiai-independent-workspaces.md) | Independent Lab sessions, terminal directories, lifecycle, and restoration |
+| [Visual Navigation](reference-modules/guiai-visual-navigation.md) | Tree, breadcrumbs, Rings, Treemap, shared selection, geometry, and validation |
+| [Review Workflow](reference-modules/guiai-review-workflow.md) | Status meanings, human review, scoped completion, follow-ups, bookmarks, and append-only undo |
+| [Layout Preferences](reference-modules/guiai-layout-preferences.md) | Four visual Lab/Agent arrangements, pane behavior, migration, persistence, and validation |
 | [Terminal](reference-modules/guiai-terminal.md) | Interactive CLI, PTY/ConPTY, display preferences, input/output, and process cleanup |
-| [Directory inventory](reference-modules/guiai-directory-inventory.md) | Honest top-level inventory, target identity, rescanning, session boundaries, and validation |
-| [METRIX support](reference-modules/metrix-support.md) | Bundled artifact inventory, summaries, queries, retrieval, dashboard, and external bridge |
+| [Directory Inventory](reference-modules/guiai-directory-inventory.md) | Honest top-level inventory, target identity, rescanning, session boundaries, and validation |
+| [METRIX Support](reference-modules/metrix-support.md) | Bundled artifact inventory, summaries, queries, retrieval, dashboard, and external bridge |
 | [Operating System Support](reference-modules/guiai-operating-system-support.md) | Native Linux, Windows, and macOS interfaces, packages, requirements, and platform validation |
 | [Unified Memory Architecture](reference-modules/unified-memory-architecture.md) | How the GUIAI workspace, real CLI/AI Agent, and human investigator form one authoritative investigation address space |
 | [Universal OS Installation Prompt](../guiai-lab/INSTALL-PROMPT.md) | Choose GUIAI or CLI Only, then install the appropriate tools on Linux, macOS, or Windows |

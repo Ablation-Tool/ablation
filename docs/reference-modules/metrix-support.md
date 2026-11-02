@@ -1,4 +1,4 @@
-# METRIX support
+# METRIX Support
 
 ## Purpose and distinction
 
