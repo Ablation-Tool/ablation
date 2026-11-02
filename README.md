@@ -20,7 +20,7 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**a11y Optimization**](guiai-lab/README.md) | [1](guiai-lab/guiai/app.py)&nbsp;[2](guiai-lab/guiai/gtk_app.py) | Auto-detects & Merges your Accessibility settings & tools into the GUI. |
+| [**a11y Optimization**](guiai-lab/README.md) | [1](guiai-lab/guiai/app.py)&nbsp;[2](guiai-lab/guiai/gtk_app.py) | Auto-detects & merges your accessibility settings & tools into the GUI |
 | [**Agent Bridge**](guiai-lab/README.md) | [1](guiai-lab/guiai/environment.py)&nbsp;[2](guiai-lab/metrix/desktop.py) | Embeds your AI Agent into the GUIAI |
 | [**Debug Diagnostics**](guiai-lab/README.md) | [1](guiai-lab/guiai/app.py)&nbsp;[2](guiai-lab/guiai/gtk_app.py) | Shows dependency and terminal diagnostics before requesting troubleshooting permission |
 | [**Evidence Integrity**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/cli.py)&nbsp;[3](guiai-lab/guiai/app.py) | Tracks reviews and validates evidence targets |
