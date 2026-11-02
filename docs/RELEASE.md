@@ -1,6 +1,6 @@
 # Ablation Release Notes
 
-## Unreleased: Cross-platform GUIAI desktop integration 2026-11-02
+## v2.94.0 2026-11-02
 
 ### Desktop launchers and universal installation
 

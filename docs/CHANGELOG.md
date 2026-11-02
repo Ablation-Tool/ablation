@@ -2,7 +2,7 @@
 
 ---
 
-## Unreleased
+## v2.94.0
 
 **Cross-platform GUIAI desktop integration.**
 
@@ -10,6 +10,8 @@
 - Added safe local file/folder drops into the embedded CLI with host-specific quoting and no automatic Enter or artifact execution.
 - Added read-only a11y, OS optimization, and Debug workflows with visible findings and bounded Allow/Deny AI-agent actions. Accessibility includes persistent colorblind-safe/high-contrast palettes, measured contrast, descriptive screen-reader labels, keyboard navigation, and the Lab tree text alternative.
 - Added OS accent-following settings controls, compact titlebar presentation, responsive Preferences sizing, and **Lab N** tab labels. Validation covers 113 local checks plus passing native Windows, macOS, and universal-installer CI runs (`41474878498`, `41474878515`, and `41474878448`); macOS signing/notarization and manual assistive-technology validation remain release requirements.
+
+## Unreleased
 
 **Android APK/XAPK, DEX, JNI, and cross-layer taint workflow.**
 
