@@ -70,6 +70,34 @@ The parser removes `//` comments and reads transaction headers following `0x7654
 
 ---
 
+## Exhaustive RTL boundary simulation
+
+`analysis/specs-protocol/run_rtl_boundaries.py` complements the codec and archived vectors with dynamic execution of the original `slave_receiver` Verilog. It uses the pinned Icarus 12.0 package and drives complete serial frames rather than forcing `wrdcntreg`, `slave_dec_lgfram`, or `lt_inhb_ser`.
+
+The bench tests all 256 read-count values and performs five checks per value: native checksum acceptance, long-frame classification, emitter inhibit, reported count, and I2C mode selection. The result is 1,280 passing checks, 127 long-frame cases, and zero checksum errors. Explicit observations are:
+
+```text
+count=7f long=0 inhibit=0 reported=7f checksum_error=0
+count=80 long=0 inhibit=0 reported=00 checksum_error=0
+count=81 long=1 inhibit=1 reported=01 checksum_error=0
+count=ff long=1 inhibit=1 reported=7f checksum_error=0
+```
+
+Run it with:
+
+```bash
+TMPDIR=/home/cowboy/ablation \
+  python3 /media/cowboy/research/CERN/analysis/specs-protocol/run_rtl_boundaries.py
+```
+
+The original receiver has two legacy instance names that collide with nets under Icarus. The runner writes a build-only `slave_receiver_sim.v` with `bcount_counter` and `wrcount_counter` substituted for those instance names. Original source and logic are unchanged and their hashes are pinned.
+
+The test uses a valid third header byte chosen so both the codec's fourth-byte checksum model and the receiver's early third-byte sampling accept the frame. Tracing showed that the receiver compares the third header byte's low nibble at the following word boundary. A nonzero third byte can therefore expose different master/receiver checksum accumulation behavior. This interoperability anomaly is separate from the long-frame rule and is not hidden by the successful boundary result.
+
+Generated evidence is in `rtl-boundary-findings.json` and `rtl-boundary-sim.log`. This is focused RTL verification, not synthesis, timing closure, a complete master/slave board simulation, or hardware testing.
+
+---
+
 ## False positives
 
 A transaction-like value in arbitrary text is not necessarily a simulation header. The caller must select the correct vector format and artifact. The parser only interprets headers after the documented marker.

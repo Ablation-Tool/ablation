@@ -58,6 +58,20 @@
 
 ---
 
+## v2.94.0
+
+**CERN protocol, C166, mixed-HDL, and streaming-WDB verification toolchain.**
+
+- Added exhaustive SPECS receiver simulation for all 256 read counts: 1,280 checks, 127 long-frame cases, and zero checksum errors. Dynamic evidence proves the `0x80`/`0x81` boundary, emitter inhibit, and bit-7 output masking while preserving the separate third-header checksum-sampling anomaly.
+- Added seeded C166 recursive control-flow recovery and direct data xrefs in `c166_cfg.py`, with bounded functions/instructions/issues, stable JSON, explicit indirect-flow limits, and DPP-aware direct-memory records. Real A1396 recovery covers both update handlers and the `0x84FE` producer/gate.
+- Added bounded C166 execution and CAN message-object modeling in `c166_execution.py`, including sparse memory, protected spans, direct/DPP-indirect accesses, condition flags, `ZEROS`/`ONES`, bounded calls/traces, and fail-closed unsupported behavior. The suite dynamically confirms valid arming, valid or invalid trigger after arming, invalid-arm rejection, and the exact ten-byte `update req` handoff.
+- Added a two-way GHDL/Icarus VPI bridge with strict C compilation, hierarchical lookup at simulation start, settled callbacks, normalized timestamps, atomic per-timestamp exchange, and graceful completion. Both native HDL assertion streams pass and a missing peer produces a bounded timeout.
+- Added streaming Xilinx WDB recovery for the 2017 legacy two-section profile and event-only newer containers. The Endeavour WDB now yields 21 roots and 10,759,544 events with bounded memory/export, cycle checks, and atomic JSONL; unnamed legacy streams are not assigned invented names.
+- Added extensive API references, known-anomaly guides, CERN reproduction workflow, package exports, release metadata, and MIT provenance for the pinned modern WDB reader.
+- Validation includes 141 C166 tests, five WDB tests including the full 10.76-million-event decode, exhaustive SPECS RTL, and mixed two-way/timeout simulations. Every changed Python file is subject to the FORGE ten-section gate before commit.
+
+---
+
 ## v2.93.0
 
 **Relocation-aware bFLT analysis and legacy ARM WindowAnalyzer support.**

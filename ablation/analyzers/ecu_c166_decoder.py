@@ -230,6 +230,23 @@ class EcuC166Decoder:
 
     # ---- Public API ----
 
+    @property
+    def base_pa(self) -> int:
+        """Physical address represented by the first image byte."""
+        return self._base_pa
+
+    @property
+    def image_size(self) -> int:
+        """Number of bytes in the loaded image."""
+        return self._rom_size
+
+    def contains_pa(self, pa: int, size: int = 2) -> bool:
+        """Return whether a physical-address range lies wholly inside the image."""
+        if size < 1:
+            raise ValueError('EcuC166Decoder: range size must be positive')
+        offset = pa - self._base_pa
+        return offset >= 0 and offset + size <= self._rom_size
+
     def insn_length(self, byte_off: int) -> int:
         """Return 2 or 4 — byte length of instruction at ``byte_off``."""
         if byte_off < 0 or byte_off >= len(self._data):
