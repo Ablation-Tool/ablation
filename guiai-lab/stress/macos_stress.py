@@ -172,6 +172,11 @@ class MacOSNativeCase(unittest.TestCase):
         moved = self.root_path / "moved with spaces" / "Ablation.app"
         moved.parent.mkdir()
         shutil.copytree(bundle, moved)
+        launcher = moved / "Contents" / "Resources" / ".venv" / "bin" / "guiai"
+        self.assertEqual(
+            launcher.read_text().splitlines()[0],
+            f"#!{moved}/Contents/Resources/.venv/bin/python",
+        )
         result = subprocess.run(
             [str(moved / "Contents" / "MacOS" / "Ablation"), "--self-test"],
             capture_output=True, text=True, timeout=20,

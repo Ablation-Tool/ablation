@@ -38,6 +38,16 @@
 
 ---
 
+## v2.93.2
+
+**Complete Ablation and GUIAI installation prompt.**
+
+- `forall.py` now installs the standard Ablation CLI and GUIAI into one environment by default, with `--gui-only` retained for workbench-only installations.
+- Both the native GUIAI package and the standard Ablation wheel are selected from the release and verified against `SHA256SUMS.txt`. GUIAI wheels install offline; standard Ablation dependencies are downloaded from PyPI without optional extras, models, or credentials.
+- Validation checks both `ablation --help` and `guiai --help`, including the Ablation CLI bundled inside `Ablation.app`. The universal installation workflow exercises the complete installation on Linux, Windows, and macOS.
+
+---
+
 ## v2.93.1
 
 **Native macOS application bundle.**
