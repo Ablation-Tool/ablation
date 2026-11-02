@@ -40,8 +40,9 @@ def repair_launchers(environment):
             remainder = stream.read()
         if not first.startswith(b"#!") or b"python" not in first.lower() or not first.endswith(b"\n"):
             continue
-        newline = b"\r\n" if first.endswith(b"\r\n") else b"\n"
-        script.write_bytes(f"#!{environment / 'bin' / 'python'}".encode() + newline + remainder)
+        script.write_bytes(
+            b'#!/bin/sh\n""":"\nexec "$(dirname "$0")/python" "$0" "$@"\n":"""\n' + remainder
+        )
 
 
 def create_app(source):

@@ -4,7 +4,7 @@ These packages contain the GUIAI wheel and its Python dependencies for offline P
 
 ## Universal installer
 
-**[Start with the all-platform installation guide](../INSTALL.md).** It includes the copy-paste AI Agent prompt, manual platform instructions, and the separate CLI-only section.
+**[Start with the all-platform installation guide](../INSTALL.md).** It includes the copy-paste AI Agent prompt, Linux/MacOS/Windows installation prompts, and the separate CLI-only prompt.
 
 Download and review `forall.py` from the [latest release](https://github.com/Ablation-Tool/ablation/releases/latest), then run `python forall.py`. Alternatively, paste the [universal install prompt](../INSTALL-PROMPT.md) into your AI Agent and type `/forall`.
 
