@@ -10,6 +10,7 @@ from tkinter import ttk
 
 from metrix.desktop import TerminalPanel
 
+from .accessibility import PALETTE_MODES, contrast_ratio, evaluate_accessibility, load_accessibility, save_accessibility, system_accent_color
 from .environment import configure_environment
 from .events import STATUSES, Session
 from .layout import LAYOUTS, load_layout, save_layout
@@ -43,6 +44,7 @@ class InvestigationApp:
         except (OSError, ValueError, json.JSONDecodeError) as error:
             self.layout = "lab-left"
             self.layout_error = str(error)
+        self.accessibility_palette, self.accessibility_error = load_accessibility(session.root)
         self.applied_layout = None
         self.layout_after_id = None
         self.layout_buttons = {}
@@ -55,7 +57,7 @@ class InvestigationApp:
         self.restoring_selection = False
         self.events_signature = None
         self.refresh_after_id = None
-        self.root.title(f"GUIAI · {Path(session.target).name or session.target}")
+        self.root.title(f"ABLⱯTION · {Path(session.target).name or session.target}")
         self.root.geometry("1500x900")
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.configure_environment()
@@ -70,7 +72,7 @@ class InvestigationApp:
             icon_bitmap = str(icon_root / "ablation-guiai.ico")
             self.root.iconbitmap(icon_bitmap)
             self.root.iconbitmap(default=icon_bitmap)
-        self.brand_button = ttk.Button(header, image=self.brand_header_image, command=self.toggle_settings)
+        self.brand_button = ttk.Button(header, image=self.brand_header_image, text="Settings", compound="left", command=self.toggle_settings)
         self.brand_button.pack(side="left")
         ttk.Label(header, textvariable=self.agent_variable, style="Header.TLabel").pack(side="right")
         ttk.Button(header, text="Save project", command=self.save_project).pack(side="right", padx=6)
@@ -80,7 +82,15 @@ class InvestigationApp:
             style="HeaderTitle.TLabel", font=("TkDefaultFont", 16, "bold"),
         ).place(relx=0.5, anchor="center")
         self.settings_bar = ttk.Frame(header, style="Header.TFrame")
-        ttk.Button(self.settings_bar, text="OS Optimization/Debugging", command=self.run_safety_check).pack(side="left")
+        self.safety_button = tk.Button(self.settings_bar, text="OS Optimization", command=self.run_safety_check)
+        self.safety_button.pack(side="left")
+        self.accessibility_button = tk.Button(self.settings_bar, text="a11y Optimization", command=self.show_accessibility)
+        self.accessibility_button.pack(side="left")
+        self.debug_button = tk.Button(self.settings_bar, text="Debug", command=self.run_debug_check)
+        self.debug_button.pack(side="left")
+        self.accent_buttons = (self.accessibility_button, self.safety_button, self.debug_button)
+        self.apply_system_accent()
+        self.accessibility_button.pack(side="left", before=self.safety_button)
         self.safety_panel = ttk.Frame(self.root, padding=(8, 4, 8, 0))
         ttk.Label(self.safety_panel, text="Read-only audit: no changes until Allow Permission").pack(fill="x")
         self.safety_summary = tk.StringVar()
@@ -92,8 +102,39 @@ class InvestigationApp:
         permissions.pack(fill="x")
         self.allow_safety_button = ttk.Button(permissions, text="Allow Permission", command=self.allow_safety)
         self.allow_safety_button.pack(side="left")
-        ttk.Button(permissions, text="Deny Permission", command=self.clear_safety).pack(side="left", padx=6)
+        self.deny_safety_button = ttk.Button(permissions, text="Deny Permission", command=self.clear_safety)
+        self.deny_safety_button.pack(side="left", padx=6)
+        self.accessibility_panel = ttk.Frame(self.root, padding=(8, 4, 8, 0))
+        ttk.Label(self.accessibility_panel, text="a11y Optimization and keyboard navigation").pack(fill="x")
+        self.accessibility_palette_var = tk.StringVar(value=PALETTE_MODES[self.accessibility_palette])
+        self.accessibility_palette_combo = ttk.Combobox(
+            self.accessibility_panel, textvariable=self.accessibility_palette_var,
+            values=list(PALETTE_MODES.values()), state="readonly",
+        )
+        self.accessibility_palette_combo.pack(fill="x", pady=4)
+        self.accessibility_palette_combo.bind("<<ComboboxSelected>>", self.on_accessibility_palette)
+        self.accessibility_status_var = tk.StringVar(
+            value=self.accessibility_error or "Screen reader labels and keyboard navigation are always enabled.",
+        )
+        ttk.Label(self.accessibility_panel, textvariable=self.accessibility_status_var, wraplength=1400).pack(fill="x")
+        keyboard_help = (
+            "Keyboard: Alt+S opens Settings, Alt+O opens the audit, Alt+A opens a11y Optimization, and Escape closes these panels. "
+            "Tab and Shift+Tab move between controls. Enter activates a control. Arrow keys navigate the Lab tree and charts. "
+            "The Lab tree is the text alternative to every chart."
+        )
+        ttk.Label(self.accessibility_panel, text=keyboard_help, wraplength=1400).pack(fill="x", pady=4)
+        self.accessibility_details = tk.Text(self.accessibility_panel, height=6, wrap="word", state="disabled")
+        self.accessibility_details.pack(fill="x", pady=4)
+        accessibility_permissions = ttk.Frame(self.accessibility_panel)
+        accessibility_permissions.pack(fill="x")
+        self.allow_accessibility_button = ttk.Button(accessibility_permissions, text="Allow Permission", command=self.allow_accessibility)
+        self.allow_accessibility_button.pack(side="left")
+        self.deny_accessibility_button = ttk.Button(accessibility_permissions, text="Deny Permission", command=self.clear_safety)
+        self.deny_accessibility_button.pack(side="left", padx=6)
+        ttk.Button(self.accessibility_panel, text="Close Accessibility", command=self.clear_safety).pack(side="left")
         self.safety_report = None
+        self.safety_domain = "Safety Check + OS Compliance"
+        self.accessibility_report = None
         self.target_label = ttk.Label(
             self.root,
             text=f"Target: {session.target}  ·  {session.target_kind}  ·  Session: {session.root}",
@@ -122,8 +163,28 @@ class InvestigationApp:
         ttk.Button(bottom, text="Refresh", command=self.reload).pack(side="right")
         if session.target_kind == "directory":
             ttk.Button(bottom, text="Rescan directory", command=self.rescan_directory).pack(side="right", padx=(0, 6))
+        for sequence in ("<Alt-s>", "<Alt-o>", "<Alt-a>", "<Escape>"):
+            self.root.bind(sequence, self.on_accessibility_key)
         self.reload()
         self.after_refresh()
+
+    def apply_system_accent(self):
+        accent = system_accent_color() or "#1867c0"
+        if getattr(self, "accent_color", None) == accent:
+            return
+        self.accent_color = accent
+        foreground = "#ffffff" if contrast_ratio(accent, "#ffffff") >= 4.5 else "#000000"
+        for button in self.accent_buttons:
+            button.configure(
+                background=accent, foreground=foreground,
+                activebackground=accent, activeforeground=foreground,
+                highlightbackground=accent, highlightcolor=accent,
+                highlightthickness=2, padx=8, pady=3, cursor="hand2",
+            )
+        if getattr(self, "safety_report", None) is not None:
+            self.present_safety_report(self.safety_report)
+        if getattr(self, "accessibility_report", None) is not None:
+            self.present_accessibility_report(self.accessibility_report)
 
     def toggle_settings(self):
         if self.settings_bar.winfo_ismapped():
@@ -133,12 +194,119 @@ class InvestigationApp:
 
     def clear_safety(self):
         self.safety_panel.pack_forget()
+        self.accessibility_panel.pack_forget()
         self.settings_bar.pack_forget()
+
+    def show_accessibility(self):
+        self.safety_panel.pack_forget()
+        self.accessibility_panel.pack(fill="x", before=self.target_label)
+        self.accessibility_palette_combo.focus_set()
+        self.run_accessibility_check()
+
+    def accessibility_features(self):
+        named_buttons = (self.brand_button, self.accessibility_button, self.allow_safety_button, self.deny_safety_button)
+        return {
+            "Descriptive control labels": all(button.cget("text") for button in named_buttons),
+            "Screen reader instructions": bool(self.accessibility_status_var.get() and self.accessibility_details.winfo_exists()),
+            "Keyboard navigation": callable(self.on_accessibility_key) and bool(self.terminal.text.cget("takefocus")),
+            "Text alternatives for charts": bool(self.tree.winfo_exists()),
+            "Visible focus navigation": bool(self.safety_details.cget("takefocus") and self.accessibility_details.cget("takefocus")),
+            "Status independent of color": True,
+        }
+
+    def accessibility_background(self):
+        red, green, blue = self.accessibility_details.winfo_rgb(self.accessibility_details.cget("background"))
+        luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 65535
+        background = f"#{round(red / 257):02x}{round(green / 257):02x}{round(blue / 257):02x}"
+        return background, luminance > 0.55
+
+    def present_accessibility_report(self, report):
+        background, light = self.accessibility_background()
+        colors = safety_colors(light, self.accessibility_palette, system_accent_color())
+        self.accessibility_status_var.set(report["summary"])
+        contrast_pass = all(check["ok"] for check in report["checks"] if check["name"].endswith("text contrast"))
+        self.accessibility_palette_var.set(f"Contrast, {'pass' if contrast_pass else 'review'}: {PALETTE_MODES[self.accessibility_palette]}")
+        self.accessibility_details.configure(state="normal")
+        self.accessibility_details.delete("1.0", "end")
+        for status in ("pass", "review", "section"):
+            self.accessibility_details.tag_configure(
+                status, foreground=colors[status if status != "section" else "accent"],
+            )
+        for check in report["checks"]:
+            status = "pass" if check["ok"] else "review"
+            self.accessibility_details.insert("end", f"[{status.upper()}] {check['name']}: {check['detail']}\n", status)
+        if report["remediations"]:
+            self.accessibility_details.insert("end", "\nProposed actions (no action has been taken):\n", "section")
+            for item in report["remediations"]:
+                self.accessibility_details.insert("end", f"- {item['action']}\n", "review")
+        self.accessibility_details.configure(state="disabled")
+
+    def run_accessibility_check(self):
+        background, light = self.accessibility_background()
+        try:
+            self.accessibility_report = evaluate_accessibility(
+                self.accessibility_palette, light, background, self.accessibility_features(),
+            )
+        except Exception as error:
+            self.accessibility_report = None
+            self.accessibility_status_var.set(f"Accessibility audit could not complete: {error}")
+            self.allow_accessibility_button.state(["disabled"])
+            return
+        self.present_accessibility_report(self.accessibility_report)
+        agent_ready = bool(self.command and self.terminal.fd is not None and not self.terminal.exited and not self.terminal.closed)
+        self.allow_accessibility_button.state(["!disabled"] if agent_ready else ["disabled"])
+
+    def allow_accessibility(self):
+        if self.accessibility_report is None:
+            return
+        try:
+            self.terminal.submit_agent_request(agent_request(self.accessibility_report, "a11y Optimization/Debugging"))
+        except ValueError as error:
+            self.accessibility_status_var.set(str(error))
+            return
+        self.agent_variable.set("a11y Optimization/Debugging request sent; review the terminal output")
+        self.clear_safety()
+
+    def on_accessibility_palette(self, _event=None):
+        label = self.accessibility_palette_var.get().rsplit(": ", 1)[-1]
+        palette = next((key for key, value in PALETTE_MODES.items() if value == label), None)
+        if palette is None:
+            return
+        try:
+            save_accessibility(self.session.root, palette)
+        except OSError as error:
+            self.accessibility_status_var.set(f"Could not save accessibility preferences: {error}")
+            return
+        self.accessibility_palette = palette
+        self.accessibility_status_var.set(f"{PALETTE_MODES[palette]} applied. PASS and REVIEW text remains visible.")
+        if self.safety_report is not None:
+            self.present_safety_report(self.safety_report)
+        self.run_accessibility_check()
+
+    def on_accessibility_key(self, event):
+        if event.keysym == "Escape":
+            if self.settings_bar.winfo_ismapped() or self.safety_panel.winfo_ismapped() or self.accessibility_panel.winfo_ismapped():
+                self.clear_safety()
+                return "break"
+            return None
+        if event.keysym == "s":
+            self.toggle_settings()
+        elif event.keysym == "o":
+            if not self.settings_bar.winfo_ismapped():
+                self.toggle_settings()
+            self.run_safety_check()
+        elif event.keysym == "a":
+            if not self.settings_bar.winfo_ismapped():
+                self.toggle_settings()
+            self.show_accessibility()
+        else:
+            return None
+        return "break"
 
     def safety_palette(self):
         red, green, blue = self.safety_details.winfo_rgb(self.safety_details.cget("background"))
         luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 65535
-        return safety_colors(luminance > 0.55)
+        return safety_colors(luminance > 0.55, self.accessibility_palette, system_accent_color())
 
     def present_safety_report(self, report, error=None):
         colors = self.safety_palette()
@@ -172,8 +340,20 @@ class InvestigationApp:
         self.safety_details.configure(state="disabled")
 
     def run_safety_check(self):
+        self.safety_domain = "Safety Check + OS Compliance"
+        self._run_safety_audit()
+
+    def run_debug_check(self):
+        self.safety_domain = "Debug"
+        self._run_safety_audit()
+
+    def _run_safety_audit(self):
+        self.accessibility_panel.pack_forget()
         try:
             self.safety_report = evaluate_safety(self.command)
+            if self.safety_domain == "Debug":
+                self.safety_report["summary"] = "Debug diagnostics: " + self.safety_report["summary"]
+                self.safety_report["details"] += "\n\nDebug scope: dependency and terminal diagnostics. Review evidence before any troubleshooting action."
         except Exception as error:
             self.safety_report = None
             self.present_safety_report(None, f"Safety audit could not complete: {error}")
@@ -188,11 +368,11 @@ class InvestigationApp:
         if self.safety_report is None:
             return
         try:
-            self.terminal.submit_agent_request(agent_request(self.safety_report))
+            self.terminal.submit_agent_request(agent_request(self.safety_report, self.safety_domain))
         except ValueError as error:
             self.safety_summary.set(str(error))
             return
-        self.agent_variable.set("Safety Check + OS Compliance request sent; review the terminal output")
+        self.agent_variable.set(f"{self.safety_domain} request sent; review the terminal output")
         self.clear_safety()
 
     def save_project(self):
@@ -544,6 +724,7 @@ class InvestigationApp:
     def after_refresh(self):
         if getattr(self, "closed", False):
             return
+        self.apply_system_accent()
         if self.refresh_after_id is not None:
             try:
                 self.root.after_cancel(self.refresh_after_id)

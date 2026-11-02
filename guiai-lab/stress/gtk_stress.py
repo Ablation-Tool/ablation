@@ -179,12 +179,12 @@ with tempfile.TemporaryDirectory(prefix="guiai-application-run-") as temporary:
         try:
             window = app.window
             assert window is not None and window.get_visible(), "application window was not activated"
-            assert window.get_title().startswith("Ablation"), "visible application name is not Ablation"
-            assert window.header_bar.get_custom_title() is not None, "centered title text should be removed"
+            assert window.get_title().startswith("ABLⱯTION"), "visible application name is not ABLⱯTION"
+            assert window.header_bar.get_custom_title() is not None, "native title label is missing"
             assert isinstance(window.brand_mark, Gtk.Image), "header must use the supplied transparent icon"
             assert window.brand_mark.get_pixbuf().get_has_alpha(), "header icon must preserve transparency"
-            assert window.brand_mark.get_pixbuf().get_width() == 32
-            assert window.brand_mark.get_pixbuf().get_height() == 32
+            assert window.brand_mark.get_pixbuf().get_width() == 24
+            assert window.brand_mark.get_pixbuf().get_height() == 24
             assert window.get_icon().get_has_alpha(), "program icon must preserve transparency"
             assert window.get_icon().get_width() == 512
             assert window.get_icon().get_height() == 512
@@ -213,6 +213,20 @@ with tempfile.TemporaryDirectory(prefix="guiai-application-run-") as temporary:
                 preferences_item = next(item for item in menu_items if item.get_label() == "Preferences")
                 preferences_item.emit("activate")
                 assert window.preferences_dialog is not None, "menu did not open native preferences"
+                layout_expander = window.preferences_dialog.section_expanders["layout"]
+                assert not layout_expander.get_expanded()
+                layout_expander.set_expanded(True)
+                geometry_deadline = time.monotonic() + 2
+                while window.preferences_dialog.get_allocated_width() < 460 and time.monotonic() < geometry_deadline:
+                    Gtk.main_iteration_do(False)
+                    time.sleep(0.02)
+                assert window.preferences_dialog.get_allocated_width() >= 460
+                layout_expander.set_expanded(False)
+                geometry_deadline = time.monotonic() + 2
+                while window.preferences_dialog.get_allocated_width() > 340 and time.monotonic() < geometry_deadline:
+                    Gtk.main_iteration_do(False)
+                    time.sleep(0.02)
+                assert window.preferences_dialog.get_allocated_width() <= 340
                 window.preferences_dialog.destroy()
                 assert window.preferences_dialog is None
                 from unittest import mock
@@ -229,8 +243,11 @@ with tempfile.TemporaryDirectory(prefix="guiai-application-run-") as temporary:
                 assert not window.settings_bar.get_visible()
                 window.brand_button.emit("clicked")
                 assert window.settings_bar.get_visible()
-                assert len(window.settings_bar.get_children()) == 1
+                assert len(window.settings_bar.get_children()) == 3
+                assert window.settings_bar.get_children()[0] is window.accessibility_button
+                assert window.settings_bar.get_children()[2] is window.debug_button
                 assert all(child.get_visible() for child in window.settings_bar.get_children())
+                assert all(child.get_style_context().has_class("suggested-action") for child in window.settings_bar.get_children())
                 with mock.patch.object(gtk_app, "evaluate_safety", return_value=report):
                     window.run_safety_check(None)
                 assert window.safety_panel.get_visible()
@@ -251,6 +268,25 @@ with tempfile.TemporaryDirectory(prefix="guiai-application-run-") as temporary:
                     window.deny_safety_button.emit("clicked")
                     submit.assert_not_called()
                 assert not window.settings_bar.get_visible() and not window.safety_panel.get_visible()
+                window.brand_button.emit("clicked")
+                with mock.patch.object(gtk_app, "evaluate_accessibility", return_value=report):
+                    window.accessibility_button.emit("clicked")
+                assert window.accessibility_panel.get_visible()
+                assert window.accessibility_palette_combo.get_accessible().get_name().startswith("Contrast, pass")
+                with mock.patch.object(workspace, "submit_agent_request") as submit:
+                    window.allow_accessibility_button.emit("clicked")
+                    submit.assert_called_once()
+                    assert submit.call_args.args[0].startswith("a11y Optimization/Debugging requested by the user. ")
+                assert not window.accessibility_panel.get_visible()
+                window.brand_button.emit("clicked")
+                with mock.patch.object(gtk_app, "evaluate_safety", return_value=report):
+                    window.debug_button.emit("clicked")
+                assert window.safety_domain == "Debug"
+                assert window.safety_report["summary"].startswith("Debug diagnostics: ")
+                with mock.patch.object(workspace, "submit_agent_request") as submit:
+                    window.allow_safety_button.emit("clicked")
+                    submit.assert_called_once()
+                    assert submit.call_args.args[0].startswith("Debug requested by the user. ")
                 window.new_button.emit("clicked")
                 second = window.current_workspace()
                 assert second is not workspace, "+ did not create a paired investigation"
@@ -1184,7 +1220,7 @@ with tempfile.TemporaryDirectory(prefix="guiai-tab-churn-") as temporary:
                 restored.notebook.get_tab_label(workspace).get_children()[0].get_text()
                 for workspace in restored.workspaces
             ]
-            self.assertEqual(labels, ["Lab #1", "Lab #2"])
+            self.assertEqual(labels, ["Lab 1", "Lab 2"])
             self.assertTrue(all(workspace.layout == "lab-right" for workspace in restored.workspaces))
             self.assertEqual(restored.current_workspace().investigation_number, 2)
             self.assertEqual(restored.current_workspace().session.current_state()["selected_id"], "observation:restored")

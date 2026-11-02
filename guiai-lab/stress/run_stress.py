@@ -535,6 +535,59 @@ class SafetyCase(unittest.TestCase):
         self.assertIn("Do not install", payload["instruction"])
 
 
+class AccessibilityCase(unittest.TestCase):
+    def test_preferences_round_trip_and_validation(self):
+        from guiai.accessibility import DEFAULT_PALETTE, load_accessibility, save_accessibility
+
+        with tempfile.TemporaryDirectory(prefix="guiai-a11y-test-") as temporary:
+            root = Path(temporary)
+            self.assertEqual(load_accessibility(root), (DEFAULT_PALETTE, None))
+            save_accessibility(root, "colorblind")
+            self.assertEqual(load_accessibility(root), ("colorblind", None))
+            (root / "accessibility.json").write_text('{"palette":"invalid"}')
+            palette, error = load_accessibility(root)
+            self.assertEqual(palette, DEFAULT_PALETTE)
+            self.assertIn("Unknown accessibility palette", error)
+            with self.assertRaises(ValueError):
+                save_accessibility(root, "invalid")
+
+    def test_palette_text_meets_normal_text_contrast(self):
+        from guiai.accessibility import PALETTE_MODES, contrast_ratio
+        from guiai.safety import safety_colors
+
+        self.assertAlmostEqual(contrast_ratio("#000000", "#ffffff"), 21.0)
+        for palette in PALETTE_MODES:
+            for light, background in ((True, "#ffffff"), (False, "#0d1117")):
+                colors = safety_colors(light, palette)
+                for name in ("pass", "review", "accent"):
+                    with self.subTest(palette=palette, light=light, name=name):
+                        self.assertGreaterEqual(contrast_ratio(colors[name], background), 4.5)
+        self.assertEqual(safety_colors(True, "system", "#123456")["accent"], "#123456")
+        self.assertNotEqual(safety_colors(True, "colorblind", "#123456")["accent"], "#123456")
+
+    def test_audit_reports_missing_features_and_remediation(self):
+        from guiai.accessibility import evaluate_accessibility
+
+        report = evaluate_accessibility("colorblind", False, "#0d1117", {"Keyboard navigation": False})
+        self.assertFalse(report["ready"])
+        self.assertFalse(report["remediations"][0]["command"])
+        self.assertIn("Keyboard navigation", report["remediations"][0]["action"])
+        passing = evaluate_accessibility("colorblind", False, "#0d1117", {"Keyboard navigation": True})
+        self.assertTrue(passing["ready"])
+        self.assertIn("Manual assistive-technology validation", passing["details"])
+
+    def test_a11y_agent_request_is_single_line_and_scoped(self):
+        from guiai.safety import agent_request
+
+        report = {"summary": "a11y", "details": "line one\nline two", "remediations": [], "checks": [], "ready": True}
+        request = agent_request(report, "a11y Optimization/Debugging")
+        self.assertTrue(request.startswith("a11y Optimization/Debugging requested by the user. "))
+        self.assertNotIn("\r", request)
+        self.assertNotIn("\n", request)
+        payload = json.loads(request.split("user. ", 1)[1])
+        self.assertIn("read-only AI review", payload["instruction"])
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run GUIAI core stress tests")
     parser.add_argument("--failfast", action="store_true")
@@ -546,6 +599,7 @@ def main():
         unittest.defaultTestLoader.loadTestsFromTestCase(LauncherCase),
         unittest.defaultTestLoader.loadTestsFromTestCase(DropPayloadCase),
         unittest.defaultTestLoader.loadTestsFromTestCase(SafetyCase),
+        unittest.defaultTestLoader.loadTestsFromTestCase(AccessibilityCase),
     ])
     result = unittest.TextTestRunner(verbosity=2, failfast=args.failfast).run(suite)
     raise SystemExit(0 if result.wasSuccessful() else 1)

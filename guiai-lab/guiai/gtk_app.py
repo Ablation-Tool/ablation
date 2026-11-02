@@ -14,10 +14,12 @@ import gi
 gi.require_version("Gdk", "3.0")
 gi.require_version("Gtk", "3.0")
 gi.require_version("Vte", "2.91")
-from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango, Vte
+gi.require_version("Atk", "1.0")
+from gi.repository import Atk, Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango, Vte
 
 import metrix
 from metrix.drop import dropped_payload
+from .accessibility import PALETTE_MODES, evaluate_accessibility, load_accessibility, save_accessibility, system_accent_color
 from .environment import agent_environment, configure_environment
 from .events import Session
 from .map_view import InvestigationMap
@@ -244,7 +246,7 @@ class PreferencesDialog(Gtk.Dialog):
         }
         self.syncing = False
         self.section_expanders = {}
-        self.set_default_size(650, -1)
+        self.set_default_size(320, -1)
         self.add_button("Close", Gtk.ResponseType.CLOSE)
         apply_button = self.add_button("Apply", Gtk.ResponseType.APPLY)
         apply_button.get_style_context().add_class("suggested-action")
@@ -345,7 +347,13 @@ class PreferencesDialog(Gtk.Dialog):
         return expander
 
     def on_section_expanded(self, expander, _property, child):
-        child.set_visible(expander.get_expanded())
+        expanded = expander.get_expanded()
+        child.set_visible(expanded)
+        if self.section_expanders.get("layout") is expander and expanded:
+            self.set_size_request(480, 500)
+        elif not expanded:
+            self.set_size_request(320, 300)
+            self.resize(320, 300)
 
     def attach_field(self, grid, row, text, widget):
         label = Gtk.Label(label=text, xalign=0)
@@ -434,13 +442,14 @@ def choose_workspace(parent, initial):
 
 class AblationWindow(Gtk.Window):
     def __init__(self, application, session, command, workspace, export_actions=True):
-        super().__init__(title=f"Ablation · {Path(session.target).name or session.target}")
+        super().__init__(title=f"ABLⱯTION · {Path(session.target).name or session.target}")
         self.session = session
         self.command = command
         self.cli_workspace = Path(workspace).resolve()
         self.workspace_override = self.cli_workspace != session.root
         self.export_actions = export_actions
         self.preferences = WorkbenchPreferences(session.root, configure_native_fonts().to_string())
+        self.accessibility_palette, self.accessibility_error = load_accessibility(session.root)
         self.workspaces = []
         self.next_number = 2
         self.preferences_dialog = None
@@ -449,52 +458,133 @@ class AblationWindow(Gtk.Window):
         self.set_position(Gtk.WindowPosition.CENTER)
         header = Gtk.HeaderBar(show_close_button=True)
         header.set_custom_title(Gtk.Box())
+        header.set_size_request(-1, 36)
         self.header_bar = header
         icon_path = Path(__file__).resolve().parent / "icons" / "ablation-guiai-logo.png"
         icon_pixbuf = GdkPixbuf.Pixbuf.new_from_file(str(icon_path))
         Gtk.Window.set_default_icon(icon_pixbuf)
         self.set_icon(icon_pixbuf)
-        brand_pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(str(icon_path), 32, 32, True)
+        brand_pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(str(icon_path), 24, 24, True)
         self.brand_mark = Gtk.Image.new_from_pixbuf(brand_pixbuf)
-        self.brand_mark.set_margin_start(8)
+        self.brand_mark.set_margin_start(4)
         self.brand_mark.set_margin_end(4)
         self.brand_button = Gtk.Button(relief=Gtk.ReliefStyle.NONE)
+        self.brand_button.set_size_request(40, 32)
+        self.brand_button.set_valign(Gtk.Align.CENTER)
         self.brand_button.set_image(self.brand_mark)
         self.brand_button.set_tooltip_text("Settings")
         self.brand_button.get_accessible().set_name("Settings")
+        self.brand_button.get_accessible().set_description("Open Settings (Alt+S), including OS Optimization and Accessibility")
         self.brand_button.connect("clicked", self.toggle_settings)
         header.pack_start(self.brand_button)
         self.set_titlebar(header)
-        self.set_title(f"Ablation · {Path(session.target).name or session.target}")
+        self.set_title(f"ABLⱯTION · {Path(session.target).name or session.target}")
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, border_width=10)
         self.add(outer)
         self.settings_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         self.settings_bar.set_no_show_all(True)
-        safety_button = Gtk.Button(label="OS Optimization/Debugging")
-        safety_button.connect("clicked", self.run_safety_check)
-        self.settings_bar.pack_start(safety_button, False, False, 0)
+        self.safety_button = Gtk.Button(label="OS Optimization")
+        self.safety_button.get_accessible().set_name("OS Optimization")
+        self.safety_button.get_accessible().set_description("Run a read-only safety and OS compliance audit (Alt+O)")
+        self.safety_button.get_style_context().add_class("suggested-action")
+        self.safety_button.connect("clicked", self.run_safety_check)
+        self.settings_bar.pack_start(self.safety_button, False, False, 0)
+        self.accessibility_button = Gtk.Button(label="a11y Optimization")
+        self.accessibility_button.get_accessible().set_name("a11y Optimization")
+        self.accessibility_button.get_accessible().set_description("Run a read-only accessibility audit and open color and keyboard settings (Alt+A)")
+        self.accessibility_button.get_style_context().add_class("suggested-action")
+        self.accessibility_button.connect("clicked", self.show_accessibility)
+        self.settings_bar.pack_start(self.accessibility_button, False, False, 0)
+        self.debug_button = Gtk.Button(label="Debug")
+        self.debug_button.get_accessible().set_name("Debug")
+        self.debug_button.get_accessible().set_description("Run read-only debug diagnostics and review proposed troubleshooting actions")
+        self.debug_button.get_style_context().add_class("suggested-action")
+        self.debug_button.connect("clicked", self.run_debug_check)
+        self.settings_bar.pack_start(self.debug_button, False, False, 0)
+        self.settings_bar.reorder_child(self.accessibility_button, 0)
+        self.settings_bar.reorder_child(self.safety_button, 1)
         header.pack_start(self.settings_bar)
         self.safety_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.safety_panel.set_no_show_all(True)
         self.safety_panel.pack_start(Gtk.Label(label="Read-only audit: no changes until Allow Permission", xalign=0), False, False, 0)
         self.safety_summary = Gtk.Label(xalign=0)
         self.safety_summary.set_line_wrap(True)
+        self.safety_summary.get_accessible().set_role(Atk.Role.STATUSBAR)
         self.safety_panel.pack_start(self.safety_summary, False, False, 0)
         safety_scroller = Gtk.ScrolledWindow()
         safety_scroller.set_size_request(-1, 140)
         self.safety_details = Gtk.TextView(editable=False, cursor_visible=False, wrap_mode=Gtk.WrapMode.WORD_CHAR)
+        self.safety_details.set_can_focus(True)
+        self.safety_details.get_accessible().set_name("Safety audit results")
+        self.safety_details.get_accessible().set_description("Read findings with a screen reader. Tab reaches Allow Permission and Deny Permission.")
         safety_scroller.add(self.safety_details)
         self.safety_panel.pack_start(safety_scroller, False, False, 0)
         permission_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         self.allow_safety_button = Gtk.Button(label="Allow Permission")
+        self.allow_safety_button.get_accessible().set_description("Send only the displayed bounded request to the active AI agent")
         self.allow_safety_button.connect("clicked", self.allow_safety)
         self.deny_safety_button = Gtk.Button(label="Deny Permission")
+        self.deny_safety_button.get_accessible().set_description("Close this audit without sending anything to the terminal")
         self.deny_safety_button.connect("clicked", lambda _button: self.clear_safety())
         permission_box.pack_start(self.allow_safety_button, False, False, 0)
         permission_box.pack_start(self.deny_safety_button, False, False, 0)
         self.safety_panel.pack_start(permission_box, False, False, 0)
         outer.pack_start(self.safety_panel, False, False, 0)
+        self.accessibility_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.accessibility_panel.set_no_show_all(True)
+        self.accessibility_panel.pack_start(Gtk.Label(label="a11y Optimization and keyboard navigation", xalign=0), False, False, 0)
+        self.accessibility_palette_combo = Gtk.ComboBoxText()
+        for palette, label in PALETTE_MODES.items():
+            self.accessibility_palette_combo.append(palette, label)
+        self.accessibility_palette_combo.set_active_id(self.accessibility_palette)
+        self.accessibility_palette_combo.get_accessible().set_name("Color palette")
+        self.accessibility_palette_combo.get_accessible().set_description("Choose system, colorblind-safe, or high-contrast colors")
+        self.accessibility_palette_combo.connect("changed", self.on_accessibility_palette)
+        self.accessibility_panel.pack_start(self.accessibility_palette_combo, False, False, 0)
+        self.accessibility_status = Gtk.Label(xalign=0)
+        self.accessibility_status.set_line_wrap(True)
+        self.accessibility_status.get_accessible().set_role(Atk.Role.STATUSBAR)
+        self.accessibility_status.set_text(self.accessibility_error or "Screen reader labels and keyboard navigation are always enabled.")
+        self.accessibility_panel.pack_start(self.accessibility_status, False, False, 0)
+        keyboard_help = Gtk.Label(xalign=0)
+        keyboard_help.set_line_wrap(True)
+        keyboard_help.set_text(
+            "Keyboard: Alt+S opens Settings, Alt+O opens the audit, Alt+A opens a11y Optimization, and Escape closes these panels. "
+            "Tab and Shift+Tab move between controls. Enter activates a control. Arrow keys navigate the Lab tree and charts. "
+            "The Lab tree is the text alternative to every chart.",
+        )
+        self.accessibility_panel.pack_start(keyboard_help, False, False, 0)
+        accessibility_scroller = Gtk.ScrolledWindow()
+        accessibility_scroller.set_size_request(-1, 100)
+        self.accessibility_details = Gtk.TextView(editable=False, cursor_visible=False, wrap_mode=Gtk.WrapMode.WORD_CHAR)
+        self.accessibility_details.set_can_focus(True)
+        self.accessibility_details.get_accessible().set_name("a11y audit results")
+        self.accessibility_details.get_accessible().set_description("Accessibility findings and proposed fixes. Tab reaches Allow Permission and Deny Permission.")
+        accessibility_scroller.add(self.accessibility_details)
+        self.accessibility_panel.pack_start(accessibility_scroller, False, False, 0)
+        accessibility_permissions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self.allow_accessibility_button = Gtk.Button(label="Allow Permission")
+        self.allow_accessibility_button.get_accessible().set_description("Send only the displayed accessibility request to the active AI agent")
+        self.allow_accessibility_button.connect("clicked", self.allow_accessibility)
+        self.deny_accessibility_button = Gtk.Button(label="Deny Permission")
+        self.deny_accessibility_button.get_accessible().set_description("Close the a11y audit without sending anything to the terminal")
+        self.deny_accessibility_button.connect("clicked", lambda _button: self.clear_safety())
+        accessibility_permissions.pack_start(self.allow_accessibility_button, False, False, 0)
+        accessibility_permissions.pack_start(self.deny_accessibility_button, False, False, 0)
+        self.accessibility_panel.pack_start(accessibility_permissions, False, False, 0)
+        close_accessibility = Gtk.Button(label="Close Accessibility")
+        close_accessibility.get_accessible().set_description("Close accessibility settings and return to the investigation")
+        close_accessibility.connect("clicked", lambda _button: self.clear_safety())
+        self.accessibility_panel.pack_start(close_accessibility, False, False, 0)
+        outer.pack_start(self.accessibility_panel, False, False, 0)
         self.safety_report = None
+        self.safety_domain = "Safety Check + OS Compliance"
+        self.accessibility_report = None
+        self.system_accent_settings = None
+        schema_source = Gio.SettingsSchemaSource.get_default()
+        if schema_source is not None and schema_source.lookup("org.gnome.desktop.interface", True):
+            self.system_accent_settings = Gio.Settings.new("org.gnome.desktop.interface")
+            self.system_accent_settings.connect("changed::accent-color", self.on_system_accent_changed)
         self.preferences_error = Gtk.Label(xalign=0)
         self.preferences_error.set_line_wrap(True)
         if self.preferences.error:
@@ -538,17 +628,153 @@ class AblationWindow(Gtk.Window):
         self.register_actions()
         self.restore_investigations()
         self.connect("delete-event", self.on_delete)
+        self.connect("key-press-event", self.on_accessibility_key)
+
+    def on_system_accent_changed(self, _settings, _key):
+        if self.safety_report is not None:
+            self.present_safety_report(self.safety_report)
+        if self.accessibility_report is not None:
+            self.present_accessibility_report(self.accessibility_report)
 
     def toggle_settings(self, _button):
         if self.settings_bar.get_visible():
             self.clear_safety()
         else:
+            self.header_bar.set_size_request(-1, 48)
             self.settings_bar.set_no_show_all(False)
             self.settings_bar.show_all()
 
     def clear_safety(self):
         self.safety_panel.hide()
+        self.accessibility_panel.hide()
         self.settings_bar.hide()
+        self.header_bar.set_size_request(-1, 36)
+
+    def show_accessibility(self, _button=None):
+        self.safety_panel.hide()
+        self.accessibility_panel.set_no_show_all(False)
+        self.accessibility_panel.show_all()
+        self.accessibility_palette_combo.grab_focus()
+        self.run_accessibility_check()
+
+    def accessibility_features(self):
+        workspace = self.current_workspace()
+        named_controls = (self.brand_button, self.accessibility_button, self.allow_safety_button, self.deny_safety_button, workspace.tree, workspace.terminal)
+        return {
+            "Descriptive control labels": all(control.get_accessible().get_name() for control in named_controls),
+            "Screen reader descriptions": all(control.get_accessible().get_description() for control in named_controls),
+            "Keyboard navigation": callable(self.on_accessibility_key) and workspace.tree.get_can_focus() and workspace.terminal.get_can_focus(),
+            "Text alternatives for charts": bool(workspace.tree.get_accessible().get_name() and workspace.map_stack.get_accessible().get_description()),
+            "Visible focus navigation": self.brand_button.get_can_focus() and self.accessibility_details.get_can_focus(),
+            "Status independent of color": True,
+        }
+
+    def accessibility_background(self):
+        style = self.accessibility_details.get_style_context()
+        found, background = style.lookup_color("theme_base_color")
+        if not found:
+            background = style.get_background_color(Gtk.StateFlags.NORMAL)
+        luminance = 0.2126 * background.red + 0.7152 * background.green + 0.0722 * background.blue
+        return color_hex(background), luminance > 0.55
+
+    def present_accessibility_report(self, report):
+        background, light = self.accessibility_background()
+        colors = safety_colors(light, self.accessibility_palette, system_accent_color())
+        self.accessibility_status.set_text(report["summary"])
+        self.accessibility_status.get_accessible().set_name(report["summary"])
+        contrast_pass = all(check["ok"] for check in report["checks"] if check["name"].endswith("text contrast"))
+        self.accessibility_palette_combo.get_accessible().set_name(
+            f"Contrast, {'pass' if contrast_pass else 'review'}: {PALETTE_MODES[self.accessibility_palette]}",
+        )
+        self.accessibility_details.get_accessible().set_description(report["details"])
+        buffer = self.accessibility_details.get_buffer()
+        buffer.set_text("")
+        tags = {}
+        for status in ("pass", "review", "section"):
+            tag = buffer.get_tag_table().lookup(status) or buffer.create_tag(status)
+            tag.set_property("foreground", colors[status if status != "section" else "accent"])
+            tag.set_property("weight", Pango.Weight.BOLD if status == "section" else Pango.Weight.NORMAL)
+            tags[status] = tag
+        for check in report["checks"]:
+            status = "pass" if check["ok"] else "review"
+            buffer.insert_with_tags(buffer.get_end_iter(), f"[{status.upper()}] {check['name']}: {check['detail']}\n", tags[status])
+        if report["remediations"]:
+            buffer.insert_with_tags(buffer.get_end_iter(), "\nProposed actions (no action has been taken):\n", tags["section"])
+            for item in report["remediations"]:
+                buffer.insert_with_tags(buffer.get_end_iter(), f"- {item['action']}\n", tags["review"])
+
+    def run_accessibility_check(self):
+        background, light = self.accessibility_background()
+        try:
+            self.accessibility_report = evaluate_accessibility(
+                self.accessibility_palette, light, background, self.accessibility_features(),
+            )
+        except Exception as error:
+            self.accessibility_report = None
+            self.accessibility_status.set_text(f"Accessibility audit could not complete: {error}")
+            self.accessibility_details.get_buffer().set_text(str(error))
+            self.allow_accessibility_button.set_sensitive(False)
+            return
+        self.present_accessibility_report(self.accessibility_report)
+        workspace = self.current_workspace()
+        agent_ready = bool(workspace and workspace.command and workspace.agent_pid is not None and not workspace.agent_exited)
+        self.allow_accessibility_button.set_sensitive(agent_ready)
+        self.allow_accessibility_button.set_tooltip_text(
+            "Send only the displayed accessibility request to the embedded AI agent" if agent_ready
+            else "Start an embedded AI agent before sending the request",
+        )
+
+    def allow_accessibility(self, _button):
+        workspace = self.current_workspace()
+        if self.accessibility_report is None or workspace is None:
+            return
+        try:
+            workspace.submit_agent_request(agent_request(self.accessibility_report, "a11y Optimization/Debugging"))
+        except ValueError as error:
+            self.accessibility_status.set_text(str(error))
+            return
+        workspace.agent_status = "a11y Optimization/Debugging request sent; review the terminal output"
+        workspace.status_changed()
+        self.clear_safety()
+
+    def on_accessibility_palette(self, combo):
+        palette = combo.get_active_id()
+        if palette not in PALETTE_MODES:
+            return
+        try:
+            save_accessibility(self.session.root, palette)
+        except OSError as error:
+            self.accessibility_status.set_text(f"Could not save accessibility preferences: {error}")
+        else:
+            self.accessibility_palette = palette
+            self.accessibility_status.set_text(f"{PALETTE_MODES[palette]} applied. PASS and REVIEW text remains visible.")
+            if self.safety_report is not None:
+                self.present_safety_report(self.safety_report)
+            self.run_accessibility_check()
+        self.accessibility_status.get_accessible().set_name(self.accessibility_status.get_text())
+
+    def on_accessibility_key(self, _widget, event):
+        if event.keyval == Gdk.keyval_from_name("Escape"):
+            if self.settings_bar.get_visible() or self.safety_panel.get_visible() or self.accessibility_panel.get_visible():
+                self.clear_safety()
+                return True
+            return False
+        if not event.state & Gdk.ModifierType.MOD1_MASK:
+            return False
+        key = Gdk.keyval_name(event.keyval)
+        if key == "s":
+            self.toggle_settings(None)
+        elif key == "o":
+            if not self.settings_bar.get_visible():
+                self.toggle_settings(None)
+            self.run_safety_check(None)
+        elif key == "a":
+            if not self.settings_bar.get_visible():
+                self.toggle_settings(None)
+            self.show_accessibility()
+        else:
+            return False
+        return True
 
     def safety_palette(self):
         style = self.safety_details.get_style_context()
@@ -556,7 +782,7 @@ class AblationWindow(Gtk.Window):
         if not found:
             background = style.get_background_color(Gtk.StateFlags.NORMAL)
         luminance = 0.2126 * background.red + 0.7152 * background.green + 0.0722 * background.blue
-        return safety_colors(luminance > 0.55)
+        return safety_colors(luminance > 0.55, self.accessibility_palette, system_accent_color())
 
     def set_safety_summary(self, text, color):
         escaped = GLib.markup_escape_text(text)
@@ -565,6 +791,8 @@ class AblationWindow(Gtk.Window):
     def present_safety_error(self, message):
         colors = self.safety_palette()
         self.set_safety_summary(message, colors["review"])
+        self.safety_summary.get_accessible().set_name(message)
+        self.safety_details.get_accessible().set_description(message)
         buffer = self.safety_details.get_buffer()
         buffer.set_text(message)
         tag = buffer.get_tag_table().lookup("review") or buffer.create_tag("review")
@@ -574,6 +802,8 @@ class AblationWindow(Gtk.Window):
     def present_safety_report(self, report):
         colors = self.safety_palette()
         self.set_safety_summary(report["summary"], colors["pass"] if report["ready"] else colors["review"])
+        self.safety_summary.get_accessible().set_name(report["summary"])
+        self.safety_details.get_accessible().set_description(report["details"])
         buffer = self.safety_details.get_buffer()
         buffer.set_text("")
 
@@ -610,9 +840,21 @@ class AblationWindow(Gtk.Window):
                     buffer.insert_with_tags(buffer.get_end_iter(), f"  {item['command']}\n", tags["command"])
 
     def run_safety_check(self, _button):
+        self.safety_domain = "Safety Check + OS Compliance"
+        self._run_safety_audit()
+
+    def run_debug_check(self, _button):
+        self.safety_domain = "Debug"
+        self._run_safety_audit()
+
+    def _run_safety_audit(self):
+        self.accessibility_panel.hide()
         workspace = self.current_workspace()
         try:
             self.safety_report = evaluate_safety(workspace.command if workspace else None)
+            if self.safety_domain == "Debug":
+                self.safety_report["summary"] = "Debug diagnostics: " + self.safety_report["summary"]
+                self.safety_report["details"] += "\n\nDebug scope: dependency and terminal diagnostics. Review evidence before any troubleshooting action."
         except Exception as error:
             self.safety_report = None
             self.present_safety_error(f"Safety audit could not complete: {error}")
@@ -635,11 +877,11 @@ class AblationWindow(Gtk.Window):
         if self.safety_report is None or workspace is None:
             return
         try:
-            workspace.submit_agent_request(agent_request(self.safety_report))
+            workspace.submit_agent_request(agent_request(self.safety_report, self.safety_domain))
         except ValueError as error:
             self.safety_summary.set_text(str(error))
             return
-        workspace.agent_status = "Safety Check + OS Compliance request sent; review the terminal output"
+        workspace.agent_status = f"{self.safety_domain} request sent; review the terminal output"
         workspace.status_changed()
         self.clear_safety()
 
@@ -689,7 +931,7 @@ class AblationWindow(Gtk.Window):
                 cli_workspace = session.workspace
                 saved_workspace = session.metadata.get("workspace")
                 if saved_workspace is not None and Path(saved_workspace) != cli_workspace:
-                    warning = f"Lab #{number}: saved terminal directory is unavailable; using {cli_workspace}."
+                    warning = f"Lab {number}: saved terminal directory is unavailable; using {cli_workspace}."
                     if hasattr(self, "workspace_warnings"):
                         self.workspace_warnings.append(warning)
         workspace = InvestigationWorkspace(
@@ -698,7 +940,7 @@ class AblationWindow(Gtk.Window):
         )
         workspace.investigation_number = number
         tab = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        title = Gtk.Label(label=f"Lab #{number}")
+        title = Gtk.Label(label=f"Lab {number}")
         tab.pack_start(title, False, False, 0)
         close = Gtk.Button()
         close.set_image(Gtk.Image.new_from_icon_name("window-close", Gtk.IconSize.MENU))
@@ -999,6 +1241,10 @@ class InvestigationWorkspace(Gtk.Box):
         navigation.pack_end(self.map_toggle, False, False, 0)
         self.store = Gtk.TreeStore(str, str, str, bool, str, str, str)
         self.tree = Gtk.TreeView()
+        self.tree.get_accessible().set_name("Investigation tree")
+        self.tree.get_accessible().set_description(
+            "Text alternative to all charts. Use arrow keys to expand, collapse, and move between nodes. Status is read as text.",
+        )
         self.tree.set_headers_visible(True)
         self.tree.set_headers_clickable(False)
         self.tree.set_enable_tree_lines(True)
@@ -1034,6 +1280,10 @@ class InvestigationWorkspace(Gtk.Box):
         self.investigation_panes = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL, wide_handle=True)
         self.investigation_panes.pack1(scrolled, True, True)
         self.map_stack = Gtk.Stack()
+        self.map_stack.get_accessible().set_name("Investigation visualization")
+        self.map_stack.get_accessible().set_description(
+            "Visual supplement to the Investigation tree. Use arrow keys to navigate; equivalent nodes and statuses are available in the tree.",
+        )
         self.map_stack.set_no_show_all(True)
         map_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self.investigation_map = InvestigationMap(self.select_node)
@@ -1161,6 +1411,10 @@ class InvestigationWorkspace(Gtk.Box):
         left.pack_end(footer, False, False, 0)
         left.pack_end(self.node_actions, False, False, 0)
         self.terminal = Vte.Terminal()
+        self.terminal.get_accessible().set_name("Embedded AI agent terminal")
+        self.terminal.get_accessible().set_description(
+            "Interactive AI command line. Type commands or drop local files and folders to insert quoted paths without Enter.",
+        )
         self.preferences.apply_terminal(self.terminal)
         self.terminal.set_scrollback_lines(1000)
         self.terminal.set_scroll_on_keystroke(True)
@@ -1857,6 +2111,7 @@ class InvestigationWorkspace(Gtk.Box):
             raise ValueError("Safety request rejected: the prompt contains control characters")
         self.terminal.feed_child(text.encode("utf-8"))
         self.terminal.feed_child(b"\r")
+        self.terminal.grab_focus()
 
     def insert_dropped_paths(self, paths):
         if not self.command or self.agent_pid is None or self.agent_exited or self.closed:

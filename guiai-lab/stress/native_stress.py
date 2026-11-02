@@ -82,6 +82,22 @@ class NativeCase(unittest.TestCase):
                 self.assertNotIn(b"\n", request)
                 self.assertEqual(write.call_args_list[1], mock.call(b"\r"))
 
+        with mock.patch("guiai.app.evaluate_accessibility", return_value=report):
+            self.app.show_accessibility()
+            self.assertEqual(self.app.accessibility_panel.winfo_manager(), "pack")
+            self.assertTrue(self.app.accessibility_palette_var.get().startswith("Contrast, pass"))
+            with mock.patch.object(self.app.terminal, "write") as write:
+                self.app.allow_accessibility()
+                self.assertEqual(write.call_count, 2)
+                self.assertTrue(write.call_args_list[0].args[0].startswith(b"a11y Optimization/Debugging requested by the user. "))
+        with mock.patch("guiai.app.evaluate_safety", return_value=report):
+            self.app.run_debug_check()
+            self.assertEqual(self.app.safety_domain, "Debug")
+            self.assertTrue(self.app.safety_report["summary"].startswith("Debug diagnostics: "))
+            with mock.patch.object(self.app.terminal, "write") as write:
+                self.app.allow_safety()
+                self.assertTrue(write.call_args_list[0].args[0].startswith(b"Debug requested by the user. "))
+
     def test_details_are_collapsed_without_changing_selection(self):
         self.assertEqual(self.app.details_frame.winfo_manager(), "")
         self.assertEqual(self.app.details_label.winfo_manager(), "")
