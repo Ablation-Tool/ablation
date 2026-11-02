@@ -32,8 +32,8 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 | [**Terminal**](guiai-lab/README.md#agent-workflow) | [1](guiai-lab/metrix/desktop.py)&nbsp;[2](guiai-lab/guiai/gtk_app.py) | Interactive input, Unicode, clipboard, resizing, scrollback, font selection, color schemes, custom foreground/background, and all 16 ANSI palette colors. |
 | [**Directory inventory**](guiai-lab/README.md#start-a-session) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/app.py) | Add and rescan real top-level directory entries without implying recursive analysis coverage. |
 | [**METRIX support**](guiai-lab/README.md#architecture) | [1](guiai-lab/metrix/cli.py)&nbsp;[2](guiai-lab/metrix/desktop.py) | Bundled inventory, search, filtering, and export utilities; no separate METRIX checkout is required. |
-| [**Platform support**](guiai-lab/README.md#install) | [1](guiai-lab/packaging/build_windows_native.py)&nbsp;[2](guiai-lab/packaging/build_macos.py)&nbsp;[3](guiai-lab/packaging/build_linux.py) | Native GTK/VTE on Linux, native Tk with ConPTY on Windows, and `Ablation.app` with POSIX PTY and first-run setup on macOS. |
-| [**Installation**](guiai-lab/INSTALL.md) | [1](guiai-lab/packaging/forall.py) | The Universal OS Installation Prompt offers Ablation and GUIAI together or CLI only. Native GUIAI packages include their Python dependencies for offline installation; standard Ablation dependencies are downloaded separately. |
+| [**Operating System Support**](guiai-lab/README.md#install) | [1](guiai-lab/packaging/build_windows_native.py)&nbsp;[2](guiai-lab/packaging/build_macos.py)&nbsp;[3](guiai-lab/packaging/build_linux.py) | Windows, MacOS, Linux |
+| [**Installation Prompt**](guiai-lab/INSTALL.md) | [1](guiai-lab/packaging/forall.py) | The Universal OS Installation Prompt offers Ablation and GUIAI together or CLI only. Native GUIAI packages include their Python dependencies for offline installation; standard Ablation dependencies are downloaded separately. |
 
 GUIAI does not automatically execute analysis targets, install an AI model, or issue blanket vulnerability verdicts. The AI Agent chooses which analysis tools to invoke.
 
