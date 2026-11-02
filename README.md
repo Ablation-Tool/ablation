@@ -13,24 +13,6 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 
 ![GUIAI native workbench demo](assets/demos/guiai-workbench-demo.gif)
 
-<details>
-<summary>GUIAI</summary>
-
-Ablation's GUIAI unifies GUI with your AI Agent in one native window. The standard Ablation installation includes GUIAI by default; choose the separate CLI-only prompt only if you do not want the workbench.
-
-Install both with the [Installation Prompt](#installation-prompt), or use the platform-specific prompts for [Linux](guiai-lab/INSTALL.md#linux), [MacOS](guiai-lab/INSTALL.md#macos), and [Windows](guiai-lab/INSTALL.md#windows).
-
-Launch with your agent:
-
-```bash
-guiai desktop /path/to/target --session /path/to/session --agent kimi
-# Also: --agent claude, --agent codex, or --agent-command 'your-agent-cli --flag'
-```
-
-[Installation Prompt](guiai-lab/INSTALL-PROMPT.md) · [Platform prompts](guiai-lab/INSTALL.md) · [CLI only](guiai-lab/INSTALL.md#cli-only) · [Workbench guide](guiai-lab/README.md) · [Native packages](guiai-lab/packaging/README.md)
-
-</details>
-
 ## Capabilities
 
 <details>
