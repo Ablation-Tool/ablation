@@ -1,35 +1,33 @@
-# Universal GUIAI install prompt
+# Universal OS Installation Prompt
 
-Paste this prompt into the AI Agent you want to embed. Then type `/forall`. This is a shared instruction for the AI Agent, not a built-in slash command supplied by every CLI. It works through Kimi Code, Claude Code, Codex, and other interactive agents that can download files and run local commands.
+Copy this prompt into your AI Agent. It will ask you to choose **GUIAI** or **CLI Only** before installing anything.
 
 ```text
-When I type /forall, install GUIAI for Ablation and launch it with you—the AI Agent I am currently using—embedded in its terminal.
+Ask me to choose one installation type and wait for my answer before installing anything:
 
-Ask before privileged commands or system changes. Do not execute the RE target, install an AI model, change credentials, or bypass my permissions. Preserve my existing files and local changes.
+1. GUIAI — install the standard Ablation CLI and GUIAI, then launch the workbench with you—the AI Agent I am currently using—embedded in its terminal.
+2. CLI Only — install the standard Ablation CLI without GUIAI.
 
-1. Check for Python 3.10 or newer with Tkinter. Native Windows requires Python 3.11 x64. On macOS, use a Python distribution that includes Tkinter. On Ubuntu or Debian, ask before installing missing native dependencies:
-   sudo apt install python3-venv python3-tk python3-gi python3-cairo python3-gi-cairo gir1.2-gtk-3.0 gir1.2-vte-2.91
+Do not continue until I explicitly choose GUIAI or CLI Only.
 
-2. Download this installer over HTTPS into a new temporary or working directory:
-   https://github.com/Ablation-Tool/ablation/releases/latest/download/forall.py
+If I choose GUIAI:
+- Check my operating system and Python first. Native Windows requires Python 3.11 x64 with Tcl/Tk; macOS and Linux require Python 3.10 or newer with Tkinter. Explain missing prerequisites and ask before system changes.
+- Download and review https://github.com/Ablation-Tool/ablation/releases/latest/download/forall.py and run it with the checked Python. Use the default full installation, which includes both Ablation and GUIAI, verifies release checksums, installs GUIAI's wheels offline, and downloads standard Ablation dependencies from PyPI.
+- Ask me for the RE target and a project directory outside it. On macOS, open the generated Ablation.app. On Windows and macOS, use --toolkit tk when launching through the CLI. Use your actual executable for the embedded AI Agent; if you cannot identify it, ask me instead of substituting another agent.
+- Verify ablation --help and guiai --help, and confirm that the native window opens with your real CLI inside it.
 
-   Do not pipe a downloaded script directly into Python. Review it first. It selects the native Windows, macOS, or Linux package, verifies the package against the release's SHA256SUMS.txt, rejects unsafe archive paths, and installs its GUIAI Python dependencies offline. METRIX and the pinned native drag-and-drop bridge are bundled. This installs GUIAI, not the optional full Ablation analysis environment, AI models, or agent credentials.
+- If I explicitly do not want a Desktop shortcut, use python forall.py --no-desktop-shortcut. Otherwise, confirm that the installed icon opens a native target chooser with stable per-target sessions. Dropping local files or folders into the embedded CLI inserts quoted paths without pressing Enter; never execute an RE artifact merely to validate it.
+- The turned-A logo exposes **a11y Optimization**, **OS Optimization**, and **Debug**. Each provides a read-only audit with visible findings and proposed commands before requesting permission; Deny must do nothing, and Allow may send only the displayed bounded request to the active AI agent. Accessibility includes persistent colorblind-safe and high-contrast palettes, descriptive labels, text alternatives, and keyboard navigation. Do not claim screen-reader or accessibility compliance without testing with the user's assistive technology.
 
-3. Run the reviewed installer with the checked Python:
-   python forall.py
+If I choose CLI Only:
+- Create a project-local virtual environment and activate it for my operating system. For an existing source checkout, verify its origin and preserve uncommitted changes.
+- Install the standard package with python -m pip install ablation-tool, or from a reviewed source checkout with python -m pip install . Do not run forall.py because its default includes GUIAI.
+- Verify ablation --help. Do not launch GUIAI.
 
-   It moves the verified package to a previously nonexistent destination before creating the virtual environment, runs native validation, installs a Desktop icon by default, and verifies `guiai launch --help` from the final path. Do not use sudo. If the destination exists, stop and ask me before choosing another empty directory with --directory; never delete or overwrite my installation. If installation fails, report the retained partial destination and do not delete it or call the installation successful. Do not skip failed tests.
-
-   If I explicitly do not want a Desktop icon, use:
-   python forall.py --no-desktop-shortcut
-
-4. Confirm the platform-specific Desktop icon exists and opens a native target chooser. The chooser supports a single binary or a material directory and uses a per-target session. Dropping local files or folders into the embedded CLI inserts quoted paths without pressing Enter; never execute an RE artifact merely to validate the icon. The turned-A logo exposes **a11y Optimization**, **OS Optimization**, and **Debug**. Each provides a read-only audit with visible findings and proposed commands before requesting permission; Deny must do nothing, and Allow may send only the displayed bounded request to the active AI agent. Accessibility includes persistent colorblind-safe and high-contrast palettes, descriptive labels, text alternatives, and keyboard navigation. Do not claim screen-reader or accessibility compliance without testing with the user's assistive technology.
-
-5. To launch with you embedded, use the exact guiai executable reported by the installer:
-   guiai desktop TARGET --session SESSION --agent AGENT_EXECUTABLE
-
-   On native Windows and macOS, add --toolkit tk. Use the actual executable for this session, commonly kimi, claude, or codex. For custom arguments, use:
-   guiai desktop TARGET --session SESSION --agent-command 'AGENT_EXECUTABLE --flag'
-
-   If you cannot identify the executable, ask me instead of substituting another agent. Ask for TARGET and SESSION if I have not provided them. Confirm that the native window opens and the embedded CLI starts, then report the installation directory, Desktop-icon status, and exact launch command. Do not claim visual or native OS validation that you did not perform.
+For either choice:
+- Preserve my files and local changes. Do not use sudo, overwrite an existing installation, skip failed validation, or bypass my permissions.
+- Do not install an AI model, credentials, optional analysis extras, or firmware analysis. Do not execute the RE target.
+- Report my selected option, operating system, Ablation and GUIAI versions when applicable, installation and project paths, validation result, and exact launch command.
 ```
+
+For manual platform packages, see the [platform package guide](packaging/README.md).

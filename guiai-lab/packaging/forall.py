@@ -12,6 +12,7 @@ import sys
 import tempfile
 from urllib.parse import quote
 from urllib.request import Request, urlopen
+import venv
 from zipfile import BadZipFile, ZipFile
 
 
@@ -96,6 +97,51 @@ def install_package(source, installer, skip_tests, no_desktop_shortcut, destinat
     subprocess.run(command, cwd=source, env=environment, check=True)
 
 
+def ablation_package(checksums):
+    matches = [
+        name for name in checksums
+        if name.startswith("ablation_tool-") and name.endswith("-py3-none-any.whl")
+    ]
+    if len(matches) != 1:
+        raise RuntimeError("The release must provide exactly one standard Ablation CLI wheel.")
+    return matches[0]
+
+
+def install_ablation(source, archive):
+    environment = source / ".venv"
+    venv.EnvBuilder(
+        with_pip=True, system_site_packages=sys.platform.startswith("linux"),
+    ).create(environment)
+    executable = environment / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+    subprocess.run(
+        [str(executable), "-m", "pip", "install", str(archive)],
+        cwd=source, check=True, timeout=600,
+    )
+
+
+def verify_installed_cli(source, include_ablation):
+    names = ["guiai"] + (["ablation"] if include_ablation else [])
+    for name in names:
+        executable = source / ".venv" / (
+            f"Scripts/{name}.exe" if sys.platform == "win32" else f"bin/{name}"
+        )
+        subprocess.run(
+            [str(executable), "--help"], cwd=source,
+            stdout=subprocess.DEVNULL, check=True, timeout=60,
+        )
+    guiai = source / ".venv" / ("Scripts/guiai.exe" if sys.platform == "win32" else "bin/guiai")
+    subprocess.run(
+        [str(guiai), "launch", "--help"], cwd=source,
+        stdout=subprocess.DEVNULL, check=True, timeout=60,
+    )
+    if include_ablation and sys.platform == "darwin":
+        bundled = source / "Ablation.app" / "Contents" / "Resources" / ".venv" / "bin" / "ablation"
+        subprocess.run(
+            [str(bundled), "--help"], cwd=source,
+            stdout=subprocess.DEVNULL, check=True, timeout=60,
+        )
+
+
 def default_destination():
     if sys.platform == "win32":
         root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
@@ -107,7 +153,8 @@ def default_destination():
 
 
 def parse_arguments(arguments=None):
-    parser = argparse.ArgumentParser(description="Download and install the verified native GUIAI package for this computer.")
+    parser = argparse.ArgumentParser(description="Download and install the standard Ablation CLI and native GUIAI workbench.")
+    parser.add_argument("--gui-only", action="store_true", help="install only GUIAI, without the standard Ablation CLI")
     parser.add_argument("--directory", type=Path, default=default_destination(), help="new installation directory (must not exist)")
     parser.add_argument("--skip-tests", action="store_true", help="skip native validation (not recommended)")
     parser.add_argument("--no-desktop-shortcut", action="store_true", help="install without creating a Desktop shortcut")
@@ -132,30 +179,39 @@ def main(arguments=None):
         archive = downloads / asset
         download(base + quote(asset), archive)
         verify_archive(archive, checksums)
-        staging = downloads / "install"
-        extract_archive(archive, staging)
+        ablation_asset = None
+        if not args.gui_only:
+            ablation_asset = ablation_package(checksums)
+            full_archive = downloads / ablation_asset
+            download(base + quote(ablation_asset), full_archive)
+            verify_archive(full_archive, checksums)
+        created = False
         try:
-            staging.rename(destination)
-        except OSError as error:
-            raise RuntimeError(f"Unable to move the verified package into {destination}: {error}") from error
-        try:
+            destination.mkdir()
+            created = True
+            extract_archive(archive, destination)
+            if not args.gui_only:
+                install_ablation(destination, full_archive)
             install_package(destination, installer, args.skip_tests, args.no_desktop_shortcut, destination)
+            verify_installed_cli(destination, not args.gui_only)
             (destination / ".guiai-install.json").write_text(json.dumps({
                 "package": asset,
                 "sha256": checksums[asset],
+                "ablation_package": ablation_asset,
+                "ablation_sha256": checksums.get(ablation_asset),
                 "source": args.base_url,
             }, indent=2) + "\n", encoding="utf-8")
-        except (OSError, subprocess.CalledProcessError) as error:
+        except BaseException as error:
             raise RuntimeError(
                 f"Installation did not complete; the new partial installation is retained at {destination}: {error}",
             ) from error
     executable = destination / ".venv" / ("Scripts/guiai.exe" if sys.platform == "win32" else "bin/guiai")
-    if not executable.is_file():
-        raise RuntimeError(f"Installation did not produce the expected executable: {executable}")
-    subprocess.run([str(executable), "launch", "--help"], stdout=subprocess.DEVNULL, check=True)
-    print(f"\nGUIAI is installed in {destination}")
+    installed = "GUIAI is" if args.gui_only else "Ablation CLI and GUIAI are"
+    print(f"\n{installed} installed in {destination}")
     if not args.no_desktop_shortcut:
         print("Open Ablation from its Desktop icon to choose an investigation target.")
+    if sys.platform == "darwin":
+        print(f"Application: {destination / 'Ablation.app'}")
     print("Launch it with your installed AI Agent:")
     print(f'  "{executable}" desktop TARGET --session SESSION --toolkit tk --agent kimi')
     if not sys.platform.startswith("linux"):
@@ -167,6 +223,6 @@ def main(arguments=None):
 if __name__ == "__main__":
     try:
         main()
-    except (OSError, RuntimeError, ValueError, BadZipFile, subprocess.CalledProcessError) as error:
+    except (OSError, RuntimeError, ValueError, BadZipFile, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         print(f"Installation failed: {error}", file=sys.stderr)
         raise SystemExit(1)

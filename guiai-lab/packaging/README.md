@@ -4,13 +4,17 @@ These packages contain the GUIAI wheel and its Python dependencies for offline P
 
 ## Universal installer
 
-Download and review `forall.py` from the [latest release](https://github.com/Ablation-Tool/ablation/releases/latest), then run `python forall.py`. Alternatively, paste the [universal install prompt](../INSTALL-PROMPT.md) into your AI Agent and type `/forall`.
+**[Start with the Universal OS Installation Prompt](../INSTALL.md).** It asks you to choose **GUIAI** or **CLI Only**, then installs the appropriate tools for your operating system.
+
+Download and review `forall.py` from the [latest release](https://github.com/Ablation-Tool/ablation/releases/latest), then run `python forall.py`. Alternatively, paste the [Universal OS Installation Prompt](../INSTALL-PROMPT.md) into your AI Agent and answer its GUIAI-or-CLI-only question.
 
 The installer selects the native package for the current operating system, downloads the release checksum file and package over HTTPS, verifies SHA256 before extraction, rejects unsafe archive paths, and moves the verified package to a previously nonexistent destination before creating its virtual environment. It runs platform validation and verifies `guiai launch --help` from the final installation path. It does not require `sudo`; choose a new empty directory with `--directory` when the default exists.
 
 A Desktop icon is installed by default and opens a native target chooser. Use `python forall.py --no-desktop-shortcut` to opt out. If native installation fails, the new partial destination is retained for diagnosis and reported as incomplete; it is never presented as successful or silently deleted.
 
-This installs GUIAI and its required Python dependencies, not the optional full Ablation analysis environment or an AI Agent. A network connection is needed for the initial download. Subsequent Python package installation uses only the bundled wheels. `/forall` is an instruction interpreted through the install prompt, not a built-in command available in every CLI.
+By default, this installs the **standard Ablation CLI and GUIAI together** in one environment. The native GUIAI package and its Python wheels are checksum-verified and installed offline. The standard Ablation CLI wheel is checksum-verified from the same release, and its dependencies are downloaded from PyPI. Optional analysis extras, AI models, credentials, and an AI Agent are not installed. Use `--gui-only` to install only the workbench.
+
+A network connection is needed for the initial downloads and the standard Ablation dependencies. `/forall` is an instruction interpreted through the install prompt, not a built-in command available in every CLI.
 
 After installation, the turned-A logo exposes **a11y Optimization**, **OS Optimization**, and **Debug**. Each audit is read-only until the user explicitly allows a displayed, bounded remediation request through an active embedded AI agent. Denying permission never invokes the terminal. Accessibility includes persistent colorblind-safe and high-contrast palettes, descriptive labels, text alternatives, and keyboard navigation; manual assistive-technology validation remains necessary.
 
@@ -24,13 +28,11 @@ Linux can use the native GTK/VTE interface when the distribution's GTK, VTE, and
 
 ## macOS
 
-Use `GUIAI-macOS.zip` with Python 3.10 or newer that includes Tkinter. Extract it and run `bash install_macos.sh`. The installer creates `.venv` inside the extracted directory and installs without an index or separate METRIX checkout.
+Use `GUIAI-macOS.zip` with Python 3.10 or newer that includes Tkinter. Extract it and run `bash install_macos.sh`. The installer creates `.venv` inside the extracted directory, installs without an index or separate METRIX checkout, and creates `Ablation.app` beside it.
 
-The installer creates `~/Applications/Ablation.app` with the ICNS icon and a target-choosing launcher, validates its plist and launcher syntax, and creates a Desktop alias by default. Set `NO_DESKTOP_SHORTCUT=1` to omit the alias. An existing non-symlink at `~/Desktop/Ablation.app` is never replaced.
+Open **Ablation.app** to choose a binary or material directory, project directory, and optional installed AI Agent. The setup window opens the existing GUIAI workbench; it does not install a model or credentials. The app includes its Python environment and `Ablation.icns` icon and can be moved to another folder on the same Mac. For scripted use, `Contents/MacOS/Ablation` forwards arguments to `guiai`, including `desktop`, `--agent`, and `--agent-command`. A Desktop alias is created by default; set `NO_DESKTOP_SHORTCUT=1` to omit it, and an existing non-symlink at `~/Desktop/Ablation.app` is never replaced.
 
-The installer does not bypass macOS privacy permissions, quarantine, or Gatekeeper. macOS may request permission before the installer can create a Desktop alias. Public production releases must also sign the app and native libraries with a Developer ID and complete Apple notarization; the per-user installer does not invent a signing identity or claim that SHA256 verification provides publisher authentication.
-
-macOS uses the **native Tk interface with POSIX PTY**, not GTK/VTE. The installer runs native shell-wrapper, interactive-terminal, drag-and-drop, icon, and process-cleanup tests unless `SKIP_TESTS=1` is set. A dedicated `macos-latest` CI workflow builds and validates the package.
+macOS uses the **native Tk interface with POSIX PTY**, not GTK/VTE. The app is built locally and is not signed or Apple-notarized. The installer does not bypass privacy permissions, quarantine, or Gatekeeper; public production releases require Developer ID signing and notarization. The installer validates shell wrapping, interactive PTY, drag-and-drop, icon rendering, cleanup, branding/layout/project saving, first-run setup, bundle execution, relocation, and Launch Services opening unless `SKIP_TESTS=1` is set. A dedicated `macos-latest` CI workflow builds and validates the package.
 
 ## Native Windows
 

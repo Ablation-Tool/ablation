@@ -30,6 +30,44 @@ Semantic firmware analysis for vulnerability researchers.
 | [Known Anomalies: X86_32TaintTracker](reference-anomalies/x86-32-taint-tracker.md) | Intraprocedural only, FPO functions, GOT-base not emulated, esp arithmetic, loop fixpoint |
 | [Known Anomalies: LoongArch64TaintTracker](reference-anomalies/loongarch64-taint-tracker.md) | Stripped binary discovery, KASAN/KCOV false positives, LSX/LASX vectors, dynamic syscalls, loop fixpoint |
 | [Known Anomalies: WindowsPoolTaintTracker](reference-anomalies/windows-pool-taint-tracker.md) | Register-identity false positives, 200-instruction window, dynamic-resolve zero-IAT, lief version |
+| [Known Anomalies: C166 CFG](reference-anomalies/c166-cfg.md) | Seeded coverage, shared tails, indirect control flow, direct-xref classes, DPP ambiguity |
+| [Known Anomalies: C166 Execution](reference-anomalies/c166-execution.md) | Bounded ISA, reset state, DPP inputs, pseudo-registers, CAN and SRST evidence limits |
+| [Known Anomalies: Mixed VPI Bridge](reference-anomalies/mixed-hdl-vpi-bridge.md) | Timestamp schedules, VPI lifecycle/value handling, scalar transport, completion semantics |
+| [Known Anomalies: Streaming WDB](reference-anomalies/xilinx-wdb.md) | Profile/name limits, timestamp interpretation, streaming bounds, partial exports |
+
+---
+
+## ABL∀TION's Default GUIAI
+
+Native workspaces for agent-guided reverse engineering, with real agent terminals, persistent investigation state, visual navigation, review controls, and configurable Lab layouts.
+
+| Document | Description |
+|---|---|
+| [AI Agent Bridge](reference-modules/guiai-agent-bridge.md) | Runs your interactive AI agent inside the GUI. No credentials included. |
+| [Lab & Navigation](reference-modules/guiai-investigation-lab.md) | Organizes, searches, and visualizes discoveries, with directory inventory and METRIX tools. |
+| [Persistence & Isolation](reference-modules/guiai-project-memory.md) | Restores sessions and preferences while keeping each Lab's agent, history, and workspace separate. |
+| [Review & Evidence Integrity](reference-modules/guiai-review-workflow.md) | Tracks reviews, preserves evidence history, validates targets, and prevents duplicate discoveries. |
+
+**Supporting topics**
+
+- [GUIAI workbench guide](../guiai-lab/README.md)
+- [Performance and investigation memory](reference-modules/guiai-performance.md)
+- [Unified Memory Architecture](reference-modules/unified-memory-architecture.md)
+- [Token Allocation](reference-modules/guiai-token-allocation.md)
+- [Operating System Support](reference-modules/guiai-operating-system-support.md)
+- [Independent Workspaces](reference-modules/guiai-independent-workspaces.md)
+- [Visual Navigation](reference-modules/guiai-visual-navigation.md)
+- [Layout Preferences](reference-modules/guiai-layout-preferences.md)
+- [Terminal](reference-modules/guiai-terminal.md)
+- [Directory Inventory](reference-modules/guiai-directory-inventory.md)
+- [METRIX Support](reference-modules/metrix-support.md)
+- [Universal OS Installation Prompt](../guiai-lab/INSTALL-PROMPT.md)
+- [Installation guide](../guiai-lab/INSTALL.md)
+- [Native platform packages](../guiai-lab/packaging/README.md)
+- [Agent configuration](integrations/agent-configuration.md)
+- [Kimi Code configuration](kimi-code-configuration.md)
+- [Claude Code workflow](integrations/claude-code.md)
+- [Validation and hardening](../guiai-lab/HARDENING.md)
 
 ---
 
@@ -54,6 +92,7 @@ Step-by-step guides for common research tasks.
 | [Cross-Version Diffing](workflows/cross-version.md) | Track a function across firmware patch releases |
 | [Go Binary RE](workflows/go-binaries.md) | Stripped Go binaries: pclntab recovery, garbled builds |
 | [Android Cross-Layer Analysis](workflows/android-reverse-engineering.md) | End-to-end APK/XAPK → manifest → DEX → JNI → native taint tutorial, with confirmation and reporting guidance |
+| [CERN Reverse-Engineering Toolchain](workflows/cern-reverse-engineering-toolchain.md) | SPECS exhaustive RTL, C166 CFG/execution, mixed VHDL/SystemVerilog VPI, and streaming WDB evidence with reproduction commands |
 | [Crypto Analysis](workflows/crypto.md) | Encrypted firmware, XOR key recovery, JWT cracking |
 | [Source Code Audit](workflows/source-code-audit.md) | Compress a repo → rank files → confirm findings; full worked example |
 | [KASAN-Oracle](workflows/kasan-oracle.md) | Scan KASAN debug build first; verify candidates in stripped production build |
@@ -83,7 +122,9 @@ Analyze hardware description language source files: extract constants, compare v
 | [HdlHtmlExtractor](reference-modules/hdl-html-extractor.md) | Extract VHDL/Verilog from HDL Designer HTML exports (ContentFrame0.htm files) and feed into VerilogSemantic |
 | [LatexReExtractor](reference-modules/latex-re-extractor.md) | Extract sections, \\newcommand constants, tabular tables, inline numeric parameters, and labeled items from LaTeX ASIC/firmware specs |
 | [LpgbtDecoder](reference-modules/lpgbt-decoder.md) | Decode lpGBT e-link serial protocols: LCB 6B/8B downlink (L0A/BCR/CMD frames), STAR FLINK 4-bit uplink, HCC 8B/10B uplink |
+| [Mixed VHDL/SystemVerilog VPI Bridge](reference-modules/mixed-hdl-vpi-bridge.md) | Run GHDL and Icarus concurrently with bounded scalar exchange, timestamp normalization, assertions, and completion/timeout handling |
 | [SPECS Protocol](reference-modules/specs-protocol.md) | Encode and validate SPECS serial frames, final-payload marker bits, long-frame count rules, and archived simulation headers |
+| [Streaming Xilinx WDB](reference-modules/xilinx-wdb.md) | Recover legacy and event-only WDB records with bounded decompression, streaming summaries, and atomic JSONL export |
 | [VersalPdi](reference-modules/versal-pdi.md) | Parse Xilinx Versal PDI firmware images: MetaHeader, IHT, image/partition headers, CDO section scanner, CDO command parser; pld and boot sub-formats; git hash extraction |
 | [VerilogSemantic](reference-modules/verilog-semantic.md) | Extract constants, signal widths, FSM states from a single Verilog/VHDL source tree |
 | [HDLVersionDiff](reference-modules/hdl-version-diff.md) | Compare two HDL source versions: added/removed/changed constants, signals, ports, FSM states |
@@ -188,6 +229,8 @@ Analyze hardware description language source files: extract constants, compare v
 | [bFLT (Binary Flat Format)](reference-modules/bflt.md) | BfltImage, BfltArm32, and BfltBinaryContext: binary Flat containers, bounded loading, link-time literal references, Linux RAM relocation with explicit outcomes, and relocated analysis contexts |
 | [JFFS2 Filesystem Reader](reference-modules/jffs2.md) | Jffs2Image: read-only little-endian reconstruction with node/dirent/name/inode/payload CRCs, versioned extents, implicit roots, hard links, and explicit resource limits |
 | [ECU C166/C167 Decoder](reference-modules/c166-c167-decoding.md) | EcuC166Decoder: corrected two-/four-byte decoding, arbitrary image sizes, selectable IVT bases, direct CALLS targets, explicit 64 KiB code segments and 16 KiB DPP data pages, and CERN-byte regression coverage |
+| [C166 Recursive CFG and Direct Xrefs](reference-modules/c166-cfg.md) | Seeded variable-width control flow, function/block recovery, direct RAM/SFR references, DPP-aware records, and stable JSON |
+| [Bounded C166 Execution and CAN](reference-modules/c166-execution.md) | Fail-closed instruction execution, sparse memory, DPP-indirect access, CAN message objects, and A1396 update-path verification |
 | [ECU ROM Layout Analyzer](reference-modules/ecu-rom-layout-analyzer.md) | EcuROMLayoutAnalyzer: entropy-based arch-agnostic ROM region classifier; four-variable decision entropy + fill ratio + entropy floor + PPC density; ERASED/CODE/CALIBRATION/MIXED/PADDING; `is_calibration_only()` detects OBD cal-only dumps EDC16C34 confirmed; validated on GM E38 PCM (PPC32) and Bosch EDC16C34 |
 | [ECU Security Access Scanner](reference-modules/ecu-security-access-scanner.md) | EcuSecurityAccessScanner: static-seed SecurityAccess handler fingerprinter; M68K/CPU32 pattern move.b #$67 + 2x clr.b and PPC32 pattern: li rX imm 0x67 + stb + 2x zero li+stb; confirmed GM P01/P04/P05/P08/P10/P11/P59 (CPU32) and GM E38 (PPC32) |
 | [ECU RomRaider Parser](reference-modules/ecu-romraider-parser.md) | EcuRomRaiderParser: RomRaider ECU definition XML parser; two-pass base+variant inheritance model; identify_rom() with ±32-byte window + hex-address fallback + false-positive table-count filter; 14 scaling expression forms; BMW Siemens MS43/MS45 MPC555 PPC32 + Subaru SH705x; self-contained ROM support for Subaru 5EAT TCU M32R: 273 tables, 160 MAP |
@@ -277,6 +320,8 @@ See [CHANGELOG.md](CHANGELOG.md) for full version history.
 | Version | Summary |
 |---|---|
 | Unreleased | Added bounded APK/XAPK decoding, overload-aware Java-like DEX decompilation, byte-backed ARM/Thumb ELF disassembly, exact JNI mapping, and converged DEX-to-native taint analysis with FORGE closure and capability documentation. |
+| v2.93.2 | Added the complete Installation Prompt and universal installer for the standard Ablation CLI and GUIAI, with verified release wheels, a shared environment, and native cross-platform validation. |
+| v2.93.1 | Added the offline `Ablation.app` bundle with native ICNS branding, first-run target/project/agent selection, relocation-safe launching, and native macOS application validation. |
 | v2.93.0 | Added relocation-aware BfltBinaryContext with strict and explicit unresolved outcomes, corrected GZIP/GZDATA layouts, added bFLT-backed WindowAnalyzer support, and recovered legacy ARM PLT symbols and direct calls without the A1676 LIEF crash. |
 | v2.92.0 | Expanded C166 dispatch decoding and corrected condition/shift operands; resolved A3801 and N1470 update variants; added BfltArm32 link-time pointer and literal recovery with complete documentation. |
 | v2.91.0 | Added immediate SUBB decoding, bFLT pointer-endianness guidance, corrected A1676 update gating, confirmed C111C command-listener evidence, and documented the ALICE control FPGA command decoder. |

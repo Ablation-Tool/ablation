@@ -9,7 +9,7 @@
 - Added native Linux, Windows, and macOS Desktop launchers, target-choosing `guiai launch`, ICO/ICNS artwork, ABLⱯTION branding, and stable per-target sessions. Universal installation now uses final-path virtual environments, offline pinned drag-and-drop dependencies, explicit shortcut opt-out, and retained partial-failure diagnostics.
 - Added safe local file/folder drops into the embedded CLI with host-specific quoting and no automatic Enter or artifact execution.
 - Added read-only a11y, OS optimization, and Debug workflows with visible findings and bounded Allow/Deny AI-agent actions. Accessibility includes persistent colorblind-safe/high-contrast palettes, measured contrast, descriptive screen-reader labels, keyboard navigation, and the Lab tree text alternative.
-- Added OS accent-following settings controls, compact titlebar presentation, responsive Preferences sizing, and **Lab N** tab labels. Validation covers 111 local checks plus passing native Windows, macOS, and universal-installer CI runs (`41474878498`, `41474878515`, and `41474878448`); macOS signing/notarization and manual assistive-technology validation remain release requirements.
+- Added OS accent-following settings controls, compact titlebar presentation, responsive Preferences sizing, and **Lab N** tab labels. Validation covers 113 local checks plus passing native Windows, macOS, and universal-installer CI runs (`41474878498`, `41474878515`, and `41474878448`); macOS signing/notarization and manual assistive-technology validation remain release requirements.
 
 **Android APK/XAPK, DEX, JNI, and cross-layer taint workflow.**
 
@@ -42,6 +42,40 @@
 - `VersalPdi.git_hash()` now returns an empty string when every candidate Git word is zero instead of reporting the false identifier `00000000`.
 - Corrected the reference to describe Git metadata as optional and DMA-loaded bytes as unidentified until their architecture and purpose are established.
 - Added a zero-valued `LOADER/SET_IMAGE_INFO` regression test and validated the correction against the reviewed GEP GCM4 boot images.
+
+---
+
+## v2.93.2
+
+**Complete Ablation and GUIAI installation prompt.**
+
+- `forall.py` now installs the standard Ablation CLI and GUIAI into one environment by default, with `--gui-only` retained for workbench-only installations.
+- Both the native GUIAI package and the standard Ablation wheel are selected from the release and verified against `SHA256SUMS.txt`. GUIAI wheels install offline; standard Ablation dependencies are downloaded from PyPI without optional extras, models, or credentials.
+- Validation checks both `ablation --help` and `guiai --help`, including the Ablation CLI bundled inside `Ablation.app`. The universal installation workflow exercises the complete installation on Linux, Windows, and macOS.
+
+---
+
+## v2.93.1
+
+**Native macOS application bundle.**
+
+- Added `Ablation.app` with the offline Python environment, native ICNS branding, and a first-run chooser for the RE target, project directory, and optional installed AI Agent.
+- Added atomic application creation and relocation-safe launching on the same Mac, with command forwarding to the existing GUIAI workbench and no bundled model or credentials.
+- Added native macOS validation for app execution, Launch Services, relocation, launcher input, and the existing terminal and workspace behavior. The locally generated app is not signed or Apple-notarized.
+
+---
+
+## v2.94.0
+
+**CERN protocol, C166, mixed-HDL, and streaming-WDB verification toolchain.**
+
+- Added exhaustive SPECS receiver simulation for all 256 read counts: 1,280 checks, 127 long-frame cases, and zero checksum errors. Dynamic evidence proves the `0x80`/`0x81` boundary, emitter inhibit, and bit-7 output masking while preserving the separate third-header checksum-sampling anomaly.
+- Added seeded C166 recursive control-flow recovery and direct data xrefs in `c166_cfg.py`, with bounded functions/instructions/issues, stable JSON, explicit indirect-flow limits, and DPP-aware direct-memory records. Real A1396 recovery covers both update handlers and the `0x84FE` producer/gate.
+- Added bounded C166 execution and CAN message-object modeling in `c166_execution.py`, including sparse memory, protected spans, direct/DPP-indirect accesses, condition flags, `ZEROS`/`ONES`, bounded calls/traces, and fail-closed unsupported behavior. The suite dynamically confirms valid arming, valid or invalid trigger after arming, invalid-arm rejection, and the exact ten-byte `update req` handoff.
+- Added a two-way GHDL/Icarus VPI bridge with strict C compilation, hierarchical lookup at simulation start, settled callbacks, normalized timestamps, atomic per-timestamp exchange, and graceful completion. Both native HDL assertion streams pass and a missing peer produces a bounded timeout.
+- Added streaming Xilinx WDB recovery for the 2017 legacy two-section profile and event-only newer containers. The Endeavour WDB now yields 21 roots and 10,759,544 events with bounded memory/export, cycle checks, and atomic JSONL; unnamed legacy streams are not assigned invented names.
+- Added extensive API references, known-anomaly guides, CERN reproduction workflow, package exports, release metadata, and MIT provenance for the pinned modern WDB reader.
+- Validation includes 141 C166 tests, five WDB tests including the full 10.76-million-event decode, exhaustive SPECS RTL, and mixed two-way/timeout simulations. Every changed Python file is subject to the FORGE ten-section gate before commit.
 
 ---
 
