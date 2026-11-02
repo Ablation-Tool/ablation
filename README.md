@@ -412,30 +412,3 @@ Report the operating system, installed version, installation and project paths, 
 [Linux](guiai-lab/INSTALL.md#linux) · [MacOS](guiai-lab/INSTALL.md#macos) · [Windows](guiai-lab/INSTALL.md#windows) · [CLI only](guiai-lab/INSTALL.md#cli-only)
 
 </details>
-
-<details>
-<summary>AI Agent Install</summary>
-
-```text
-Set up Ablation from https://github.com/Ablation-Tool/ablation for me.
-
-Check for Git and Python 3.10 or newer. Clone the repository if it is absent.
-For an existing checkout, verify its origin and check for uncommitted changes.
-Do not reset, clean, overwrite, or pull over local changes. Stop and ask if
-the remote differs or the checkout is dirty.
-
-Review pyproject.toml before installation. Create a project-local Python
-virtual environment, activate it for my operating system, and install only
-the standard package from the source checkout with:
-
-  python -m pip install .
-
-Keep full, LLM, and bytecode extras opt-in and ask before adding them. Stop
-on errors. Do not use sudo, global Python installation, alternate package
-sources, API keys, model-provider configuration, or firmware analysis.
-
-Verify with `ablation --help`. Report the checkout and environment paths,
-Python version, installed extras, and verification result.
-```
-
-</details>
