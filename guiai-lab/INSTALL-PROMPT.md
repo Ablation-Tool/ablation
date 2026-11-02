@@ -1,4 +1,4 @@
-# Universal Platform Installation Prompt
+# Universal OS Installation Prompt
 
 Copy this prompt into your AI Agent. It will ask you to choose **GUIAI** or **CLI Only** before installing anything.
 

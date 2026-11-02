@@ -4,9 +4,9 @@ These packages contain the GUIAI wheel and its Python dependencies for offline P
 
 ## Universal installer
 
-**[Start with the Universal Platform Installation Prompt](../INSTALL.md).** It asks you to choose **GUIAI** or **CLI Only**, then installs the appropriate tools for your operating system.
+**[Start with the Universal OS Installation Prompt](../INSTALL.md).** It asks you to choose **GUIAI** or **CLI Only**, then installs the appropriate tools for your operating system.
 
-Download and review `forall.py` from the [latest release](https://github.com/Ablation-Tool/ablation/releases/latest), then run `python forall.py`. Alternatively, paste the [Universal Platform Installation Prompt](../INSTALL-PROMPT.md) into your AI Agent and answer its GUIAI-or-CLI-only question.
+Download and review `forall.py` from the [latest release](https://github.com/Ablation-Tool/ablation/releases/latest), then run `python forall.py`. Alternatively, paste the [Universal OS Installation Prompt](../INSTALL-PROMPT.md) into your AI Agent and answer its GUIAI-or-CLI-only question.
 
 The installer selects the native package for the current operating system, downloads the release checksum file and package over HTTPS, verifies SHA256 before extraction, rejects unsafe archive paths, runs the platform installer, and performs native validation. It creates a new installation under the current user's data directory and does not require `sudo`. An existing destination is never overwritten; choose a new empty directory with `--directory`.
 
