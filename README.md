@@ -16,6 +16,41 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 ## Capabilities
 
 <details>
+<summary>GUIAI</summary>
+
+**Native workbench for agent-guided reverse engineering.** Your actual AI Agent supplies labor; the workspace supplies memory and navigation; you supply direction and judgment.
+
+| Area | Capabilities |
+|---|---|
+| **AI Agent bridge** | Embeds the real interactive CLI for Kimi Code, Claude Code, Codex, or a custom agent. No built-in model, separate chatbot, or credentials are supplied. |
+| **Investigation Lab** | Agent-grown tree of artifacts, functions, evidence, observations, hypotheses, findings, and notes. Search and filter while retaining ancestor context. |
+| **Project memory** | Saves discoveries, selections, bookmarks, terminal directories, active Lab, and preferences. Reopen projects without depending on the agent's chat context. |
+| **Independent workspaces** | GTK supports independent Lab tabs with separate histories, selections, terminal directories, and agent processes. Tk supports one investigation per window. |
+| **Visual navigation** | Tree, breadcrumbs, Rings, and Treemap. Chart size represents subtree node count, not disk usage or analysis coverage. |
+| **Review workflow** | Not-started, in-progress, partial, blocked, reviewed, scoped-complete, rejected, and not-applicable states. Flag follow-ups, mark reviewed, copy focused prompts, reveal evidence in the file manager, and undo status changes. |
+| **Layout preferences** | Place the Lab left, right, above, or below the AI Agent using numbered visual previews. Preferences persist across launches. |
+| **Terminal** | Interactive input, Unicode, clipboard, resizing, scrollback, font selection, color schemes, custom foreground/background, and all 16 ANSI palette colors. |
+| **Directory inventory** | Add and rescan real top-level directory entries without implying recursive analysis coverage. |
+| **METRIX support** | Bundled inventory, search, filtering, and export utilities; no separate METRIX checkout is required. |
+| **Platform support** | Native GTK/VTE on Linux, native Tk with ConPTY on Windows, and `Ablation.app` with POSIX PTY and first-run setup on macOS. |
+| **Installation** | The Universal OS Installation Prompt offers Ablation and GUIAI together or CLI only. Native GUIAI packages include their Python dependencies for offline installation; standard Ablation dependencies are downloaded separately. |
+
+GUIAI does not automatically execute analysis targets, install an AI model, or issue blanket vulnerability verdicts. The AI Agent chooses which analysis tools to invoke.
+
+**GUIAI documentation**
+
+- [Workbench guide](guiai-lab/README.md)
+- [Universal OS Installation Prompt](guiai-lab/INSTALL-PROMPT.md)
+- [Installation guide](guiai-lab/INSTALL.md)
+- [Native packages and offline installation](guiai-lab/packaging/README.md)
+- [Agent configuration](docs/integrations/agent-configuration.md)
+- [Kimi Code configuration](docs/kimi-code-configuration.md)
+- [Claude Code workflow](docs/integrations/claude-code.md)
+- [Validation and hardening](guiai-lab/HARDENING.md)
+
+</details>
+
+<details>
 <summary>Decompilers, Disassemblers & Analyzers</summary>
 
 **Native CPUs**

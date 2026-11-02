@@ -33,6 +33,23 @@ Semantic firmware analysis for vulnerability researchers.
 
 ---
 
+## GUIAI
+
+Native workspaces for agent-guided reverse engineering, with real agent terminals, persistent investigation state, visual navigation, review controls, and configurable Lab layouts.
+
+| Document | Description |
+|---|---|
+| [GUIAI workbench guide](../guiai-lab/README.md) | Lab/tree navigation, independent investigations, project saving, charts, review controls, preferences, session files, and validation |
+| [Universal OS Installation Prompt](../guiai-lab/INSTALL-PROMPT.md) | Choose GUIAI or CLI Only, then install the appropriate tools on Linux, macOS, or Windows |
+| [Installation guide](../guiai-lab/INSTALL.md) | Universal installation workflow and the explicit CLI-only alternative |
+| [Native platform packages](../guiai-lab/packaging/README.md) | Offline GUIAI packages, native Windows ConPTY, macOS `Ablation.app`, Linux GTK/VTE, and Windows WSL alternatives |
+| [Agent configuration](integrations/agent-configuration.md) | Shared setup and workflows for supported terminal and IDE coding agents |
+| [Kimi Code configuration](kimi-code-configuration.md) | Reverse-engineering model, permission, and runtime configuration for Kimi Code |
+| [Claude Code workflow](integrations/claude-code.md) | Claude Code setup, CLI workflow, and `CLAUDE.md` template |
+| [Validation and hardening](../guiai-lab/HARDENING.md) | Native test coverage, terminal lifecycle checks, stress testing, defect fixes, and platform boundaries |
+
+---
+
 ## Rubric Library
 
 Session-starter prompts that set the analysis mode before calling any Ablation tool.
