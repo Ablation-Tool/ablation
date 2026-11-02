@@ -40,6 +40,7 @@ Native workspaces for agent-guided reverse engineering, with real agent terminal
 | Document | Description |
 |---|---|
 | [GUIAI workbench guide](../guiai-lab/README.md) | Lab/tree navigation, independent investigations, project saving, charts, review controls, preferences, session files, and validation |
+| [Performance and investigation memory](reference-modules/guiai-performance.md) | How GUIAI reduces rediscovery, preserves evidence, and improves navigation, resumption, and review without replacing the CLI |
 | [AI Agent Bridge](reference-modules/guiai-agent-bridge.md) | Real interactive agent CLIs, session environments, terminal lifecycle, permissions, and validation |
 | [Token Allocation](reference-modules/guiai-token-allocation.md) | Scoped retrieval and workspace memory reduce repeated context while preserving full evidence and investigation coverage |
 | [Operating System Support](reference-modules/guiai-operating-system-support.md) | Native Linux, Windows, and macOS interfaces, packages, requirements, and platform validation |
