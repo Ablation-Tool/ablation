@@ -102,7 +102,9 @@ Example output:
 
 The decoder turns otherwise opaque C166 bytes into typed instructions, vector entries, and explicit code/data address candidates. It provides the mechanical foundation needed to inspect update handlers and service paths without depending on a Capstone backend or a target execution environment.
 
-It remains a focused decoding component rather than a complete C166 analysis framework. A future CFG or state-machine analyzer could consume its typed instructions, but DPP values, indirect targets, and code-region choices still need target evidence. Keeping those inputs explicit makes the decoder reusable across ROM layouts while preventing an address guess from becoming an unsupported security conclusion.
+It remains a focused decoding component rather than a complete C166 analysis framework. `c166_cfg.py` now consumes its typed instructions for seeded control-flow recovery, while `c166_execution.py` supplies a bounded interpreter for focused paths. DPP values, indirect targets, and code-region choices still need target evidence. Keeping those inputs explicit makes the decoder reusable across ROM layouts while preventing an address guess from becoming an unsupported security conclusion.
+
+Read-only `base_pa` and `image_size` properties expose image metadata without opening mutable state. `contains_pa(pa, size=2)` checks that an entire physical range is inside the image and rejects nonpositive sizes. These APIs let CFG and execution code avoid private decoder fields or duplicated image-bound calculations.
 
 ## False positives
 
@@ -148,6 +150,8 @@ A power-of-two image size does not prove that ROM mirroring is active. Review th
 ## See also
 
 - [C166 Family Instruction Set Manual](https://www.keil.com/dd/docs/datashts/infineon/c166ism.pdf)
+- [C166 Recursive CFG and Direct Xrefs](c166-cfg.md)
+- [Bounded C166 Execution and CAN](c166-execution.md)
 - [ECU Architecture Detector](ecu-arch-detector.md)
 - [Strict Intel HEX Parser](intel-hex.md)
 - [TI TMS320C28x Decoding](ecu-c28x-decoder.md)

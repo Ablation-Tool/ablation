@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ablation-tool"
-version = "2.93.2"
+version = "2.94.0"
 description = "Semantic function matching for stripped firmware. No symbols. No source. No setup."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -85,4 +85,4 @@ include = ["ablation*", "sweeps*", "modules*"]
 [tool.setuptools.package-data]
 "*" = ["py.typed"]
 "ablation" = ["profiles/*.yaml", "profiles/*.yml"]
-"ablation.data" = ["*.json", "*.md"]
+"ablation.data" = ["*.json", "*.md", "*.txt"]

@@ -30,6 +30,10 @@ Semantic firmware analysis for vulnerability researchers.
 | [Known Anomalies: X86_32TaintTracker](reference-anomalies/x86-32-taint-tracker.md) | Intraprocedural only, FPO functions, GOT-base not emulated, esp arithmetic, loop fixpoint |
 | [Known Anomalies: LoongArch64TaintTracker](reference-anomalies/loongarch64-taint-tracker.md) | Stripped binary discovery, KASAN/KCOV false positives, LSX/LASX vectors, dynamic syscalls, loop fixpoint |
 | [Known Anomalies: WindowsPoolTaintTracker](reference-anomalies/windows-pool-taint-tracker.md) | Register-identity false positives, 200-instruction window, dynamic-resolve zero-IAT, lief version |
+| [Known Anomalies: C166 CFG](reference-anomalies/c166-cfg.md) | Seeded coverage, shared tails, indirect control flow, direct-xref classes, DPP ambiguity |
+| [Known Anomalies: C166 Execution](reference-anomalies/c166-execution.md) | Bounded ISA, reset state, DPP inputs, pseudo-registers, CAN and SRST evidence limits |
+| [Known Anomalies: Mixed VPI Bridge](reference-anomalies/mixed-hdl-vpi-bridge.md) | Timestamp schedules, VPI lifecycle/value handling, scalar transport, completion semantics |
+| [Known Anomalies: Streaming WDB](reference-anomalies/xilinx-wdb.md) | Profile/name limits, timestamp interpretation, streaming bounds, partial exports |
 
 ---
 
@@ -92,6 +96,7 @@ Step-by-step guides for common research tasks.
 | [Source Code Audit](workflows/source-code-audit.md) | Compress a repo → rank files → confirm findings; full worked example |
 | [KASAN-Oracle](workflows/kasan-oracle.md) | Scan KASAN debug build first; verify candidates in stripped production build |
 | [Fortinet Firmware](workflows/fortinet-firmware.md) | Two-layer decryption, shared key corpus, and semantic sweep for Fortinet `.out` images |
+| [CERN Reverse-Engineering Toolchain](workflows/cern-reverse-engineering-toolchain.md) | SPECS exhaustive RTL, C166 CFG/execution, mixed VHDL/SystemVerilog VPI, and streaming WDB evidence with reproduction commands |
 
 ---
 
@@ -118,6 +123,8 @@ Analyze hardware description language source files: extract constants, compare v
 | [LatexReExtractor](reference-modules/latex-re-extractor.md) | Extract sections, \\newcommand constants, tabular tables, inline numeric parameters, and labeled items from LaTeX ASIC/firmware specs |
 | [LpgbtDecoder](reference-modules/lpgbt-decoder.md) | Decode lpGBT e-link serial protocols: LCB 6B/8B downlink (L0A/BCR/CMD frames), STAR FLINK 4-bit uplink, HCC 8B/10B uplink |
 | [SPECS Protocol](reference-modules/specs-protocol.md) | Encode and validate SPECS serial frames, final-payload marker bits, long-frame count rules, and archived simulation headers |
+| [Mixed VHDL/SystemVerilog VPI Bridge](reference-modules/mixed-hdl-vpi-bridge.md) | Run GHDL and Icarus concurrently with bounded scalar exchange, timestamp normalization, assertions, and completion/timeout handling |
+| [Streaming Xilinx WDB](reference-modules/xilinx-wdb.md) | Recover legacy and event-only WDB records with bounded decompression, streaming summaries, and atomic JSONL export |
 | [VersalPdi](reference-modules/versal-pdi.md) | Parse Xilinx Versal PDI firmware images: MetaHeader, IHT, image/partition headers, CDO section scanner, CDO command parser; pld and boot sub-formats; git hash extraction |
 | [VerilogSemantic](reference-modules/verilog-semantic.md) | Extract constants, signal widths, FSM states from a single Verilog/VHDL source tree |
 | [HDLVersionDiff](reference-modules/hdl-version-diff.md) | Compare two HDL source versions: added/removed/changed constants, signals, ports, FSM states |
@@ -222,6 +229,8 @@ Analyze hardware description language source files: extract constants, compare v
 | [bFLT (Binary Flat Format)](reference-modules/bflt.md) | BfltImage, BfltArm32, and BfltBinaryContext: binary Flat containers, bounded loading, link-time literal references, Linux RAM relocation with explicit outcomes, and relocated analysis contexts |
 | [JFFS2 Filesystem Reader](reference-modules/jffs2.md) | Jffs2Image: read-only little-endian reconstruction with node/dirent/name/inode/payload CRCs, versioned extents, implicit roots, hard links, and explicit resource limits |
 | [ECU C166/C167 Decoder](reference-modules/c166-c167-decoding.md) | EcuC166Decoder: corrected two-/four-byte decoding, arbitrary image sizes, selectable IVT bases, direct CALLS targets, explicit 64 KiB code segments and 16 KiB DPP data pages, and CERN-byte regression coverage |
+| [C166 Recursive CFG and Direct Xrefs](reference-modules/c166-cfg.md) | Seeded variable-width control flow, function/block recovery, direct RAM/SFR references, DPP-aware records, and stable JSON |
+| [Bounded C166 Execution and CAN](reference-modules/c166-execution.md) | Fail-closed instruction execution, sparse memory, DPP-indirect access, CAN message objects, and A1396 update-path verification |
 | [ECU ROM Layout Analyzer](reference-modules/ecu-rom-layout-analyzer.md) | EcuROMLayoutAnalyzer: entropy-based arch-agnostic ROM region classifier; four-variable decision entropy + fill ratio + entropy floor + PPC density; ERASED/CODE/CALIBRATION/MIXED/PADDING; `is_calibration_only()` detects OBD cal-only dumps EDC16C34 confirmed; validated on GM E38 PCM (PPC32) and Bosch EDC16C34 |
 | [ECU Security Access Scanner](reference-modules/ecu-security-access-scanner.md) | EcuSecurityAccessScanner: static-seed SecurityAccess handler fingerprinter; M68K/CPU32 pattern move.b #$67 + 2x clr.b and PPC32 pattern: li rX imm 0x67 + stb + 2x zero li+stb; confirmed GM P01/P04/P05/P08/P10/P11/P59 (CPU32) and GM E38 (PPC32) |
 | [ECU RomRaider Parser](reference-modules/ecu-romraider-parser.md) | EcuRomRaiderParser: RomRaider ECU definition XML parser; two-pass base+variant inheritance model; identify_rom() with ±32-byte window + hex-address fallback + false-positive table-count filter; 14 scaling expression forms; BMW Siemens MS43/MS45 MPC555 PPC32 + Subaru SH705x; self-contained ROM support for Subaru 5EAT TCU M32R: 273 tables, 160 MAP |

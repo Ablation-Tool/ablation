@@ -150,6 +150,9 @@ from .abc_parser import (
 )
 from .abc_disasm import ARKDisasm, ARKInstruction
 from .abc_decompiler import ABCDecompiler
+from .c166_cfg import C166Recovery, C166CFGBuilder, recover_c166_cfg
+from .c166_execution import C166CPU, C166Memory, C166CANController, C166CANMessage
+from .xilinx_wdb import WdbReader, WdbEvent, WdbDecodeError
 # ── FORGE: module validation and local storage ────────────────────────────────
 from .forge import FORGE, ForgeReport, ForgeFinding
 
@@ -270,6 +273,9 @@ __all__ = [
     "MethodInfo", "CodeItem", "FieldInfo", "ClassInfo",
     "ARKDisasm", "ARKInstruction",
     "ABCDecompiler",
+    "C166Recovery", "C166CFGBuilder", "recover_c166_cfg",
+    "C166CPU", "C166Memory", "C166CANController", "C166CANMessage",
+    "WdbReader", "WdbEvent", "WdbDecodeError",
     # ── FORGE ────────────────────────────────────────────────────────────────
     "FORGE", "ForgeReport", "ForgeFinding",
     # ── C++ Vtable Reconstruction ─────────────────────────────────────────────
