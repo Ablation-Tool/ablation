@@ -119,7 +119,7 @@ class UniversalInstallerCase(unittest.TestCase):
         digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
         with (self.root / "SHA256SUMS.txt").open("a", encoding="utf-8") as stream:
             stream.write(f"{digest}  {wheel.name}\n")
-        destination = self.root / "full install"
+        destination = (self.root / "full install").resolve()
         with (
             mock.patch.object(forall, "install_ablation") as install_ablation,
             mock.patch.object(forall, "install_package") as install_package,

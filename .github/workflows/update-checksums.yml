@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v[0-9]*.[0-9]*.[0-9]*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to record (for example, v2.94.0)
+        required: true
+        type: string
 
 jobs:
   update-checksums:
@@ -19,8 +25,14 @@ jobs:
 
       - name: Compute archive SHA-256 for tag
         id: info
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          TAG="${GITHUB_REF_NAME}"           # e.g. v2.68.0
+          TAG="${RELEASE_TAG}"
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: ${TAG}" >&2
+            exit 1
+          fi
           VERSION="${TAG#v}"                  # e.g. 2.68.0
           SHA=$(git archive "${TAG}" --prefix="ablation-${VERSION}/" \
                 | sha256sum | cut -d' ' -f1)
