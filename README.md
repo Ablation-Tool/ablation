@@ -13,18 +13,6 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 
 ![GUIAI native workbench demo](assets/demos/guiai-workbench-demo.gif)
 
-<details>
-<summary>Cross-Platform GUIAI</summary>
-
-- **Native launchers on Linux, Windows, and macOS:** install a Desktop icon with the turned-A artwork and **ABLⱯTION** branding, then choose a binary or material directory in a native dialog. Each target receives a stable session. Use `guiai launch` for the same target-choosing workflow from the CLI.
-- **Safer universal installation:** the installer verifies release checksums, creates the virtual environment at its final destination, installs GUIAI dependencies offline, and offers `--no-desktop-shortcut`. It preserves existing files and reports partial installations explicitly rather than claiming success.
-- **Drag-and-drop embedded CLI:** drop local files or folders into the AI terminal to insert shell-quoted paths without pressing Enter or executing artifacts. Missing paths, non-local URIs, control characters, unavailable CLIs, and oversized batches are rejected explicitly.
-- **Bounded safety and debugging:** **a11y Optimization**, **OS Optimization**, and **Debug** provide read-only audits with visible findings and proposed actions. **Allow Permission** sends one bounded request to the active AI agent; **Deny Permission** performs no terminal action.
-- **Accessibility built in:** persistent colorblind-safe and high-contrast palettes, measured contrast, PASS/REVIEW text labels, descriptive screen-reader names and roles, text alternatives for charts, and keyboard navigation are included. Manual validation with the user's assistive technology remains necessary.
-- **Native presentation:** settings controls follow the OS accent color, the titlebar stays compact until Settings opens, Preferences resizes with Workspace Layout, and investigations are labeled **Lab N**. See the [GUIAI workbench guide](guiai-lab/README.md) and [release notes](docs/RELEASE.md).
-
-</details>
-
 ## Capabilities
 
 <details>
@@ -36,6 +24,17 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 | [**Evidence Integrity**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/cli.py)&nbsp;[3](guiai-lab/guiai/app.py) | Tracks reviews and validates evidence targets |
 | [**Lab Navigation**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/map_view.py)&nbsp;[3](guiai-lab/metrix/cli.py) | Organizes, searches, and visualizes discoveries |
 | [**Session Persistence**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/preferences.py)&nbsp;[3](guiai-lab/guiai/gtk_app.py) | Restores Lab sessions, agents, and preferences |
+
+**Cross-Platform GUIAI**
+
+| Capability | Code | Description |
+|:---|:---|:---|
+| [**Accessibility**](guiai-lab/README.md) | [1](guiai-lab/guiai/accessibility.py)&nbsp;[2](guiai-lab/guiai/app.py) | Provides persistent colorblind-safe and high-contrast palettes, descriptive labels, text alternatives, and keyboard navigation |
+| [**Bounded Safety & Debugging**](guiai-lab/README.md) | [1](guiai-lab/guiai/safety.py)&nbsp;[2](guiai-lab/guiai/app.py) | Shows read-only audit findings and requests permission before sending bounded agent actions |
+| [**Drag-and-Drop Embedded CLI**](guiai-lab/README.md) | [1](guiai-lab/metrix/drop.py)&nbsp;[2](guiai-lab/guiai/gtk_app.py) | Inserts shell-quoted local paths without pressing Enter or executing artifacts |
+| [**Native Launchers**](guiai-lab/README.md) | [1](guiai-lab/guiai/launcher.py)&nbsp;[2](guiai-lab/guiai/macos_launcher.py)&nbsp;[3](guiai-lab/packaging/install_linux.sh) | Opens native target choosers with turned-A Desktop icons and stable per-target sessions on Linux, Windows, and macOS |
+| [**Native Presentation**](guiai-lab/README.md) | [1](guiai-lab/guiai/gtk_app.py)&nbsp;[2](guiai-lab/guiai/app.py) | Follows OS accent colors and adapts titlebars, preferences, and Lab labels |
+| [**Safer Universal Installation**](guiai-lab/packaging/README.md) | [1](guiai-lab/packaging/forall.py)&nbsp;[2](guiai-lab/packaging/install_macos.sh)&nbsp;[3](guiai-lab/packaging/Install-WindowsNative.ps1) | Verifies release checksums, installs GUIAI dependencies offline, preserves existing files, and supports optional Desktop shortcuts |
 
 </details>
 
