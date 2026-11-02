@@ -4,6 +4,8 @@ GUIAI Lab is the **native workbench included with Ablation** for agent-guided re
 
 The user’s real interactive CLI supplies labor. The workspace supplies memory and navigation. The human supplies direction and judgment. GUIAI supports any interactive agent executable through `--agent`, and custom argument lists through `--agent-command`; it provides no model or credentials.
 
+For how this improves investigation throughput without making analysis computation faster, see [GUIAI performance and investigation memory](../docs/reference-modules/guiai-performance.md).
+
 ## What the workbench does
 
 - Embeds the actual interactive agent CLI in a native VTE terminal beside each investigation tree, with guarded startup, duplicate prevention, and explicit failure handling.
