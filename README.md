@@ -22,6 +22,7 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 |:---|:---|:---|
 | [**AI Agent Bridge**](docs/reference-modules/guiai-agent-bridge.md) | [1](guiai-lab/guiai/environment.py)&nbsp;[2](guiai-lab/metrix/desktop.py) | Embeds the user's AI Agent into the GUI. No credentials are supplied. |
 | [**Token Allocation**](docs/reference-modules/guiai-token-allocation.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/metrix/cli.py) | Uses scoped retrieval and workspace memory to reduce repeated context while preserving evidence, analysis quality, and investigation coverage. |
+| [**Operating System Support**](docs/reference-modules/guiai-operating-system-support.md) | [1](guiai-lab/packaging/build_windows_native.py)&nbsp;[2](guiai-lab/packaging/build_macos.py)&nbsp;[3](guiai-lab/packaging/build_linux.py) | Fully compatible with all major desktop operating systems, including Windows, macOS, and Linux. |
 | [**Lab**](docs/reference-modules/guiai-investigation-lab.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/app.py) | Agent-grown tree of artifacts, functions, evidence, observations, hypotheses, findings, and notes. Search and filter while retaining ancestor context. |
 | [**Project Memory**](docs/reference-modules/guiai-project-memory.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/preferences.py) | Saves discoveries, selections, bookmarks, terminal directories, active Lab, and preferences. Reopen projects without depending on the agent's chat context. |
 | [**Independent Workspaces**](docs/reference-modules/guiai-independent-workspaces.md) | [1](guiai-lab/guiai/gtk_app.py)&nbsp;[2](guiai-lab/guiai/app.py) | GTK supports independent Lab tabs with separate histories, selections, terminal directories, and agent processes. Tk supports one investigation per window. |
@@ -31,7 +32,6 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 | [**Terminal**](docs/reference-modules/guiai-terminal.md) | [1](guiai-lab/metrix/desktop.py)&nbsp;[2](guiai-lab/guiai/gtk_app.py) | Interactive input, Unicode, clipboard, resizing, scrollback, font selection, color schemes, custom foreground/background, and all 16 ANSI palette colors. |
 | [**Directory Inventory**](docs/reference-modules/guiai-directory-inventory.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/app.py) | Add and rescan real top-level directory entries without implying recursive analysis coverage. |
 | [**METRIX Support**](docs/reference-modules/metrix-support.md) | [1](guiai-lab/metrix/cli.py)&nbsp;[2](guiai-lab/metrix/desktop.py) | Bundled inventory, search, filtering, and export utilities; no separate METRIX checkout is required. |
-| [**Operating System Support**](docs/reference-modules/guiai-operating-system-support.md) | [1](guiai-lab/packaging/build_windows_native.py)&nbsp;[2](guiai-lab/packaging/build_macos.py)&nbsp;[3](guiai-lab/packaging/build_linux.py) | Fully compatible with all major desktop operating systems, including Windows, macOS, and Linux. |
 
 </details>
 
