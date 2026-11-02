@@ -50,7 +50,7 @@ class InvestigationApp:
         self.layout_buttons = {}
         self.preferences_window = None
         self.events = []
-        self.filter_variable = tk.StringVar(value="All")
+        self.filter_variable = tk.StringVar(value="All Statuses")
         self.search_variable = tk.StringVar()
         self.counts_variable = tk.StringVar()
         self.agent_variable = tk.StringVar(value="No embedded CLI")
@@ -576,7 +576,7 @@ class InvestigationApp:
         search.pack(side="left", fill="x", expand=True, padx=(6, 12))
         search.bind("<KeyRelease>", lambda event: self.render_tree())
         ttk.Label(controls, text="Status").pack(side="left")
-        status = ttk.Combobox(controls, textvariable=self.filter_variable, state="readonly", values=["All"] + sorted(STATUSES), width=18)
+        status = ttk.Combobox(controls, textvariable=self.filter_variable, state="readonly", values=["All Statuses"] + sorted(STATUSES), width=12)
         status.pack(side="left", padx=6)
         status.bind("<<ComboboxSelected>>", lambda event: self.render_tree())
         ttk.Button(controls, text="Reset filters", command=self.reset_filters).pack(side="left")
@@ -656,7 +656,7 @@ class InvestigationApp:
         matches = set()
         by_id = {event["id"]: event for event in self.events}
         for event in self.events:
-            if status != "All" and event["status"] != status:
+            if status not in {"All", "All Statuses"} and event["status"] != status:
                 continue
             haystack = json.dumps(event, ensure_ascii=False).casefold()
             if any(term not in haystack for term in terms):
@@ -699,7 +699,7 @@ class InvestigationApp:
         self.counts_variable.set(f"{len(self.events)} nodes · {summary}")
 
     def reset_filters(self):
-        self.filter_variable.set("All")
+        self.filter_variable.set("All Statuses")
         self.search_variable.set("")
         self.render_tree()
 

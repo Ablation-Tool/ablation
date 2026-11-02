@@ -237,6 +237,12 @@ with tempfile.TemporaryDirectory(prefix="guiai-application-run-") as temporary:
                         {"name": "Example review", "ok": False, "required": False, "detail": "optional"},
                     ],
                 }
+                assert workspace.search.get_visible()
+                assert workspace.search.get_placeholder_text() == "Search Lab"
+                assert workspace.status.get_active_id() == "all"
+                workspace.search.set_text("firmware")
+                workspace.reset_filters()
+                assert workspace.search.get_visible() and workspace.search.get_text() == ""
                 assert window.brand_button.get_tooltip_text() == "Settings"
                 assert window.settings_bar.get_parent() is window.header_bar
                 assert window.header_bar.child_get_property(window.settings_bar, "pack-type") == Gtk.PackType.START
