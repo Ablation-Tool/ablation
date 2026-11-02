@@ -16,7 +16,7 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 ## Capabilities
 
 <details>
-<summary>GUIAI</summary>
+<summary>ABL∀TION's Default GUIAI</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|

@@ -33,7 +33,7 @@ Semantic firmware analysis for vulnerability researchers.
 
 ---
 
-## GUIAI
+## ABL∀TION's Default GUIAI
 
 Native workspaces for agent-guided reverse engineering, with real agent terminals, persistent investigation state, visual navigation, review controls, and configurable Lab layouts.
 
