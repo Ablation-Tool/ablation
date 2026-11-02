@@ -67,7 +67,9 @@ class InvestigationApp:
         self.brand_header_image = tk.PhotoImage(master=self.root, file=str(icon_root / "ablation-guiai-logo-32.png"))
         self.root.iconphoto(True, self.brand_image)
         if os.name == "nt":
-            self.root.iconbitmap(default=str(icon_root / "ablation-guiai.ico"))
+            icon_bitmap = str(icon_root / "ablation-guiai.ico")
+            self.root.iconbitmap(icon_bitmap)
+            self.root.iconbitmap(default=icon_bitmap)
         self.brand_button = ttk.Button(header, image=self.brand_header_image, command=self.toggle_settings)
         self.brand_button.pack(side="left")
         ttk.Label(header, textvariable=self.agent_variable, style="Header.TLabel").pack(side="right")
