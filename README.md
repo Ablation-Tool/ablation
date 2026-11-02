@@ -13,6 +13,18 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 
 ![GUIAI native workbench demo](assets/demos/guiai-workbench-demo.gif)
 
+<details>
+<summary>Cross-Platform GUIAI</summary>
+
+- **Native launchers on Linux, Windows, and macOS:** install a Desktop icon with the turned-A artwork and **ABLⱯTION** branding, then choose a binary or material directory in a native dialog. Each target receives a stable session. Use `guiai launch` for the same target-choosing workflow from the CLI.
+- **Safer universal installation:** the installer verifies release checksums, creates the virtual environment at its final destination, installs GUIAI dependencies offline, and offers `--no-desktop-shortcut`. It preserves existing files and reports partial installations explicitly rather than claiming success.
+- **Drag-and-drop embedded CLI:** drop local files or folders into the AI terminal to insert shell-quoted paths without pressing Enter or executing artifacts. Missing paths, non-local URIs, control characters, unavailable CLIs, and oversized batches are rejected explicitly.
+- **Bounded safety and debugging:** **a11y Optimization**, **OS Optimization**, and **Debug** provide read-only audits with visible findings and proposed actions. **Allow Permission** sends one bounded request to the active AI agent; **Deny Permission** performs no terminal action.
+- **Accessibility built in:** persistent colorblind-safe and high-contrast palettes, measured contrast, PASS/REVIEW text labels, descriptive screen-reader names and roles, text alternatives for charts, and keyboard navigation are included. Manual validation with the user's assistive technology remains necessary.
+- **Native presentation:** settings controls follow the OS accent color, the titlebar stays compact until Settings opens, Preferences resizes with Workspace Layout, and investigations are labeled **Lab N**. See the [GUIAI workbench guide](guiai-lab/README.md) and [release notes](docs/RELEASE.md).
+
+</details>
+
 ## Capabilities
 
 <details>
@@ -258,6 +270,8 @@ If I choose GUIAI:
 - Download and review https://github.com/Ablation-Tool/ablation/releases/latest/download/forall.py and run it with the checked Python. Use the default full installation, which includes both Ablation and GUIAI, verifies release checksums, installs GUIAI's wheels offline, and downloads standard Ablation dependencies from PyPI.
 - Ask me for the RE target and a project directory outside it. On macOS, open the generated Ablation.app. On Windows and macOS, use --toolkit tk when launching through the CLI. Use your actual executable for the embedded AI Agent; if you cannot identify it, ask me instead of substituting another agent.
 - Verify ablation --help and guiai --help, and confirm that the native window opens with your real CLI inside it.
+- If I explicitly do not want a Desktop shortcut, use python forall.py --no-desktop-shortcut. Otherwise, confirm that the installed icon opens a native target chooser with stable per-target sessions. Dropping local files or folders into the embedded CLI inserts quoted paths without pressing Enter; never execute an RE artifact merely to validate it.
+- The turned-A logo exposes **a11y Optimization**, **OS Optimization**, and **Debug**. Each provides a read-only audit with visible findings and proposed commands before requesting permission; Deny must do nothing, and Allow may send only the displayed bounded request to the active AI agent. Accessibility includes persistent colorblind-safe and high-contrast palettes, descriptive labels, text alternatives, and keyboard navigation. Do not claim screen-reader or accessibility compliance without testing with the user's assistive technology.
 
 If I choose CLI Only:
 - Create a project-local virtual environment and activate it for my operating system. For an existing source checkout, verify its origin and preserve uncommitted changes.
