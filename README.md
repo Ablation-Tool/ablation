@@ -20,7 +20,7 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**AI Agent Bridge**](docs/reference-modules/guiai-agent-bridge.md) | [1](guiai-lab/guiai/environment.py)&nbsp;[2](guiai-lab/metrix/desktop.py) | Embeds your AI Agent inside the GUIAI. No credentials included. |
+| [**AI Agent Bridge**](docs/reference-modules/guiai-agent-bridge.md) | [1](guiai-lab/guiai/environment.py)&nbsp;[2](guiai-lab/metrix/desktop.py) | Embeds your AI Agent inside the GUIAI. No credentials, tokens, or API keys requested. |
 | [**Lab & Navigation**](docs/reference-modules/guiai-investigation-lab.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/map_view.py)&nbsp;[3](guiai-lab/metrix/cli.py) | Organizes, searches, and visualizes discoveries, with directory inventory and METRIX tools. |
 | [**Persistence & Isolation**](docs/reference-modules/guiai-project-memory.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/preferences.py)&nbsp;[3](guiai-lab/guiai/gtk_app.py) | Restores sessions and preferences while keeping each Lab's agent, history, and workspace separate. |
 | [**Review & Evidence Integrity**](docs/reference-modules/guiai-review-workflow.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/cli.py)&nbsp;[3](guiai-lab/guiai/app.py) | Tracks reviews, preserves evidence history, validates targets, and prevents duplicate discoveries. |
