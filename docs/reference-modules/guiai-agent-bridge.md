@@ -1,4 +1,4 @@
-# AI Agent bridge
+# AI Agent Bridge
 
 ## Purpose
 

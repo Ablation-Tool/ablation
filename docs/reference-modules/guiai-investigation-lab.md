@@ -1,4 +1,4 @@
-# Investigation Lab
+# Lab
 
 ## Purpose
 

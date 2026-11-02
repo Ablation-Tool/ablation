@@ -1,4 +1,4 @@
-# Visual navigation
+# Visual Navigation
 
 ## Purpose
 
