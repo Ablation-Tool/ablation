@@ -1,6 +1,6 @@
 # Install Ablation
 
-## GUIAI
+## GUIAI and Ablation
 
 <details>
 <summary><strong>Installation Prompt</strong></summary>
@@ -29,112 +29,81 @@ Report the operating system, Ablation and GUIAI versions, installation and proje
 </details>
 
 <details>
-<summary><strong>Linux</strong></summary>
+<summary><strong>Linux Installation Prompt</strong></summary>
 
-On Ubuntu or Debian:
+```text
+Install the standard Ablation CLI and GUIAI on Linux, then launch GUIAI with you—the AI Agent I am currently using—embedded in its terminal.
 
-```bash
-sudo apt update
-sudo apt install python3 python3-venv python3-tk python3-gi python3-cairo python3-gi-cairo gir1.2-gtk-3.0 gir1.2-vte-2.91
-curl -fLO https://github.com/Ablation-Tool/ablation/releases/latest/download/GUIAI-Linux.zip
-mkdir Ablation-Linux
-unzip -q GUIAI-Linux.zip -d Ablation-Linux
-cd Ablation-Linux
-bash install_linux.sh
+Check for Python 3.10 or newer, Tkinter, a virtual-environment tool, and an X11 or XWayland display. On Ubuntu or Debian, ask before installing missing packages with sudo apt install python3-venv python3-tk python3-gi python3-cairo python3-gi-cairo gir1.2-gtk-3.0 gir1.2-vte-2.91.
+
+Download and review https://github.com/Ablation-Tool/ablation/releases/latest/download/forall.py and run it with the checked Python. Use the default full installation, which includes both Ablation and GUIAI, verifies release checksums, installs GUIAI's wheels offline, and downloads standard Ablation dependencies from PyPI.
+
+Do not overwrite existing files, use sudo for the Python installation, skip failed validation, or execute the RE target. Ask before privileged changes.
+
+Verify ablation --help and guiai --help in the installed environment. Ask me for the RE target and a project directory outside it, then launch with your actual agent executable using guiai desktop TARGET --session PROJECT --agent AGENT_EXECUTABLE. If I need custom agent arguments, use --agent-command instead.
+
+Do not install a model, credentials, or optional analysis extras. Report both versions, installation and project paths, validation results, and the exact launch command. Confirm that the workbench opens and your real CLI starts inside it.
 ```
-
-Launch with your installed AI Agent:
-
-```bash
-. .venv/bin/activate
-guiai desktop /path/to/target --session /path/to/project --agent kimi
-```
-
-Linux uses GTK/VTE when available, with Tk as a fallback. The GUI requires X11 or XWayland. Replace `kimi` with `claude`, `codex`, or another installed agent executable.
 
 </details>
 
 <details>
-<summary><strong>MacOS</strong></summary>
+<summary><strong>MacOS Installation Prompt</strong></summary>
 
-Use Python 3.10 or newer with Tkinter. In Terminal:
+```text
+Install the standard Ablation CLI and GUIAI on macOS, then open Ablation.app with you—the AI Agent I am currently using—embedded in its terminal.
 
-```bash
-curl -fLO https://github.com/Ablation-Tool/ablation/releases/latest/download/GUIAI-macOS.zip
-mkdir Ablation-macOS
-unzip -q GUIAI-macOS.zip -d Ablation-macOS
-cd Ablation-macOS
-bash install_macos.sh
-open Ablation.app
+Check for Python 3.10 or newer with Tkinter. If it is missing, explain how to install a Python distribution that includes Tkinter and ask before making system changes.
+
+Download and review https://github.com/Ablation-Tool/ablation/releases/latest/download/forall.py and run it with the checked Python. Use the default full installation, which includes both Ablation and GUIAI, verifies release checksums, installs GUIAI's wheels offline, and downloads standard Ablation dependencies from PyPI.
+
+Do not overwrite existing files, use sudo for the Python installation, skip failed validation, or execute the RE target. Do not bypass macOS security settings or my permissions.
+
+Verify ablation --help and guiai --help, and run Contents/MacOS/Ablation --self-test from the installation directory. Open the generated Ablation.app. Ask me to choose the RE target, a project directory outside it, and your actual executable. The app is locally built and is not signed or Apple-notarized.
+
+Do not install a model, credentials, or optional analysis extras. Report both versions, installation and project paths, validation results, and the exact app and CLI launch commands. Confirm that the app opens and your real CLI starts inside it.
 ```
-
-In the first-run window, choose the **RE target**, a **project directory outside the target**, and optionally your installed AI Agent. Select an existing project to continue saved work.
-
-The installer creates `Ablation.app` and runs native validation. You can move the app on the same Mac; it uses the Python installation used by the installer. It is not signed or Apple-notarized.
-
-Verify the app with:
-
-```bash
-Contents/MacOS/Ablation --self-test
-```
-
-The result should be `GUIAI_MACOS_APP_OK`.
 
 </details>
 
 <details>
-<summary><strong>Windows</strong></summary>
+<summary><strong>Windows Installation Prompt</strong></summary>
 
-Use **Python 3.11 x64** with Tcl/Tk support. In PowerShell:
+```text
+Install the standard Ablation CLI and GUIAI on Windows, then launch GUIAI with you—the AI Agent I am currently using—embedded in its terminal.
 
-```powershell
-Invoke-WebRequest -Uri "https://github.com/Ablation-Tool/ablation/releases/latest/download/GUIAI-Windows-Native.zip" -OutFile "GUIAI-Windows-Native.zip"
-Expand-Archive -Path "GUIAI-Windows-Native.zip" -DestinationPath "Ablation-Windows"
-Set-Location "Ablation-Windows"
+Check for Python 3.11 x64 with Tcl/Tk support. If it is missing, explain how to install it and ask before making system changes. Do not require WSL.
+
+Download and review https://github.com/Ablation-Tool/ablation/releases/latest/download/forall.py and run it with the checked Python. Use the default full installation, which includes both Ablation and GUIAI, verifies release checksums, installs GUIAI's wheels offline, and downloads standard Ablation dependencies from PyPI.
+
+Do not overwrite existing files, use a global Python installation, skip failed validation, or execute the RE target. Preserve my permissions and existing configuration.
+
+Verify ablation --help and guiai --help in the installed environment. Ask me for the RE target and a project directory outside it, then launch with your actual executable using guiai desktop TARGET --session PROJECT --toolkit tk --agent AGENT_EXECUTABLE. Use --agent-command for custom arguments.
+
+Do not install a model, credentials, or optional analysis extras. Report both versions, installation and project paths, validation results, and the exact launch command. Confirm that the native Windows workbench opens with ConPTY and your real CLI starts inside it.
 ```
-
-Review `Install-WindowsNative.ps1`. If you approve it, allow and run the reviewed local script:
-
-```powershell
-Unblock-File -Path ".\Install-WindowsNative.ps1"
-& ".\Install-WindowsNative.ps1"
-```
-
-Launch with your installed AI Agent:
-
-```powershell
-.\.venv\Scripts\guiai.exe desktop "C:\path\to\target" --session "C:\path\to\project" --toolkit tk --agent kimi
-```
-
-Replace `kimi` with `claude`, `codex`, or another installed executable. Native Windows uses Tk with ConPTY; WSL is not required.
 
 </details>
 
 ## CLI only
 
-These instructions install the **Ablation command-line tools without the GUIAI workbench**. Use Python 3.10 or newer and a project-local virtual environment.
+<details>
+<summary><strong>CLI Only Installation Prompt</strong></summary>
 
-Create and activate the environment on Linux or macOS:
+This is the explicit installation choice for users who want the Ablation command-line tools **without GUIAI**. The normal Ablation + GUIAI installation includes both by default.
 
-```bash
-python3 -m venv .venv
-. .venv/bin/activate
+```text
+Install only the standard Ablation command-line tools for me, without the GUIAI workbench.
+
+Check for Git and Python 3.10 or newer. Create a project-local virtual environment and activate it for my operating system. For an existing source checkout, verify its origin and preserve uncommitted changes; do not reset, clean, overwrite, or pull over local changes.
+
+Install the standard package with python -m pip install ablation-tool, or from a reviewed source checkout with python -m pip install . Do not run forall.py for this CLI-only installation because its default includes GUIAI.
+
+Keep full, LLM, bytecode, model-provider, credential, and optional analysis extras opt-in. Do not use sudo, global Python installation, alternate package sources, or firmware analysis. Stop on errors.
+
+Verify with ablation --help. Report the checkout and environment paths, Python version, Ablation version, installed extras, and verification result. Do not launch GUIAI or execute the RE target.
 ```
 
-Or on Windows PowerShell:
-
-```powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-```
-
-Install the standard package and verify it:
-
-```bash
-python -m pip install ablation-tool
-ablation --help
-```
-
-To install from a source checkout instead, run `python -m pip install .` from the repository root. Optional analysis extras, models, provider configuration, and credentials remain separate. No RE target is executed during installation.
+</details>
 
 For project saving, custom agent arguments, and the native workbench, see the [GUIAI guide](README.md) and [platform package details](packaging/README.md).

@@ -21,4 +21,4 @@ Do not install an AI model, credentials, optional analysis extras, or firmware a
 Report the operating system, Ablation and GUIAI versions, installation and project paths, validation result, and exact launch command. Confirm that the native window opens and your real CLI starts inside it.
 ```
 
-For manual platform instructions or CLI-only installation, see the [all-platform installation guide](INSTALL.md).
+For platform-specific installation prompts or the CLI-only prompt, see the [all-platform installation guide](INSTALL.md).
