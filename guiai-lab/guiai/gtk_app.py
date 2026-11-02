@@ -466,10 +466,10 @@ class AblationWindow(Gtk.Window):
         self.set_icon(icon_pixbuf)
         brand_pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(str(icon_path), 24, 24, True)
         self.brand_mark = Gtk.Image.new_from_pixbuf(brand_pixbuf)
-        self.brand_mark.set_margin_start(4)
-        self.brand_mark.set_margin_end(4)
+        self.brand_mark.set_margin_start(0)
+        self.brand_mark.set_margin_end(0)
         self.brand_button = Gtk.Button(relief=Gtk.ReliefStyle.NONE)
-        self.brand_button.set_size_request(40, 32)
+        self.brand_button.set_size_request(28, 28)
         self.brand_button.set_valign(Gtk.Align.CENTER)
         self.brand_button.set_image(self.brand_mark)
         self.brand_button.set_tooltip_text("Settings")
@@ -754,6 +754,11 @@ class AblationWindow(Gtk.Window):
         self.accessibility_status.get_accessible().set_name(self.accessibility_status.get_text())
 
     def on_accessibility_key(self, _widget, event):
+        if event.state & Gdk.ModifierType.CONTROL_MASK and event.keyval == Gdk.keyval_from_name("f"):
+            workspace = self.current_workspace()
+            if workspace is not None:
+                workspace.search.grab_focus()
+                return True
         if event.keyval == Gdk.keyval_from_name("Escape"):
             if self.settings_bar.get_visible() or self.safety_panel.get_visible() or self.accessibility_panel.get_visible():
                 self.clear_safety()
@@ -1182,12 +1187,14 @@ class InvestigationWorkspace(Gtk.Box):
         controls = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         left.pack_start(controls, False, False, 0)
         self.search = Gtk.SearchEntry()
-        self.search.set_placeholder_text("Search lab…")
+        self.search.set_placeholder_text("Search Lab")
         self.search.set_hexpand(True)
+        self.search.get_accessible().set_name("Search Lab")
         self.search.connect("search-changed", self.on_filter_changed)
         controls.pack_start(self.search, True, True, 0)
         self.status = Gtk.ComboBoxText()
-        self.status.append("all", "All statuses")
+        self.status.set_size_request(96, 28)
+        self.status.append("all", "All Statuses")
         for value in STATUS_ORDER:
             self.status.append(value, STATUS_LABELS[value])
         self.status.set_active_id("all")
@@ -1643,7 +1650,7 @@ class InvestigationWorkspace(Gtk.Box):
         self.update_type_visibility()
         filters_active = bool(self.search.get_text().strip()) or self.status.get_active_id() != "all"
         self.reset_button.set_visible(filters_active)
-        self.empty_label.set_text("" if self.matching else "No nodes match. Clear filters or choose All statuses.")
+        self.empty_label.set_text("" if self.matching else "No nodes match. Clear filters or choose All Statuses.")
 
     def update_type_visibility(self):
         visible_types = {
