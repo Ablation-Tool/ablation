@@ -22,13 +22,11 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 |:---|:---|:---|
 | [**a11y Optimization**](guiai-lab/README.md) | [1](guiai-lab/guiai/app.py)&nbsp;[2](guiai-lab/guiai/gtk_app.py) | Audits accessibility and requests permission before applying recommendations |
 | [**Agent Bridge**](guiai-lab/README.md) | [1](guiai-lab/guiai/environment.py)&nbsp;[2](guiai-lab/metrix/desktop.py) | Embeds your AI Agent with safe drag-and-drop path insertion |
-| [**Cross-Platform Support**](guiai-lab/README.md) | [1](guiai-lab/guiai/launcher.py)&nbsp;[2](guiai-lab/guiai/macos_launcher.py)&nbsp;[3](guiai-lab/packaging/install_linux.sh) | Runs natively across Linux, Windows, and macOS with OS-adaptive presentation |
+| [**Cross-Platform Support**](guiai-lab/README.md) | [1](guiai-lab/guiai/launcher.py)&nbsp;[2](guiai-lab/packaging/forall.py)&nbsp;[3](guiai-lab/packaging/install_linux.sh) | Supports Linux, Windows, macOS, adaptive presentation, and safe installation |
 | [**Debug Diagnostics**](guiai-lab/README.md) | [1](guiai-lab/guiai/app.py)&nbsp;[2](guiai-lab/guiai/gtk_app.py) | Shows dependency and terminal diagnostics before requesting troubleshooting permission |
 | [**Evidence Integrity**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/cli.py)&nbsp;[3](guiai-lab/guiai/app.py) | Tracks reviews and validates evidence targets |
-| [**Lab Navigation**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/map_view.py)&nbsp;[3](guiai-lab/metrix/cli.py) | Organizes, searches, and visualizes discoveries |
+| [**Lab Navigation**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/map_view.py)&nbsp;[3](guiai-lab/metrix/cli.py) | Searches and visualizes discoveries while restoring sessions, agents, and preferences |
 | [**OS Optimization**](guiai-lab/README.md) | [1](guiai-lab/guiai/app.py)&nbsp;[2](guiai-lab/guiai/gtk_app.py) | Audits OS integration before requesting permission for optimizations |
-| [**Safe Installation**](guiai-lab/packaging/README.md) | [1](guiai-lab/packaging/forall.py)&nbsp;[2](guiai-lab/packaging/install_macos.sh)&nbsp;[3](guiai-lab/packaging/Install-WindowsNative.ps1) | Verifies packages, preserves files, and supports optional shortcuts |
-| [**Session Persistence**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/preferences.py)&nbsp;[3](guiai-lab/guiai/gtk_app.py) | Restores Lab sessions, agents, and preferences |
 
 </details>
 
