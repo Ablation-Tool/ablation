@@ -31,6 +31,20 @@ def create_icon(source, resources):
         ], check=True)
 
 
+def repair_launchers(environment):
+    for script in (environment / "bin").iterdir():
+        if not script.is_file() or script.is_symlink():
+            continue
+        with script.open("rb") as stream:
+            first = stream.readline(4096)
+            remainder = stream.read()
+        if not first.startswith(b"#!") or b"python" not in first.lower() or not first.endswith(b"\n"):
+            continue
+        script.write_bytes(
+            b'#!/bin/sh\n""":"\nexec "$(dirname "$0")/python" "$0" "$@"\n":"""\n' + remainder
+        )
+
+
 def create_app(source):
     source = Path(source).resolve()
     environment = source / ".venv"
@@ -45,6 +59,7 @@ def create_app(source):
         resources = contents / "Resources"
         resources.mkdir(parents=True)
         shutil.copytree(environment, resources / ".venv")
+        repair_launchers(resources / ".venv")
         launcher = contents / "MacOS" / "Ablation"
         launcher.parent.mkdir()
         launcher.write_text(LAUNCHER, encoding="utf-8")

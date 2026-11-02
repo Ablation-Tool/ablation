@@ -4,13 +4,15 @@ These packages contain the GUIAI wheel and its Python dependencies for offline P
 
 ## Universal installer
 
-**[Start with the all-platform installation guide](../INSTALL.md).** It includes the copy-paste AI Agent prompt, manual platform instructions, and the separate CLI-only section.
+**[Start with the all-platform installation guide](../INSTALL.md).** It includes the copy-paste AI Agent prompt, Linux/MacOS/Windows installation prompts, and the separate CLI-only prompt.
 
 Download and review `forall.py` from the [latest release](https://github.com/Ablation-Tool/ablation/releases/latest), then run `python forall.py`. Alternatively, paste the [universal install prompt](../INSTALL-PROMPT.md) into your AI Agent and type `/forall`.
 
 The installer selects the native package for the current operating system, downloads the release checksum file and package over HTTPS, verifies SHA256 before extraction, rejects unsafe archive paths, runs the platform installer, and performs native validation. It creates a new installation under the current user's data directory and does not require `sudo`. An existing destination is never overwritten; choose a new empty directory with `--directory`.
 
-This installs GUIAI and its required Python dependencies, not the optional full Ablation analysis environment or an AI Agent. A network connection is needed for the initial download. Subsequent Python package installation uses only the bundled wheels. `/forall` is an instruction interpreted through the install prompt, not a built-in command available in every CLI.
+By default, this installs the **standard Ablation CLI and GUIAI together** in one environment. The native GUIAI package and its Python wheels are checksum-verified and installed offline. The standard Ablation CLI wheel is checksum-verified from the same release, and its dependencies are downloaded from PyPI. Optional analysis extras, AI models, credentials, and an AI Agent are not installed. Use `--gui-only` to install only the workbench.
+
+A network connection is needed for the initial downloads and the standard Ablation dependencies. `/forall` is an instruction interpreted through the install prompt, not a built-in command available in every CLI.
 
 ## Linux
 
