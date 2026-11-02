@@ -92,11 +92,11 @@ Step-by-step guides for common research tasks.
 | [Cross-Version Diffing](workflows/cross-version.md) | Track a function across firmware patch releases |
 | [Go Binary RE](workflows/go-binaries.md) | Stripped Go binaries: pclntab recovery, garbled builds |
 | [Android Cross-Layer Analysis](workflows/android-reverse-engineering.md) | End-to-end APK/XAPK → manifest → DEX → JNI → native taint tutorial, with confirmation and reporting guidance |
+| [CERN Reverse-Engineering Toolchain](workflows/cern-reverse-engineering-toolchain.md) | SPECS exhaustive RTL, C166 CFG/execution, mixed VHDL/SystemVerilog VPI, and streaming WDB evidence with reproduction commands |
 | [Crypto Analysis](workflows/crypto.md) | Encrypted firmware, XOR key recovery, JWT cracking |
 | [Source Code Audit](workflows/source-code-audit.md) | Compress a repo → rank files → confirm findings; full worked example |
 | [KASAN-Oracle](workflows/kasan-oracle.md) | Scan KASAN debug build first; verify candidates in stripped production build |
 | [Fortinet Firmware](workflows/fortinet-firmware.md) | Two-layer decryption, shared key corpus, and semantic sweep for Fortinet `.out` images |
-| [CERN Reverse-Engineering Toolchain](workflows/cern-reverse-engineering-toolchain.md) | SPECS exhaustive RTL, C166 CFG/execution, mixed VHDL/SystemVerilog VPI, and streaming WDB evidence with reproduction commands |
 
 ---
 
@@ -122,8 +122,8 @@ Analyze hardware description language source files: extract constants, compare v
 | [HdlHtmlExtractor](reference-modules/hdl-html-extractor.md) | Extract VHDL/Verilog from HDL Designer HTML exports (ContentFrame0.htm files) and feed into VerilogSemantic |
 | [LatexReExtractor](reference-modules/latex-re-extractor.md) | Extract sections, \\newcommand constants, tabular tables, inline numeric parameters, and labeled items from LaTeX ASIC/firmware specs |
 | [LpgbtDecoder](reference-modules/lpgbt-decoder.md) | Decode lpGBT e-link serial protocols: LCB 6B/8B downlink (L0A/BCR/CMD frames), STAR FLINK 4-bit uplink, HCC 8B/10B uplink |
-| [SPECS Protocol](reference-modules/specs-protocol.md) | Encode and validate SPECS serial frames, final-payload marker bits, long-frame count rules, and archived simulation headers |
 | [Mixed VHDL/SystemVerilog VPI Bridge](reference-modules/mixed-hdl-vpi-bridge.md) | Run GHDL and Icarus concurrently with bounded scalar exchange, timestamp normalization, assertions, and completion/timeout handling |
+| [SPECS Protocol](reference-modules/specs-protocol.md) | Encode and validate SPECS serial frames, final-payload marker bits, long-frame count rules, and archived simulation headers |
 | [Streaming Xilinx WDB](reference-modules/xilinx-wdb.md) | Recover legacy and event-only WDB records with bounded decompression, streaming summaries, and atomic JSONL export |
 | [VersalPdi](reference-modules/versal-pdi.md) | Parse Xilinx Versal PDI firmware images: MetaHeader, IHT, image/partition headers, CDO section scanner, CDO command parser; pld and boot sub-formats; git hash extraction |
 | [VerilogSemantic](reference-modules/verilog-semantic.md) | Extract constants, signal widths, FSM states from a single Verilog/VHDL source tree |
