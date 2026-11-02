@@ -394,6 +394,147 @@ class AgentCommandCase(unittest.TestCase):
         )
 
 
+class LauncherCase(unittest.TestCase):
+    def test_launch_uses_target_workspace_and_stable_session(self):
+        from guiai import cli
+
+        with tempfile.TemporaryDirectory(prefix="guiai-launch-test-") as temporary:
+            root = Path(temporary)
+            file_target = root / "firmware.bin"
+            file_target.touch()
+            directory_target = root / "material"
+            directory_target.mkdir()
+            for target in (file_target, directory_target):
+                with self.subTest(target=target):
+                    args = build_parser().parse_args(["launch", "--toolkit", "tk", "--agent", "kimi"])
+                    with mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(root / "data")}):
+                        with mock.patch.object(cli, "choose_target", return_value=target), mock.patch.object(
+                            cli, "command_desktop", return_value=23,
+                        ) as desktop:
+                            self.assertEqual(args.function(args), 23)
+                    desktop.assert_called_once_with(args)
+                    self.assertEqual(args.target, str(target.resolve()))
+                    self.assertEqual(args.workspace, str((target if target.is_dir() else target.parent).resolve()))
+                    self.assertEqual(Path(args.session).parent.parent, root / "data" / "Ablation" / "GUIAI")
+                    self.assertEqual(args.toolkit, "tk")
+                    self.assertEqual(args.agent, "kimi")
+
+    def test_launch_cancel_is_clean(self):
+        from guiai import cli
+
+        args = build_parser().parse_args(["launch"])
+        with mock.patch.object(cli, "choose_target", return_value=None), mock.patch.object(cli, "command_desktop") as desktop:
+            self.assertEqual(args.function(args), 0)
+        desktop.assert_not_called()
+
+    def test_launch_failure_is_visible(self):
+        from guiai import cli
+
+        args = build_parser().parse_args(["launch"])
+        with mock.patch.object(cli, "choose_target", side_effect=OSError("display unavailable")), mock.patch.object(
+            cli, "show_launch_error",
+        ) as show_error:
+            self.assertEqual(args.function(args), 1)
+        show_error.assert_called_once_with("display unavailable")
+
+    def test_launch_rejects_session_inside_directory_target(self):
+        from guiai.launcher import session_for_target
+
+        with tempfile.TemporaryDirectory(prefix="guiai-launch-test-") as temporary:
+            target = Path(temporary)
+            with mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(target / "data")}):
+                with self.assertRaisesRegex(ValueError, "contains GUIAI's session data"):
+                    session_for_target(target)
+
+
+class DropPayloadCase(unittest.TestCase):
+    def test_posix_payload_is_quoted_without_enter(self):
+        import shlex
+        from metrix.drop import dropped_payload
+
+        with tempfile.TemporaryDirectory(prefix="guiai-drop test-") as temporary:
+            directory = Path(temporary) / "folder with spaces"
+            directory.mkdir()
+            artifact = directory / "firmware's image.bin"
+            artifact.touch()
+            payload = dropped_payload([directory, artifact], windows=False)
+            self.assertEqual(payload, (shlex.join([str(directory), str(artifact)]) + " ").encode())
+            self.assertNotIn(b"\r", payload)
+            self.assertNotIn(b"\n", payload)
+
+    def test_windows_payload_quotes_metacharacters(self):
+        from metrix.drop import dropped_payload, quote_dropped_path
+
+        self.assertEqual(quote_dropped_path(r"C:\Users\A & B\firmware.bin", windows=True), '"C:\\Users\\A & B\\firmware.bin"')
+        with tempfile.TemporaryDirectory(prefix="guiai-drop-test-") as temporary:
+            artifact = Path(temporary) / "a&b.bin"
+            artifact.touch()
+            self.assertEqual(dropped_payload([artifact], windows=True), f'"{artifact}" '.encode())
+
+    def test_missing_empty_and_control_paths_are_rejected(self):
+        from metrix.drop import dropped_payload
+
+        with tempfile.TemporaryDirectory(prefix="guiai-drop-test-") as temporary:
+            with self.assertRaisesRegex(ValueError, "does not exist"):
+                dropped_payload([Path(temporary) / "missing"])
+            with self.assertRaisesRegex(ValueError, "control characters"):
+                dropped_payload([Path(temporary) / "bad\nname"])
+        with self.assertRaisesRegex(ValueError, "no local files"):
+            dropped_payload([])
+
+    def test_oversized_payload_is_rejected(self):
+        from metrix import drop
+
+        with tempfile.TemporaryDirectory(prefix="guiai-drop-test-") as temporary:
+            artifact = Path(temporary) / "firmware.bin"
+            artifact.touch()
+            with mock.patch.object(drop, "MAX_DROP_BYTES", 1):
+                with self.assertRaisesRegex(ValueError, "8 MiB"):
+                    drop.dropped_payload([artifact])
+
+
+class SafetyCase(unittest.TestCase):
+    def test_audit_is_read_only_and_reports_platform_requirements(self):
+        from guiai.safety import evaluate_safety
+
+        with mock.patch("subprocess.run", side_effect=AssertionError("audit executed an external command")):
+            report = evaluate_safety([os.sys.executable])
+        self.assertTrue(report["ready"], report["details"])
+        self.assertGreaterEqual(len(report["checks"]), 7)
+        self.assertTrue(report["summary"])
+        self.assertFalse(any("REVIEW" in line and "Native Linux GTK/VTE" not in line for line in report["details"].splitlines()), report["details"])
+
+    def test_permission_prompt_is_single_line_and_bounded(self):
+        from guiai.safety import agent_request
+
+        report = {
+            "summary": "one fix",
+            "details": "first line\nsecond line",
+            "remediations": [{"action": "Run the shown command", "command": "echo approved"}],
+            "checks": [],
+            "ready": False,
+        }
+        request = agent_request(report)
+        self.assertNotIn("\r", request)
+        self.assertNotIn("\n", request)
+        payload = json.loads(request.split("user. ", 1)[1])
+        self.assertIn("at most once", payload["instruction"])
+        self.assertEqual(payload["audit"], report)
+        from guiai import safety
+        with mock.patch.object(safety.os, "name", "nt"):
+            command = safety.command_text([r"C:\Python 311\python.exe", "-m", "pip", "install", "pyte>=0.8.1,<1"])
+        self.assertEqual(command, r'"C:\Python 311\python.exe" -m pip install "pyte>=0.8.1,<1"')
+
+    def test_empty_remediation_prompt_is_read_only(self):
+        from guiai.safety import agent_request
+
+        report = {"summary": "ready", "details": "pass", "remediations": [], "checks": [], "ready": True}
+        request = agent_request(report)
+        payload = json.loads(request.split("user. ", 1)[1])
+        self.assertIn("read-only AI review", payload["instruction"])
+        self.assertIn("Do not install", payload["instruction"])
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run GUIAI core stress tests")
     parser.add_argument("--failfast", action="store_true")
@@ -402,6 +543,9 @@ def main():
         unittest.defaultTestLoader.loadTestsFromTestCase(SessionCase),
         unittest.defaultTestLoader.loadTestsFromTestCase(DirectorySessionCase),
         unittest.defaultTestLoader.loadTestsFromTestCase(AgentCommandCase),
+        unittest.defaultTestLoader.loadTestsFromTestCase(LauncherCase),
+        unittest.defaultTestLoader.loadTestsFromTestCase(DropPayloadCase),
+        unittest.defaultTestLoader.loadTestsFromTestCase(SafetyCase),
     ])
     result = unittest.TextTestRunner(verbosity=2, failfast=args.failfast).run(suite)
     raise SystemExit(0 if result.wasSuccessful() else 1)

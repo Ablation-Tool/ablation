@@ -12,7 +12,7 @@ import sys
 import tempfile
 from urllib.parse import quote
 from urllib.request import Request, urlopen
-from zipfile import ZipFile
+from zipfile import BadZipFile, ZipFile
 
 
 BASE_URL = "https://github.com/Ablation-Tool/ablation/releases/latest/download"
@@ -75,7 +75,13 @@ def extract_archive(archive, destination):
         bundle.extractall(destination)
 
 
-def install_package(source, installer, skip_tests):
+def install_package(source, installer, skip_tests, no_desktop_shortcut, destination):
+    environment = os.environ.copy()
+    environment["GUIAI_INSTALL_DESTINATION"] = str(destination)
+    if skip_tests:
+        environment["SKIP_TESTS"] = "1"
+    if no_desktop_shortcut:
+        environment["NO_DESKTOP_SHORTCUT"] = "1"
     if sys.platform == "win32":
         shell = shutil.which("pwsh") or shutil.which("powershell")
         if shell is None:
@@ -83,19 +89,18 @@ def install_package(source, installer, skip_tests):
         command = [shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(source / installer)]
         if skip_tests:
             command.append("-SkipTests")
+        if no_desktop_shortcut:
+            command.append("-NoDesktopShortcut")
     else:
         command = ["bash", str(source / installer)]
-        environment = os.environ.copy()
-        if skip_tests:
-            environment["SKIP_TESTS"] = "1"
-        subprocess.run(command, cwd=source, env=environment, check=True)
-        return
-    subprocess.run(command, cwd=source, check=True)
+    subprocess.run(command, cwd=source, env=environment, check=True)
 
 
 def default_destination():
     if sys.platform == "win32":
         root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    elif sys.platform == "darwin":
+        root = Path.home() / "Library" / "Application Support"
     else:
         root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
     return root / "Ablation" / "GUIAI"
@@ -105,6 +110,7 @@ def parse_arguments(arguments=None):
     parser = argparse.ArgumentParser(description="Download and install the verified native GUIAI package for this computer.")
     parser.add_argument("--directory", type=Path, default=default_destination(), help="new installation directory (must not exist)")
     parser.add_argument("--skip-tests", action="store_true", help="skip native validation (not recommended)")
+    parser.add_argument("--no-desktop-shortcut", action="store_true", help="install without creating a Desktop shortcut")
     parser.add_argument("--base-url", default=BASE_URL, help=argparse.SUPPRESS)
     return parser.parse_args(arguments)
 
@@ -128,18 +134,28 @@ def main(arguments=None):
         verify_archive(archive, checksums)
         staging = downloads / "install"
         extract_archive(archive, staging)
-        install_package(staging, installer, args.skip_tests)
-        (staging / ".guiai-install.json").write_text(json.dumps({
-            "package": asset,
-            "sha256": checksums[asset],
-            "source": args.base_url,
-        }, indent=2) + "\n", encoding="utf-8")
         try:
             staging.rename(destination)
         except OSError as error:
-            raise RuntimeError(f"Unable to move the completed installation into {destination}: {error}") from error
+            raise RuntimeError(f"Unable to move the verified package into {destination}: {error}") from error
+        try:
+            install_package(destination, installer, args.skip_tests, args.no_desktop_shortcut, destination)
+            (destination / ".guiai-install.json").write_text(json.dumps({
+                "package": asset,
+                "sha256": checksums[asset],
+                "source": args.base_url,
+            }, indent=2) + "\n", encoding="utf-8")
+        except (OSError, subprocess.CalledProcessError) as error:
+            raise RuntimeError(
+                f"Installation did not complete; the new partial installation is retained at {destination}: {error}",
+            ) from error
     executable = destination / ".venv" / ("Scripts/guiai.exe" if sys.platform == "win32" else "bin/guiai")
+    if not executable.is_file():
+        raise RuntimeError(f"Installation did not produce the expected executable: {executable}")
+    subprocess.run([str(executable), "launch", "--help"], stdout=subprocess.DEVNULL, check=True)
     print(f"\nGUIAI is installed in {destination}")
+    if not args.no_desktop_shortcut:
+        print("Open Ablation from its Desktop icon to choose an investigation target.")
     print("Launch it with your installed AI Agent:")
     print(f'  "{executable}" desktop TARGET --session SESSION --toolkit tk --agent kimi')
     if not sys.platform.startswith("linux"):
@@ -151,6 +167,6 @@ def main(arguments=None):
 if __name__ == "__main__":
     try:
         main()
-    except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
+    except (OSError, RuntimeError, ValueError, BadZipFile, subprocess.CalledProcessError) as error:
         print(f"Installation failed: {error}", file=sys.stderr)
         raise SystemExit(1)

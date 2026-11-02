@@ -18,11 +18,13 @@ def main():
     subprocess.run([sys.executable, "-m", "build", "--wheel", "--outdir", str(DIST)], cwd=ROOT, check=True)
     subprocess.run([
         sys.executable, "-m", "pip", "download", "--only-binary=:all:",
-        "--dest", str(vendor), "pyte>=0.8.1,<1", "wcwidth==0.2.14",
+        "--dest", str(vendor), "pyte>=0.8.1,<1", "wcwidth==0.2.14", "tkinterdnd2==0.7.0",
     ], check=True)
     for name in ("install_linux.sh", "README.md"):
         shutil.copy(ROOT / "packaging" / name, DIST / name)
     shutil.copy(ROOT / "stress" / "native_stress.py", DIST / "native_stress.py")
+    shutil.copy(ROOT / "guiai" / "icons" / "ablation-guiai-logo.png", DIST / "ablation-guiai-logo.png")
+    shutil.copy(ROOT / "packaging" / "re.guiai.workbench.desktop.in", DIST / "re.guiai.workbench.desktop.in")
     (DIST / "install_linux.sh").chmod(0o755)
     destination = ROOT / "dist" / "GUIAI-Linux.zip"
     with ZipFile(destination, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:
