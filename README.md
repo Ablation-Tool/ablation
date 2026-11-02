@@ -357,18 +357,6 @@ Following coordinated disclosure, the **Cisco Product Security Incident Response
 <details>
 <summary>Demonstrations</summary>
 
-### Ablation in Action
-
-![Ablation in Action](assets/demos/Ablation-In-Action-01.gif)
-
-### How to Use Ablation
-
-![How to Use Ablation](assets/demos/How-To-Use-Ablation.gif)
-
-### Learn as You RE
-
-![Learn as You RE](assets/demos/Learn-As-You-RE.gif)
-
 ### GUIAI Workbench
 
 <table>
