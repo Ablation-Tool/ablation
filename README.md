@@ -31,7 +31,7 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 | [**Terminal**](docs/reference-modules/guiai-terminal.md) | [1](guiai-lab/metrix/desktop.py)&nbsp;[2](guiai-lab/guiai/gtk_app.py) | Interactive input, Unicode, clipboard, resizing, scrollback, font selection, color schemes, custom foreground/background, and all 16 ANSI palette colors. |
 | [**Directory Inventory**](docs/reference-modules/guiai-directory-inventory.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/app.py) | Add and rescan real top-level directory entries without implying recursive analysis coverage. |
 | [**METRIX Support**](docs/reference-modules/metrix-support.md) | [1](guiai-lab/metrix/cli.py)&nbsp;[2](guiai-lab/metrix/desktop.py) | Bundled inventory, search, filtering, and export utilities; no separate METRIX checkout is required. |
-| [**Operating System Support**](docs/reference-modules/guiai-operating-system-support.md) | [1](guiai-lab/packaging/build_windows_native.py)&nbsp;[2](guiai-lab/packaging/build_macos.py)&nbsp;[3](guiai-lab/packaging/build_linux.py) | Windows, MacOS, Linux |
+| [**Operating System Support**](docs/reference-modules/guiai-operating-system-support.md) | [1](guiai-lab/packaging/build_windows_native.py)&nbsp;[2](guiai-lab/packaging/build_macos.py)&nbsp;[3](guiai-lab/packaging/build_linux.py) | Fully compatible with all major desktop operating systems, including Windows, macOS, and Linux. |
 
 </details>
 
