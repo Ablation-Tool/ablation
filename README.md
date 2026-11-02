@@ -8,7 +8,7 @@ Just as ∀ represents a rule that applies to every element without exception.
 
 
 ABL∀TION stands as the universal constant and definitive answer to reverse engineering by rendering everything before it obsolete.
- 
+
 ---
 
 ![GUIAI native workbench demo](assets/demos/guiai-workbench-demo.gif)
@@ -20,10 +20,10 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**AI Agent Bridge**](docs/reference-modules/guiai-agent-bridge.md) | [1](guiai-lab/guiai/environment.py)&nbsp;[2](guiai-lab/metrix/desktop.py) | Embeds your AI Agent inside the GUIAI. No credentials, tokens, or API keys requested. |
-| [**Lab & Navigation**](docs/reference-modules/guiai-investigation-lab.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/map_view.py)&nbsp;[3](guiai-lab/metrix/cli.py) | Organizes, searches, and visualizes discoveries, with directory inventory and METRIX tools. |
-| [**Persistence & Isolation**](docs/reference-modules/guiai-project-memory.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/preferences.py)&nbsp;[3](guiai-lab/guiai/gtk_app.py) | Restores sessions and preferences while keeping each Lab's agent, history, and workspace separate. |
-| [**Review & Evidence Integrity**](docs/reference-modules/guiai-review-workflow.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/cli.py)&nbsp;[3](guiai-lab/guiai/app.py) | Tracks reviews, preserves evidence history, validates targets, and prevents duplicate discoveries. |
+| [**AI Agent Bridge**](guiai-lab/README.md) | [1](guiai-lab/guiai/environment.py)&nbsp;[2](guiai-lab/metrix/desktop.py) | Embeds your AI Agent inside the GUIAI. |
+| [**Lab & Navigation**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/map_view.py)&nbsp;[3](guiai-lab/metrix/cli.py) | Organizes, searches, and visualizes discoveries. |
+| [**Persistence & Isolation**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/preferences.py)&nbsp;[3](guiai-lab/guiai/gtk_app.py) | Restores Lab sessions, agents, and preferences. |
+| [**Review & Evidence Integrity**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/cli.py)&nbsp;[3](guiai-lab/guiai/app.py) | Tracks reviews and validates evidence targets. |
 
 </details>
 
@@ -75,24 +75,24 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**AI Knowledge-Graph Analysis**](docs/reference-modules/knowledge-graph.md) | [1](ablation/analyzers/knowledge_graph.py)&nbsp;[2](sweeps/build_ablation_graph.py) | Combines knowledge graphs with agent-driven retrieval to explore... |
-| [**Analysis Context & Caching**](docs/reference-modules/on-demand-analysis.md) | [1](ablation/analyzers/binary_context.py)&nbsp;[2](ablation/analyzers/xref_graph.py) | Reuses analysis results and session state across runs to avoid redundant... |
-| [**Architecture & ABI Models**](docs/reference-modules/isa-models.md) | [1](ablation/analyzers/insn_x86.py)&nbsp;[2](ablation/analyzers/isa_x86.py) | Normalizes x86 instructions and models register aliases, calling conventions,... |
-| [**Architecture Definition Language**](docs/reference-modules/encoding-dag.md) | [1](ablation/analyzers/encoding_dag.py) | Describes ISA encodings and semantics as reusable graphs, allowing new... |
-| [**ARM64 Data-Flow Slicing**](docs/reference-modules/arm64-symbolic-slicing.md) | [1](modules/sse_slicer.py)&nbsp;[2](modules/arm64_global_tracker.py) | Traces ARM64 store addresses backward to identify exact and possible writes... |
-| [**Binary Parsing & Hardening**](docs/reference-modules/binary-format-and-platform-identification.md) | [1](ablation/core/binary_parser.py)&nbsp;[2](ablation/core/elf_parser.py) | Parses ELF, PE, and Mach-O metadata and inspects ELF hardening, including NX,... |
-| [**Control & Data-Flow Analysis**](docs/reference-modules/control-flow-graph-construction.md) | [1](ablation/analyzers/dataflow_engine.py)&nbsp;[2](ablation/analyzers/structurizer.py) | Builds control-flow graphs, propagates dataflow facts, and recovers... |
-| [**Cryptographic Analysis**](docs/reference-modules/cryptographic-analysis.md) | [1](modules/crypto_audit.py)&nbsp;[2](ablation/analyzers/xor_solver.py) | Detects cipher implementations, recovers XOR and affine keys, and tests JWT... |
-| [**Debug Metadata & Symbol Recovery**](docs/reference-modules/debug-metadata-recovery.md) | [1](ablation/analyzers/i386_absolute_xref_scanner.py)&nbsp;[2](ablation/analyzers/dwarf_loongarch64.py) | Recovers ELF function addresses and names from unwind metadata, DWARF, and... |
-| [**Disassembly, Code Profiling & Legacy ARM**](docs/reference-modules/streaming-and-windowed-disassembly.md) | [1](ablation/core/disasm_engine.py)&nbsp;[2](ablation/analyzers/window_analyzer.py) | Provides streaming and targeted disassembly, optional Angr-backed dataflow... |
-| [**Dynamic Function Emulation**](docs/reference-modules/dynamic-sandbox.md) | [1](ablation/analyzers/dynamic_sandbox.py) | Emulates ARM64 and x86-64 leaf functions to corroborate static findings with... |
-| [**Expression Analysis**](docs/reference-modules/expr-lifter.md) | [1](ablation/analyzers/expr_lifter.py) | Converts instructions into typed expressions and merges equivalent... |
-| [**Function Discovery**](docs/reference-modules/stripped-function-discovery.md) | [1](ablation/analyzers/arm32_function_scanner.py)&nbsp;[2](ablation/analyzers/static_elf32_func_start_scanner.py) | Recovers function entry points from stripped binaries and flat ROMs using... |
-| [**Function Prioritization**](docs/reference-modules/single-function-profiling.md) | [1](ablation/analyzers/func_profiler.py)&nbsp;[2](ablation/analyzers/func_reachability.py) | Profiles function calls and filters findings in functions without runtime... |
-| [**Intermediate Representation**](docs/reference-modules/binary-lifting.md) | [1](ablation/analyzers/binary_lifter.py) | Lifts machine code from supported architectures into a shared IR for dataflow... |
-| [**Packed & Encrypted Region Detection**](docs/reference-modules/entropy-mapper.md) | [1](ablation/analyzers/entropy_mapper.py) | Locates compressed, encrypted, and packed regions using sliding-window... |
-| [**Register & Argument Tracking**](docs/reference-modules/call-argument-annotation.md) | [1](ablation/analyzers/reg_annotator.py)&nbsp;[2](ablation/analyzers/arm32_reg_annotator.py) | Tracks symbolic register values across calls and traces sink arguments to... |
-| [**Static Single Assignment**](docs/reference-modules/ssa.md) | [1](ablation/analyzers/ssa.py)&nbsp;[2](ablation/analyzers/ir.py) | Models register definitions with SSA and unifies architecture-specific... |
+| [**AI Knowledge-Graph Analysis**](docs/reference-modules/knowledge-graph.md) | [1](ablation/analyzers/knowledge_graph.py)&nbsp;[2](sweeps/build_ablation_graph.py) | Combines knowledge graphs with agent-driven retrieval. |
+| [**Analysis Context & Caching**](docs/reference-modules/on-demand-analysis.md) | [1](ablation/analyzers/binary_context.py)&nbsp;[2](ablation/analyzers/xref_graph.py) | Reuses analysis results and session state across runs. |
+| [**Architecture & ABI Models**](docs/reference-modules/isa-models.md) | [1](ablation/analyzers/insn_x86.py)&nbsp;[2](ablation/analyzers/isa_x86.py) | Normalizes x86 instructions and models register aliases, calling conventions. |
+| [**Architecture Definition Language**](docs/reference-modules/encoding-dag.md) | [1](ablation/analyzers/encoding_dag.py) | Describes ISA encodings and semantics as reusable graphs. |
+| [**ARM64 Data-Flow Slicing**](docs/reference-modules/arm64-symbolic-slicing.md) | [1](modules/sse_slicer.py)&nbsp;[2](modules/arm64_global_tracker.py) | Traces ARM64 store addresses backward. |
+| [**Binary Parsing & Hardening**](docs/reference-modules/binary-format-and-platform-identification.md) | [1](ablation/core/binary_parser.py)&nbsp;[2](ablation/core/elf_parser.py) | Parses ELF, PE, and Mach-O metadata and inspects ELF hardening. |
+| [**Control & Data-Flow Analysis**](docs/reference-modules/control-flow-graph-construction.md) | [1](ablation/analyzers/dataflow_engine.py)&nbsp;[2](ablation/analyzers/structurizer.py) | Builds control-flow graphs, propagates dataflow facts. |
+| [**Cryptographic Analysis**](docs/reference-modules/cryptographic-analysis.md) | [1](modules/crypto_audit.py)&nbsp;[2](ablation/analyzers/xor_solver.py) | Detects cipher implementations, recovers XOR and affine keys. |
+| [**Debug Metadata & Symbol Recovery**](docs/reference-modules/debug-metadata-recovery.md) | [1](ablation/analyzers/i386_absolute_xref_scanner.py)&nbsp;[2](ablation/analyzers/dwarf_loongarch64.py) | Recovers ELF function addresses and names from unwind metadata, DWARF. |
+| [**Disassembly, Code Profiling & Legacy ARM**](docs/reference-modules/streaming-and-windowed-disassembly.md) | [1](ablation/core/disasm_engine.py)&nbsp;[2](ablation/analyzers/window_analyzer.py) | Provides targeted disassembly and dataflow analysis. |
+| [**Dynamic Function Emulation**](docs/reference-modules/dynamic-sandbox.md) | [1](ablation/analyzers/dynamic_sandbox.py) | Emulates ARM64 and x86-64 leaf functions. |
+| [**Expression Analysis**](docs/reference-modules/expr-lifter.md) | [1](ablation/analyzers/expr_lifter.py) | Converts instructions into typed expressions and merges computations. |
+| [**Function Discovery**](docs/reference-modules/stripped-function-discovery.md) | [1](ablation/analyzers/arm32_function_scanner.py)&nbsp;[2](ablation/analyzers/static_elf32_func_start_scanner.py) | Recovers function entries from stripped binaries and ROMs. |
+| [**Function Prioritization**](docs/reference-modules/single-function-profiling.md) | [1](ablation/analyzers/func_profiler.py)&nbsp;[2](ablation/analyzers/func_reachability.py) | Profiles calls and filters findings in functions. |
+| [**Intermediate Representation**](docs/reference-modules/binary-lifting.md) | [1](ablation/analyzers/binary_lifter.py) | Lifts machine code into shared intermediate representations. |
+| [**Packed & Encrypted Region Detection**](docs/reference-modules/entropy-mapper.md) | [1](ablation/analyzers/entropy_mapper.py) | Locates compressed and encrypted regions using entropy. |
+| [**Register & Argument Tracking**](docs/reference-modules/call-argument-annotation.md) | [1](ablation/analyzers/reg_annotator.py)&nbsp;[2](ablation/analyzers/arm32_reg_annotator.py) | Tracks registers and sink arguments across calls. |
+| [**Static Single Assignment**](docs/reference-modules/ssa.md) | [1](ablation/analyzers/ssa.py)&nbsp;[2](ablation/analyzers/ir.py) | Models register definitions using static single assignment. |
 
 </details>
 
@@ -101,14 +101,14 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**AI-Guided Analysis**](docs/reference-modules/llm-analyst-loop.md) | [1](ablation/analyzers/llm_analyst/agent_loop.py)&nbsp;[2](ablation/analyzers/llm_analyst/rag_retriever.py) | Pre-fetches function context and prior results for single-call LLM naming,... |
-| [**Approximate Function Matching**](docs/reference-modules/sax-approximate-indexing.md) | [1](ablation/analyzers/sax_index.py)&nbsp;[2](ablation/analyzers/subsequence_searcher.py) | Indexes opcode-category sequences for fast approximate matching and DTW-based... |
-| [**Cross-Target Learning**](docs/reference-modules/flywheel.md) | [1](ablation/analyzers/pattern_library.py)&nbsp;[2](ablation/analyzers/finding_registry.py) | Reuses productive findings, queries, and vendor-specific sink patterns across... |
-| [**Evidence Scoring & Validation**](docs/reference-modules/evidence-scoring-and-probe-ranking.md) | [1](ablation/analyzers/probe_ranker.py)&nbsp;[2](ablation/analyzers/probe_adapters.py) | Ranks probes by expected information gain and executes approved adapters to... |
-| [**Function Identification & Naming**](docs/reference-modules/function-identity-database.md) | [1](ablation/analyzers/corpus_builder.py)&nbsp;[2](ablation/analyzers/func_id_db.py) | Automatically names known functions using FLIRT-style signatures and... |
-| [**Semantic Code Search**](docs/reference-modules/semantic-code-search.md) | [1](ablation/analyzers/semantic_search.py) | Ranks functions by natural-language queries using fast vector embeddings,... |
-| [**Vulnerability Hypothesis Tracking**](docs/reference-modules/hypothesis-engine-2.md) | [1](ablation/analyzers/hypothesis_engine.py) | Ranks competing vulnerability hypotheses as evidence accumulates and... |
-| [**Vulnerability Pattern Mining**](docs/reference-modules/corpus-mining-cve-patterns.md) | [1](sweeps/corpus_miner.py)&nbsp;[2](modules/cve_byte_patterns.py) | Mines prior findings for CWE trends and scans binaries for registered... |
+| [**AI-Guided Analysis**](docs/reference-modules/llm-analyst-loop.md) | [1](ablation/analyzers/llm_analyst/agent_loop.py)&nbsp;[2](ablation/analyzers/llm_analyst/rag_retriever.py) | Pre-fetches function context for LLM analysis. |
+| [**Approximate Function Matching**](docs/reference-modules/sax-approximate-indexing.md) | [1](ablation/analyzers/sax_index.py)&nbsp;[2](ablation/analyzers/subsequence_searcher.py) | Indexes opcode sequences for approximate matching. |
+| [**Cross-Target Learning**](docs/reference-modules/flywheel.md) | [1](ablation/analyzers/pattern_library.py)&nbsp;[2](ablation/analyzers/finding_registry.py) | Reuses findings and vendor sink patterns. |
+| [**Evidence Scoring & Validation**](docs/reference-modules/evidence-scoring-and-probe-ranking.md) | [1](ablation/analyzers/probe_ranker.py)&nbsp;[2](ablation/analyzers/probe_adapters.py) | Ranks probes by expected information gain and executes approved adapters. |
+| [**Function Identification & Naming**](docs/reference-modules/function-identity-database.md) | [1](ablation/analyzers/corpus_builder.py)&nbsp;[2](ablation/analyzers/func_id_db.py) | Names known functions and preserves analyst names. |
+| [**Semantic Code Search**](docs/reference-modules/semantic-code-search.md) | [1](ablation/analyzers/semantic_search.py) | Ranks functions using natural-language embeddings. |
+| [**Vulnerability Hypothesis Tracking**](docs/reference-modules/hypothesis-engine-2.md) | [1](ablation/analyzers/hypothesis_engine.py) | Ranks and preserves vulnerability hypotheses. |
+| [**Vulnerability Pattern Mining**](docs/reference-modules/corpus-mining-cve-patterns.md) | [1](sweeps/corpus_miner.py)&nbsp;[2](modules/cve_byte_patterns.py) | Mines CWE patterns and scans binaries. |
 
 </details>
 
@@ -117,26 +117,26 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**Automated Vulnerability Sweeps**](docs/reference-modules/multi-phase-vulnerability-sweeps.md) | [1](sweeps/base_sweep.py)&nbsp;[2](sweeps/fortinet_sweep.py) | Runs resumable pre-filtering, sink classification, and taint phases,... |
-| [**Browser Extension Security**](docs/reference-modules/browser-extension-auditing.md) | [1](ablation/analyzers/browser_extension_auditor.py) | Detects externally connectable extensions whose privileged message handlers... |
-| [**Compiler Defects & Hardening**](docs/reference-modules/compiler-defects.md) | [1](ablation/analyzers/loongarch64_max_not_min_scanner.py)&nbsp;[2](ablation/analyzers/compiler_security_gate.py) | Detects LoongArch64 min/max miscompilations and missing or inconsistent... |
-| [**Dangerous Call Classification**](docs/reference-modules/sink-arg-classifier.md) | [1](ablation/analyzers/sink_arg_classifier.py)&nbsp;[2](ablation/analyzers/sink_arg_classifier_arm32.py)&nbsp;[3](ablation/analyzers/sink_arg_classifier_loongarch64.py) | Classifies sink arguments on x86-64, ARM32, and LoongArch64 and filters... |
-| [**Data-Flow Taint Analysis**](docs/reference-modules/taint-analysis.md) | [1](ablation/analyzers/taint_tracker.py)&nbsp;[2](ablation/analyzers/taint_tracker_arm64.py)&nbsp;[3](ablation/analyzers/cross_layer_taint.py) | Traces attacker-controlled data on x86-64, ARM64, and through DEX/JNI... |
-| [**Exploit Development & Scoring**](docs/reference-modules/shellcode-templates.md) | [1](ablation/core/shellcode_utils.py)&nbsp;[2](modules/bare_adapter.py) | Builds encoded shellcode and ROP chains, calculates cyclic offsets, and... |
-| [**Exploit Path Validation**](docs/reference-modules/finding-validation.md) | [1](modules/path_solver.py)&nbsp;[2](ablation/analyzers/finding_registry.py) | Checks path feasibility with bounded Z3 solving and stores reviewed findings... |
-| [**Format-String Vulnerabilities**](docs/reference-modules/format-string-scanner.md) | [1](ablation/analyzers/format_string_scanner.py) | Finds non-constant format arguments in logging calls and includes provenance... |
-| [**Game Engine Analysis**](docs/reference-modules/engine-pattern-library.md) | [1](ablation/analyzers/engine_pattern_library.py) | Identifies game engines and engine-specific RCE surfaces in stripped binaries... |
-| [**Heap Memory Vulnerabilities**](docs/reference-modules/heap-vulnerability-scanner.md) | [1](ablation/analyzers/heap_vuln_scanner.py)&nbsp;[2](modules/heap_uaf_scanner.py) | Detects allocation overflows, use-after-free, double-free, and off-by-one... |
-| [**Input Validation & Call Wrappers**](docs/reference-modules/transitive-sink-wrapper-discovery.md) | [1](ablation/analyzers/sink_propagator.py)&nbsp;[2](ablation/analyzers/sanitizer_detector.py) | Discovers transitive sink wrappers and profiles sanitization coverage to... |
-| [**KASAN Finding Validation**](docs/workflows/kasan-oracle.md) | [1](ablation/analyzers/loongarch_decoder_v2.py) | Verifies KASAN candidates in stripped production binaries, confirming 11 of... |
-| [**Network Attack-Surface Detection**](docs/reference-modules/network-sink-finder.md) | [1](ablation/analyzers/network_sink_finder.py) | Prioritizes propagated-argument sinks in functions reachable from network... |
-| [**Parser Length & Bounds Checks**](docs/reference-modules/length-underflow.md) | [1](ablation/analyzers/length_underflow.py)&nbsp;[2](modules/chunk_walker_validator.py) | Detects length-subtraction underflows and validates TLV chunk bounds in... |
-| [**Source Code Security Analysis**](docs/reference-modules/source-code-auditing.md) | [1](ablation/analyzers/source_audit_compressor.py)&nbsp;[2](ablation/analyzers/source_taint_tracker.py) | Profiles source files and traces dangerous sinks back to request-input... |
-| [**SQL & Lua Injection Analysis**](docs/reference-modules/sql-injection-scanner.md) | [1](ablation/analyzers/sql_sink_scanner.py)&nbsp;[2](ablation/analyzers/lua_injection_analyzer.py) | Classifies SQL query provenance in binaries and traces request input to Lua... |
-| [**Unauthenticated Attack Surface**](docs/reference-modules/preauth-exposure.md) | [1](ablation/analyzers/preauth_route_auditor.py) | Maps unauthenticated routes and their reachable sinks by reconstructing... |
-| [**Unsafe Input & Function Checks**](docs/reference-modules/scanf-family-overflow-candidates.md) | [1](ablation/analyzers/sscanf_sink_classifier.py)&nbsp;[2](ablation/analyzers/deprecated_func_scanner.py) | Classifies risky `sscanf` call sites and flags deprecated or unsafe imported... |
-| [**Web & Fortinet Attack Surfaces**](docs/reference-modules/apache-module-analysis.md) | [1](ablation/analyzers/apache_module_analyzer.py)&nbsp;[2](ablation/analyzers/cmdb_surface_mapper.py) | Reconstructs Apache handler chains and maps Fortinet CMDB operations to... |
-| [**Windows Driver Vulnerabilities**](docs/reference-modules/kernel-drivers.md) | [1](ablation/analyzers/kernel_driver_analyzer.py)&nbsp;[2](ablation/analyzers/byovd_detector.py) | Ranks BYOVD primitives by impact and identifies METHOD_NEITHER IOCTL handlers... |
+| [**Automated Vulnerability Sweeps**](docs/reference-modules/multi-phase-vulnerability-sweeps.md) | [1](sweeps/base_sweep.py)&nbsp;[2](sweeps/fortinet_sweep.py) | Runs resumable pre-filtering, sink classification, and taint analysis. |
+| [**Browser Extension Security**](docs/reference-modules/browser-extension-auditing.md) | [1](ablation/analyzers/browser_extension_auditor.py) | Detects insecure externally connectable browser extensions. |
+| [**Compiler Defects & Hardening**](docs/reference-modules/compiler-defects.md) | [1](ablation/analyzers/loongarch64_max_not_min_scanner.py)&nbsp;[2](ablation/analyzers/compiler_security_gate.py) | Detects miscompilations and inconsistent binary hardening. |
+| [**Dangerous Call Classification**](docs/reference-modules/sink-arg-classifier.md) | [1](ablation/analyzers/sink_arg_classifier.py)&nbsp;[2](ablation/analyzers/sink_arg_classifier_arm32.py)&nbsp;[3](ablation/analyzers/sink_arg_classifier_loongarch64.py) | Classifies sink arguments and filters constant-format calls. |
+| [**Data-Flow Taint Analysis**](docs/reference-modules/taint-analysis.md) | [1](ablation/analyzers/taint_tracker.py)&nbsp;[2](ablation/analyzers/taint_tracker_arm64.py)&nbsp;[3](ablation/analyzers/cross_layer_taint.py) | Traces attacker-controlled data across architectures. |
+| [**Exploit Development & Scoring**](docs/reference-modules/shellcode-templates.md) | [1](ablation/core/shellcode_utils.py)&nbsp;[2](modules/bare_adapter.py) | Builds shellcode and computes cyclic offsets. |
+| [**Exploit Path Validation**](docs/reference-modules/finding-validation.md) | [1](modules/path_solver.py)&nbsp;[2](ablation/analyzers/finding_registry.py) | Checks path feasibility and stores reviewed findings. |
+| [**Format-String Vulnerabilities**](docs/reference-modules/format-string-scanner.md) | [1](ablation/analyzers/format_string_scanner.py) | Finds non-constant format arguments with provenance. |
+| [**Game Engine Analysis**](docs/reference-modules/engine-pattern-library.md) | [1](ablation/analyzers/engine_pattern_library.py) | Identifies game engines and RCE surfaces. |
+| [**Heap Memory Vulnerabilities**](docs/reference-modules/heap-vulnerability-scanner.md) | [1](ablation/analyzers/heap_vuln_scanner.py)&nbsp;[2](modules/heap_uaf_scanner.py) | Detects allocation overflows, use-after-free, double-free. |
+| [**Input Validation & Call Wrappers**](docs/reference-modules/transitive-sink-wrapper-discovery.md) | [1](ablation/analyzers/sink_propagator.py)&nbsp;[2](ablation/analyzers/sanitizer_detector.py) | Discovers sink wrappers and profiles sanitization coverage. |
+| [**KASAN Finding Validation**](docs/workflows/kasan-oracle.md) | [1](ablation/analyzers/loongarch_decoder_v2.py) | Verifies KASAN candidates in stripped binaries. |
+| [**Network Attack-Surface Detection**](docs/reference-modules/network-sink-finder.md) | [1](ablation/analyzers/network_sink_finder.py) | Prioritizes network-reachable propagated-argument sinks. |
+| [**Parser Length & Bounds Checks**](docs/reference-modules/length-underflow.md) | [1](ablation/analyzers/length_underflow.py)&nbsp;[2](modules/chunk_walker_validator.py) | Detects underflows and validates chunk bounds. |
+| [**Source Code Security Analysis**](docs/reference-modules/source-code-auditing.md) | [1](ablation/analyzers/source_audit_compressor.py)&nbsp;[2](ablation/analyzers/source_taint_tracker.py) | Profiles sources and traces dangerous sinks. |
+| [**SQL & Lua Injection Analysis**](docs/reference-modules/sql-injection-scanner.md) | [1](ablation/analyzers/sql_sink_scanner.py)&nbsp;[2](ablation/analyzers/lua_injection_analyzer.py) | Classifies SQL and Lua injection provenance. |
+| [**Unauthenticated Attack Surface**](docs/reference-modules/preauth-exposure.md) | [1](ablation/analyzers/preauth_route_auditor.py) | Maps unauthenticated routes and reachable sinks. |
+| [**Unsafe Input & Function Checks**](docs/reference-modules/scanf-family-overflow-candidates.md) | [1](ablation/analyzers/sscanf_sink_classifier.py)&nbsp;[2](ablation/analyzers/deprecated_func_scanner.py) | Classifies risky calls and deprecated functions. |
+| [**Web & Fortinet Attack Surfaces**](docs/reference-modules/apache-module-analysis.md) | [1](ablation/analyzers/apache_module_analyzer.py)&nbsp;[2](ablation/analyzers/cmdb_surface_mapper.py) | Reconstructs Apache handlers and Fortinet execution sinks. |
+| [**Windows Driver Vulnerabilities**](docs/reference-modules/kernel-drivers.md) | [1](ablation/analyzers/kernel_driver_analyzer.py)&nbsp;[2](ablation/analyzers/byovd_detector.py) | Ranks BYOVD primitives and identifies unsafe IOCTL handlers. |
 
 </details>
 
@@ -145,22 +145,22 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**bFLT (Binary Flat Format)**](docs/reference-modules/bflt.md) | [1](ablation/parsers/bflt.py)&nbsp;[2](ablation/analyzers/bflt_arm32.py)&nbsp;[3](ablation/analyzers/bflt_context.py) | Loads binary Flat executables, recovers ARM32 link-time references, applies... |
-| [**C166 Toolkit**](docs/reference-modules/c166-cfg.md) | [1](ablation/analyzers/c166_cfg.py)&nbsp;[2](ablation/analyzers/c166_execution.py) | Analyze C166 control flow and CAN update paths. |
-| [**CAEN ASCII-Hex Containers**](docs/reference-modules/caen-ascii-hex.md) | [1](ablation/parsers/caen_hex.py) | Decodes CAEN firmware payloads and verifies their additive checksums without... |
-| [**ECU Architecture Detection**](docs/reference-modules/ecu-architecture-detector.md) | [1](ablation/analyzers/ecu_arch_detector.py)&nbsp;[2](ablation/analyzers/ecu_rom_layout_analyzer.py) | Identifies raw-ROM architectures and classifies code, calibration data, and... |
-| [**ECU Calibration**](docs/reference-modules/calibration-parsers.md) | [1](ablation/analyzers/ecu_xdf_parser.py)&nbsp;[2](ablation/analyzers/ecu_a2l_parser.py) | Parses ECU calibration definitions and scaling metadata. |
-| [**ECU Security Analysis**](docs/reference-modules/ecu-security-access-scanner.md) | [1](ablation/analyzers/ecu_security_access_scanner.py)&nbsp;[2](ablation/analyzers/taint_tracker_tricore.py) | Detects predictable UDS and KWP2000 seeds and traces diagnostic input to... |
-| [**Embedded Architecture Decoding**](docs/reference-modules/c166-c167-decoding.md) | [1](ablation/analyzers/ecu_c166_decoder.py)&nbsp;[2](ablation/analyzers/ecu_c28x_decoder.py) | Decodes C166/C167 and TI C28x instructions and recovers function starts from... |
-| [**Extraction & Triage**](docs/reference-modules/firmware-signature-and-secret-triage.md) | [1](ablation/core/firmware_analyzer.py)&nbsp;[2](ablation/analyzers/firmware_container.py) | Scans firmware signatures, strings, and entropy and extracts partitions from... |
-| [**Firmware Steganography**](docs/reference-modules/proto-fsm.md) | [1](ablation/analyzers/lsb_stego_extractor.py) | Extracts cryptographic material hidden in firmware bitmap pixels. |
-| [**Fortinet**](docs/reference-modules/firmware-extraction.md) | [1](ablation/analyzers/fortios_firmware_extractor.py)&nbsp;[2](ablation/analyzers/firmware_container_key_extractor.py) | Recovers FortiOS partition keys and extracts firmware containers into... |
-| [**IBM i / TIMI Save Files**](docs/reference-modules/ibm-timi.md) | [1](ablation/ibm_timi/savf.py)&nbsp;[2](ablation/ibm_timi/catalogue.py)&nbsp;[3](ablation/ibm_timi/program.py)&nbsp;[4](ablation/ibm_timi/cli.py) | Verifies QSYS SAVF records and extracts bounded MI objects; recovers legacy... |
-| [**JFFS2 Recovery**](docs/reference-modules/jffs2.md) | [1](ablation/parsers/jffs2.py) | Reconstructs little-endian JFFS2 files with CRC and extent validation,... |
-| [**Juniper**](docs/reference-modules/junos.md) | [1](ablation/core/junos_package.py)&nbsp;[2](ablation/core/junos_signature.py)&nbsp;[3](ablation/analyzers/junos_function_diff.py)&nbsp;[4](ablation/analyzers/gencfg.py)&nbsp;[5](ablation/analyzers/mips_ownership.py)&nbsp;[6](ablation/analyzers/gencfg_provenance.py)&nbsp;[7](ablation/analyzers/mips_message_provenance.py) | Extracts and verifies signed Junos packages, compares bounded MIPS32/o32... |
-| [**Legacy Binary Formats**](docs/reference-modules/motorola-88000-bcs-coff.md) | [1](ablation/core/coff_m88k_parser.py)&nbsp;[2](ablation/core/guardian_pak_extractor.py) | Parses Motorola M88K COFF binaries and extracts files from Tandem NonStop... |
-| [**Texas Instruments**](docs/reference-modules/texas-instruments-firmware.md) | [1](ablation/analyzers/ti_coff_loader.py)&nbsp;[2](ablation/analyzers/ti_nnc_scanner.py) | Parses TI COFF2 symbols and detects embedded NNC/TVM models, weak... |
-| [**WDB Stream Reader**](docs/reference-modules/xilinx-wdb.md) | [1](ablation/analyzers/xilinx_wdb.py) | Read Xilinx waveform events with bounded memory. |
+| [**bFLT (Binary Flat Format)**](docs/reference-modules/bflt.md) | [1](ablation/parsers/bflt.py)&nbsp;[2](ablation/analyzers/bflt_arm32.py)&nbsp;[3](ablation/analyzers/bflt_context.py) | Loads bFLT executables and applies ARM32 relocations. |
+| [**C166 Toolkit**](docs/reference-modules/c166-cfg.md) | [1](ablation/analyzers/c166_cfg.py)&nbsp;[2](ablation/analyzers/c166_execution.py) | Analyzes C166 control flow and CAN updates. |
+| [**CAEN ASCII-Hex Containers**](docs/reference-modules/caen-ascii-hex.md) | [1](ablation/parsers/caen_hex.py) | Decodes CAEN firmware and verifies additive checksums. |
+| [**ECU Architecture Detection**](docs/reference-modules/ecu-architecture-detector.md) | [1](ablation/analyzers/ecu_arch_detector.py)&nbsp;[2](ablation/analyzers/ecu_rom_layout_analyzer.py) | Identifies ROM architectures and classifies regions. |
+| [**ECU Calibration**](docs/reference-modules/calibration-parsers.md) | [1](ablation/analyzers/ecu_xdf_parser.py)&nbsp;[2](ablation/analyzers/ecu_a2l_parser.py) | Parses ECU calibration and scaling metadata. |
+| [**ECU Security Analysis**](docs/reference-modules/ecu-security-access-scanner.md) | [1](ablation/analyzers/ecu_security_access_scanner.py)&nbsp;[2](ablation/analyzers/taint_tracker_tricore.py) | Detects predictable seeds and traces diagnostic writes. |
+| [**Embedded Architecture Decoding**](docs/reference-modules/c166-c167-decoding.md) | [1](ablation/analyzers/ecu_c166_decoder.py)&nbsp;[2](ablation/analyzers/ecu_c28x_decoder.py) | Decodes C166 and C28x instructions. |
+| [**Extraction & Triage**](docs/reference-modules/firmware-signature-and-secret-triage.md) | [1](ablation/core/firmware_analyzer.py)&nbsp;[2](ablation/analyzers/firmware_container.py) | Scans firmware and extracts vendor partitions. |
+| [**Firmware Steganography**](docs/reference-modules/proto-fsm.md) | [1](ablation/analyzers/lsb_stego_extractor.py) | Extracts cryptographic material from firmware images. |
+| [**Fortinet**](docs/reference-modules/firmware-extraction.md) | [1](ablation/analyzers/fortios_firmware_extractor.py)&nbsp;[2](ablation/analyzers/firmware_container_key_extractor.py) | Recovers FortiOS keys and firmware containers. |
+| [**IBM i / TIMI Save Files**](docs/reference-modules/ibm-timi.md) | [1](ablation/ibm_timi/savf.py)&nbsp;[2](ablation/ibm_timi/catalogue.py)&nbsp;[3](ablation/ibm_timi/program.py)&nbsp;[4](ablation/ibm_timi/cli.py) | Verifies QSYS SAVF records and extracts objects. |
+| [**JFFS2 Recovery**](docs/reference-modules/jffs2.md) | [1](ablation/parsers/jffs2.py) | Reconstructs little-endian JFFS2 files with CRC and extent validation. |
+| [**Juniper**](docs/reference-modules/junos.md) | [1](ablation/core/junos_package.py)&nbsp;[2](ablation/core/junos_signature.py)&nbsp;[3](ablation/analyzers/junos_function_diff.py)&nbsp;[4](ablation/analyzers/gencfg.py)&nbsp;[5](ablation/analyzers/mips_ownership.py)&nbsp;[6](ablation/analyzers/gencfg_provenance.py)&nbsp;[7](ablation/analyzers/mips_message_provenance.py) | Verifies Junos packages and analyzes MIPS functions. |
+| [**Legacy Binary Formats**](docs/reference-modules/motorola-88000-bcs-coff.md) | [1](ablation/core/coff_m88k_parser.py)&nbsp;[2](ablation/core/guardian_pak_extractor.py) | Parses M88K COFF and Guardian PAK archives. |
+| [**Texas Instruments**](docs/reference-modules/texas-instruments-firmware.md) | [1](ablation/analyzers/ti_coff_loader.py)&nbsp;[2](ablation/analyzers/ti_nnc_scanner.py) | Parses TI COFF2 symbols and embedded models. |
+| [**WDB Stream Reader**](docs/reference-modules/xilinx-wdb.md) | [1](ablation/analyzers/xilinx_wdb.py) | Streams Xilinx waveform events with bounded memory. |
 
 </details>
 
@@ -169,19 +169,19 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**Android Cross-Layer**](docs/reference-modules/android-cross-layer.md) | [1](ablation/core/android_package.py)&nbsp;[2](ablation/analyzers/dex_decompiler.py)&nbsp;[3](ablation/analyzers/elf_disassembler.py)&nbsp;[4](ablation/analyzers/apk_jni_mapper.py)&nbsp;[5](ablation/analyzers/cross_layer_taint.py) | Provides end-to-end Android analysis: APK/XAPK and DEX decoding, JNI binding... |
-| [**C++ Call Recovery**](docs/reference-modules/cpp-vtable-reconstructor.md) | [1](modules/cpp_vtable_reconstructor.py)&nbsp;[2](ablation/analyzers/vtable_resolver.py) | Reconstructs C++ class hierarchies and resolves ARM64 and x86-64 virtual... |
-| [**Erlang & MicroPython**](docs/reference-modules/beam.md) | [1](ablation/analyzers/beam_context.py)&nbsp;[2](modules/mpy_lifter.py) | Lifts BEAM and MicroPython bytecode to pseudocode and flags dynamic execution... |
-| [**Go Binaries**](docs/workflows/go-binaries.md) | [1](ablation/analyzers/go_pclntab.py)&nbsp;[2](modules/go_binary_re.py) | Recovers Go function names from pclntab metadata and reconstructs command... |
-| [**HarmonyOS Apps**](docs/reference-modules/harmonyos.md) | [1](ablation/analyzers/abc_parser.py)&nbsp;[2](ablation/analyzers/abc_disasm.py)&nbsp;[3](ablation/analyzers/abc_decompiler.py) | Reconstructs ArkTS modules as JavaScript-like pseudocode and surfaces... |
-| [**IBM AIX**](docs/reference-modules/aix-xcoff32-64-analysis.md) | [1](ablation/core/xcoff_parser.py)&nbsp;[2](ablation/core/bff_extractor.py) | Parses XCOFF32/64 sections and symbols and extracts BFF package archives... |
-| [**IBM z/OS**](docs/reference-modules/ibm-zos.md) | [1](ablation/ibm_zos/netdata.py)&nbsp;[2](ablation/ibm_zos/loadmodule.py)&nbsp;[3](ablation/ibm_zos/relocation.py)&nbsp;[4](ablation/ibm_zos/callgraph.py)&nbsp;[5](ablation/ibm_zos/decompiler.py)&nbsp;[6](ablation/ibm_zos/sid.py)&nbsp;[7](ablation/ibm_zos/compare.py) | Decode IBM z/OS binaries, resolve call graphs, emit S/390 pseudo-C, and... |
-| [**Java & Spring**](docs/reference-modules/java-class-jar-parsing.md) | [1](modules/java_re.py)&nbsp;[2](modules/java_decompiler.py) | Parses Java artifacts and detects deserialization gadgets, XXE, JNDI... |
-| [**LoongArch & nanoMIPS**](docs/reference-modules/loongarch64-2.md) | [1](ablation/analyzers/loongarch_decoder.py)&nbsp;[2](ablation/analyzers/nanomips_decoder.py)&nbsp;[3](ablation/analyzers/sink_arg_classifier_loongarch64.py) | Provides architecture-specific decoding, lifting, taint analysis, and sink... |
-| [**PowerPC Call Recovery**](docs/reference-modules/ppc32-got2-resolver.md) | [1](modules/ppc32_got2_resolver.py)&nbsp;[2](ablation/analyzers/ppc32_plt_tracer.py)&nbsp;[3](ablation/analyzers/ppc64_vmx_density.py) | Resolves PowerPC indirect calls and ELFv1 trampolines and uses AltiVec... |
-| [**Python, Perl & Electron**](docs/reference-modules/python-pyc-scanning.md) | [1](ablation/analyzers/pyc_bytecode_scanner.py)&nbsp;[2](ablation/analyzers/perl_taint_scanner.py)&nbsp;[3](ablation/analyzers/electron_security_scanner.py) | Audits Python bytecode, traces Perl input into backticks, and detects... |
-| [**VPI Co-Sim Bridge**](docs/reference-modules/mixed-hdl-vpi-bridge.md) | [1](/media/cowboy/research/CERN/analysis/mixed-hdl/ablation_vpi_bridge.c)&nbsp;[2](/media/cowboy/research/CERN/analysis/mixed-hdl/run_mixed_bridge.py) | Link VHDL and Verilog simulators. |
-| [**Windows Binaries**](docs/reference-modules/windows-pe.md) | [1](sweeps/pe_sweep.py)&nbsp;[2](ablation/analyzers/cfg_bypass_detector.py)&nbsp;[3](ablation/analyzers/seh_chain_analyzer.py)&nbsp;[4](ablation/analyzers/com_attack_surface_mapper.py)&nbsp;[5](ablation/analyzers/etw_provider_extractor.py)&nbsp;[6](ablation/analyzers/rpc_server_analyzer.py) | Detects Windows CFG bypasses, exposed SEH handlers, and COM hijacks while... |
+| [**Android Cross-Layer**](docs/reference-modules/android-cross-layer.md) | [1](ablation/core/android_package.py)&nbsp;[2](ablation/analyzers/dex_decompiler.py)&nbsp;[3](ablation/analyzers/elf_disassembler.py)&nbsp;[4](ablation/analyzers/apk_jni_mapper.py)&nbsp;[5](ablation/analyzers/cross_layer_taint.py) | Analyzes Android packages, JNI bindings, and native sinks. |
+| [**C++ Call Recovery**](docs/reference-modules/cpp-vtable-reconstructor.md) | [1](modules/cpp_vtable_reconstructor.py)&nbsp;[2](ablation/analyzers/vtable_resolver.py) | Reconstructs C++ hierarchies and virtual call graphs. |
+| [**Erlang & MicroPython**](docs/reference-modules/beam.md) | [1](ablation/analyzers/beam_context.py)&nbsp;[2](modules/mpy_lifter.py) | Lifts BEAM bytecode and flags dynamic operations. |
+| [**Go Binaries**](docs/workflows/go-binaries.md) | [1](ablation/analyzers/go_pclntab.py)&nbsp;[2](modules/go_binary_re.py) | Recovers Go names, handlers, and message framing. |
+| [**HarmonyOS Apps**](docs/reference-modules/harmonyos.md) | [1](ablation/analyzers/abc_parser.py)&nbsp;[2](ablation/analyzers/abc_disasm.py)&nbsp;[3](ablation/analyzers/abc_decompiler.py) | Reconstructs ArkTS pseudocode and embedded endpoints. |
+| [**IBM AIX**](docs/reference-modules/aix-xcoff32-64-analysis.md) | [1](ablation/core/xcoff_parser.py)&nbsp;[2](ablation/core/bff_extractor.py) | Parses XCOFF sections and BFF archives. |
+| [**IBM z/OS**](docs/reference-modules/ibm-zos.md) | [1](ablation/ibm_zos/netdata.py)&nbsp;[2](ablation/ibm_zos/loadmodule.py)&nbsp;[3](ablation/ibm_zos/relocation.py)&nbsp;[4](ablation/ibm_zos/callgraph.py)&nbsp;[5](ablation/ibm_zos/decompiler.py)&nbsp;[6](ablation/ibm_zos/sid.py)&nbsp;[7](ablation/ibm_zos/compare.py) | Decode z/OS binaries and compare builds. |
+| [**Java & Spring**](docs/reference-modules/java-class-jar-parsing.md) | [1](modules/java_re.py)&nbsp;[2](modules/java_decompiler.py) | Parses Java artifacts and detects deserialization gadgets. |
+| [**LoongArch & nanoMIPS**](docs/reference-modules/loongarch64-2.md) | [1](ablation/analyzers/loongarch_decoder.py)&nbsp;[2](ablation/analyzers/nanomips_decoder.py)&nbsp;[3](ablation/analyzers/sink_arg_classifier_loongarch64.py) | Decodes and analyzes LoongArch and nanoMIPS. |
+| [**PowerPC Call Recovery**](docs/reference-modules/ppc32-got2-resolver.md) | [1](modules/ppc32_got2_resolver.py)&nbsp;[2](ablation/analyzers/ppc32_plt_tracer.py)&nbsp;[3](ablation/analyzers/ppc64_vmx_density.py) | Resolves PowerPC indirect calls and trampolines. |
+| [**Python, Perl & Electron**](docs/reference-modules/python-pyc-scanning.md) | [1](ablation/analyzers/pyc_bytecode_scanner.py)&nbsp;[2](ablation/analyzers/perl_taint_scanner.py)&nbsp;[3](ablation/analyzers/electron_security_scanner.py) | Audits Python, Perl, and Electron code. |
+| [**VPI Co-Sim Bridge**](docs/reference-modules/mixed-hdl-vpi-bridge.md) | [1](/media/cowboy/research/CERN/analysis/mixed-hdl/ablation_vpi_bridge.c)&nbsp;[2](/media/cowboy/research/CERN/analysis/mixed-hdl/run_mixed_bridge.py) | Links VHDL and Verilog simulators. |
+| [**Windows Binaries**](docs/reference-modules/windows-pe.md) | [1](sweeps/pe_sweep.py)&nbsp;[2](ablation/analyzers/cfg_bypass_detector.py)&nbsp;[3](ablation/analyzers/seh_chain_analyzer.py)&nbsp;[4](ablation/analyzers/com_attack_surface_mapper.py)&nbsp;[5](ablation/analyzers/etw_provider_extractor.py)&nbsp;[6](ablation/analyzers/rpc_server_analyzer.py) | Detects Windows CFG bypasses and COM hijacks. |
 
 </details>
 
@@ -190,13 +190,13 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**AI & Agent Security**](docs/reference-modules/inference-endpoint-enumeration.md) | [1](modules/llm_enum.py)&nbsp;[2](ablation/analyzers/mcp_tool_taint_scanner.py) | Audits AI endpoints, MCP tool flows, RAG stores, and agent-to-agent trust... |
-| [**API Security Testing**](docs/reference-modules/unknown-http-api-mapping.md) | [1](modules/api_re.py) | Discovers undocumented APIs and tests major web transports for authorization,... |
-| [**CAN Signal Decoding**](docs/reference-modules/calibration-parsers.md) | [1](modules/can_dbc_parser.py) | Maps CAN frames to named signals using DBC layouts and scaling metadata. |
-| [**Nginx Security Testing**](docs/reference-modules/nginx-fingerprinting-and-exposure.md) | [1](modules/nginx_enum.py) | Fingerprints Nginx and probes for exposed status endpoints, alias traversal,... |
+| [**AI & Agent Security**](docs/reference-modules/inference-endpoint-enumeration.md) | [1](modules/llm_enum.py)&nbsp;[2](ablation/analyzers/mcp_tool_taint_scanner.py) | Audits AI endpoints and trust chains. |
+| [**API Security Testing**](docs/reference-modules/unknown-http-api-mapping.md) | [1](modules/api_re.py) | Discovers APIs and tests transport weaknesses. |
+| [**CAN Signal Decoding**](docs/reference-modules/calibration-parsers.md) | [1](modules/can_dbc_parser.py) | Maps CAN frames using DBC metadata. |
+| [**Nginx Security Testing**](docs/reference-modules/nginx-fingerprinting-and-exposure.md) | [1](modules/nginx_enum.py) | Fingerprints Nginx and probes exposed endpoints. |
 | [**Protocol State Machines**](docs/reference-modules/proto-fsm.md) | [1](modules/proto_fsm.py) | Reconstructs ARM64 protocol state machines. |
-| [**SPECS RTL Verifier**](docs/reference-modules/specs-protocol.md) | [1](/media/cowboy/research/CERN/analysis/specs-protocol/run_rtl_boundaries.py)&nbsp;[2](/media/cowboy/research/CERN/analysis/specs-protocol/rtl_boundary_tb.sv) | Verify all 256 SPECS read counts against original RTL. |
-| [**TLS Security Analysis**](docs/reference-modules/tls-certificate-and-protocol-probing.md) | [1](ablation/core/tls_analyzer.py)&nbsp;[2](modules/tls_enum.py) | Audits TLS certificates, key exchanges, transport protections, and... |
+| [**SPECS RTL Verifier**](docs/reference-modules/specs-protocol.md) | [1](/media/cowboy/research/CERN/analysis/specs-protocol/run_rtl_boundaries.py)&nbsp;[2](/media/cowboy/research/CERN/analysis/specs-protocol/rtl_boundary_tb.sv) | Verifies all 256 SPECS read counts. |
+| [**TLS Security Analysis**](docs/reference-modules/tls-certificate-and-protocol-probing.md) | [1](ablation/core/tls_analyzer.py)&nbsp;[2](modules/tls_enum.py) | Audits TLS certificates and downgrade paths. |
 
 </details>
 
@@ -205,12 +205,12 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**Cisco Infrastructure Assessment**](docs/reference-modules/ios-ios-xe-appliance-enumeration.md) | [1](modules/ios_enum.py)&nbsp;[2](modules/nxos_enum.py) | Audits Cisco appliance and data-center configurations, recovers weak... |
-| [**Container & Kubernetes Security**](docs/reference-modules/docker-inventory-and-posture.md) | [1](modules/docker_enum.py)&nbsp;[2](modules/k8s_enum.py) | Assesses container privilege, isolation, secret exposure, RBAC, and... |
-| [**Forensics & Malware Analysis**](docs/reference-modules/windows-artifact-discovery.md) | [1](modules/forensics_enum.py)&nbsp;[2](modules/physmem_elf_vfs.py) | Collects Windows and Linux forensic artifacts, detects timestomping and... |
-| [**Host & Privilege Assessment**](docs/reference-modules/host-platform-inventory.md) | [1](modules/process_enum.py)&nbsp;[2](modules/privesc_enum.py) | Inventories hosts, detects process injection, traces syscalls, and identifies... |
-| [**Network & Industrial Protocols**](docs/reference-modules/local-network-inventory.md) | [1](modules/network_analyze.py)&nbsp;[2](modules/net_sniffer.py) | Discovers services and ICS/OT protocols, extracts exposed PCAP credentials,... |
-| [**VoIP Security Assessment**](docs/reference-modules/sip-service-and-extension-discovery.md) | [1](modules/sip_enum.py) | Enumerates VoIP services and gateways and detects unencrypted media, weak SIP... |
+| [**Cisco Infrastructure Assessment**](docs/reference-modules/ios-ios-xe-appliance-enumeration.md) | [1](modules/ios_enum.py)&nbsp;[2](modules/nxos_enum.py) | Audits Cisco configurations and trust paths. |
+| [**Container & Kubernetes Security**](docs/reference-modules/docker-inventory-and-posture.md) | [1](modules/docker_enum.py)&nbsp;[2](modules/k8s_enum.py) | Assesses container privilege and metadata risks. |
+| [**Forensics & Malware Analysis**](docs/reference-modules/windows-artifact-discovery.md) | [1](modules/forensics_enum.py)&nbsp;[2](modules/physmem_elf_vfs.py) | Collects forensic artifacts and recovers memory binaries. |
+| [**Host & Privilege Assessment**](docs/reference-modules/host-platform-inventory.md) | [1](modules/process_enum.py)&nbsp;[2](modules/privesc_enum.py) | Inventories hosts and privilege-escalation misconfigurations. |
+| [**Network & Industrial Protocols**](docs/reference-modules/local-network-inventory.md) | [1](modules/network_analyze.py)&nbsp;[2](modules/net_sniffer.py) | Discovers protocols, credentials, and lateral movement. |
+| [**VoIP Security Assessment**](docs/reference-modules/sip-service-and-extension-discovery.md) | [1](modules/sip_enum.py) | Enumerates VoIP services and security weaknesses. |
 
 </details>
 
@@ -219,14 +219,14 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**Binary Diffing & Patch Tracking**](docs/workflows/cross-version.md) | [1](ablation/analyzers/version_delta.py) | Matches functions across binary versions and reports instruction, callee, and... |
-| [**Binary Ninja Plugin**](docs/reference-modules/binary-ninja-plugin.md) | [1](ablation/integrations/binja_plugin.py) | Annotates Binary Ninja with cached function names, taint findings, and... |
-| [**Finding Export & Reporting**](docs/reference-modules/yara-json-sarif-export.md) | [1](ablation/core/yara_generator.py)&nbsp;[2](ablation/export/json_export.py)&nbsp;[3](ablation/export/sarif.py) | Exports findings as replayable YARA rules, SARIF 2.1.0, and JSON for analysis... |
-| [**Module Security Quality Gate**](docs/reference-modules/forge.md) | [1](ablation/analyzers/forge.py) | Blocks commits with critical or high findings from cached ten-section... |
-| [**Sequence-Based Function Matching**](docs/reference-modules/dtw-matrix-profile-similarity.md) | [1](ablation/analyzers/dtw_matcher.py)&nbsp;[2](ablation/analyzers/matrix_profile_diff.py) | Matches homologous functions with DTW and localizes patched instruction... |
-| [**Software Composition & Supply Chain**](docs/reference-modules/dependency-and-supply-chain-tooling.md) | [1](modules/sbom_extractor.py)&nbsp;[2](modules/third_party_library_identifier.py) | Extracts library versions and provenance into SBOM-ready component records... |
-| [**Structural Function Matching**](docs/reference-modules/structural.md) | [1](modules/structural_sim.py) | Matches functions across architectures and optimized builds by comparing... |
-| [**Threat Classification**](docs/reference-modules/attandck-labeling.md) | [1](ablation/core/attck_tagger.py) | Labels findings with MITRE ATT&CK technique and tactic IDs for export and... |
+| [**Binary Diffing & Patch Tracking**](docs/workflows/cross-version.md) | [1](ablation/analyzers/version_delta.py) | Matches functions and reports patch changes. |
+| [**Binary Ninja Plugin**](docs/reference-modules/binary-ninja-plugin.md) | [1](ablation/integrations/binja_plugin.py) | Annotates Binary Ninja with analysis findings. |
+| [**Finding Export & Reporting**](docs/reference-modules/yara-json-sarif-export.md) | [1](ablation/core/yara_generator.py)&nbsp;[2](ablation/export/json_export.py)&nbsp;[3](ablation/export/sarif.py) | Exports findings as YARA, SARIF, and JSON. |
+| [**Module Security Quality Gate**](docs/reference-modules/forge.md) | [1](ablation/analyzers/forge.py) | Blocks commits with high-risk audit findings. |
+| [**Sequence-Based Function Matching**](docs/reference-modules/dtw-matrix-profile-similarity.md) | [1](ablation/analyzers/dtw_matcher.py)&nbsp;[2](ablation/analyzers/matrix_profile_diff.py) | Matches functions and localizes patched windows. |
+| [**Software Composition & Supply Chain**](docs/reference-modules/dependency-and-supply-chain-tooling.md) | [1](modules/sbom_extractor.py)&nbsp;[2](modules/third_party_library_identifier.py) | Extracts library provenance into SBOM records. |
+| [**Structural Function Matching**](docs/reference-modules/structural.md) | [1](modules/structural_sim.py) | Matches functions using control-flow topology. |
+| [**Threat Classification**](docs/reference-modules/attandck-labeling.md) | [1](ablation/core/attck_tagger.py) | Labels findings with MITRE ATT&CK IDs. |
 
 </details>
 
@@ -235,7 +235,7 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 
 | Capability | Description |
 |:---|:---|
-| [**Index**](docs/prompts/analysis-rubric.md) | A structured collection of named, versionable LLM "behavior specifications" that you can apply to different tasks to get consistent, high-quality analyses on demand. |
+| [**Index**](docs/prompts/analysis-rubric.md) | Applies versioned LLM behavior specifications to analysis tasks. |
 
 </details>
 
@@ -280,7 +280,7 @@ Ablation couldn't exist without these creative individuals.
 
 Though no code was written by these authors, doctors, and engineers, their work has direct influence on the production of code, and the aesthetics that makes Ablation what it is.
 
-Thank you. 
+Thank you.
 
 -Nick
 
