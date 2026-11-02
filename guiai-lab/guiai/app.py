@@ -13,6 +13,7 @@ from metrix.desktop import TerminalPanel
 from .environment import configure_environment
 from .events import STATUSES, Session
 from .layout import LAYOUTS, load_layout, save_layout
+from .safety import agent_request, evaluate_safety, safety_colors
 
 
 UBUNTU = {
@@ -65,7 +66,10 @@ class InvestigationApp:
         self.brand_image = tk.PhotoImage(master=self.root, file=str(icon_root / "ablation-guiai-logo.png"))
         self.brand_header_image = tk.PhotoImage(master=self.root, file=str(icon_root / "ablation-guiai-logo-32.png"))
         self.root.iconphoto(True, self.brand_image)
-        ttk.Label(header, image=self.brand_header_image, style="Header.TLabel").pack(side="left")
+        if os.name == "nt":
+            self.root.iconbitmap(default=str(icon_root / "ablation-guiai.ico"))
+        self.brand_button = ttk.Button(header, image=self.brand_header_image, command=self.toggle_settings)
+        self.brand_button.pack(side="left")
         ttk.Label(header, textvariable=self.agent_variable, style="Header.TLabel").pack(side="right")
         ttk.Button(header, text="Save project", command=self.save_project).pack(side="right", padx=6)
         ttk.Button(header, text="Preferences", command=self.show_preferences).pack(side="right")
@@ -73,11 +77,27 @@ class InvestigationApp:
             header, text="GUIAI Lab Workbench",
             style="HeaderTitle.TLabel", font=("TkDefaultFont", 16, "bold"),
         ).place(relx=0.5, anchor="center")
-        ttk.Label(
+        self.settings_bar = ttk.Frame(header, style="Header.TFrame")
+        ttk.Button(self.settings_bar, text="OS Optimization/Debugging", command=self.run_safety_check).pack(side="left")
+        self.safety_panel = ttk.Frame(self.root, padding=(8, 4, 8, 0))
+        ttk.Label(self.safety_panel, text="Read-only audit: no changes until Allow Permission").pack(fill="x")
+        self.safety_summary = tk.StringVar()
+        self.safety_summary_label = ttk.Label(self.safety_panel, textvariable=self.safety_summary, wraplength=1400)
+        self.safety_summary_label.pack(fill="x")
+        self.safety_details = tk.Text(self.safety_panel, height=8, wrap="word", state="disabled")
+        self.safety_details.pack(fill="x", pady=4)
+        permissions = ttk.Frame(self.safety_panel)
+        permissions.pack(fill="x")
+        self.allow_safety_button = ttk.Button(permissions, text="Allow Permission", command=self.allow_safety)
+        self.allow_safety_button.pack(side="left")
+        ttk.Button(permissions, text="Deny Permission", command=self.clear_safety).pack(side="left", padx=6)
+        self.safety_report = None
+        self.target_label = ttk.Label(
             self.root,
             text=f"Target: {session.target}  ·  {session.target_kind}  ·  Session: {session.root}",
             wraplength=1400, justify="left", padding=(8, 4, 8, 0),
-        ).pack(fill="x")
+        )
+        self.target_label.pack(fill="x")
         if self.layout_error:
             ttk.Label(
                 self.root, text=f"Preferences could not be loaded: {self.layout_error}",
@@ -102,6 +122,76 @@ class InvestigationApp:
             ttk.Button(bottom, text="Rescan directory", command=self.rescan_directory).pack(side="right", padx=(0, 6))
         self.reload()
         self.after_refresh()
+
+    def toggle_settings(self):
+        if self.settings_bar.winfo_ismapped():
+            self.clear_safety()
+        else:
+            self.settings_bar.pack(side="left")
+
+    def clear_safety(self):
+        self.safety_panel.pack_forget()
+        self.settings_bar.pack_forget()
+
+    def safety_palette(self):
+        red, green, blue = self.safety_details.winfo_rgb(self.safety_details.cget("background"))
+        luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 65535
+        return safety_colors(luminance > 0.55)
+
+    def present_safety_report(self, report, error=None):
+        colors = self.safety_palette()
+        summary = error or report["summary"]
+        ready = False if error else report["ready"]
+        self.safety_summary.set(summary)
+        self.safety_summary_label.configure(foreground=colors["pass"] if ready else colors["review"])
+        self.safety_details.configure(state="normal")
+        self.safety_details.delete("1.0", "end")
+        for status in ("pass", "review"):
+            self.safety_details.tag_configure(status, foreground=colors[status])
+            self.safety_details.tag_configure(f"{status}-subject", foreground=colors[status], font=("TkDefaultFont", 10, "bold"))
+        self.safety_details.tag_configure("section", foreground=colors["accent"], font=("TkDefaultFont", 10, "bold"))
+        self.safety_details.tag_configure("command", foreground=colors["accent"], font=("TkFixedFont", 10))
+        if error:
+            self.safety_details.insert("end", error, "review")
+        else:
+            for check in report["checks"]:
+                status = "pass" if check["ok"] else "review"
+                self.safety_details.insert("end", f"[{status.upper()}] ", status)
+                self.safety_details.insert("end", check["name"], f"{status}-subject")
+                self.safety_details.insert("end", f": {check['detail']}\n", status)
+            if not report["checks"] and report["details"]:
+                self.safety_details.insert("end", report["details"])
+            if report["remediations"]:
+                self.safety_details.insert("end", "\nProposed actions (no action has been taken):\n", "section")
+                for item in report["remediations"]:
+                    self.safety_details.insert("end", f"- {item['action']}\n", "review")
+                    if item["command"]:
+                        self.safety_details.insert("end", f"  {item['command']}\n", "command")
+        self.safety_details.configure(state="disabled")
+
+    def run_safety_check(self):
+        try:
+            self.safety_report = evaluate_safety(self.command)
+        except Exception as error:
+            self.safety_report = None
+            self.present_safety_report(None, f"Safety audit could not complete: {error}")
+            self.allow_safety_button.state(["disabled"])
+        else:
+            self.present_safety_report(self.safety_report)
+            agent_ready = bool(self.command and self.terminal.fd is not None and not self.terminal.exited and not self.terminal.closed)
+            self.allow_safety_button.state(["!disabled"] if agent_ready else ["disabled"])
+        self.safety_panel.pack(fill="x", before=self.target_label)
+
+    def allow_safety(self):
+        if self.safety_report is None:
+            return
+        try:
+            self.terminal.submit_agent_request(agent_request(self.safety_report))
+        except ValueError as error:
+            self.safety_summary.set(str(error))
+            return
+        self.agent_variable.set("Safety Check + OS Compliance request sent; review the terminal output")
+        self.clear_safety()
 
     def save_project(self):
         try:

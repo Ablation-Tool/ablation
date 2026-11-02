@@ -185,8 +185,12 @@ with tempfile.TemporaryDirectory(prefix="guiai-application-run-") as temporary:
             assert window.brand_mark.get_pixbuf().get_has_alpha(), "header icon must preserve transparency"
             assert window.brand_mark.get_pixbuf().get_width() == 32
             assert window.brand_mark.get_pixbuf().get_height() == 32
-            assert window.brand_mark.get_parent() is window.header_bar
-            assert window.header_bar.child_get_property(window.brand_mark, "pack-type") == Gtk.PackType.START, "brand mark must stay at the far left"
+            assert window.get_icon().get_has_alpha(), "program icon must preserve transparency"
+            assert window.get_icon().get_width() == 512
+            assert window.get_icon().get_height() == 512
+            assert window.brand_button.get_image() is window.brand_mark
+            assert window.brand_button.get_parent() is window.header_bar
+            assert window.header_bar.child_get_property(window.brand_button, "pack-type") == Gtk.PackType.START, "brand button must stay at the far left"
             workspace = window.current_workspace()
             if not second_workspace:
                 assert workspace is not None and window.notebook.get_n_pages() == 1
@@ -211,6 +215,42 @@ with tempfile.TemporaryDirectory(prefix="guiai-application-run-") as temporary:
                 assert window.preferences_dialog is not None, "menu did not open native preferences"
                 window.preferences_dialog.destroy()
                 assert window.preferences_dialog is None
+                from unittest import mock
+                report = {
+                    "summary": "audit", "details": "read-only details", "remediations": [], "ready": True,
+                    "checks": [
+                        {"name": "Example pass", "ok": True, "required": True, "detail": "available"},
+                        {"name": "Example review", "ok": False, "required": False, "detail": "optional"},
+                    ],
+                }
+                assert window.brand_button.get_tooltip_text() == "Settings"
+                assert window.settings_bar.get_parent() is window.header_bar
+                assert window.header_bar.child_get_property(window.settings_bar, "pack-type") == Gtk.PackType.START
+                assert not window.settings_bar.get_visible()
+                window.brand_button.emit("clicked")
+                assert window.settings_bar.get_visible()
+                assert len(window.settings_bar.get_children()) == 1
+                assert all(child.get_visible() for child in window.settings_bar.get_children())
+                with mock.patch.object(gtk_app, "evaluate_safety", return_value=report):
+                    window.run_safety_check(None)
+                assert window.safety_panel.get_visible()
+                assert window.safety_details.get_buffer().get_tag_table().lookup("pass-subject") is not None
+                assert window.safety_details.get_buffer().get_tag_table().lookup("review-subject") is not None
+                assert all(child.get_visible() for child in window.safety_panel.get_children())
+                assert window.allow_safety_button.get_sensitive()
+                with mock.patch.object(workspace, "submit_agent_request") as submit:
+                    window.allow_safety_button.emit("clicked")
+                    submit.assert_called_once()
+                    request = submit.call_args.args[0]
+                    assert "\r" not in request and "\n" not in request
+                assert not window.settings_bar.get_visible() and not window.safety_panel.get_visible()
+                window.brand_button.emit("clicked")
+                with mock.patch.object(gtk_app, "evaluate_safety", return_value=report):
+                    window.run_safety_check(None)
+                with mock.patch.object(workspace, "submit_agent_request") as submit:
+                    window.deny_safety_button.emit("clicked")
+                    submit.assert_not_called()
+                assert not window.settings_bar.get_visible() and not window.safety_panel.get_visible()
                 window.new_button.emit("clicked")
                 second = window.current_workspace()
                 assert second is not workspace, "+ did not create a paired investigation"
@@ -581,6 +621,21 @@ with tempfile.TemporaryDirectory(prefix="guiai-tab-churn-") as temporary:
         button_foreground = rgba_values(button.get_style_context().get_color(Gtk.StateFlags.NORMAL))
         self.assertIn(button_foreground, opaque_colors(image.get_pixbuf()))
         button.destroy()
+
+    def test_vte_drop_inserts_path_without_enter(self):
+        from metrix.drop import dropped_payload
+
+        directory = self.corpus / "dropped folder with spaces"
+        directory.mkdir()
+        self.window.command = [os.sys.executable, "-u", "-c", GTK_FIXTURE]
+        self.window.agent_pid = 123456
+        with mock.patch.object(self.window.terminal, "feed_child") as feed:
+            self.assertEqual(self.window.insert_dropped_paths([directory]), 1)
+        feed.assert_called_once_with(dropped_payload([directory]))
+        payload = feed.call_args.args[0]
+        self.assertTrue(payload.endswith(b" "))
+        self.assertNotIn(b"\r", payload)
+        self.assertNotIn(b"\n", payload)
 
     def test_tree_expander_icons_and_vte_discovery(self):
         self.assertFalse(self.window.details_toggle.get_active())

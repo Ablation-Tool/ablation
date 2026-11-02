@@ -74,22 +74,45 @@ class UniversalInstallerCase(unittest.TestCase):
         download.assert_not_called()
         self.assertEqual(marker.read_text(encoding="utf-8"), "keep")
 
+    def complete_install(self, source, installer, skip_tests, no_desktop_shortcut, final_destination):
+        self.assertEqual(installer, "install_linux.sh")
+        self.assertFalse(skip_tests)
+        self.assertEqual(source, final_destination)
+        self.assertEqual((source / installer).read_text(), "offline package")
+        executable = source / ".venv" / "bin" / "guiai"
+        executable.parent.mkdir(parents=True)
+        executable.write_text("installed", encoding="utf-8")
+
     def test_complete_verified_offline_install(self):
         self.package()
         destination = self.root / "completed install"
-        def install(source, installer, skip_tests):
-            self.assertEqual(installer, "install_linux.sh")
-            self.assertFalse(skip_tests)
-            self.assertEqual((source / installer).read_text(), "offline package")
-            executable = source / ".venv" / "bin" / "guiai"
-            executable.parent.mkdir(parents=True)
-            executable.write_text("installed", encoding="utf-8")
-        with mock.patch.object(forall, "install_package", side_effect=install):
+        with mock.patch.object(forall, "install_package", side_effect=self.complete_install) as install, mock.patch.object(
+            forall.subprocess, "run",
+        ) as run:
             forall.main(["--directory", str(destination), "--base-url", self.root.as_uri()])
+        install.assert_called_once_with(destination, "install_linux.sh", False, False, destination)
+        run.assert_called_once_with([str(destination / ".venv" / "bin" / "guiai"), "launch", "--help"], stdout=forall.subprocess.DEVNULL, check=True)
         self.assertEqual((destination / ".venv" / "bin" / "guiai").read_text(), "installed")
         metadata = json.loads((destination / ".guiai-install.json").read_text())
         self.assertEqual(metadata["package"], "GUIAI-Linux.zip")
         self.assertEqual(metadata["sha256"], hashlib.sha256((self.root / "GUIAI-Linux.zip").read_bytes()).hexdigest())
+
+    def test_no_desktop_shortcut_is_forwarded(self):
+        self.package()
+        destination = self.root / "without shortcut"
+        with mock.patch.object(forall, "install_package", side_effect=self.complete_install) as install, mock.patch.object(
+            forall.subprocess, "run",
+        ):
+            forall.main(["--directory", str(destination), "--base-url", self.root.as_uri(), "--no-desktop-shortcut"])
+        install.assert_called_once_with(destination, "install_linux.sh", False, True, destination)
+
+    def test_failed_install_retains_partial_destination_for_diagnosis(self):
+        self.package()
+        destination = self.root / "partial install"
+        with mock.patch.object(forall, "install_package", side_effect=forall.subprocess.CalledProcessError(1, "installer")):
+            with self.assertRaisesRegex(RuntimeError, "partial installation is retained"):
+                forall.main(["--directory", str(destination), "--base-url", self.root.as_uri()])
+        self.assertEqual((destination / "install_linux.sh").read_text(), "offline package")
 
     def test_failed_verification_does_not_run_installer(self):
         archive = self.package()

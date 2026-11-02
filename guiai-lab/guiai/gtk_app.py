@@ -17,11 +17,13 @@ gi.require_version("Vte", "2.91")
 from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango, Vte
 
 import metrix
+from metrix.drop import dropped_payload
 from .environment import agent_environment, configure_environment
 from .events import Session
 from .map_view import InvestigationMap
 from .layout import LAYOUTS
 from .rings_view import InvestigationRings
+from .safety import agent_request, evaluate_safety, safety_colors
 from .preferences import (
     SCHEME_LABELS, SCHEMES,
     WorkbenchPreferences, color_hex, parse_color,
@@ -448,21 +450,51 @@ class AblationWindow(Gtk.Window):
         header = Gtk.HeaderBar(show_close_button=True)
         header.set_custom_title(Gtk.Box())
         self.header_bar = header
-        brand_pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-            str(Path(__file__).resolve().parent / "icons" / "ablation-guiai-logo.png"),
-            32, 32, True,
-        )
-        self.set_icon(brand_pixbuf)
+        icon_path = Path(__file__).resolve().parent / "icons" / "ablation-guiai-logo.png"
+        icon_pixbuf = GdkPixbuf.Pixbuf.new_from_file(str(icon_path))
+        Gtk.Window.set_default_icon(icon_pixbuf)
+        self.set_icon(icon_pixbuf)
+        brand_pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(str(icon_path), 32, 32, True)
         self.brand_mark = Gtk.Image.new_from_pixbuf(brand_pixbuf)
-        self.brand_mark.set_tooltip_text("ABL∀TION")
-        self.brand_mark.get_accessible().set_name("Ablation")
-        self.brand_mark.set_margin_start(12)
+        self.brand_mark.set_margin_start(8)
         self.brand_mark.set_margin_end(4)
-        header.pack_start(self.brand_mark)
+        self.brand_button = Gtk.Button(relief=Gtk.ReliefStyle.NONE)
+        self.brand_button.set_image(self.brand_mark)
+        self.brand_button.set_tooltip_text("Settings")
+        self.brand_button.get_accessible().set_name("Settings")
+        self.brand_button.connect("clicked", self.toggle_settings)
+        header.pack_start(self.brand_button)
         self.set_titlebar(header)
         self.set_title(f"Ablation · {Path(session.target).name or session.target}")
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, border_width=10)
         self.add(outer)
+        self.settings_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self.settings_bar.set_no_show_all(True)
+        safety_button = Gtk.Button(label="OS Optimization/Debugging")
+        safety_button.connect("clicked", self.run_safety_check)
+        self.settings_bar.pack_start(safety_button, False, False, 0)
+        header.pack_start(self.settings_bar)
+        self.safety_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.safety_panel.set_no_show_all(True)
+        self.safety_panel.pack_start(Gtk.Label(label="Read-only audit: no changes until Allow Permission", xalign=0), False, False, 0)
+        self.safety_summary = Gtk.Label(xalign=0)
+        self.safety_summary.set_line_wrap(True)
+        self.safety_panel.pack_start(self.safety_summary, False, False, 0)
+        safety_scroller = Gtk.ScrolledWindow()
+        safety_scroller.set_size_request(-1, 140)
+        self.safety_details = Gtk.TextView(editable=False, cursor_visible=False, wrap_mode=Gtk.WrapMode.WORD_CHAR)
+        safety_scroller.add(self.safety_details)
+        self.safety_panel.pack_start(safety_scroller, False, False, 0)
+        permission_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self.allow_safety_button = Gtk.Button(label="Allow Permission")
+        self.allow_safety_button.connect("clicked", self.allow_safety)
+        self.deny_safety_button = Gtk.Button(label="Deny Permission")
+        self.deny_safety_button.connect("clicked", lambda _button: self.clear_safety())
+        permission_box.pack_start(self.allow_safety_button, False, False, 0)
+        permission_box.pack_start(self.deny_safety_button, False, False, 0)
+        self.safety_panel.pack_start(permission_box, False, False, 0)
+        outer.pack_start(self.safety_panel, False, False, 0)
+        self.safety_report = None
         self.preferences_error = Gtk.Label(xalign=0)
         self.preferences_error.set_line_wrap(True)
         if self.preferences.error:
@@ -506,6 +538,110 @@ class AblationWindow(Gtk.Window):
         self.register_actions()
         self.restore_investigations()
         self.connect("delete-event", self.on_delete)
+
+    def toggle_settings(self, _button):
+        if self.settings_bar.get_visible():
+            self.clear_safety()
+        else:
+            self.settings_bar.set_no_show_all(False)
+            self.settings_bar.show_all()
+
+    def clear_safety(self):
+        self.safety_panel.hide()
+        self.settings_bar.hide()
+
+    def safety_palette(self):
+        style = self.safety_details.get_style_context()
+        found, background = style.lookup_color("theme_base_color")
+        if not found:
+            background = style.get_background_color(Gtk.StateFlags.NORMAL)
+        luminance = 0.2126 * background.red + 0.7152 * background.green + 0.0722 * background.blue
+        return safety_colors(luminance > 0.55)
+
+    def set_safety_summary(self, text, color):
+        escaped = GLib.markup_escape_text(text)
+        self.safety_summary.set_markup(f'<span weight="bold" foreground="{color}">{escaped}</span>')
+
+    def present_safety_error(self, message):
+        colors = self.safety_palette()
+        self.set_safety_summary(message, colors["review"])
+        buffer = self.safety_details.get_buffer()
+        buffer.set_text(message)
+        tag = buffer.get_tag_table().lookup("review") or buffer.create_tag("review")
+        tag.set_property("foreground", colors["review"])
+        buffer.apply_tag(tag, buffer.get_start_iter(), buffer.get_end_iter())
+
+    def present_safety_report(self, report):
+        colors = self.safety_palette()
+        self.set_safety_summary(report["summary"], colors["pass"] if report["ready"] else colors["review"])
+        buffer = self.safety_details.get_buffer()
+        buffer.set_text("")
+
+        def styled_tag(name, color, bold=False, monospace=False):
+            tag = buffer.get_tag_table().lookup(name) or buffer.create_tag(name)
+            tag.set_property("foreground", color)
+            tag.set_property("weight", Pango.Weight.BOLD if bold else Pango.Weight.NORMAL)
+            if monospace:
+                tag.set_property("family", "monospace")
+            return tag
+
+        tags = {
+            "pass": styled_tag("pass", colors["pass"]),
+            "review": styled_tag("review", colors["review"]),
+            "pass-subject": styled_tag("pass-subject", colors["pass"], bold=True),
+            "review-subject": styled_tag("review-subject", colors["review"], bold=True),
+            "section": styled_tag("section", colors["accent"], bold=True),
+            "command": styled_tag("command", colors["accent"], monospace=True),
+        }
+        for check in report["checks"]:
+            status = "pass" if check["ok"] else "review"
+            buffer.insert_with_tags(buffer.get_end_iter(), f"[{status.upper()}] ", tags[status])
+            buffer.insert_with_tags(buffer.get_end_iter(), check["name"], tags[f"{status}-subject"])
+            buffer.insert_with_tags(buffer.get_end_iter(), f": {check['detail']}\n", tags[status])
+        if not report["checks"] and report["details"]:
+            buffer.set_text(report["details"])
+        if report["remediations"]:
+            buffer.insert_with_tags(
+                buffer.get_end_iter(), "\nProposed actions (no action has been taken):\n", tags["section"],
+            )
+            for item in report["remediations"]:
+                buffer.insert_with_tags(buffer.get_end_iter(), f"- {item['action']}\n", tags["review"])
+                if item["command"]:
+                    buffer.insert_with_tags(buffer.get_end_iter(), f"  {item['command']}\n", tags["command"])
+
+    def run_safety_check(self, _button):
+        workspace = self.current_workspace()
+        try:
+            self.safety_report = evaluate_safety(workspace.command if workspace else None)
+        except Exception as error:
+            self.safety_report = None
+            self.present_safety_error(f"Safety audit could not complete: {error}")
+            self.allow_safety_button.set_sensitive(False)
+        else:
+            self.present_safety_report(self.safety_report)
+            agent_ready = bool(
+                workspace and workspace.command and workspace.agent_pid is not None and not workspace.agent_exited,
+            )
+            self.allow_safety_button.set_sensitive(agent_ready)
+            self.allow_safety_button.set_tooltip_text(
+                "Send only the displayed authorization to the embedded AI agent" if agent_ready
+                else "Start an embedded AI agent before sending the request",
+            )
+        self.safety_panel.set_no_show_all(False)
+        self.safety_panel.show_all()
+
+    def allow_safety(self, _button):
+        workspace = self.current_workspace()
+        if self.safety_report is None or workspace is None:
+            return
+        try:
+            workspace.submit_agent_request(agent_request(self.safety_report))
+        except ValueError as error:
+            self.safety_summary.set_text(str(error))
+            return
+        workspace.agent_status = "Safety Check + OS Compliance request sent; review the terminal output"
+        workspace.status_changed()
+        self.clear_safety()
 
     def restore_investigations(self):
         self.workspace_warnings = []
@@ -1032,6 +1168,12 @@ class InvestigationWorkspace(Gtk.Box):
         self.terminal.set_hexpand(True)
         self.terminal.set_vexpand(True)
         self.terminal.connect("child-exited", self.on_agent_exit)
+        self.terminal.drag_dest_set(
+            Gtk.DestDefaults.ALL,
+            [Gtk.TargetEntry.new("text/uri-list", 0, 0)],
+            Gdk.DragAction.COPY,
+        )
+        self.terminal.connect("drag-data-received", self.on_terminal_drop)
         self.panes.pack2(self.terminal, True, True)
         self.apply_layout()
         self.register_actions()
@@ -1707,6 +1849,41 @@ class InvestigationWorkspace(Gtk.Box):
             self.agent_status = f"Unable to start CLI: {error}"
         finally:
             self.status_changed()
+
+    def submit_agent_request(self, text):
+        if not self.command or self.agent_pid is None or self.agent_exited or self.closed:
+            raise ValueError("Safety request rejected: the embedded CLI is not running")
+        if not text or any(ord(character) < 32 or ord(character) == 127 for character in text):
+            raise ValueError("Safety request rejected: the prompt contains control characters")
+        self.terminal.feed_child(text.encode("utf-8"))
+        self.terminal.feed_child(b"\r")
+
+    def insert_dropped_paths(self, paths):
+        if not self.command or self.agent_pid is None or self.agent_exited or self.closed:
+            raise ValueError("Drop rejected: the embedded CLI is not running")
+        paths = tuple(paths)
+        payload = dropped_payload(paths)
+        self.terminal.feed_child(payload)
+        return len(paths)
+
+    def on_terminal_drop(self, terminal, context, _x, _y, selection_data, _info, event_time):
+        terminal.stop_emission_by_name("drag-data-received")
+        try:
+            paths = []
+            for uri in selection_data.get_uris() or ():
+                path = Gio.File.new_for_uri(uri).get_path()
+                if path is None:
+                    raise ValueError("Drop rejected: only local files and folders are supported")
+                paths.append(path)
+            count = self.insert_dropped_paths(paths)
+            self.agent_status = f"Inserted {count} dropped path{'s' if count != 1 else ''}; review before running"
+            succeeded = True
+        except (GLib.Error, OSError, ValueError) as error:
+            self.agent_status = str(error)
+            succeeded = False
+        self.status_changed()
+        Gtk.drag_finish(context, succeeded, False, event_time)
+        return True
 
     def on_agent_exit(self, _terminal, _status=None):
         self.agent_cancellable = None

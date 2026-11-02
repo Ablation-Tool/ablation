@@ -110,11 +110,38 @@ class MacOSNativeCase(unittest.TestCase):
         panel.stop()
         self.assert_reaped(panel)
 
+    def test_native_drop_target_inserts_path_without_enter(self):
+        from unittest import mock
+        from metrix.drop import dropped_payload
+
+        panel = self.make_panel([sys.executable, "-u", "-c", FIXTURE])
+        self.assertTrue(panel.drop_enabled, "native macOS tkdnd bridge did not initialize")
+        panel.fd = 123456
+        messages = []
+        panel.status_callback = messages.append
+        directory = self.root_path / "dropped folder with spaces"
+        directory.mkdir()
+        with mock.patch.object(panel, "write") as write:
+            action = panel.on_drop(mock.Mock(data="{" + str(directory) + "}"))
+        self.assertEqual(action, "copy")
+        write.assert_called_once_with(dropped_payload([directory]))
+        payload = write.call_args.args[0]
+        self.assertTrue(payload.endswith(b" "))
+        self.assertNotIn(b"\r", payload)
+        self.assertNotIn(b"\n", payload)
+        self.assertIn("review before running", messages[-1])
+
     def test_workspace_branding_layout_and_save(self):
         application = InvestigationApp(self.root, self.session)
         try:
             self.assertEqual(application.brand_header_image.width(), 32)
             self.assertTrue(application.brand_header_image.transparency_get(0, 0))
+            application.toggle_settings()
+            self.assertEqual(application.settings_bar.winfo_manager(), "pack")
+            application.run_safety_check()
+            self.assertEqual(application.safety_panel.winfo_manager(), "pack")
+            self.assertIn("disabled", application.allow_safety_button.state())
+            application.clear_safety()
             application.show_preferences()
             for layout in LAYOUTS:
                 self.assertTrue(application.select_layout(layout))

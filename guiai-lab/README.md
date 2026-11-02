@@ -21,6 +21,8 @@ The user’s real interactive CLI supplies labor. The workspace supplies memory 
 - Uses theme-derived alternating row shading and theme-colored icons while preserving native selection colors.
 - Offers native terminal schemes, editable foreground/background and all 16 ANSI palette colors, and a terminal font selector through **Preferences**. Four numbered visual previews select the Lab/terminal arrangement without text-heavy options. Lab, Workspace layout, Terminal, and ANSI palette use independent collapsed disclosure sections in GTK; Tk presents a compact graphical layout dialog. Preferences apply to all open Labs and persist in the root session.
 - Provides scrollbars, directory rescanning, and a selection-specific follow-up prompt.
+- Accepts local files and folders dragged into the embedded CLI on Linux, Windows, and macOS. Drops insert shell-quoted paths and a trailing space without Enter, so the user reviews the command before running it. Missing paths, control characters, non-local URIs, unavailable CLIs, and batches over 8 MiB are rejected explicitly.
+- Uses the turned-A logo as an inline settings toggle with a single **OS Optimization/Debugging** entry. It runs a read-only Safety Check + OS Compliance audit for Python/OS support, Tkinter, terminal and drag-and-drop dependencies, Linux GTK/VTE, data-directory writability, and the configured agent. Findings and proposed commands are visible before **Allow Permission** sends one bounded request to an active AI agent. **Deny Permission** performs no terminal action. The audit never executes artifacts or changes the system on its own.
 - Offers **Show in file manager** to reveal selected evidence in Nautilus, Finder, or Windows Explorer after an explicit user action; it does not execute artifacts.
 - Keeps **Open in CLI** as the primary node action, with **Flag for follow-up**, **Mark as reviewed**, and an overflow menu for copy/file-manager actions. Status feedback offers Undo, which appends a restoration event rather than deleting or rewriting history.
 - Preserves append-only discovery histories in each investigation's `events.jsonl`.
@@ -57,13 +59,15 @@ python3 -m venv --system-site-packages .venv
 python -m pip install ./guiai-lab
 ```
 
-METRIX and `pyte` are included or installed automatically. No separate METRIX checkout is required. Install the full Ablation CLI only if you also need its analysis tools: `python -m pip install -e .`
+METRIX, `pyte`, and the pinned `tkinterdnd2` drag-and-drop bridge are included or installed automatically. No separate METRIX checkout is required. Install the full Ablation CLI only if you also need its analysis tools: `python -m pip install -e .`
 
 Prefer an AI Agent-guided setup? Use the **[universal install prompt](INSTALL-PROMPT.md)**.
 
 ## Start a session
 
-Investigate one binary:
+Open the installed Desktop icon, or run `guiai launch`, to choose a binary or material directory in a native dialog. Each target gets a stable session under the user's GUIAI data directory. On native Windows and macOS, the installed launcher selects Tk explicitly; command-line users on those platforms can run `guiai launch --toolkit tk`. The Desktop launcher does not assume that an AI agent is installed.
+
+Investigate one binary with an embedded agent:
 
 ```bash
 guiai desktop /path/to/binary \
@@ -222,6 +226,7 @@ python3 stress/run_stress.py
 python3 stress/native_stress.py
 python3 stress/desktop_input_stress.py
 python3 stress/gtk_stress.py
+python3 stress/installer_stress.py
 ```
 
 For repeated GUI testing, use the nested launcher instead of opening test windows on the live desktop. It starts a private Xephyr X11 display with software rendering, refuses to reuse an active display, and cleans up its own server:
@@ -236,4 +241,4 @@ The desktop-input suite requires an X11 display (the live display or the nested 
 
 The canonical workspace has one outer divider between Lab and the terminal. **Chart** reveals a nested divider with the Lab tree beside **Rings** or **Treemap**; the tree is never replaced by a chart. Column headers are not draggable: Lab flexes and middle-ellipsizes long labels, Type appears only for mixed-type matching rows, and Status retains a bounded width. Type and Status become compact only while a chart is visible and restore when it is hidden. Breadcrumbs and chart selection update the real session selection. Node actions remain visible below the workspace and compact to icons at narrow widths without wrapping; **Node details** independently reveals actual metadata labels without rebuilding the charts. Footer status counts apply filters, and routine status changes expose append-only Undo. Ring sectors select real nodes, the center moves to the parent, arrow keys navigate the hierarchy, and the mouse wheel changes the visible depth. Small or deeper nodes are counted explicitly rather than silently treated as covered.
 
-The current suite contains 29 core tests, 21 native tests, 31 GTK/map/rings integration tests, and one complete desktop workflow: 82 checks in total. Coverage includes concurrent file and directory initialization, real directory scale, malformed metadata and events, cycles, legacy file sessions, deep trees, independent investigation histories, readable status/type labels, adaptive Type visibility, long-name presentation, streamlined actions, clickable status summaries, exact append-only Undo, preference persistence and corruption, four visual workspace layouts, active-Lab project restoration, collapsed Lab/Workspace-layout/Terminal/ANSI-palette sections with mapped content, legacy-layout migration, canonical pane positions, stars that survive selection and reopen, row-level star interaction, eye-icon disclosure, mapped and height-bounded detail labels, permanent tree/chart layout, compact/restored columns, single-process tab churn with memory and object-retention checks, duplicate starts, failed spawns, deferred-start cancellation, tab-label teardown, treemap area/descendant counts, Baobab palette independence from status, pagination, exact container allocation and tile reuse, ring geometry and real Cairo rendering, angular and depth limits, keyboard navigation, shared chart selection, terminal input readiness, partial terminal writes, stubborn processes, and repeated shutdown. See [HARDENING.md](HARDENING.md) for the defect ledger, installed-artifact evidence, and remaining limits.
+The current suite contains 40 core tests, 24 native tests, 32 GTK/map/rings integration tests, one complete desktop workflow, and 10 universal-installer tests: 107 checks in total. Native Windows and macOS packages additionally run their platform-specific drag-and-drop, inline safety audit, icon, terminal, and cleanup checks. Coverage includes concurrent file and directory initialization, real directory scale, malformed metadata and events, cycles, legacy file sessions, deep trees, independent investigation histories, readable status/type labels, adaptive Type visibility, long-name presentation, streamlined actions, clickable status summaries, exact append-only Undo, preference persistence and corruption, four visual workspace layouts, active-Lab project restoration, collapsed Lab/Workspace-layout/Terminal/ANSI-palette sections with mapped content, legacy-layout migration, canonical pane positions, stars that survive selection and reopen, row-level star interaction, eye-icon disclosure, mapped and height-bounded detail labels, permanent tree/chart layout, compact/restored columns, single-process tab churn with memory and object-retention checks, duplicate starts, failed spawns, deferred-start cancellation, tab-label teardown, treemap area/descendant counts, Baobab palette independence from status, pagination, exact container allocation and tile reuse, ring geometry and real Cairo rendering, angular and depth limits, keyboard navigation, shared chart selection, terminal input readiness, partial terminal writes, stubborn processes, and repeated shutdown. See [HARDENING.md](HARDENING.md) for the defect ledger, installed-artifact evidence, and remaining limits.
