@@ -24,6 +24,7 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 | [**Accessibility Options**](guiai-lab/README.md) | [1](guiai-lab/guiai/accessibility.py)&nbsp;[2](guiai-lab/guiai/app.py) | Provides accessible palettes, labels, alternatives, and keyboard navigation |
 | [**Agent Bridge**](guiai-lab/README.md) | [1](guiai-lab/guiai/environment.py)&nbsp;[2](guiai-lab/metrix/desktop.py) | Embeds your AI Agent inside the GUIAI |
 | [**Agent Safety**](guiai-lab/README.md) | [1](guiai-lab/guiai/safety.py)&nbsp;[2](guiai-lab/guiai/app.py) | Requests permission before bounded audits and debugging actions |
+| [**Cross-Platform Support**](guiai-lab/README.md) | [1](guiai-lab/guiai/launcher.py)&nbsp;[2](guiai-lab/guiai/macos_launcher.py)&nbsp;[3](guiai-lab/packaging/install_linux.sh) | Runs natively on Linux, Windows, and macOS |
 | [**Debug Diagnostics**](guiai-lab/README.md) | [1](guiai-lab/guiai/app.py)&nbsp;[2](guiai-lab/guiai/gtk_app.py) | Shows dependency and terminal diagnostics before requesting troubleshooting permission |
 | [**Evidence Integrity**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/cli.py)&nbsp;[3](guiai-lab/guiai/app.py) | Tracks reviews and validates evidence targets |
 | [**Lab Navigation**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/map_view.py)&nbsp;[3](guiai-lab/metrix/cli.py) | Organizes, searches, and visualizes discoveries |
