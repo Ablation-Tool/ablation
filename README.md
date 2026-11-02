@@ -25,7 +25,7 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 | [**Debug Diagnostics**](guiai-lab/README.md) | [1](guiai-lab/guiai/app.py)&nbsp;[2](guiai-lab/guiai/gtk_app.py) | Shows dependency and terminal diagnostics before requesting troubleshooting permission |
 | [**Evidence Integrity**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/cli.py)&nbsp;[3](guiai-lab/guiai/app.py) | Tracks reviews and validates evidence targets |
 | [**Lab Navigation**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/map_view.py)&nbsp;[3](guiai-lab/metrix/cli.py) | Searches and visualizes discoveries while restoring sessions, agents, and preferences |
-| [**OS Optimization**](guiai-lab/README.md) | [1](guiai-lab/guiai/app.py)&nbsp;[2](guiai-lab/guiai/gtk_app.py) | Automatically detects the user's operating system and distribution, dynamically adapting GUIAI to match their unique environment and preferences. |
+| [**OS Optimization**](guiai-lab/README.md) | [1](guiai-lab/guiai/app.py)&nbsp;[2](guiai-lab/guiai/gtk_app.py) | Recognizes the operating system in use and adapts GUIAI to that environment |
 | [**OS Support**](guiai-lab/README.md) | [1](guiai-lab/guiai/launcher.py)&nbsp;[2](guiai-lab/packaging/forall.py)&nbsp;[3](guiai-lab/packaging/install_linux.sh) | Supports Linux, Windows, macOS, adaptive presentation, and safe installation |
 
 </details>
