@@ -229,12 +229,6 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 <details>
 <summary>Universal OS Installation Prompt</summary>
 
-Copy this prompt into your AI Agent. 
-
-Works with: Windows, MacOS, and Linux
-
-It will ask you to choose **GUIAI** or **CLI Only** before installing anything.
-
 ```text
 Ask me to choose one installation type and wait for my answer before installing anything:
 
