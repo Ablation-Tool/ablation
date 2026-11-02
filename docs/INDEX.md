@@ -44,6 +44,7 @@ Native workspaces for agent-guided reverse engineering, with real agent terminal
 | [AI Agent Bridge](reference-modules/guiai-agent-bridge.md) | Real interactive agent CLIs, session environments, terminal lifecycle, permissions, and validation |
 | [Token Allocation](reference-modules/guiai-token-allocation.md) | Scoped retrieval and workspace memory reduce repeated context while preserving full evidence and investigation coverage |
 | [Operating System Support](reference-modules/guiai-operating-system-support.md) | Native Linux, Windows, and macOS interfaces, packages, requirements, and platform validation |
+| [Unified Memory Architecture](reference-modules/unified-memory-architecture.md) | How the GUIAI workspace, real CLI/AI Agent, and human investigator form one authoritative investigation address space |
 | [Lab](reference-modules/guiai-investigation-lab.md) | Event model, navigation, filtering, charts, evidence, and agent-grown investigation history |
 | [Project Memory](reference-modules/guiai-project-memory.md) | Project manifests, session files, restoration, persistence, consistency, and corruption handling |
 | [Independent Workspaces](reference-modules/guiai-independent-workspaces.md) | Independent Lab sessions, terminal directories, lifecycle, and restoration |
