@@ -59,7 +59,7 @@ python -m pip install ./guiai-lab
 
 METRIX and `pyte` are included or installed automatically. The Installation Prompt installs the standard Ablation CLI and GUIAI together. The source command above installs GUIAI only; add the full CLI with `python -m pip install -e .` when needed.
 
-Start with the **[all-platform installation guide](INSTALL.md)** or copy the **[AI Agent Installation Prompt](INSTALL-PROMPT.md)** into your agent.
+Start with the **[all-platform installation guide](INSTALL.md)** or copy the **[Universal Platform Installation Prompt](INSTALL-PROMPT.md)** into your agent.
 
 ## Start a session
 

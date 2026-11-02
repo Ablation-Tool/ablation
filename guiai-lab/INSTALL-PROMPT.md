@@ -1,24 +1,30 @@
-# Ablation and GUIAI Installation Prompt
+# Universal Platform Installation Prompt
 
-Copy this entire prompt into the AI Agent you want to use. It installs the standard Ablation CLI and GUIAI with their dependencies directly; `/forall` can be used afterward as a short name for the same request.
+Copy this prompt into your AI Agent. It will ask you to choose **GUIAI** or **CLI Only** before installing anything.
 
 ```text
-Install the standard Ablation CLI and GUIAI, then launch GUIAI with you—the AI Agent I am currently using—embedded in its terminal.
+Ask me to choose one installation type and wait for my answer before installing anything:
 
-Check my operating system and Python first. Native Windows requires Python 3.11 x64 with Tcl/Tk; macOS and Linux require Python 3.10 or newer with Tkinter. If a prerequisite is missing, explain what is needed and ask before making system changes.
+1. GUIAI — install the standard Ablation CLI and GUIAI, then launch the workbench with you—the AI Agent I am currently using—embedded in its terminal.
+2. CLI Only — install the standard Ablation CLI without GUIAI.
 
-Download and review this installer:
-https://github.com/Ablation-Tool/ablation/releases/latest/download/forall.py
+Do not continue until I explicitly choose GUIAI or CLI Only.
 
-Run it with the checked Python. It selects the correct native package, verifies SHA256, and installs the standard Ablation CLI and GUIAI with their required dependencies. GUIAI's wheels install offline; standard Ablation dependencies are downloaded from PyPI. It verifies both ablation --help and guiai --help.
+If I choose GUIAI:
+- Check my operating system and Python first. Native Windows requires Python 3.11 x64 with Tcl/Tk; macOS and Linux require Python 3.10 or newer with Tkinter. Explain missing prerequisites and ask before system changes.
+- Download and review https://github.com/Ablation-Tool/ablation/releases/latest/download/forall.py and run it with the checked Python. Use the default full installation, which includes both Ablation and GUIAI, verifies release checksums, installs GUIAI's wheels offline, and downloads standard Ablation dependencies from PyPI.
+- Ask me for the RE target and a project directory outside it. On macOS, open the generated Ablation.app. On Windows and macOS, use --toolkit tk when launching through the CLI. Use your actual executable for the embedded AI Agent; if you cannot identify it, ask me instead of substituting another agent.
+- Verify ablation --help and guiai --help, and confirm that the native window opens with your real CLI inside it.
 
-Do not pipe a downloaded script into an interpreter, use sudo, overwrite an existing installation, skip failed tests, or bypass my permissions.
+If I choose CLI Only:
+- Create a project-local virtual environment and activate it for my operating system. For an existing source checkout, verify its origin and preserve uncommitted changes.
+- Install the standard package with python -m pip install ablation-tool, or from a reviewed source checkout with python -m pip install . Do not run forall.py because its default includes GUIAI.
+- Verify ablation --help. Do not launch GUIAI.
 
-Ask me for the RE target and project/session directory if needed. Keep the project outside the target. On macOS, open the generated Ablation.app. On Windows and macOS, use --toolkit tk when launching through the CLI. Use your actual executable for the embedded AI Agent; if you cannot identify it, ask me instead of substituting another agent.
-
-Do not install an AI model, credentials, optional analysis extras, or firmware analysis. Do not execute the RE target.
-
-Report the operating system, Ablation and GUIAI versions, installation and project paths, validation result, and exact launch command. Confirm that the native window opens and your real CLI starts inside it.
+For either choice:
+- Preserve my files and local changes. Do not use sudo, overwrite an existing installation, skip failed validation, or bypass my permissions.
+- Do not install an AI model, credentials, optional analysis extras, or firmware analysis. Do not execute the RE target.
+- Report my selected option, operating system, Ablation and GUIAI versions when applicable, installation and project paths, validation result, and exact launch command.
 ```
 
-For platform-specific installation prompts or the CLI-only prompt, see the [all-platform installation guide](INSTALL.md).
+For manual platform packages, see the [platform package guide](packaging/README.md).
