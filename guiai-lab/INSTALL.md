@@ -1,6 +1,6 @@
 # Install Ablation
 
-## GUIAI and Ablation
+## Installation
 
 <details>
 <summary><strong>Installation Prompt</strong></summary>
@@ -29,7 +29,7 @@ Report the operating system, Ablation and GUIAI versions, installation and proje
 </details>
 
 <details>
-<summary><strong>Linux Installation Prompt</strong></summary>
+<summary><strong>Linux</strong></summary>
 
 ```text
 Install the standard Ablation CLI and GUIAI on Linux, then launch GUIAI with you—the AI Agent I am currently using—embedded in its terminal.
@@ -48,7 +48,7 @@ Do not install a model, credentials, or optional analysis extras. Report both ve
 </details>
 
 <details>
-<summary><strong>MacOS Installation Prompt</strong></summary>
+<summary><strong>MacOS</strong></summary>
 
 ```text
 Install the standard Ablation CLI and GUIAI on macOS, then open Ablation.app with you—the AI Agent I am currently using—embedded in its terminal.
@@ -67,7 +67,7 @@ Do not install a model, credentials, or optional analysis extras. Report both ve
 </details>
 
 <details>
-<summary><strong>Windows Installation Prompt</strong></summary>
+<summary><strong>Windows</strong></summary>
 
 ```text
 Install the standard Ablation CLI and GUIAI on Windows, then launch GUIAI with you—the AI Agent I am currently using—embedded in its terminal.
@@ -85,10 +85,8 @@ Do not install a model, credentials, or optional analysis extras. Report both ve
 
 </details>
 
-## CLI only
-
 <details>
-<summary><strong>CLI Only Installation Prompt</strong></summary>
+<summary><strong>CLI only</strong></summary>
 
 This is the explicit installation choice for users who want the Ablation command-line tools **without GUIAI**. The normal Ablation + GUIAI installation includes both by default.
 
