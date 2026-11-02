@@ -51,7 +51,7 @@ jobs:
 
           # ── CHECKSUMS.txt ────────────────────────────────────────────────────
           with open('CHECKSUMS.txt') as f:
-              text = f.read()
+              text = f.read() if os.path.exists('CHECKSUMS.txt') else '# ─── Current main\n'
 
           SPLIT = '# ─── Current main'
           historical, current_main_tail = text.split(SPLIT, 1)
@@ -84,7 +84,7 @@ jobs:
 
           # ── requirements-verified.txt ────────────────────────────────────────
           with open('requirements-verified.txt') as f:
-              req = f.read()
+              req = f.read() if os.path.exists('requirements-verified.txt') else '# version: \n# date: \n'
 
           req = re.sub(r'^# version:.*$', f'# version: {version}',
                        req, flags=re.MULTILINE)
