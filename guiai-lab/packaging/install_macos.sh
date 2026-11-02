@@ -20,6 +20,22 @@ if [[ "${SKIP_TESTS:-0}" != "1" && -f "$SOURCE/macos_stress.py" ]]; then
     python "$SOURCE/macos_stress.py"
 fi
 
+if [[ "${NO_DESKTOP_SHORTCUT:-0}" != "1" ]]; then
+    DESKTOP_DIR="$(python -c 'from pathlib import Path; print(Path.home() / "Desktop")')"
+    mkdir -p "$DESKTOP_DIR"
+    SHORTCUT="$DESKTOP_DIR/Ablation.app"
+    if [[ -e "$SHORTCUT" && ! -L "$SHORTCUT" ]]; then
+        echo "Refusing to replace an existing non-symlink at $SHORTCUT" >&2
+        exit 1
+    fi
+    ln -sfn "$SOURCE/Ablation.app" "$SHORTCUT"
+    if [[ "$(readlink "$SHORTCUT")" != "$SOURCE/Ablation.app" ]]; then
+        echo "The Ablation Desktop alias failed validation." >&2
+        exit 1
+    fi
+    echo "Desktop alias: $SHORTCUT"
+fi
+
 printf '\nApplication: %s\n' "$SOURCE/Ablation.app"
 cat <<'EOF'
 Open Ablation.app to choose a target, project directory, and optional AI Agent.

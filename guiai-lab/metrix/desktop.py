@@ -23,6 +23,7 @@ else:
 from tkinter import filedialog, font as tkfont, ttk
 
 from .agent import parse_agent_command
+from .drop import dropped_payload
 from .inventory import load_records
 from .render import load_summary
 
@@ -31,6 +32,11 @@ try:
     import pyte
 except ImportError:
     pyte = None
+
+try:
+    from tkinterdnd2 import COPY, DND_FILES, REFUSE_DROP, TkinterDnD
+except ImportError:
+    COPY = REFUSE_DROP = DND_FILES = TkinterDnD = None
 
 
 if pyte is not None:
@@ -117,15 +123,56 @@ class TerminalPanel(ttk.Frame):
         self.text.bind("<Button-2>", lambda event: "break")
         self.text.bind("<Button-1>", lambda event: self.text.focus_set())
         self.closed = False
+        self.drop_enabled = False
         self.poll_after_id = None
         self.render_after_id = None
         if command:
+            self.configure_drop_target()
             self.after_idle(self.start)
         else:
             self.text.insert("1.0", "No external CLI configured.\nRestart with --agent kimi or --agent-command.")
             self.text.configure(state="disabled")
         self.poll_after_id = self.after(30, self.poll)
         self.render_after_id = self.after(60, self.render)
+
+    def configure_drop_target(self):
+        try:
+            if TkinterDnD is None:
+                raise RuntimeError("install tkinterdnd2 0.7.0")
+            TkinterDnD._require(self.winfo_toplevel())
+            self.text.drop_target_register(DND_FILES)
+            self.text.dnd_bind("<<Drop>>", self.on_drop)
+            self.drop_enabled = True
+        except (AttributeError, RuntimeError, tk.TclError) as error:
+            self.status_callback(f"File drag-and-drop unavailable: {error}")
+
+    def submit_agent_request(self, text):
+        if not self.command or self.fd is None or self.exited or self.closed:
+            raise ValueError("Safety request rejected: the embedded CLI is not running")
+        if not text or any(ord(character) < 32 or ord(character) == 127 for character in text):
+            raise ValueError("Safety request rejected: the prompt contains control characters")
+        self.write(text.encode("utf-8"))
+        self.write(b"\r")
+        self.text.focus_set()
+
+    def insert_dropped_paths(self, paths):
+        if not self.command or self.fd is None or self.exited or self.closed:
+            raise ValueError("Drop rejected: the embedded CLI is not running")
+        paths = tuple(paths)
+        payload = dropped_payload(paths)
+        self.write(payload)
+        self.text.focus_set()
+        return len(paths)
+
+    def on_drop(self, event):
+        try:
+            paths = self.text.tk.splitlist(event.data)
+            count = self.insert_dropped_paths(paths)
+            self.status_callback(f"Inserted {count} dropped path{'s' if count != 1 else ''}; review before running")
+            return COPY
+        except (OSError, ValueError, tk.TclError) as error:
+            self.status_callback(str(error))
+            return REFUSE_DROP
 
     def start(self):
         if self.closed or self.process is not None:
@@ -305,6 +352,12 @@ class TerminalPanel(ttk.Frame):
                 except tk.TclError:
                     pass
                 setattr(self, attribute, None)
+        if self.drop_enabled:
+            try:
+                self.text.drop_target_unregister()
+            except tk.TclError:
+                pass
+            self.drop_enabled = False
         self.write_queue.clear()
         if self.process is not None and not self.reaped:
             self.signal_process(getattr(signal, "SIGHUP", signal.SIGINT))

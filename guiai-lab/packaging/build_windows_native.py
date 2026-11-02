@@ -20,11 +20,12 @@ def main():
         sys.executable, "-m", "pip", "download", "--only-binary=:all:",
         "--platform", "win_amd64", "--python-version", "311",
         "--implementation", "cp", "--abi", "cp311",
-        "--dest", str(vendor), "pyte>=0.8.1,<1", "wcwidth==0.2.14", "pywinpty>=2,<3",
+        "--dest", str(vendor), "pyte>=0.8.1,<1", "wcwidth==0.2.14", "pywinpty>=2,<3", "tkinterdnd2==0.7.0",
     ], check=True)
     for name in ("Install-WindowsNative.ps1", "README.md"):
         shutil.copy(ROOT / "packaging" / name, DIST / name)
     shutil.copy(ROOT / "stress" / "windows_stress.py", DIST / "windows_stress.py")
+    shutil.copy(ROOT / "guiai" / "icons" / "ablation-guiai.ico", DIST / "ablation-guiai.ico")
     destination = ROOT / "dist" / "GUIAI-Windows-Native.zip"
     with ZipFile(destination, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:
         for path in sorted(DIST.rglob("*")):

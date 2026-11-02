@@ -4,10 +4,11 @@ import importlib.util
 import json
 from pathlib import Path
 import stat
+import sys
 import tempfile
 import unittest
 from unittest import mock
-from zipfile import ZipFile
+from zipfile import ZipFile, ZipInfo
 
 
 SOURCE = Path(__file__).resolve().parents[1] / "packaging" / "forall.py"
@@ -21,8 +22,12 @@ class UniversalInstallerCase(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory(prefix="guiai-installer-")
         self.root = Path(self.temporary.name)
         self.addCleanup(self.temporary.cleanup)
+        self.asset, self.installer = forall.platform_package()
+        self.executable = Path(".venv") / ("Scripts/guiai.exe" if sys.platform == "win32" else "bin/guiai")
 
-    def package(self, name="GUIAI-Linux.zip", installer="install_linux.sh", content="offline package"):
+    def package(self, name=None, installer=None, content="offline package"):
+        name = name or self.asset
+        installer = installer or self.installer
         archive = self.root / name
         with ZipFile(archive, "w") as bundle:
             bundle.writestr(installer, content)
@@ -48,7 +53,7 @@ class UniversalInstallerCase(unittest.TestCase):
 
     def test_checksum_verification_rejects_changed_package(self):
         archive = self.package()
-        (self.root / "SHA256SUMS.txt").write_text("0" * 64 + "  GUIAI-Linux.zip\n", encoding="utf-8")
+        (self.root / "SHA256SUMS.txt").write_text(f"{'0' * 64}  {archive.name}\n", encoding="utf-8")
         checksums = forall.release_checksums((self.root / "SHA256SUMS.txt").read_text())
         with self.assertRaisesRegex(RuntimeError, "Checksum"):
             forall.verify_archive(archive, checksums)
@@ -57,8 +62,9 @@ class UniversalInstallerCase(unittest.TestCase):
         for name, attributes in (("../outside", 0), ("/absolute", 0), ("..\\outside", 0), ("linked", stat.S_IFLNK << 16)):
             archive = self.root / "unsafe.zip"
             with ZipFile(archive, "w") as bundle:
-                bundle.writestr(name, "bad")
-                bundle.getinfo(name).external_attr = attributes
+                info = ZipInfo(name)
+                bundle.writestr(info, "bad")
+                info.external_attr = attributes
             with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, "Unsafe"):
                 forall.extract_archive(archive, self.root / "extract")
         self.assertFalse((self.root / "outside").exists())
@@ -74,25 +80,37 @@ class UniversalInstallerCase(unittest.TestCase):
         download.assert_not_called()
         self.assertEqual(marker.read_text(encoding="utf-8"), "keep")
 
+    def complete_install(self, source, installer, skip_tests, no_desktop_shortcut, final_destination):
+        self.assertEqual(installer, self.installer)
+        self.assertFalse(skip_tests)
+        self.assertEqual(source, final_destination)
+        self.assertEqual((source / installer).read_text(), "offline package")
+        executable = source / self.executable
+        executable.parent.mkdir(parents=True)
+        executable.write_text("installed", encoding="utf-8")
+
     def test_complete_verified_offline_install(self):
         self.package()
-        destination = self.root / "completed install"
-        def install(source, installer, skip_tests):
-            self.assertEqual(installer, "install_linux.sh")
-            self.assertFalse(skip_tests)
-            self.assertEqual((source / installer).read_text(), "offline package")
-            executable = source / ".venv" / "bin" / "guiai"
-            executable.parent.mkdir(parents=True)
-            executable.write_text("installed", encoding="utf-8")
-        with (
-            mock.patch.object(forall, "install_package", side_effect=install),
-            mock.patch.object(forall, "verify_installed_cli"),
-        ):
+        destination = (self.root / "completed install").resolve()
+        with mock.patch.object(forall, "install_package", side_effect=self.complete_install) as install, mock.patch.object(
+            forall, "verify_installed_cli",
+        ) as verify:
             forall.main(["--directory", str(destination), "--gui-only", "--base-url", self.root.as_uri()])
-        self.assertEqual((destination / ".venv" / "bin" / "guiai").read_text(), "installed")
+        install.assert_called_once_with(destination, self.installer, False, False, destination)
+        verify.assert_called_once_with(destination, False)
+        self.assertEqual((destination / self.executable).read_text(), "installed")
         metadata = json.loads((destination / ".guiai-install.json").read_text())
-        self.assertEqual(metadata["package"], "GUIAI-Linux.zip")
-        self.assertEqual(metadata["sha256"], hashlib.sha256((self.root / "GUIAI-Linux.zip").read_bytes()).hexdigest())
+        self.assertEqual(metadata["package"], self.asset)
+        self.assertEqual(metadata["sha256"], hashlib.sha256((self.root / self.asset).read_bytes()).hexdigest())
+
+    def test_no_desktop_shortcut_is_forwarded(self):
+        self.package()
+        destination = (self.root / "without shortcut").resolve()
+        with mock.patch.object(forall, "install_package", side_effect=self.complete_install) as install, mock.patch.object(
+            forall, "verify_installed_cli",
+        ):
+            forall.main(["--directory", str(destination), "--gui-only", "--no-desktop-shortcut", "--base-url", self.root.as_uri()])
+        install.assert_called_once_with(destination, self.installer, False, True, destination)
 
     def test_full_install_includes_ablation_and_gui(self):
         self.package()
@@ -109,7 +127,7 @@ class UniversalInstallerCase(unittest.TestCase):
         ):
             forall.main(["--directory", str(destination), "--base-url", self.root.as_uri()])
         self.assertEqual(install_ablation.call_args.args[1].name, wheel.name)
-        install_package.assert_called_once()
+        install_package.assert_called_once_with(destination, self.installer, False, False, destination)
         self.assertTrue(verify.call_args.args[1])
         metadata = json.loads((destination / ".guiai-install.json").read_text())
         self.assertEqual(metadata["ablation_package"], wheel.name)
@@ -124,9 +142,17 @@ class UniversalInstallerCase(unittest.TestCase):
         install.assert_not_called()
         self.assertFalse(destination.exists())
 
+    def test_failed_install_retains_partial_destination_for_diagnosis(self):
+        self.package()
+        destination = self.root / "partial install"
+        with mock.patch.object(forall, "install_package", side_effect=forall.subprocess.CalledProcessError(1, "installer")):
+            with self.assertRaisesRegex(RuntimeError, "partial installation is retained"):
+                forall.main(["--directory", str(destination), "--gui-only", "--base-url", self.root.as_uri()])
+        self.assertEqual((destination / self.installer).read_text(), "offline package")
+
     def test_failed_verification_does_not_run_installer(self):
         archive = self.package()
-        (self.root / "SHA256SUMS.txt").write_text("0" * 64 + "  GUIAI-Linux.zip\n", encoding="utf-8")
+        (self.root / "SHA256SUMS.txt").write_text(f"{'0' * 64}  {archive.name}\n", encoding="utf-8")
         destination = self.root / "rejected"
         with mock.patch.object(forall, "install_package") as install:
             with self.assertRaisesRegex(RuntimeError, "Checksum"):

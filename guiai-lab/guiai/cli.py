@@ -6,10 +6,25 @@ import sys
 from . import __version__
 from .events import Session
 from metrix.agent import parse_agent_command
+from .launcher import choose_target, session_for_target, show_launch_error
 
 
 def session_path(value):
     return Path(value).expanduser().resolve()
+
+
+def command_launch(args):
+    try:
+        target = choose_target()
+        if target is None:
+            return 0
+        args.target = str(target)
+        args.session = str(session_for_target(target))
+        args.workspace = str(target if target.is_dir() else target.parent)
+        return command_desktop(args)
+    except Exception as error:
+        show_launch_error(str(error))
+        return 1
 
 
 def command_desktop(args):
@@ -98,6 +113,13 @@ def add_session(parser):
     parser.add_argument("--session", "-s", default="guiai-session", help="Session directory (default: guiai-session)")
 
 
+def add_desktop_options(command):
+    command.add_argument("--toolkit", choices=["auto", "gtk", "tk"], default="auto", help="Native interface toolkit (default: auto)")
+    agents = command.add_mutually_exclusive_group()
+    agents.add_argument("--agent", help="Interactive agent CLI executable to embed, such as kimi, claude, or codex")
+    agents.add_argument("--agent-command", help="Interactive CLI command to run inside the embedded terminal")
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="guiai", description="Agent-grown Lab workspace for reverse-engineering sessions")
     parser.add_argument("--version", action="version", version=f"GUIAI {__version__}")
@@ -106,11 +128,11 @@ def build_parser():
     command.add_argument("target", help="Binary file or material directory for this investigation")
     add_session(command)
     command.add_argument("--workspace", help="Interactive CLI working directory (default: session directory)")
-    command.add_argument("--toolkit", choices=["auto", "gtk", "tk"], default="auto", help="Native interface toolkit (default: auto)")
-    agents = command.add_mutually_exclusive_group()
-    agents.add_argument("--agent", help="Interactive agent CLI executable to embed, such as kimi, claude, or codex")
-    agents.add_argument("--agent-command", help="Interactive CLI command to run inside the embedded terminal")
+    add_desktop_options(command)
     command.set_defaults(function=command_desktop)
+    command = commands.add_parser("launch", help="Choose an investigation target and open the native Lab workspace")
+    add_desktop_options(command)
+    command.set_defaults(function=command_launch)
     command = commands.add_parser("emit", help="Append or update an investigation node")
     add_session(command)
     command.add_argument("--id", required=True)

@@ -13,7 +13,7 @@ import tempfile
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 import venv
-from zipfile import ZipFile
+from zipfile import BadZipFile, ZipFile
 
 
 BASE_URL = "https://github.com/Ablation-Tool/ablation/releases/latest/download"
@@ -76,7 +76,13 @@ def extract_archive(archive, destination):
         bundle.extractall(destination)
 
 
-def install_package(source, installer, skip_tests):
+def install_package(source, installer, skip_tests, no_desktop_shortcut, destination):
+    environment = os.environ.copy()
+    environment["GUIAI_INSTALL_DESTINATION"] = str(destination)
+    if skip_tests:
+        environment["SKIP_TESTS"] = "1"
+    if no_desktop_shortcut:
+        environment["NO_DESKTOP_SHORTCUT"] = "1"
     if sys.platform == "win32":
         shell = shutil.which("pwsh") or shutil.which("powershell")
         if shell is None:
@@ -84,14 +90,11 @@ def install_package(source, installer, skip_tests):
         command = [shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(source / installer)]
         if skip_tests:
             command.append("-SkipTests")
+        if no_desktop_shortcut:
+            command.append("-NoDesktopShortcut")
     else:
         command = ["bash", str(source / installer)]
-        environment = os.environ.copy()
-        if skip_tests:
-            environment["SKIP_TESTS"] = "1"
-        subprocess.run(command, cwd=source, env=environment, check=True)
-        return
-    subprocess.run(command, cwd=source, check=True)
+    subprocess.run(command, cwd=source, env=environment, check=True)
 
 
 def ablation_package(checksums):
@@ -126,6 +129,11 @@ def verify_installed_cli(source, include_ablation):
             [str(executable), "--help"], cwd=source,
             stdout=subprocess.DEVNULL, check=True, timeout=60,
         )
+    guiai = source / ".venv" / ("Scripts/guiai.exe" if sys.platform == "win32" else "bin/guiai")
+    subprocess.run(
+        [str(guiai), "launch", "--help"], cwd=source,
+        stdout=subprocess.DEVNULL, check=True, timeout=60,
+    )
     if include_ablation and sys.platform == "darwin":
         bundled = source / "Ablation.app" / "Contents" / "Resources" / ".venv" / "bin" / "ablation"
         subprocess.run(
@@ -137,6 +145,8 @@ def verify_installed_cli(source, include_ablation):
 def default_destination():
     if sys.platform == "win32":
         root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    elif sys.platform == "darwin":
+        root = Path.home() / "Library" / "Application Support"
     else:
         root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
     return root / "Ablation" / "GUIAI"
@@ -147,6 +157,7 @@ def parse_arguments(arguments=None):
     parser.add_argument("--gui-only", action="store_true", help="install only GUIAI, without the standard Ablation CLI")
     parser.add_argument("--directory", type=Path, default=default_destination(), help="new installation directory (must not exist)")
     parser.add_argument("--skip-tests", action="store_true", help="skip native validation (not recommended)")
+    parser.add_argument("--no-desktop-shortcut", action="store_true", help="install without creating a Desktop shortcut")
     parser.add_argument("--base-url", default=BASE_URL, help=argparse.SUPPRESS)
     return parser.parse_args(arguments)
 
@@ -181,7 +192,7 @@ def main(arguments=None):
             extract_archive(archive, destination)
             if not args.gui_only:
                 install_ablation(destination, full_archive)
-            install_package(destination, installer, args.skip_tests)
+            install_package(destination, installer, args.skip_tests, args.no_desktop_shortcut, destination)
             verify_installed_cli(destination, not args.gui_only)
             (destination / ".guiai-install.json").write_text(json.dumps({
                 "package": asset,
@@ -190,13 +201,15 @@ def main(arguments=None):
                 "ablation_sha256": checksums.get(ablation_asset),
                 "source": args.base_url,
             }, indent=2) + "\n", encoding="utf-8")
-        except BaseException:
-            if created:
-                shutil.rmtree(destination, ignore_errors=True)
-            raise
+        except BaseException as error:
+            raise RuntimeError(
+                f"Installation did not complete; the new partial installation is retained at {destination}: {error}",
+            ) from error
     executable = destination / ".venv" / ("Scripts/guiai.exe" if sys.platform == "win32" else "bin/guiai")
     installed = "GUIAI is" if args.gui_only else "Ablation CLI and GUIAI are"
     print(f"\n{installed} installed in {destination}")
+    if not args.no_desktop_shortcut:
+        print("Open Ablation from its Desktop icon to choose an investigation target.")
     if sys.platform == "darwin":
         print(f"Application: {destination / 'Ablation.app'}")
     print("Launch it with your installed AI Agent:")
@@ -210,6 +223,6 @@ def main(arguments=None):
 if __name__ == "__main__":
     try:
         main()
-    except (OSError, RuntimeError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+    except (OSError, RuntimeError, ValueError, BadZipFile, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         print(f"Installation failed: {error}", file=sys.stderr)
         raise SystemExit(1)

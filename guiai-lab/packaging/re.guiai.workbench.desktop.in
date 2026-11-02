@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=ABLⱯTION
+Comment=Agent-guided reverse-engineering workbench
+Exec=@GUIAI_EXECUTABLE@ launch
+Icon=ablation-guiai
+Terminal=false
+StartupNotify=true
+StartupWMClass=re.guiai.workbench
+Categories=Development;

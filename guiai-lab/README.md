@@ -15,7 +15,7 @@ For how this improves investigation throughput without making analysis computati
 - Tracks not-started, in-progress, partial, blocked, reviewed, scoped-complete, rejected, and not-applicable work without merging distinct states or deriving a parent's own status from its children.
 - Filters the tree by status or text while retaining ancestor context. Clickable footer status counts apply the corresponding filter, and the complete breakdown remains available below the workspace.
 - Shares each investigation's selected node with its corresponding CLI through its own `state.json`. Row-level stars are bookmarks, not review states; they persist in the same state file and can be changed from the tree or the selected-node action.
-- Creates paired **Lab #N** tabs with the native `+` button. Every tab has an independent session, event history, selection, stars, and real CLI.
+- Creates paired **Lab N** tabs with the native `+` button. Every tab has an independent session, event history, selection, stars, and real CLI.
 - Restores saved investigation tabs and the active Lab on startup. **Save project** records the project manifest and preferences; discovery history and selections are saved continuously. Restored CLIs start when their tab is selected; closing a tab stops its CLI but retains its history and releases the tab label, workspace, and pending callbacks.
 - Keeps one configurable workspace with an optional chart beside the Lab tree. The Lab and terminal can be side by side or stacked in either order. The outer and chart dividers remain adjustable. Node actions remain visible and compact to icons at narrow widths without wrapping. **Node details** uses Vanilla show/hide eye icons and a height-bounded native disclosure, so expanded metadata cannot push actions or the status summary off-screen.
 - Uses Ubuntu's native GTK notebook, tree, disclosure, action, and VTE terminal model when available, with official Vanilla Framework icons. The Tk interface remains a single-investigation fallback on Linux and the native interface on Windows and macOS.
@@ -23,6 +23,9 @@ For how this improves investigation throughput without making analysis computati
 - Uses theme-derived alternating row shading and theme-colored icons while preserving native selection colors.
 - Offers native terminal schemes, editable foreground/background and all 16 ANSI palette colors, and a terminal font selector through **Preferences**. Four numbered visual previews select the Lab/terminal arrangement without text-heavy options. Lab, Workspace layout, Terminal, and ANSI palette use independent collapsed disclosure sections in GTK; Tk presents a compact graphical layout dialog. Preferences apply to all open Labs and persist in the root session.
 - Provides scrollbars, directory rescanning, and a selection-specific follow-up prompt.
+- Accepts local files and folders dragged into the embedded CLI on Linux, Windows, and macOS. Drops insert shell-quoted paths and a trailing space without Enter, so the user reviews the command before running it. Missing paths, control characters, non-local URIs, unavailable CLIs, and batches over 8 MiB are rejected explicitly.
+- Uses the turned-A logo as a titlebar settings toggle with **a11y Optimization**, **OS Optimization**, and **Debug**. Each runs a read-only audit and shows findings before **Allow Permission** sends one bounded request to an active AI agent. **Deny Permission** performs no terminal action. OS Optimization checks Python/OS support, Tkinter, terminal and drag-and-drop dependencies, Linux GTK/VTE, data-directory writability, and the configured agent. Debug uses the same evidence for scoped troubleshooting.
+- Provides built-in accessibility preferences with persistent system, colorblind-safe, and high-contrast palettes. Text contrast is measured against the active background with a 4.5:1 target. PASS and REVIEW labels, bold subjects, and section headings preserve meaning independently of color. Descriptive control labels, screen-reader descriptions, status roles, the text-based Lab tree alternative, and keyboard shortcuts are built in: Alt+S opens Settings, Alt+O opens OS Optimization, Alt+A opens a11y Optimization, and Escape closes the panels. Automated checks do not replace manual validation with the user's assistive technology.
 - Offers **Show in file manager** to reveal selected evidence in Nautilus, Finder, or Windows Explorer after an explicit user action; it does not execute artifacts.
 - Keeps **Open in CLI** as the primary node action, with **Flag for follow-up**, **Mark as reviewed**, and an overflow menu for copy/file-manager actions. Status feedback offers Undo, which appends a restoration event rather than deleting or rewriting history.
 - Preserves append-only discovery histories in each investigation's `events.jsonl`.
@@ -33,7 +36,7 @@ There is no browser, fake built-in AI, separate chatbot protocol, or automatic b
 ## Architecture
 
 ```text
-Lab #N                           Native Ablation workbench (Tk fallback)
+Lab N                           Native Ablation workbench (Tk fallback)
       │                                  │
       ├─ guiai emit ───────────────► events.jsonl
       │                                  │
@@ -59,13 +62,15 @@ python3 -m venv --system-site-packages .venv
 python -m pip install ./guiai-lab
 ```
 
-METRIX and `pyte` are included or installed automatically. The Installation Prompt installs the standard Ablation CLI and GUIAI together. The source command above installs GUIAI only; add the full CLI with `python -m pip install -e .` when needed.
+METRIX, `pyte`, and the pinned `tkinterdnd2` drag-and-drop bridge are included or installed automatically. The Installation Prompt installs the standard Ablation CLI and GUIAI together. The source command above installs GUIAI only; add the full CLI with `python -m pip install -e .` when needed. No separate METRIX checkout is required.
 
 Start with the **[all-platform installation guide](INSTALL.md)** or copy the **[Universal OS Installation Prompt](INSTALL-PROMPT.md)** into your agent.
 
 ## Start a session
 
-Investigate one binary:
+Open the installed Desktop icon, or run `guiai launch`, to choose a binary or material directory in a native dialog. Each target gets a stable session under the user's GUIAI data directory. On native Windows and macOS, the installed launcher selects Tk explicitly; command-line users on those platforms can run `guiai launch --toolkit tk`. The Desktop launcher does not assume that an AI agent is installed.
+
+Investigate one binary with an embedded agent:
 
 ```bash
 guiai desktop /path/to/binary \
@@ -99,13 +104,13 @@ Directory initialization adds the root and its real top-level entries. It does n
 
 The session must be outside a directory target. A session belongs to one target; reusing it for a different target is rejected. Existing file sessions remain compatible.
 
-In the GTK interface, **Lab #1** uses the root session. The `+` button opens a native folder chooser before creating `investigations/0002`, `investigations/0003`, and so on. The selected folder becomes that tab's terminal working directory and is saved independently in its `session.json`; it does not change the RE target. Each tab has its own agent instructions, wrapper, event log, selection, and terminal directory. Cancelling or rejecting an invalid directory creates no tab. Saved numbered investigations and their directories are restored on startup. If a saved directory no longer exists, that terminal uses its session directory and the window shows a warning. Closing a tab stops its terminal without deleting history, so that investigation is restored on the next launch. The command-line `--workspace` option, when present, overrides saved per-tab directories.
+In the GTK interface, **Lab 1** uses the root session. The `+` button opens a native folder chooser before creating `investigations/0002`, `investigations/0003`, and so on. The selected folder becomes that tab's terminal working directory and is saved independently in its `session.json`; it does not change the RE target. Each tab has its own agent instructions, wrapper, event log, selection, and terminal directory. Cancelling or rejecting an invalid directory creates no tab. Saved numbered investigations and their directories are restored on startup. If a saved directory no longer exists, that terminal uses its session directory and the window shows a warning. Closing a tab stops its terminal without deleting history, so that investigation is restored on the next launch. The command-line `--workspace` option, when present, overrides saved per-tab directories.
 
 **Save project** writes `project.json` with the active Lab, Lab session locations, terminal directories, and selected nodes, and saves the current preferences. Closing the application saves the project automatically. Reopen it with `guiai desktop TARGET --session SESSION` as usual; the authoritative event logs, selections, and bookmarks were already persisted and are not duplicated into a second database. The live process, terminal scrollback, and AI Agent conversation context are not serialized as project memory. The Lab's recorded discoveries and current selection are the supported continuation state.
 
 The native **Preferences** dialog offers Ubuntu/system, Tango, Linux console, XTerm, Solarized dark/light, high-contrast, and custom terminal colors. Custom editing covers foreground, background, and all 16 ANSI palette entries. The terminal defaults to the configured system monospace font; any font installed by the user can be selected through the native font button. Lab, Workspace layout, Terminal, and ANSI palette are collapsed by default in GTK so users reveal only the controls they need. Four graphical choices place the Lab left, right, above, or below the AI Agent; **1** is the Lab and **2** is the AI Agent. GTK applies the selection with **Apply**, while Tk saves it immediately. Every open Lab keeps its original tree, chart, and terminal widgets. One root preference set applies to all open investigations and is restored on the next launch.
 
-Omit `--agent` and `--agent-command` to use only the investigation tree. Lab #1 starts in its saved terminal directory, or the session directory when none is saved; `--workspace` overrides it. New Labs always ask for a directory. The embedded CLI receives:
+Omit `--agent` and `--agent-command` to use only the investigation tree. Lab 1 starts in its saved terminal directory, or the session directory when none is saved; `--workspace` overrides it. New Labs always ask for a directory. The embedded CLI receives:
 
 - `GUIAI_SESSION` — session directory containing authoritative state
 - `GUIAI_WORKSPACE` — this terminal's actual working directory, independent of the session and RE target
@@ -194,11 +199,11 @@ investigation-session/
 ├── bin/guiai          # Executable agent-facing CLI wrapper
 ├── session.json       # Target kind, path, and appropriate identity
 ├── project.json       # Saved active Lab and Lab manifest
-├── events.jsonl       # Lab #1 discovery history
-├── state.json         # Lab #1 selected node
+├── events.jsonl       # Lab 1 discovery history
+├── state.json         # Lab 1 selected node
 ├── preferences.json   # Optional terminal and workspace preferences
 └── investigations/
-    └── 0002/          # Lab #2, with the same session-file structure
+    └── 0002/          # Lab 2, with the same session-file structure
         ├── AGENTS.md
         ├── bin/guiai
         ├── session.json
@@ -226,6 +231,7 @@ python3 stress/run_stress.py
 python3 stress/native_stress.py
 python3 stress/desktop_input_stress.py
 python3 stress/gtk_stress.py
+python3 stress/installer_stress.py
 ```
 
 For repeated GUI testing, use the nested launcher instead of opening test windows on the live desktop. It starts a private Xephyr X11 display with software rendering, refuses to reuse an active display, and cleans up its own server:
@@ -240,4 +246,4 @@ The desktop-input suite requires an X11 display (the live display or the nested 
 
 The canonical workspace has one outer divider between Lab and the terminal. **Chart** reveals a nested divider with the Lab tree beside **Rings** or **Treemap**; the tree is never replaced by a chart. Column headers are not draggable: Lab flexes and middle-ellipsizes long labels, Type appears only for mixed-type matching rows, and Status retains a bounded width. Type and Status become compact only while a chart is visible and restore when it is hidden. Breadcrumbs and chart selection update the real session selection. Node actions remain visible below the workspace and compact to icons at narrow widths without wrapping; **Node details** independently reveals actual metadata labels without rebuilding the charts. Footer status counts apply filters, and routine status changes expose append-only Undo. Ring sectors select real nodes, the center moves to the parent, arrow keys navigate the hierarchy, and the mouse wheel changes the visible depth. Small or deeper nodes are counted explicitly rather than silently treated as covered.
 
-The current suite contains 29 core tests, 21 native tests, 31 GTK/map/rings integration tests, and one complete desktop workflow: 82 checks in total. Coverage includes concurrent file and directory initialization, real directory scale, malformed metadata and events, cycles, legacy file sessions, deep trees, independent investigation histories, readable status/type labels, adaptive Type visibility, long-name presentation, streamlined actions, clickable status summaries, exact append-only Undo, preference persistence and corruption, four visual workspace layouts, active-Lab project restoration, collapsed Lab/Workspace-layout/Terminal/ANSI-palette sections with mapped content, legacy-layout migration, canonical pane positions, stars that survive selection and reopen, row-level star interaction, eye-icon disclosure, mapped and height-bounded detail labels, permanent tree/chart layout, compact/restored columns, single-process tab churn with memory and object-retention checks, duplicate starts, failed spawns, deferred-start cancellation, tab-label teardown, treemap area/descendant counts, Baobab palette independence from status, pagination, exact container allocation and tile reuse, ring geometry and real Cairo rendering, angular and depth limits, keyboard navigation, shared chart selection, terminal input readiness, partial terminal writes, stubborn processes, and repeated shutdown. See [HARDENING.md](HARDENING.md) for the defect ledger, installed-artifact evidence, and remaining limits.
+The current suite contains 44 core tests, 24 native tests, 32 GTK/map/rings integration tests, one complete desktop workflow, and 12 universal-installer tests: 113 checks in total. Native Windows and macOS packages additionally run their platform-specific drag-and-drop, inline safety and accessibility audits, icon, terminal, and cleanup checks. Coverage includes concurrent file and directory initialization, real directory scale, malformed metadata and events, cycles, legacy file sessions, deep trees, independent investigation histories, readable status/type labels, adaptive Type visibility, long-name presentation, streamlined actions, clickable status summaries, exact append-only Undo, preference persistence and corruption, four visual workspace layouts, active-Lab project restoration, collapsed Lab/Workspace-layout/Terminal/ANSI-palette sections with mapped content, legacy-layout migration, canonical pane positions, stars that survive selection and reopen, row-level star interaction, eye-icon disclosure, mapped and height-bounded detail labels, permanent tree/chart layout, compact/restored columns, single-process tab churn with memory and object-retention checks, duplicate starts, failed spawns, deferred-start cancellation, tab-label teardown, treemap area/descendant counts, Baobab palette independence from status, pagination, exact container allocation and tile reuse, ring geometry and real Cairo rendering, angular and depth limits, keyboard navigation, shared chart selection, terminal input readiness, partial terminal writes, stubborn processes, and repeated shutdown. See [HARDENING.md](HARDENING.md) for the defect ledger, installed-artifact evidence, and remaining limits.

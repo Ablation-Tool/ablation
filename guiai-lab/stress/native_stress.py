@@ -52,6 +52,52 @@ class NativeCase(unittest.TestCase):
         self.app.reset_filters()
         self.assertTrue(self.app.tree.exists(self.artifact))
 
+    def test_inline_safety_permission_and_deny(self):
+        report = {"summary": "audit", "details": "read-only details", "remediations": [], "checks": [], "ready": True}
+        with mock.patch("guiai.app.evaluate_safety", return_value=report):
+            self.app.toggle_settings()
+            self.assertEqual(self.app.settings_bar.winfo_manager(), "pack")
+            self.app.run_safety_check()
+            self.assertEqual(self.app.safety_panel.winfo_manager(), "pack")
+            self.assertIn("pass", self.app.safety_details.tag_names())
+            self.assertIn("review", self.app.safety_details.tag_names())
+            self.assertIn("disabled", self.app.allow_safety_button.state())
+            with mock.patch.object(self.app.terminal, "write") as write:
+                self.app.allow_safety()
+                write.assert_not_called()
+                self.app.clear_safety()
+                self.assertEqual(self.app.settings_bar.winfo_manager(), "")
+
+            self.app.command = ["agent"]
+            self.app.terminal.command = ["agent"]
+            self.app.terminal.fd = 123456
+            self.app.toggle_settings()
+            self.app.run_safety_check()
+            self.assertNotIn("disabled", self.app.allow_safety_button.state())
+            with mock.patch.object(self.app.terminal, "write") as write:
+                self.app.allow_safety()
+                self.assertEqual(write.call_count, 2)
+                request = write.call_args_list[0].args[0]
+                self.assertNotIn(b"\r", request)
+                self.assertNotIn(b"\n", request)
+                self.assertEqual(write.call_args_list[1], mock.call(b"\r"))
+
+        with mock.patch("guiai.app.evaluate_accessibility", return_value=report):
+            self.app.show_accessibility()
+            self.assertEqual(self.app.accessibility_panel.winfo_manager(), "pack")
+            self.assertTrue(self.app.accessibility_palette_var.get().startswith("Contrast, pass"))
+            with mock.patch.object(self.app.terminal, "write") as write:
+                self.app.allow_accessibility()
+                self.assertEqual(write.call_count, 2)
+                self.assertTrue(write.call_args_list[0].args[0].startswith(b"a11y Optimization/Debugging requested by the user. "))
+        with mock.patch("guiai.app.evaluate_safety", return_value=report):
+            self.app.run_debug_check()
+            self.assertEqual(self.app.safety_domain, "Debug")
+            self.assertTrue(self.app.safety_report["summary"].startswith("Debug diagnostics: "))
+            with mock.patch.object(self.app.terminal, "write") as write:
+                self.app.allow_safety()
+                self.assertTrue(write.call_args_list[0].args[0].startswith(b"Debug requested by the user. "))
+
     def test_details_are_collapsed_without_changing_selection(self):
         self.assertEqual(self.app.details_frame.winfo_manager(), "")
         self.assertEqual(self.app.details_label.winfo_manager(), "")
@@ -331,6 +377,41 @@ class TerminalLifecycleCase(unittest.TestCase):
         self.assertEqual(attempts, [b"abcd", b"abcd", b"cd", b"cd", b"d"])
         panel.stop()
         self.assertEqual(panel.write_queue, b"")
+
+    def test_safety_request_is_single_submission_and_validated(self):
+        panel = self.make_panel()
+        panel.command = ["agent"]
+        panel.fd = 123456
+        with mock.patch.object(panel, "write") as write:
+            panel.submit_agent_request("read-only audit")
+            self.assertEqual(write.call_args_list, [mock.call(b"read-only audit"), mock.call(b"\r")])
+            write.reset_mock()
+            with self.assertRaisesRegex(ValueError, "control characters"):
+                panel.submit_agent_request("first\nsecond")
+            write.assert_not_called()
+        panel.fd = None
+        with self.assertRaisesRegex(ValueError, "not running"):
+            panel.submit_agent_request("read-only audit")
+
+    def test_native_drop_target_inserts_path_without_enter(self):
+        from metrix.drop import dropped_payload
+
+        panel = self.make_panel([os.sys.executable, "-c", "import time; time.sleep(60)"])
+        self.assertTrue(panel.drop_enabled, "native tkdnd bridge did not initialize")
+        panel.fd = 123456
+        messages = []
+        panel.status_callback = messages.append
+        directory = Path(panel.output) / "dropped folder with spaces"
+        directory.mkdir()
+        with mock.patch.object(panel, "write") as write:
+            action = panel.on_drop(mock.Mock(data="{" + str(directory) + "}"))
+        self.assertEqual(action, "copy")
+        write.assert_called_once_with(dropped_payload([directory]))
+        payload = write.call_args.args[0]
+        self.assertTrue(payload.endswith(b" "))
+        self.assertNotIn(b"\r", payload)
+        self.assertNotIn(b"\n", payload)
+        self.assertIn("review before running", messages[-1])
 
     def test_oversized_paste_is_rejected_without_writing(self):
         panel = self.make_panel()
