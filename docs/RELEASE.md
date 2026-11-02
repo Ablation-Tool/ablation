@@ -29,7 +29,7 @@
 ### Validation and boundaries
 
 - Local validation includes 44 core tests, 24 native/Tk tests, 32 GTK/map/rings tests, one complete desktop-input workflow, and 10 universal-installer tests: **111 checks**, plus targeted accent and responsive-layout coverage.
-- Native macOS and Windows CI remains required before release. macOS public distribution also requires Developer ID signing and notarization. Manual NVDA, Narrator, VoiceOver, braille, and individual assistive-configuration testing remains required; no complete accessibility certification is claimed.
+- Native validation passed on `windows-latest` (run `41474878498`), `macos-latest` (run `41474878515`), and the full Linux/Windows/macOS universal-installer matrix (run `41474878448`). macOS public distribution still requires Developer ID signing and notarization. Manual NVDA, Narrator, VoiceOver, braille, and individual assistive-configuration testing remains required; no complete accessibility certification is claimed.
 
 ---
 
