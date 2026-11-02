@@ -40,6 +40,7 @@ Native workspaces for agent-guided reverse engineering, with real agent terminal
 | Document | Description |
 |---|---|
 | [GUIAI workbench guide](../guiai-lab/README.md) | Lab/tree navigation, independent investigations, project saving, charts, review controls, preferences, session files, and validation |
+| [Unified Memory Architecture](reference-modules/unified-memory-architecture.md) | How the GUIAI workspace, real CLI/AI Agent, and human investigator form one authoritative investigation address space |
 | [Universal OS Installation Prompt](../guiai-lab/INSTALL-PROMPT.md) | Choose GUIAI or CLI Only, then install the appropriate tools on Linux, macOS, or Windows |
 | [Installation guide](../guiai-lab/INSTALL.md) | Universal installation workflow and the explicit CLI-only alternative |
 | [Native platform packages](../guiai-lab/packaging/README.md) | Offline GUIAI packages, native Windows ConPTY, macOS `Ablation.app`, Linux GTK/VTE, and Windows WSL alternatives |
