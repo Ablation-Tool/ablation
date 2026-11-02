@@ -125,11 +125,17 @@ class WindowsNativeCase(unittest.TestCase):
         self.assertIn("review before running", messages[-1])
 
     def test_workspace_branding_layout_and_save(self):
+        bitmap_calls = []
+        original_iconbitmap = self.root.iconbitmap
+        def record_iconbitmap(*args, **kwargs):
+            bitmap_calls.extend(args)
+            return original_iconbitmap(*args, **kwargs)
+        self.root.iconbitmap = record_iconbitmap
         application = InvestigationApp(self.root, self.session)
         try:
             self.assertEqual(application.brand_header_image.width(), 32)
             self.assertTrue(application.brand_header_image.transparency_get(0, 0))
-            self.assertTrue(application.root.iconbitmap().endswith("ablation-guiai.ico"))
+            self.assertTrue(any(str(path).endswith("ablation-guiai.ico") for path in bitmap_calls), bitmap_calls)
             application.toggle_settings()
             self.assertEqual(application.settings_bar.winfo_manager(), "pack")
             application.run_safety_check()

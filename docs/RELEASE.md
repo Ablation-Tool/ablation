@@ -1,5 +1,38 @@
 # Ablation Release Notes
 
+## Unreleased: Cross-platform GUIAI desktop integration 2026-11-02
+
+### Desktop launchers and universal installation
+
+- Added per-user Desktop icons and launchers for GNOME/Linux, native Windows, and macOS, including ICO and ICNS versions of the turned-A artwork and **ABLⱯTION** desktop branding. `guiai launch` opens a native binary-or-directory chooser and creates stable per-target sessions instead of depending on hard-coded paths.
+- Installers create native application entries: a freedesktop launcher, Windows `Ablation.lnk` using `pythonw.exe`, and a macOS `Ablation.app` bundle with a Desktop alias. `NO_DESKTOP_SHORTCUT=1`, Windows `-NoDesktopShortcut`, and `forall.py --no-desktop-shortcut` provide a consistent opt-out.
+- Bundled and pinned `tkinterdnd2` 0.7.0 with offline wheels for Windows x64/ARM64, macOS Intel/Apple Silicon, and Linux. The universal installer now creates the virtual environment at its final destination, validates `guiai launch --help` there, propagates final paths correctly through staging, and retains partial installations explicitly for diagnosis.
+- Added release-archive checks for offline dependencies, icons, launcher structure, checksums, unsafe archive paths, existing-file preservation, and installations whose paths contain spaces.
+
+### Embedded CLI drag-and-drop
+
+- Local files and directories can be dragged into the embedded AI terminal on Linux, Windows, and macOS. Paths are shell-quoted and inserted with a trailing space but **without Enter**, allowing review before execution.
+- Missing or non-local paths, control characters, unavailable CLIs, and batches over 8 MiB are rejected explicitly. Dropped artifacts are never executed by the drop action.
+
+### Safety, debugging, and accessibility workflows
+
+- Added **a11y Optimization**, **OS Optimization**, and **Debug** titlebar workflows. Each presents a read-only audit, visible findings and proposed actions, then **Allow Permission** or **Deny Permission**. Deny sends nothing; Allow sends one bounded request to the active AI agent.
+- OS audits cover Python/runtime support, Tkinter, terminal and drag-and-drop dependencies, Linux GTK/VTE, data-directory writability, and the configured agent. Debug uses the same evidence for scoped troubleshooting. The a11y audit inspects control labels, roles, keyboard support, text alternatives, and measured contrast.
+- Added persistent system, colorblind-safe, and high-contrast palettes, a 4.5:1 normal-text contrast target, explicit PASS/REVIEW labels, bold subjects, and accent-colored commands. The palette control itself announces results such as **Contrast, pass**.
+- Added descriptive screen-reader names/descriptions, status roles, a text-based Lab tree alternative for charts, focusable audit output, and keyboard navigation: Alt+S Settings, Alt+O OS Optimization, Alt+A a11y Optimization, and Escape to close panels. Automated checks do not replace validation with the user's assistive technology.
+
+### Native presentation
+
+- Settings buttons follow the current OS accent color, with dynamic refresh and readable text. The titlebar uses a compact 24×24 turned-A logo, remains thin by default, and expands only while Settings is open. No written application label appears in the window titlebar.
+- Preferences defaults to 320×300, expands to 480×500 for Workspace Layout, and returns to compact size when collapsed. Investigation tabs are labeled **Lab N** instead of **Lab #N**.
+
+### Validation and boundaries
+
+- Local validation includes 44 core tests, 24 native/Tk tests, 32 GTK/map/rings tests, one complete desktop-input workflow, and 10 universal-installer tests: **111 checks**, plus targeted accent and responsive-layout coverage.
+- Native macOS and Windows CI remains required before release. macOS public distribution also requires Developer ID signing and notarization. Manual NVDA, Narrator, VoiceOver, braille, and individual assistive-configuration testing remains required; no complete accessibility certification is claimed.
+
+---
+
 ## v2.5.0 2026-09-25
 
 ### FormatStringScanner: fortify variant coverage (`ablation fmtstr`)

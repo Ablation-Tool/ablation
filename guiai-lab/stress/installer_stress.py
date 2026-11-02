@@ -91,7 +91,7 @@ class UniversalInstallerCase(unittest.TestCase):
 
     def test_complete_verified_offline_install(self):
         self.package()
-        destination = self.root / "completed install"
+        destination = (self.root / "completed install").resolve()
         with mock.patch.object(forall, "install_package", side_effect=self.complete_install) as install, mock.patch.object(
             forall.subprocess, "run",
         ) as run, mock.patch.object(forall.platform, "machine", return_value="AMD64"):
@@ -105,7 +105,7 @@ class UniversalInstallerCase(unittest.TestCase):
 
     def test_no_desktop_shortcut_is_forwarded(self):
         self.package()
-        destination = self.root / "without shortcut"
+        destination = (self.root / "without shortcut").resolve()
         with mock.patch.object(forall, "install_package", side_effect=self.complete_install) as install, mock.patch.object(
             forall.subprocess, "run",
         ), mock.patch.object(forall.platform, "machine", return_value="AMD64"):

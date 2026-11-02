@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=Ablation
+Name=ABLⱯTION
 Comment=Agent-guided reverse-engineering workbench
 Exec=@GUIAI_EXECUTABLE@ launch
 Icon=ablation-guiai

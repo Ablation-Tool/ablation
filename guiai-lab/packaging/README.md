@@ -12,7 +12,7 @@ A Desktop icon is installed by default and opens a native target chooser. Use `p
 
 This installs GUIAI and its required Python dependencies, not the optional full Ablation analysis environment or an AI Agent. A network connection is needed for the initial download. Subsequent Python package installation uses only the bundled wheels. `/forall` is an instruction interpreted through the install prompt, not a built-in command available in every CLI.
 
-After installation, the turned-A logo exposes **OS Optimization/Debugging**. Its Safety Check + OS Compliance audit is read-only until the user explicitly allows a displayed, bounded remediation request through an active embedded AI agent. Denying permission never invokes the terminal.
+After installation, the turned-A logo exposes **a11y Optimization**, **OS Optimization**, and **Debug**. Each audit is read-only until the user explicitly allows a displayed, bounded remediation request through an active embedded AI agent. Denying permission never invokes the terminal. Accessibility includes persistent colorblind-safe and high-contrast palettes, descriptive labels, text alternatives, and keyboard navigation; manual assistive-technology validation remains necessary.
 
 ## Linux
 
