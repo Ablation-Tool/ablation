@@ -17,6 +17,20 @@ metrix summary --output /path/to/metrix-output --text
 
 Summary output can be JSON or human-readable text. It distinguishes artifact totals, regular files, directories, symlinks, hashed files, total bytes, and errors. Metadata is not proof of reverse-engineering coverage or a vulnerability verdict.
 
+## Output artifacts and data model
+
+A scan produces three related outputs:
+
+- **`artifacts.jsonl`** contains one JSON object per inspected entry. Fields include `schema_version`, `id`, `path`, `kind`, `size_bytes`, `sha256`, `format`, `architecture`, `endianness`, `artifact_class`, `status`, `analysis_status`, and `detection`. Errors can add `scan_error`, `source_kind`, or link-target information.
+- **`summary.json`** aggregates those records into corpus totals, file and directory counts, hashes, byte totals, format/architecture/class/status counts, and explicit error counts.
+- **`matrix.html`** embeds the summary and artifact records into a self-contained matrix generated from the packaged template.
+
+Artifact IDs are derived from the relative path and evidence identity, including the content hash for regular files. `identified`, `unidentified`, and `error` describe inventory detection status; they do not mean that analysis has occurred. The default `analysis_status` is `not_recorded`, which is separate from the inventory status and does not imply coverage.
+
+Regular files are opened without following symlinks and hashed in chunks. A file that changes size or modification time during hashing becomes an error record instead of being presented as stable evidence. Symlink targets are recorded without following them, and non-regular filesystem entries receive their own record instead of being silently ignored.
+
+The output directory is excluded from the scan so generated records do not become new RE material. Records and summaries are written atomically, and JSONL loading reports the exact line of malformed input.
+
 ## Queries and retrieval
 
 `metrix query` filters records by format, architecture, artifact class, status, and analysis status. Repeated `--contains` terms are case-insensitive and all must match. Output is JSONL by default or TSV with `--tsv`.
