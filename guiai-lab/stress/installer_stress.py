@@ -93,11 +93,11 @@ class UniversalInstallerCase(unittest.TestCase):
         self.package()
         destination = (self.root / "completed install").resolve()
         with mock.patch.object(forall, "install_package", side_effect=self.complete_install) as install, mock.patch.object(
-            forall.subprocess, "run",
-        ) as run, mock.patch.object(forall.platform, "machine", return_value="AMD64"):
-            forall.main(["--directory", str(destination), "--base-url", self.root.as_uri()])
+            forall, "verify_installed_cli",
+        ) as verify:
+            forall.main(["--directory", str(destination), "--gui-only", "--base-url", self.root.as_uri()])
         install.assert_called_once_with(destination, self.installer, False, False, destination)
-        run.assert_called_once_with([str(destination / self.executable), "launch", "--help"], stdout=forall.subprocess.DEVNULL, check=True)
+        verify.assert_called_once_with(destination, False)
         self.assertEqual((destination / self.executable).read_text(), "installed")
         metadata = json.loads((destination / ".guiai-install.json").read_text())
         self.assertEqual(metadata["package"], self.asset)
@@ -107,17 +107,47 @@ class UniversalInstallerCase(unittest.TestCase):
         self.package()
         destination = (self.root / "without shortcut").resolve()
         with mock.patch.object(forall, "install_package", side_effect=self.complete_install) as install, mock.patch.object(
-            forall.subprocess, "run",
-        ), mock.patch.object(forall.platform, "machine", return_value="AMD64"):
-            forall.main(["--directory", str(destination), "--base-url", self.root.as_uri(), "--no-desktop-shortcut"])
+            forall, "verify_installed_cli",
+        ):
+            forall.main(["--directory", str(destination), "--gui-only", "--no-desktop-shortcut", "--base-url", self.root.as_uri()])
         install.assert_called_once_with(destination, self.installer, False, True, destination)
+
+    def test_full_install_includes_ablation_and_gui(self):
+        self.package()
+        wheel = self.root / "ablation_tool-2.93.1-py3-none-any.whl"
+        wheel.write_bytes(b"standard Ablation wheel")
+        digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
+        with (self.root / "SHA256SUMS.txt").open("a", encoding="utf-8") as stream:
+            stream.write(f"{digest}  {wheel.name}\n")
+        destination = self.root / "full install"
+        with (
+            mock.patch.object(forall, "install_ablation") as install_ablation,
+            mock.patch.object(forall, "install_package") as install_package,
+            mock.patch.object(forall, "verify_installed_cli") as verify,
+        ):
+            forall.main(["--directory", str(destination), "--base-url", self.root.as_uri()])
+        self.assertEqual(install_ablation.call_args.args[1].name, wheel.name)
+        install_package.assert_called_once_with(destination, self.installer, False, False, destination)
+        self.assertTrue(verify.call_args.args[1])
+        metadata = json.loads((destination / ".guiai-install.json").read_text())
+        self.assertEqual(metadata["ablation_package"], wheel.name)
+        self.assertEqual(metadata["ablation_sha256"], digest)
+
+    def test_ablation_wheel_is_required_by_default(self):
+        self.package()
+        destination = self.root / "missing ablation"
+        with mock.patch.object(forall, "install_package") as install:
+            with self.assertRaisesRegex(RuntimeError, "exactly one"):
+                forall.main(["--directory", str(destination), "--base-url", self.root.as_uri()])
+        install.assert_not_called()
+        self.assertFalse(destination.exists())
 
     def test_failed_install_retains_partial_destination_for_diagnosis(self):
         self.package()
         destination = self.root / "partial install"
         with mock.patch.object(forall, "install_package", side_effect=forall.subprocess.CalledProcessError(1, "installer")):
             with self.assertRaisesRegex(RuntimeError, "partial installation is retained"):
-                forall.main(["--directory", str(destination), "--base-url", self.root.as_uri()])
+                forall.main(["--directory", str(destination), "--gui-only", "--base-url", self.root.as_uri()])
         self.assertEqual((destination / self.installer).read_text(), "offline package")
 
     def test_failed_verification_does_not_run_installer(self):
@@ -126,7 +156,7 @@ class UniversalInstallerCase(unittest.TestCase):
         destination = self.root / "rejected"
         with mock.patch.object(forall, "install_package") as install:
             with self.assertRaisesRegex(RuntimeError, "Checksum"):
-                forall.main(["--directory", str(destination), "--base-url", self.root.as_uri()])
+                forall.main(["--directory", str(destination), "--gui-only", "--base-url", self.root.as_uri()])
         install.assert_not_called()
         self.assertFalse(destination.exists())
         self.assertTrue(archive.exists())

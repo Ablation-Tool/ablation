@@ -20,8 +20,9 @@ def main():
         sys.executable, "-m", "pip", "download", "--only-binary=:all:",
         "--dest", str(vendor), "pyte>=0.8.1,<1", "wcwidth==0.2.14", "tkinterdnd2==0.7.0",
     ], check=True)
-    for name in ("install_macos.sh", "README.md"):
+    for name in ("install_macos.sh", "create_macos_app.py", "README.md"):
         shutil.copy(ROOT / "packaging" / name, DIST / name)
+    shutil.copy(ROOT / "guiai" / "icons" / "ablation-guiai-logo.png", vendor / "ablation-guiai-logo.png")
     shutil.copy(ROOT / "stress" / "macos_stress.py", DIST / "macos_stress.py")
     shutil.copy(ROOT / "guiai" / "icons" / "ablation-guiai.icns", DIST / "ablation-guiai.icns")
     (DIST / "install_macos.sh").chmod(0o755)
