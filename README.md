@@ -11,52 +11,7 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 
 ---
 
-## Demonstration
-
 ![GUIAI native workbench demo](assets/demos/guiai-workbench-demo.gif)
-
-<table>
-  <tr>
-    <td><a href="assets/demos/guiai-demo-01.png"><img src="assets/demos/guiai-demo-01.png" alt="Investigation Lab and embedded AI terminal" width="600"></a></td>
-    <td><a href="assets/demos/guiai-demo-02.png"><img src="assets/demos/guiai-demo-02.png" alt="GUIAI settings controls and optimization buttons" width="600"></a></td>
-    <td><a href="assets/demos/guiai-demo-03.png"><img src="assets/demos/guiai-demo-03.png" alt="Accessibility audit and keyboard navigation options" width="600"></a></td>
-  </tr>
-  <tr>
-    <td><a href="assets/demos/guiai-demo-04.png"><img src="assets/demos/guiai-demo-04.png" alt="OS Optimization read-only audit with permission controls" width="600"></a></td>
-    <td><a href="assets/demos/guiai-demo-05.png"><img src="assets/demos/guiai-demo-05.png" alt="Debug diagnostics with pass and review findings" width="600"></a></td>
-    <td><a href="assets/demos/guiai-demo-06.png"><img src="assets/demos/guiai-demo-06.png" alt="Node details for an investigation artifact" width="600"></a></td>
-  </tr>
-  <tr>
-    <td><a href="assets/demos/guiai-demo-07.png"><img src="assets/demos/guiai-demo-07.png" alt="Resizable Lab and embedded terminal panes" width="600"></a></td>
-    <td><a href="assets/demos/guiai-demo-08.png"><img src="assets/demos/guiai-demo-08.png" alt="Full-width Lab with radial chart" width="600"></a></td>
-    <td><a href="assets/demos/guiai-demo-09.png"><img src="assets/demos/guiai-demo-09.png" alt="Treemap visualization of investigation nodes" width="600"></a></td>
-  </tr>
-  <tr>
-    <td><a href="assets/demos/guiai-demo-10.png"><img src="assets/demos/guiai-demo-10.png" alt="Lab tree and embedded AI terminal layout" width="600"></a></td>
-    <td><a href="assets/demos/guiai-demo-11.png"><img src="assets/demos/guiai-demo-11.png" alt="Treemap chart beside the embedded AI terminal" width="600"></a></td>
-    <td><a href="assets/demos/guiai-demo-12.png"><img src="assets/demos/guiai-demo-12.png" alt="Radial chart beside the embedded AI terminal" width="600"></a></td>
-  </tr>
-  <tr>
-    <td><a href="assets/demos/guiai-demo-13.png"><img src="assets/demos/guiai-demo-13.png" alt="Expanded embedded AI terminal workspace" width="600"></a></td>
-    <td><a href="assets/demos/guiai-demo-14.png"><img src="assets/demos/guiai-demo-14.png" alt="Workspace layout and terminal preferences" width="600"></a></td>
-    <td><a href="assets/demos/guiai-demo-15.png"><img src="assets/demos/guiai-demo-15.png" alt="Dragging a folder into the embedded AI terminal" width="600"></a></td>
-  </tr>
-  <tr>
-    <td><a href="assets/demos/guiai-demo-16.png"><img src="assets/demos/guiai-demo-16.png" alt="Investigation review statuses and flagged follow-up" width="600"></a></td>
-    <td><a href="assets/demos/guiai-demo-17.png"><img src="assets/demos/guiai-demo-17.png" alt="Reviewed status filter for Lab nodes" width="600"></a></td>
-    <td><a href="assets/demos/guiai-demo-18.png"><img src="assets/demos/guiai-demo-18.png" alt="Status selection menu for Lab review" width="600"></a></td>
-  </tr>
-  <tr>
-    <td><a href="assets/demos/guiai-demo-19.png"><img src="assets/demos/guiai-demo-19.png" alt="Teal accent applied to the desktop workbench" width="600"></a></td>
-    <td><a href="assets/demos/guiai-demo-20.png"><img src="assets/demos/guiai-demo-20.png" alt="Teal OS accent color in GUIAI" width="600"></a></td>
-    <td><a href="assets/demos/guiai-demo-21.png"><img src="assets/demos/guiai-demo-21.png" alt="Green OS accent color in GUIAI" width="600"></a></td>
-  </tr>
-  <tr>
-    <td><a href="assets/demos/guiai-demo-22.png"><img src="assets/demos/guiai-demo-22.png" alt="Orange OS accent color in GUIAI" width="600"></a></td>
-    <td><a href="assets/demos/guiai-demo-23.png"><img src="assets/demos/guiai-demo-23.png" alt="Red OS accent color in GUIAI" width="600"></a></td>
-    <td><a href="assets/demos/guiai-demo-24.png"><img src="assets/demos/guiai-demo-24.png" alt="Purple OS accent color in GUIAI" width="600"></a></td>
-  </tr>
-</table>
 
 ## Capabilities
 
@@ -66,7 +21,7 @@ ABL∀TION stands as the universal constant and definitive answer to reverse eng
 | Capability | Code | Description |
 |:---|:---|:---|
 | [**a11y Optimization**](guiai-lab/README.md) | [1](guiai-lab/guiai/app.py)&nbsp;[2](guiai-lab/guiai/gtk_app.py) | Automatically detects the user's native OS accessibility settings and active assistive tools, dynamically adapting GUIAI to match their preferences. |
-| [**Agent Bridge**](guiai-lab/README.md) | [1](guiai-lab/guiai/environment.py)&nbsp;[2](guiai-lab/metrix/desktop.py) | Embeds your AI Agent with safe drag-and-drop path insertion |
+| [**Agent Bridge**](guiai-lab/README.md) | [1](guiai-lab/guiai/environment.py)&nbsp;[2](guiai-lab/metrix/desktop.py) | Embeds your AI Agent into the GUIAI |
 | [**Debug Diagnostics**](guiai-lab/README.md) | [1](guiai-lab/guiai/app.py)&nbsp;[2](guiai-lab/guiai/gtk_app.py) | Shows dependency and terminal diagnostics before requesting troubleshooting permission |
 | [**Evidence Integrity**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/cli.py)&nbsp;[3](guiai-lab/guiai/app.py) | Tracks reviews and validates evidence targets |
 | [**Lab Navigation**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/map_view.py)&nbsp;[3](guiai-lab/metrix/cli.py) | Searches and visualizes discoveries while restoring sessions, agents, and preferences |
@@ -413,6 +368,51 @@ Following coordinated disclosure, the **Cisco Product Security Incident Response
 ### Learn as You RE
 
 ![Learn as You RE](assets/demos/Learn-As-You-RE.gif)
+
+### GUIAI Workbench
+
+<table>
+  <tr>
+    <td><a href="assets/demos/guiai-demo-01.png"><img src="assets/demos/guiai-demo-01.png" alt="Investigation Lab and embedded AI terminal" width="600"></a></td>
+    <td><a href="assets/demos/guiai-demo-02.png"><img src="assets/demos/guiai-demo-02.png" alt="GUIAI settings controls and optimization buttons" width="600"></a></td>
+    <td><a href="assets/demos/guiai-demo-03.png"><img src="assets/demos/guiai-demo-03.png" alt="Accessibility audit and keyboard navigation options" width="600"></a></td>
+  </tr>
+  <tr>
+    <td><a href="assets/demos/guiai-demo-04.png"><img src="assets/demos/guiai-demo-04.png" alt="OS Optimization read-only audit with permission controls" width="600"></a></td>
+    <td><a href="assets/demos/guiai-demo-05.png"><img src="assets/demos/guiai-demo-05.png" alt="Debug diagnostics with pass and review findings" width="600"></a></td>
+    <td><a href="assets/demos/guiai-demo-06.png"><img src="assets/demos/guiai-demo-06.png" alt="Node details for an investigation artifact" width="600"></a></td>
+  </tr>
+  <tr>
+    <td><a href="assets/demos/guiai-demo-07.png"><img src="assets/demos/guiai-demo-07.png" alt="Resizable Lab and embedded terminal panes" width="600"></a></td>
+    <td><a href="assets/demos/guiai-demo-08.png"><img src="assets/demos/guiai-demo-08.png" alt="Full-width Lab with radial chart" width="600"></a></td>
+    <td><a href="assets/demos/guiai-demo-09.png"><img src="assets/demos/guiai-demo-09.png" alt="Treemap visualization of investigation nodes" width="600"></a></td>
+  </tr>
+  <tr>
+    <td><a href="assets/demos/guiai-demo-10.png"><img src="assets/demos/guiai-demo-10.png" alt="Lab tree and embedded AI terminal layout" width="600"></a></td>
+    <td><a href="assets/demos/guiai-demo-11.png"><img src="assets/demos/guiai-demo-11.png" alt="Treemap chart beside the embedded AI terminal" width="600"></a></td>
+    <td><a href="assets/demos/guiai-demo-12.png"><img src="assets/demos/guiai-demo-12.png" alt="Radial chart beside the embedded AI terminal" width="600"></a></td>
+  </tr>
+  <tr>
+    <td><a href="assets/demos/guiai-demo-13.png"><img src="assets/demos/guiai-demo-13.png" alt="Expanded embedded AI terminal workspace" width="600"></a></td>
+    <td><a href="assets/demos/guiai-demo-14.png"><img src="assets/demos/guiai-demo-14.png" alt="Workspace layout and terminal preferences" width="600"></a></td>
+    <td><a href="assets/demos/guiai-demo-15.png"><img src="assets/demos/guiai-demo-15.png" alt="Dragging a folder into the embedded AI terminal" width="600"></a></td>
+  </tr>
+  <tr>
+    <td><a href="assets/demos/guiai-demo-16.png"><img src="assets/demos/guiai-demo-16.png" alt="Investigation review statuses and flagged follow-up" width="600"></a></td>
+    <td><a href="assets/demos/guiai-demo-17.png"><img src="assets/demos/guiai-demo-17.png" alt="Reviewed status filter for Lab nodes" width="600"></a></td>
+    <td><a href="assets/demos/guiai-demo-18.png"><img src="assets/demos/guiai-demo-18.png" alt="Status selection menu for Lab review" width="600"></a></td>
+  </tr>
+  <tr>
+    <td><a href="assets/demos/guiai-demo-19.png"><img src="assets/demos/guiai-demo-19.png" alt="Teal accent applied to the desktop workbench" width="600"></a></td>
+    <td><a href="assets/demos/guiai-demo-20.png"><img src="assets/demos/guiai-demo-20.png" alt="Teal OS accent color in GUIAI" width="600"></a></td>
+    <td><a href="assets/demos/guiai-demo-21.png"><img src="assets/demos/guiai-demo-21.png" alt="Green OS accent color in GUIAI" width="600"></a></td>
+  </tr>
+  <tr>
+    <td><a href="assets/demos/guiai-demo-22.png"><img src="assets/demos/guiai-demo-22.png" alt="Orange OS accent color in GUIAI" width="600"></a></td>
+    <td><a href="assets/demos/guiai-demo-23.png"><img src="assets/demos/guiai-demo-23.png" alt="Red OS accent color in GUIAI" width="600"></a></td>
+    <td><a href="assets/demos/guiai-demo-24.png"><img src="assets/demos/guiai-demo-24.png" alt="Purple OS accent color in GUIAI" width="600"></a></td>
+  </tr>
+</table>
 
 </details>
 
