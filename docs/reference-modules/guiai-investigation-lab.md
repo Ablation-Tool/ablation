@@ -1,4 +1,4 @@
-# Lab
+# Lab & Navigation
 
 ## Purpose
 

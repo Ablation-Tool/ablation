@@ -39,29 +39,31 @@ Native workspaces for agent-guided reverse engineering, with real agent terminal
 
 | Document | Description |
 |---|---|
-| [GUIAI workbench guide](../guiai-lab/README.md) | Lab/tree navigation, independent investigations, project saving, charts, review controls, preferences, session files, and validation |
-| [Performance and investigation memory](reference-modules/guiai-performance.md) | How GUIAI reduces rediscovery, preserves evidence, and improves navigation, resumption, and review without replacing the CLI |
-| [AI Agent Bridge](reference-modules/guiai-agent-bridge.md) | Real interactive agent CLIs, session environments, terminal lifecycle, permissions, and validation |
-| [Token Allocation](reference-modules/guiai-token-allocation.md) | Scoped retrieval and workspace memory reduce repeated context while preserving full evidence and investigation coverage |
-| [Operating System Support](reference-modules/guiai-operating-system-support.md) | Native Linux, Windows, and macOS interfaces, packages, requirements, and platform validation |
-| [Unified Memory Architecture](reference-modules/unified-memory-architecture.md) | How the GUIAI workspace, real CLI/AI Agent, and human investigator form one authoritative investigation address space |
-| [Lab](reference-modules/guiai-investigation-lab.md) | Event model, navigation, filtering, charts, evidence, and agent-grown investigation history |
-| [Project Memory](reference-modules/guiai-project-memory.md) | Project manifests, session files, restoration, persistence, consistency, and corruption handling |
-| [Independent Workspaces](reference-modules/guiai-independent-workspaces.md) | Independent Lab sessions, terminal directories, lifecycle, and restoration |
-| [Visual Navigation](reference-modules/guiai-visual-navigation.md) | Tree, breadcrumbs, Rings, Treemap, shared selection, geometry, and validation |
-| [Review Workflow](reference-modules/guiai-review-workflow.md) | Status meanings, human review, scoped completion, follow-ups, bookmarks, and append-only undo |
-| [Layout Preferences](reference-modules/guiai-layout-preferences.md) | Four visual Lab/Agent arrangements, pane behavior, migration, persistence, and validation |
-| [Terminal](reference-modules/guiai-terminal.md) | Interactive CLI, PTY/ConPTY, display preferences, input/output, and process cleanup |
-| [Directory Inventory](reference-modules/guiai-directory-inventory.md) | Honest top-level inventory, target identity, rescanning, session boundaries, and validation |
-| [METRIX Support](reference-modules/metrix-support.md) | Bundled artifact inventory, summaries, queries, retrieval, dashboard, and external bridge |
-| [Unified Memory Architecture](reference-modules/unified-memory-architecture.md) | How the GUIAI workspace, real CLI/AI Agent, and human investigator form one authoritative investigation address space |
-| [Universal OS Installation Prompt](../guiai-lab/INSTALL-PROMPT.md) | Choose GUIAI or CLI Only, then install the appropriate tools on Linux, macOS, or Windows |
-| [Installation guide](../guiai-lab/INSTALL.md) | Universal installation workflow and the explicit CLI-only alternative |
-| [Native platform packages](../guiai-lab/packaging/README.md) | Offline GUIAI packages, native Windows ConPTY, macOS `Ablation.app`, Linux GTK/VTE, and Windows WSL alternatives |
-| [Agent configuration](integrations/agent-configuration.md) | Shared setup and workflows for supported terminal and IDE coding agents |
-| [Kimi Code configuration](kimi-code-configuration.md) | Reverse-engineering model, permission, and runtime configuration for Kimi Code |
-| [Claude Code workflow](integrations/claude-code.md) | Claude Code setup, CLI workflow, and `CLAUDE.md` template |
-| [Validation and hardening](../guiai-lab/HARDENING.md) | Native test coverage, terminal lifecycle checks, stress testing, defect fixes, and platform boundaries |
+| [AI Agent Bridge](reference-modules/guiai-agent-bridge.md) | Runs your interactive AI agent inside the GUI. No credentials included. |
+| [Lab & Navigation](reference-modules/guiai-investigation-lab.md) | Organizes, searches, and visualizes discoveries, with directory inventory and METRIX tools. |
+| [Persistence & Isolation](reference-modules/guiai-project-memory.md) | Restores sessions and preferences while keeping each Lab's agent, history, and workspace separate. |
+| [Review & Evidence Integrity](reference-modules/guiai-review-workflow.md) | Tracks reviews, preserves evidence history, validates targets, and prevents duplicate discoveries. |
+
+**Supporting topics**
+
+- [GUIAI workbench guide](../guiai-lab/README.md)
+- [Performance and investigation memory](reference-modules/guiai-performance.md)
+- [Unified Memory Architecture](reference-modules/unified-memory-architecture.md)
+- [Token Allocation](reference-modules/guiai-token-allocation.md)
+- [Operating System Support](reference-modules/guiai-operating-system-support.md)
+- [Independent Workspaces](reference-modules/guiai-independent-workspaces.md)
+- [Visual Navigation](reference-modules/guiai-visual-navigation.md)
+- [Layout Preferences](reference-modules/guiai-layout-preferences.md)
+- [Terminal](reference-modules/guiai-terminal.md)
+- [Directory Inventory](reference-modules/guiai-directory-inventory.md)
+- [METRIX Support](reference-modules/metrix-support.md)
+- [Universal OS Installation Prompt](../guiai-lab/INSTALL-PROMPT.md)
+- [Installation guide](../guiai-lab/INSTALL.md)
+- [Native platform packages](../guiai-lab/packaging/README.md)
+- [Agent configuration](integrations/agent-configuration.md)
+- [Kimi Code configuration](kimi-code-configuration.md)
+- [Claude Code workflow](integrations/claude-code.md)
+- [Validation and hardening](../guiai-lab/HARDENING.md)
 
 ---
 
