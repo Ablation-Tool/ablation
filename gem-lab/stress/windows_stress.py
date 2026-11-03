@@ -34,6 +34,8 @@ for line in sys.stdin:
     elif command == "exit":
         print("BYE", flush=True)
         break
+    elif command:
+        print("RECEIVED:" + command, flush=True)
 '''
 
 

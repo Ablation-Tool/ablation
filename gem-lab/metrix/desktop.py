@@ -187,6 +187,8 @@ class TerminalPanel(ttk.Frame):
             "PYTHONPATH": package_root + (os.pathsep + environment["PYTHONPATH"] if environment.get("PYTHONPATH") else ""),
         })
         if os.name == "nt":
+            environment.setdefault("PYTHONIOENCODING", "utf-8")
+            environment.setdefault("PYTHONUTF8", "1")
             try:
                 from winpty import PtyProcess
                 self.process = PtyProcess.spawn(
