@@ -412,9 +412,8 @@ class TerminalPanel(ttk.Frame):
                             raise
                         break
                     written = self.process.write(text)
-                    if not isinstance(written, int) or isinstance(written, bool) or not 0 <= written <= len(text):
-                        raise ValueError("ConPTY returned an invalid character count")
-                    written = len(text[:written].encode("utf-8"))
+                    if not isinstance(written, int) or isinstance(written, bool) or not 0 <= written <= len(payload):
+                        raise ValueError("ConPTY returned an invalid byte count")
                 else:
                     written = os.write(self.fd, payload)
             except (BlockingIOError, InterruptedError):

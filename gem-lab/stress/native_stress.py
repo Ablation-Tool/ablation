@@ -391,7 +391,7 @@ class TerminalLifecycleCase(unittest.TestCase):
         panel.stop()
         self.assertEqual(panel.write_queue, b"")
 
-    def test_windows_unicode_write_converts_character_counts_to_bytes(self):
+    def test_windows_unicode_write_preserves_byte_counts(self):
         panel = self.make_panel()
         panel.after_cancel(panel.poll_after_id)
         panel.fd = True
@@ -401,7 +401,7 @@ class TerminalLifecycleCase(unittest.TestCase):
             attempts.append(text)
             if len(attempts) in {1, 3}:
                 raise BlockingIOError()
-            return 2 if len(attempts) == 2 else 1
+            return {2: 3, 4: 3, 5: 2}[len(attempts)]
 
         panel.process = mock.Mock()
         panel.process.write.side_effect = partial_write

@@ -16,6 +16,7 @@ from gem.app import InvestigationApp
 from gem.environment import configure_environment
 from gem.events import Session
 from gem.layout import LAYOUTS
+from gem.launcher import default_workspace
 from gem.macos_launcher import LauncherDialog, prepare_agent_path
 from metrix.desktop import TerminalPanel
 
@@ -77,7 +78,15 @@ class MacOSNativeCase(unittest.TestCase):
             self.root.tk.dooneevent(tk._tkinter.DONT_WAIT)
             time.sleep(0.02)
         output = self.panels[-1].text.get("1.0", "end") if self.panels else ""
-        self.fail(f"{message}: {output!r}")
+        if self.panels:
+            panel = self.panels[-1]
+            diagnostics = (
+                f"pending={bytes(panel.write_queue)!r}, reaped={panel.reaped}, "
+                f"exited={panel.exited}, reader_eof={panel.reader_eof}"
+            )
+        else:
+            diagnostics = "no terminal panel"
+        self.fail(f"{message}: {output!r}; {diagnostics}")
 
     def assert_reaped(self, panel):
         self.assertTrue(panel.reaped)
@@ -96,7 +105,11 @@ class MacOSNativeCase(unittest.TestCase):
         self.assertEqual(self.session.workspace, self.root_path.resolve())
 
     def test_posix_interactive_terminal(self):
-        panel = self.make_panel([sys.executable, "-u", "-c", FIXTURE])
+        fixture = FIXTURE.replace(
+            "    command = line.strip()\n",
+            "    command = line.strip()\n    print('INPUT=' + ascii(command), flush=True)\n",
+        )
+        panel = self.make_panel([sys.executable, "-u", "-c", fixture])
         self.wait_for(lambda: "READY" in panel.text.get("1.0", "end"), "PTY fixture did not start")
         panel.write(b"check\r")
         self.wait_for(lambda: "STATE_RC=0" in panel.text.get("1.0", "end"), "session wrapper failed through PTY")
@@ -173,7 +186,7 @@ class MacOSNativeCase(unittest.TestCase):
         dialog.agent.set(sys.executable)
         expected = dialog.arguments()
         self.assertEqual(expected[:2], ["desktop", str(Path(sys.executable).resolve())])
-        self.assertEqual(expected[expected.index("--workspace") + 1], str(Path(__file__).resolve().parents[1]))
+        self.assertEqual(expected[expected.index("--workspace") + 1], str(default_workspace()))
         self.assertEqual(expected[-2:], ["--agent", sys.executable])
         dialog.agent.set("gem-agent-that-does-not-exist")
         with self.assertRaises(ValueError):

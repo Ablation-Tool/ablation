@@ -10,6 +10,24 @@ The agent follows a transactional cycle: `gem state` reads the exact selected ob
 
 The name refers to this project's **Graphics Environment Manager** and its GEM VDI output. It is not an emulator or a replacement for the original GEM desktop.
 
+## Stochastic agent, deterministic environment
+
+“Bicameral operating system” is an architectural metaphor here, not a claim that GEM owns a kernel, CPU, memory, or devices. The AI Agent proposes actions stochastically; the human supplies direction and judgment; Ablation and GEM execute constrained operations, preserve evidence, and verify results deterministically.
+
+Next-token accessible volume measures breadth, not correctness:
+
+\[
+A_\tau(S)=\sum_{a\in O}\mathbf{1}[P(a\mid h_T(S))>\tau]
+\]
+
+Here \(S\) is the model context and \(O\) is its output vocabulary. In a Lab, context can include the current request, event history, selection, and evidence. At the structured-action level, permitted accessible actions can be distinguished with a second indicator:
+
+\[
+B_\tau(S)=\sum_{a\in O}\mathbf{1}[P(a\mid S)>\tau]\cdot\mathbf{1}[a\in\operatorname{Allow}(S)]
+\]
+
+The operational sequence is `proposal → constrained action gate → deterministic execution → evidence on disk → verification/replay`. This reduces unbounded and uninspectable action; it does not eliminate stochastic variation or prove safety. Accessible volume must not be presented as a correctness, autonomy, or safety score. Current interactive agent CLIs do not expose token probabilities, so GEM does not calculate either score for them. A provider exposing suitable logits and complete structured actions would be required before making such a measurement.
+
 ## Environment and hosted Lab
 
 GEM is the outer environment; GEM Lab is its investigation application. The migration preserves the existing native shell while moving shared operations behind `GemLabHost` and `GemCommandBroker` rather than performing a big-bang rewrite.
