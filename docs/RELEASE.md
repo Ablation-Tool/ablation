@@ -4,9 +4,9 @@
 
 ### Desktop launchers and universal installation
 
-- Added per-user Desktop icons and launchers for GNOME/Linux, native Windows, and macOS, including ICO and ICNS versions of the turned-A artwork and **ABLⱯTION** desktop branding. `guiai launch` opens a native binary-or-directory chooser and creates stable per-target sessions instead of depending on hard-coded paths.
-- Installers create native application entries: a freedesktop launcher, Windows `Ablation.lnk` using `pythonw.exe`, and a macOS `Ablation.app` bundle with a Desktop alias. `NO_DESKTOP_SHORTCUT=1`, Windows `-NoDesktopShortcut`, and `forall.py --no-desktop-shortcut` provide a consistent opt-out.
-- Bundled and pinned `tkinterdnd2` 0.7.0 with offline wheels for Windows x64/ARM64, macOS Intel/Apple Silicon, and Linux. The universal installer now creates the virtual environment at its final destination, validates `guiai launch --help` there, propagates final paths correctly through staging, and retains partial installations explicitly for diagnosis.
+- Added per-user Desktop icons and launchers for GNOME/Linux, native Windows, and macOS, including ICO and ICNS versions of the turned-A artwork and **GEM** desktop branding. `gem launch` opens a native binary-or-directory chooser and creates stable per-target sessions instead of depending on hard-coded paths.
+- Installers create native application entries: a freedesktop launcher, Windows `GEM.lnk` using `pythonw.exe`, and a macOS `GEM.app` bundle with a Desktop alias. `NO_DESKTOP_SHORTCUT=1`, Windows `-NoDesktopShortcut`, and `forall.py --no-desktop-shortcut` provide a consistent opt-out.
+- Bundled and pinned `tkinterdnd2` 0.7.0 with offline wheels for Windows x64/ARM64, macOS Intel/Apple Silicon, and Linux. The universal installer now creates the virtual environment at its final destination, validates `gem launch --help` there, propagates final paths correctly through staging, and retains partial installations explicitly for diagnosis.
 - Added release-archive checks for offline dependencies, icons, launcher structure, checksums, unsafe archive paths, existing-file preservation, and installations whose paths contain spaces.
 
 ### Embedded CLI drag-and-drop

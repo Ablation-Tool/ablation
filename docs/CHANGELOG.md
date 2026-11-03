@@ -4,14 +4,27 @@
 
 ## v2.94.0
 
-**Cross-platform GUIAI desktop integration.**
+**Cross-platform GEM desktop integration.**
 
-- Added native Linux, Windows, and macOS Desktop launchers, target-choosing `guiai launch`, ICO/ICNS artwork, ABLⱯTION branding, and stable per-target sessions. Universal installation now uses final-path virtual environments, offline pinned drag-and-drop dependencies, explicit shortcut opt-out, and retained partial-failure diagnostics.
+- Added native Linux, Windows, and macOS Desktop launchers, target-choosing `gem launch`, ICO/ICNS artwork, GEM branding, and stable per-target sessions. Universal installation now uses final-path virtual environments, offline pinned drag-and-drop dependencies, explicit shortcut opt-out, and retained partial-failure diagnostics.
 - Added safe local file/folder drops into the embedded CLI with host-specific quoting and no automatic Enter or artifact execution.
 - Added read-only a11y, OS optimization, and Debug workflows with visible findings and bounded Allow/Deny AI-agent actions. Accessibility includes persistent colorblind-safe/high-contrast palettes, measured contrast, descriptive screen-reader labels, keyboard navigation, and the Lab tree text alternative.
 - Added OS accent-following settings controls, compact titlebar presentation, responsive Preferences sizing, and **Lab N** tab labels. Validation covers 113 local checks plus passing native Windows, macOS, and universal-installer CI runs (`41474878498`, `41474878515`, and `41474878448`); macOS signing/notarization and manual assistive-technology validation remain release requirements.
 
 ## Unreleased
+
+**Transactional GEM work and verified GEM spatial evidence.**
+
+- Established GEM (Graphics Environment Manager) as the only current graphical environment, package, CLI, and session protocol. The former GUIAI interface is obsolete rather than a supported alias; package paths, assets, documentation, and tests now use GEM.
+
+- Added revisioned selections and `gem begin`, a compare-and-commit selected-work operation that preserves event fields, rejects stale agents, and allows exactly one winner under concurrent begin attempts.
+- Added typed analyzer outcomes and evidence provenance, explicit IR unknown semantics, fail-closed dynamic-function verification, and complete mapped-segment restoration.
+- Merged GEM Spatial IR with the native Lab: bounded scene generation, deterministic geometry checks, Cairo/SVG/VDI rendering, source and VDI roundtrips, CGA/VGA/NDC validation, agent repair trajectories, and replay-verified evidence export.
+- Added the `gem` CLI and native shared-selection chart, with packaged demo/replay verification and focused semantic, dynamic-safety, concurrency, GUI, and VDI regression coverage.
+- Added the outer GEM environment and hosted Lab boundary: `gem lab`, `gem lab-state`, unified investigation/spatial object addressing, a typed command broker, and one GTK/CLI export service that keeps visual state derived rather than authoritative.
+- Hardened concurrent exports with exclusive writer locks and atomic artifact writes, added stale-export rejection and coherent investigation snapshots, and verified process-group termination and bounded agent output.
+- Corrected small-device connector verification by accounting for half-pixel coordinate quantization, and fixed `ablation analyze --entropy` to consume `EntropyMapResult` correctly.
+- Added a real system-binary integration workflow: Ablation analysis becomes scoped Lab evidence and a replayed GEM run.
 
 **Android APK/XAPK, DEX, JNI, and cross-layer taint workflow.**
 
@@ -49,11 +62,11 @@
 
 ## v2.93.2
 
-**Complete Ablation and GUIAI installation prompt.**
+**Complete Ablation and GEM installation prompt.**
 
-- `forall.py` now installs the standard Ablation CLI and GUIAI into one environment by default, with `--gui-only` retained for workbench-only installations.
-- Both the native GUIAI package and the standard Ablation wheel are selected from the release and verified against `SHA256SUMS.txt`. GUIAI wheels install offline; standard Ablation dependencies are downloaded from PyPI without optional extras, models, or credentials.
-- Validation checks both `ablation --help` and `guiai --help`, including the Ablation CLI bundled inside `Ablation.app`. The universal installation workflow exercises the complete installation on Linux, Windows, and macOS.
+- `forall.py` now installs the standard Ablation CLI and GEM into one environment by default, with `--gui-only` retained for workbench-only installations.
+- Both the native GEM package and the standard Ablation wheel are selected from the release and verified against `SHA256SUMS.txt`. GEM wheels install offline; standard Ablation dependencies are downloaded from PyPI without optional extras, models, or credentials.
+- Validation checks both `ablation --help` and `gem --help`, including the Ablation CLI bundled inside `GEM.app`. The universal installation workflow exercises the complete installation on Linux, Windows, and macOS.
 
 ---
 
@@ -61,8 +74,8 @@
 
 **Native macOS application bundle.**
 
-- Added `Ablation.app` with the offline Python environment, native ICNS branding, and a first-run chooser for the RE target, project directory, and optional installed AI Agent.
-- Added atomic application creation and relocation-safe launching on the same Mac, with command forwarding to the existing GUIAI workbench and no bundled model or credentials.
+- Added `GEM.app` with the offline Python environment, native ICNS branding, and a first-run chooser for the RE target, project directory, and optional installed AI Agent.
+- Added atomic application creation and relocation-safe launching on the same Mac, with command forwarding to the existing GEM workbench and no bundled model or credentials.
 - Added native macOS validation for app execution, Launch Services, relocation, launcher input, and the existing terminal and workspace behavior. The locally generated app is not signed or Apple-notarized.
 
 ---

@@ -240,6 +240,9 @@ class ProbeRecord:
     notes: str = ""
     created_at: str = field(default_factory=_now)
     executed_at: Optional[str] = None
+    status: str = "pending"
+    diagnostics: List[Dict[str, Any]] = field(default_factory=list)
+    coverage: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def create(
@@ -269,10 +272,19 @@ class ProbeRecord:
             created_at=_now(),
         )
 
-    def mark_executed(self, evidence_ids: List[str]) -> None:
-        self.executed = True
+    def mark_executed(
+        self,
+        evidence_ids: List[str],
+        status: str = "complete",
+        diagnostics: Optional[List[Dict[str, Any]]] = None,
+        coverage: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        self.executed = status in {"complete", "partial"}
         self.executed_at = _now()
         self.result_evidence_ids = list(evidence_ids)
+        self.status = status
+        self.diagnostics = list(diagnostics or [])
+        self.coverage = dict(coverage or {})
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
