@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Ablation-Tool/ablation/main/assets/branding/ablation-1b-riveted-plate-header-1280.png" width="760" alt="Ablation">
+  <img src="https://raw.githubusercontent.com/Ablation-Tool/ablation/main/assets/branding/woven-diamond/repo/github-social-preview.png" width="760" alt="Ablation GEM woven diamond">
 </p>
 
 # Ablation Documentation

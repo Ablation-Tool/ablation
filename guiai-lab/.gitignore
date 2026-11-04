@@ -1,9 +1,0 @@
-__pycache__/
-*.py[cod]
-*.egg-info/
-build/
-dist/
-.venv/
-guiai-session/
-sessions/
-.pytest_cache/

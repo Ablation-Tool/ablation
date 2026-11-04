@@ -3,10 +3,10 @@ probe_adapters.py — Concrete probe execution adapters for the Hypothesis Engin
 
 Milestone 3 of the Active Architecture Tomography plan.
 
-Each adapter takes a ProbeRecord and the current analysis context, runs the
-appropriate Ablation analyzer, and returns a list of EvidenceRecord objects.
-The HypothesisEngine calls execute_probe() — which picks the right adapter —
-and feeds the resulting evidence back into the scoring loop.
+Each adapter takes a ProbeRecord and the current analysis context and runs the
+appropriate Ablation analyzer. The HypothesisEngine calls execute_probe_result(),
+which preserves complete, partial, unsupported, failed, cancelled, and
+non-convergent outcomes while feeding successful evidence into scoring.
 
 Adapter catalog:
     disassembly  → Capstone: function size, insn count, call targets, strings
@@ -28,9 +28,9 @@ Usage:
 """
 from __future__ import annotations
 
-import traceback
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
+from .analysis_result import AnalysisDiagnostic, AnalysisResult, AnalysisStatus
 from .hypothesis_models import EvidenceRecord, EvidenceRelation, HypothesisSession
 
 if TYPE_CHECKING:
@@ -56,8 +56,7 @@ class ProbeAdapter:
     ) -> List[EvidenceRecord]:
         """Execute the probe and return evidence records.
 
-        Must not raise — catch exceptions internally and return empty list
-        or a low-strength NEUTRAL evidence record describing the failure.
+        Dispatch translates exceptions into typed AnalysisResult outcomes.
         """
         raise NotImplementedError
 
@@ -70,13 +69,13 @@ class ProbeAdapter:
             try:
                 vas.append(int(str(params["va"]), 0))
             except (ValueError, TypeError):
-                pass
+                raise
         if "vas" in params:
             for v in params.get("vas", []):
                 try:
                     vas.append(int(str(v), 0))
                 except (ValueError, TypeError):
-                    pass
+                    raise
         if vas:
             return list(set(vas))
         # Fall back to hypothesis subjects
@@ -90,7 +89,7 @@ class ProbeAdapter:
                     try:
                         vas.append(int(str(subj[key]), 0))
                     except (ValueError, TypeError):
-                        pass
+                        raise
         return list(set(vas))
 
     def _evidence(
@@ -169,7 +168,7 @@ class DisassemblyAdapter(ProbeAdapter):
                     notes=f"disasm: {len(insns)} insns, {len(call_targets)} calls",
                 ))
             except Exception:
-                pass
+                raise
         return evidence
 
 
@@ -210,7 +209,7 @@ class CFGAdapter(ProbeAdapter):
                     notes=f"cfg: {num_blocks} blocks, loops={has_loop}",
                 ))
             except Exception:
-                pass
+                raise
         return evidence
 
 
@@ -255,7 +254,7 @@ class XRefAdapter(ProbeAdapter):
                     notes=f"xref: {len(callers)} callers, {len(callees)} callees",
                 ))
             except Exception:
-                pass
+                raise
         return evidence
 
 
@@ -302,7 +301,7 @@ class LifterAdapter(ProbeAdapter):
                     notes=f"lifter: {len(ir.splitlines())} IR lines, {taint_count} tainted",
                 ))
             except Exception:
-                pass
+                raise
         return evidence
 
 
@@ -353,7 +352,7 @@ class SemanticAdapter(ProbeAdapter):
                     notes=f"semantic: top score={getattr(hits[0], 'score', 0):.3f}",
                 ))
         except Exception:
-            pass
+            raise
         return evidence
 
 
@@ -394,9 +393,9 @@ class VersionAdapter(ProbeAdapter):
                         notes=f"dtw: similarity={sim:.3f} to {ref_path}",
                     ))
                 except Exception:
-                    pass
+                    raise
         except ImportError:
-            pass
+            raise
         return evidence
 
 
@@ -435,7 +434,7 @@ class TaintAdapter(ProbeAdapter):
                     notes=f"taint: {len(paths)} source→sink path(s)",
                 ))
             except Exception:
-                pass
+                raise
         return evidence
 
     def _run_taint(self, ctx, va, arch, params):
@@ -504,23 +503,82 @@ if _dynamic is not None:
 _ADAPTER_MAP: Dict[str, ProbeAdapter] = {a.kind: a for a in _ADAPTERS}
 
 
+def _attach_evidence_provenance(evidence, probe, ctx):
+    import hashlib
+    from pathlib import Path
+
+    path = getattr(ctx, "path", "")
+    digest = getattr(ctx, "sha256", "")
+    if not digest and path:
+        hasher = hashlib.sha256()
+        with Path(path).open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                hasher.update(chunk)
+        digest = hasher.hexdigest()
+    if not digest:
+        raise ValueError("probe evidence requires a stable artifact identity")
+    for record in evidence:
+        record.artifact_hashes = sorted(set(record.artifact_hashes) | {digest})
+        record.parameters = {
+            **record.parameters,
+            "probe_id": probe.id,
+            "probe_kind": probe.kind,
+            "probe_parameters": dict(probe.parameters),
+        }
+        if record.source_location is None:
+            record.source_location = {
+                "binary_path": path,
+                "architecture": getattr(ctx, "arch", None),
+            }
+
+
+def execute_probe_result(
+    probe: "ProbeRecord",
+    ctx: "BinaryContext",
+    session: HypothesisSession,
+) -> AnalysisResult:
+    adapter = _ADAPTER_MAP.get(probe.kind)
+    if adapter is None:
+        return AnalysisResult.unsupported(
+            "unsupported_adapter",
+            f"No probe adapter is registered for kind {probe.kind!r}",
+        )
+    try:
+        evidence = adapter.execute(probe, ctx, session)
+        _attach_evidence_provenance(evidence, probe, ctx)
+    except ImportError as error:
+        return AnalysisResult.unsupported(
+            "dependency_unavailable",
+            f"{type(error).__name__}: {error}",
+            coverage={"adapter": probe.kind},
+        )
+    except Exception as error:
+        return AnalysisResult.failed(
+            "adapter_execution_failed",
+            f"{type(error).__name__}: {error}",
+            coverage={"adapter": probe.kind},
+        )
+    return AnalysisResult.complete(
+        evidence,
+        coverage={"adapter": probe.kind, "evidence_count": len(evidence)},
+    )
+
+
 def execute_probe(
     probe: "ProbeRecord",
     ctx: "BinaryContext",
     session: HypothesisSession,
 ) -> List[EvidenceRecord]:
-    """Execute a probe and return evidence records.
-
-    Picks the right adapter by probe.kind. If no adapter exists, returns empty.
-    Never raises — all exceptions are caught internally.
-    """
-    adapter = _ADAPTER_MAP.get(probe.kind)
-    if adapter is None:
-        return []
-    try:
-        return adapter.execute(probe, ctx, session)
-    except Exception:
-        return []
+    result = execute_probe_result(probe, ctx, session)
+    if not result.succeeded:
+        import warnings
+        diagnostic = result.diagnostics[0]
+        warnings.warn(
+            f"Probe {probe.kind!r} ended as {result.status.value}: {diagnostic.message}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    return result.evidence
 
 
 def available_kinds() -> List[str]:
@@ -533,6 +591,6 @@ __all__ = [
     "DisassemblyAdapter", "CFGAdapter", "XRefAdapter",
     "LifterAdapter", "SemanticAdapter", "VersionAdapter",
     "TaintAdapter", "ManualAdapter",
-    "execute_probe", "available_kinds",
+    "execute_probe", "execute_probe_result", "available_kinds",
     # DynamicProbeAdapter re-exported if unicorn is installed
 ]

@@ -1,0 +1,11 @@
+include GEM.md
+include HARDENING.md
+include INSTALL.md
+include INSTALL-PROMPT.md
+include NOTICE
+recursive-include licenses *.txt
+recursive-include gem/icons *.svg *.png
+recursive-include metrix/templates *.html
+recursive-include metrix/gui *.html *.css *.js
+recursive-include stress *.py
+recursive-include stress *.sh

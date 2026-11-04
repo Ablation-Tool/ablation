@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gem-lab"
+version = "0.1.0"
+description = "Agent-grown investigation workspace for reverse-engineering sessions"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pyte>=0.8.1,<1",
+    "tkinterdnd2==0.7.0",
+    "pywinpty>=2,<3; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+measurement = [
+    "numpy>=1.26.0",
+    "onnxruntime>=1.24.2",
+    "tokenizers>=0.23.3",
+    "huggingface-hub>=1.0",
+]
+
+[project.scripts]
+gem = "gem.cli:main"
+metrix = "metrix.cli:main"
+
+[tool.setuptools]
+license-files = ["NOTICE", "licenses/*.txt"]
+
+[tool.setuptools.package-data]
+gem = ["icons/*.svg", "icons/*.png", "icons/*.ico", "icons/*.icns"]
+metrix = ["templates/*.html", "gui/*.html", "gui/*.css", "gui/*.js"]
+
+[tool.setuptools.packages.find]
+include = ["gem*", "metrix*"]

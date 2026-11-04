@@ -137,6 +137,13 @@ class IRReturn(IRNode):
 
 
 @dataclass(frozen=True)
+class IRUnknown(IRNode):
+    reason: str
+    address: Optional[int] = None
+    raw: Optional[int] = None
+
+
+@dataclass(frozen=True)
 class IRAssign(IRNode):
     dest: IRReg
     rhs:  IRNode
@@ -268,8 +275,8 @@ class AlphaIRLifter(IRLifter):
 
     Covers the subset of Alpha instructions relevant to taint tracing:
     integer arithmetic, loads, stores, BSR/JSR calls, branches, and RET.
-    Unrecognised instructions are emitted as IRAssign(dest, IRConst(0)) so
-    the register map stays consistent without aborting the lift.
+    Unrecognised instructions are emitted as IRUnknown with their address and
+    original word so incomplete semantics cannot masquerade as concrete values.
     """
 
     def __init__(self,
@@ -369,20 +376,28 @@ class AlphaIRLifter(IRLifter):
             taken = (va + 4) + disp21 * 4
             return [IRBranch(cond=None, taken=taken, fallthrough=None)]
 
-        # Conditional branches (0x38–0x3F, 0x31–0x37)
-        _COND_OPS = {
-            0x39: 'BEQ', 0x3D: 'BNE', 0x3B: 'BLT', 0x3F: 'BLE',
-            0x3C: 'BGT', 0x38: 'BGE', 0x31: 'FBEQ', 0x35: 'FBNE',
-            0x32: 'FBLT', 0x36: 'FBLE', 0x33: 'FBGT', 0x37: 'FBGE',
-        }
-        if op in _COND_OPS:
+        if 0x31 <= op <= 0x3F:
             disp21 = word & 0x1FFFFF
             if disp21 & 0x100000:
                 disp21 -= 0x200000
             taken = (va + 4) + disp21 * 4
-            fall  = va + 4
-            cmp_op = '==' if _COND_OPS[op] in ('BEQ', 'FBEQ') else '!='
-            cond = IRCmp(cmp_op, IRReg(_alpha_reg(ra)), IRConst(0))
+            fall = va + 4
+            register = IRReg(_alpha_reg(ra))
+            integer_conditions = {
+                0x39: '==', 0x3D: '!=', 0x3B: '<',
+                0x3F: '<=', 0x3C: '>', 0x3E: '>=',
+            }
+            if op in integer_conditions:
+                cond = IRCmp(integer_conditions[op], register, IRConst(0))
+            elif op in (0x38, 0x3A):
+                low_bit = IRBinop('&', register, IRConst(1))
+                cond = IRCmp('==' if op == 0x38 else '!=', low_bit, IRConst(0))
+            else:
+                cond = IRUnknown(
+                    f"Alpha floating-point condition opcode 0x{op:02x} requires FP semantics",
+                    address=va,
+                    raw=word,
+                )
             return [IRBranch(cond=cond, taken=taken, fallthrough=fall)]
 
         # Integer arithmetic (op groups 0x10–0x12)
@@ -394,11 +409,14 @@ class AlphaIRLifter(IRLifter):
             elif arith_op:
                 rhs = IRBinop(arith_op, IRReg(_alpha_reg(rb)), rb_node)
             else:
-                rhs = IRConst(0)   # unrecognised function code
+                return [IRUnknown(
+                    f"unsupported Alpha arithmetic function 0x{fn:02x} in opcode group 0x{op:02x}",
+                    address=va,
+                    raw=word,
+                )]
             return [IRAssign(IRReg(_alpha_reg(rc)), rhs)]
 
-        # Unrecognised: preserve dest register with a zero constant
-        return [IRAssign(IRReg(_alpha_reg(ra)), IRConst(0))]
+        return [IRUnknown(f"unsupported Alpha opcode 0x{op:02x}", address=va, raw=word)]
 
 
 # ─── x86-64 lifter ────────────────────────────────────────────────────────────
@@ -482,10 +500,10 @@ class X86_64IRLifter(IRLifter):
             return [IRReturn(IRReg('rax'))]
 
         if mn in ('call', 'callq'):
-            if ops:
-                target = _x86_operand(ops[0])
-            else:
-                target = IRConst(0)
+            target = _x86_operand(ops[0]) if ops else IRUnknown(
+                "x86 call target unavailable",
+                address=getattr(insn, 'address', None),
+            )
             return [IRAssign(IRReg('rax'), IRCall(target, args=(), ret_reg='rax'))]
 
         if mn in ('mov', 'movq', 'movl', 'movzx', 'movsx', 'movabs'):
@@ -500,7 +518,10 @@ class X86_64IRLifter(IRLifter):
                     store_addr = _x86_operand(dst_op)
                     assert isinstance(store_addr, IRLoad)
                     return [IRStore(store_addr.addr, src)]
-            return []
+            return [IRUnknown(
+                f"unsupported x86 move form {mn}",
+                address=getattr(insn, 'address', None),
+            )]
 
         if mn == 'lea' and len(ops) >= 2:
             m = ops[1].mem
@@ -530,21 +551,28 @@ class X86_64IRLifter(IRLifter):
                 rhs_combined = IRBinop(_ARITH[mn], lhs_node, rhs_node)
                 return [IRAssign(IRReg(dst_reg), rhs_combined)]
 
-        # push/pop: treat as stack ops — skip for taint purposes
         if mn in ('push', 'pushq', 'pop', 'popq'):
-            return []
-
-        # Conditional jumps: emit IRBranch with a placeholder condition
-        if mn.startswith('j') and len(ops) == 1 and ops[0].type == _X86_OP_IMM:
-            taken = ops[0].imm
-            fall  = insn.address + insn.size
-            cond  = IRCmp('!=', IRConst(0), IRConst(0))   # placeholder
-            return [IRBranch(cond=cond, taken=taken, fallthrough=fall)]
+            return [IRUnknown(
+                f"x86 stack operation {mn} is not modeled",
+                address=getattr(insn, 'address', None),
+            )]
 
         if mn == 'jmp' and ops and ops[0].type == _X86_OP_IMM:
             return [IRBranch(cond=None, taken=ops[0].imm, fallthrough=None)]
 
-        return []
+        if mn.startswith('j') and len(ops) == 1 and ops[0].type == _X86_OP_IMM:
+            taken = ops[0].imm
+            fall = insn.address + insn.size
+            cond = IRUnknown(
+                f"x86 condition code {mn} requires unresolved flags",
+                address=insn.address,
+            )
+            return [IRBranch(cond=cond, taken=taken, fallthrough=fall)]
+
+        return [IRUnknown(
+            f"unsupported x86 instruction {mn}",
+            address=getattr(insn, 'address', None),
+        )]
 
 
 # ─── Pseudo-C emitter ─────────────────────────────────────────────────────────
@@ -605,6 +633,9 @@ class PseudoCEmitter:
                   else self._node(n.target)
             args_s = ', '.join(self._node(a) for a in n.args)
             return f'{tgt}({args_s})'
+        if isinstance(n, IRUnknown):
+            location = f' @ 0x{n.address:x}' if n.address is not None else ''
+            return f'UNKNOWN({n.reason}{location})'
         return repr(n)
 
     def _struct_field(self, addr: IRNode) -> Optional[str]:
@@ -629,6 +660,8 @@ class PseudoCEmitter:
         return None
 
     def _stmt(self, s: IRNode, pad: str) -> str:
+        if isinstance(s, IRUnknown):
+            return f'{pad}/* {self._node(s)} */'
         if isinstance(s, IRAssign):
             return f'{pad}{self._node(s.dest)} = {self._node(s.rhs)};'
         if isinstance(s, IRStore):

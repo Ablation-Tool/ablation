@@ -1,0 +1,76 @@
+name: GEM universal installer
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            builder: build_linux.py
+            asset: GEM-Linux.zip
+          - os: windows-latest
+            builder: build_windows_native.py
+            asset: GEM-Windows-Native.zip
+          - os: macos-latest
+            builder: build_macos.py
+            asset: GEM-macOS.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Enable Linux display
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          Xvfb :99 -screen 0 1280x1024x24 >/tmp/gem-xvfb.log 2>&1 &
+      - name: Validate universal installer
+        run: python gem-lab/stress/installer_stress.py
+      - name: Build native package
+        run: |
+          python -m pip install build
+          python "gem-lab/packaging/${{ matrix.builder }}"
+          python -m build --wheel
+      - name: Verify checksum download and native installation
+        shell: python
+        env:
+          DISPLAY: ${{ runner.os == 'Linux' && ':99' || '' }}
+        run: |
+          import hashlib
+          from pathlib import Path
+          import shutil
+          import subprocess
+          import sys
+          import tempfile
+          with tempfile.TemporaryDirectory(prefix="gem-forall-ci-") as temporary:
+              release = Path(temporary) / "release"
+              release.mkdir()
+              archive = Path("gem-lab/dist/${{ matrix.asset }}")
+              shutil.copy2(archive, release / archive.name)
+              digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+              (release / "SHA256SUMS.txt").write_text(f"{digest}  {archive.name}\n")
+              full_wheel = next(Path("dist").glob("ablation_tool-*-py3-none-any.whl"))
+              shutil.copy2(full_wheel, release / full_wheel.name)
+              digest = hashlib.sha256(full_wheel.read_bytes()).hexdigest()
+              with (release / "SHA256SUMS.txt").open("a") as stream:
+                  stream.write(f"{digest}  {full_wheel.name}\n")
+              destination = Path(temporary) / "installed with spaces"
+              subprocess.run([sys.executable, "gem-lab/packaging/forall.py", "--base-url", release.as_uri(), "--directory", str(destination)], check=True)
+      - name: Upload Linux package
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: GEM-Linux
+          path: gem-lab/dist/GEM-Linux.zip
+          if-no-files-found: error
