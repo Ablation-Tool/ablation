@@ -68,6 +68,7 @@ Native workspaces for agent-guided reverse engineering, with real agent terminal
 - [Agent configuration](integrations/agent-configuration.md)
 - [Kimi Code configuration](kimi-code-configuration.md)
 - [Claude Code workflow](integrations/claude-code.md)
+- [Sacred geometry experiment](../experiments/sacred-geometry/README.md)
 - [Validation and hardening](../gem-lab/HARDENING.md)
 
 ---

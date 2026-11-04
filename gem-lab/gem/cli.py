@@ -76,6 +76,14 @@ def _parser():
     measure.add_argument("--momentum-band", type=int, default=1, help="accessible-momentum target band (default: 1)")
     measure.add_argument("--json", action="store_true", help="emit the complete measurement report")
 
+    volume = commands.add_parser("volume", help="measure accessible volume from a full-vocabulary NPZ distribution")
+    volume.add_argument("distribution", help="NPZ containing probabilities and optional input_ids")
+    volume.add_argument("--previous", help="optional earlier NPZ distribution for momentum")
+    volume.add_argument("--tau", type=float, action="append", help="probability threshold; repeat for a custom sweep")
+    volume.add_argument("--momentum-band", type=int, default=1, help="accessible-momentum target band (default: 1)")
+    volume.add_argument("--output", help="new JSON report path; existing files are never overwritten")
+    volume.add_argument("--session", help="optional investigation session for separate evidence")
+
     for name in ("state", "tree", "begin", "emit", "emit-many", "review"):
         command = commands.add_parser(name, help=f"{name} investigation state through the shared Lab protocol")
         command.add_argument("--session", default="gem-session")
@@ -134,6 +142,29 @@ def main(argv=None):
             elif arguments.no_agent:
                 command.append("--no-agent")
             return gem_main(command)
+        if arguments.command == "volume":
+            from .volume_bridge import VolumeBridge
+            from .accessible_volume import THRESHOLDS
+            from .events import Session
+
+            bridge = VolumeBridge(Session(arguments.session) if arguments.session else None)
+            observation = bridge.observe(
+                arguments.distribution,
+                previous=arguments.previous,
+                thresholds=arguments.tau or THRESHOLDS,
+                momentum_band=arguments.momentum_band,
+            )
+            public = {key: value for key, value in observation.items() if not key.startswith("_")}
+            if arguments.output:
+                output = Path(arguments.output)
+                output.parent.mkdir(parents=True, exist_ok=True)
+                with output.open("x", encoding="utf-8") as stream:
+                    json.dump(public, stream, indent=2, ensure_ascii=False, sort_keys=True)
+                    stream.write("\n")
+                print(f"Report: {output}")
+            else:
+                print(json.dumps(public, indent=2, ensure_ascii=False, sort_keys=True))
+            return 0
         if arguments.command == "measure":
             from .accessible_volume import THRESHOLDS, measure_session
             from .events import Session
