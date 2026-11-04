@@ -11,7 +11,7 @@ from tkinter import ttk
 import unittest
 from unittest import mock
 
-from gem.app import InvestigationApp
+from gem.app import InvestigationApp, WelcomeApp
 from gem.events import Session
 from gem.layout import LAYOUTS
 from metrix.desktop import TerminalPanel, TerminalScreen
@@ -111,16 +111,20 @@ class NativeCase(unittest.TestCase):
                 self.app.allow_safety()
                 self.assertTrue(write.call_args_list[0].args[0].startswith(b"Debug requested by the user. "))
 
-    def test_details_are_collapsed_without_changing_selection(self):
+    def test_details_and_actions_collapse_under_inverting_icon(self):
         self.assertEqual(self.app.details_frame.winfo_manager(), "")
         self.assertEqual(self.app.details_label.winfo_manager(), "")
-        self.assertEqual(self.app.details_button.cget("text"), "▸ Node details")
+        self.assertEqual(self.app.actions.winfo_manager(), "")
+        self.assertEqual(self.app.details_button.cget("style"), "TButton")
+        self.assertIn(str(self.app.details_icon_normal), str(self.app.details_button.cget("image")))
         self.root.deiconify()
         self.app.toggle_details()
         self.root.update()
         self.assertEqual(self.app.details_frame.winfo_manager(), "pack")
         self.assertEqual(self.app.details_label.winfo_manager(), "pack")
-        self.assertEqual(self.app.details_button.cget("text"), "▾ Node details")
+        self.assertEqual(self.app.actions.winfo_manager(), "pack")
+        self.assertEqual(self.app.details_button.cget("style"), "Accent.TButton")
+        self.assertIn(str(self.app.details_icon_inverse), str(self.app.details_button.cget("image")))
         self.assertEqual(self.app.details.cget("height"), self.detail_lines())
         self.assertEqual(self.app.details.yview(), (0.0, 1.0))
         self.assertFalse(any(isinstance(child, ttk.Scrollbar) for child in self.app.details_frame.children.values()))
@@ -129,6 +133,9 @@ class NativeCase(unittest.TestCase):
         self.app.toggle_details()
         self.assertEqual(self.app.details_frame.winfo_manager(), "")
         self.assertEqual(self.app.details_label.winfo_manager(), "")
+        self.assertEqual(self.app.actions.winfo_manager(), "")
+        self.assertEqual(self.app.details_button.cget("style"), "TButton")
+        self.assertIn(str(self.app.details_icon_normal), str(self.app.details_button.cget("image")))
         self.assertEqual(len(self.session.events_path.read_text().splitlines()), 1)
 
     def test_long_details_fit_without_a_scrollbar(self):
@@ -478,6 +485,43 @@ class TerminalLifecycleCase(unittest.TestCase):
             app.close()
 
 
+class WelcomeCase(unittest.TestCase):
+    def setUp(self):
+        self.root = tk.Tk()
+        self.root.withdraw()
+        self.app = WelcomeApp(self.root)
+
+    def tearDown(self):
+        try:
+            self.root.destroy()
+        except tk.TclError:
+            pass
+
+    def test_open_binary_returns_the_selected_file(self):
+        self.assertEqual(self.root.title(), "GEM")
+        with mock.patch("gem.app.filedialog.askopenfilename", return_value="/bin/true") as choose:
+            self.app.open_binary()
+        choose.assert_called_once()
+        self.assertEqual(self.app.selected_target, Path("/bin/true").resolve())
+        with self.assertRaises(tk.TclError):
+            self.root.winfo_exists()
+
+    def test_open_directory_returns_the_selected_directory(self):
+        with tempfile.TemporaryDirectory(prefix="gem-welcome-test-") as directory:
+            with mock.patch("gem.app.filedialog.askdirectory", return_value=directory) as choose:
+                self.app.open_directory()
+            choose.assert_called_once()
+            self.assertEqual(self.app.selected_target, Path(directory).resolve())
+            with self.assertRaises(tk.TclError):
+                self.root.winfo_exists()
+
+    def test_cancel_does_not_select_a_target(self):
+        self.app.close()
+        self.assertIsNone(self.app.selected_target)
+        with self.assertRaises(tk.TclError):
+            self.root.winfo_exists()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run GEM native stress tests")
     parser.add_argument("--failfast", action="store_true")
@@ -485,6 +529,7 @@ def main():
     suite = unittest.TestSuite([
         unittest.defaultTestLoader.loadTestsFromTestCase(NativeCase),
         unittest.defaultTestLoader.loadTestsFromTestCase(TerminalLifecycleCase),
+        unittest.defaultTestLoader.loadTestsFromTestCase(WelcomeCase),
     ])
     result = unittest.TextTestRunner(verbosity=2, failfast=args.failfast).run(suite)
     raise SystemExit(0 if result.wasSuccessful() else 1)

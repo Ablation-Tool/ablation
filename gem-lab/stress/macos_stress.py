@@ -16,8 +16,7 @@ from gem.app import InvestigationApp
 from gem.environment import configure_environment
 from gem.events import Session
 from gem.layout import LAYOUTS
-from gem.launcher import default_workspace
-from gem.macos_launcher import LauncherDialog, prepare_agent_path
+from gem.macos_launcher import prepare_agent_path
 from metrix.desktop import TerminalPanel
 
 
@@ -176,26 +175,11 @@ class MacOSNativeCase(unittest.TestCase):
             application.close()
 
     def test_first_run_launcher(self):
-        launched = []
-        dialog = LauncherDialog(self.root, launched.append)
-        self.root.deiconify()
-        self.root.update_idletasks()
-        self.assertTrue(self.root.winfo_ismapped())
-        dialog.target.set(sys.executable)
-        dialog.session.set(str(self.session.root))
-        dialog.agent.set("")
-        self.assertNotIn("--agent", dialog.arguments())
-        dialog.agent.set(sys.executable)
-        expected = dialog.arguments()
-        self.assertEqual(expected[:2], ["desktop", str(Path(sys.executable).resolve())])
-        self.assertEqual(expected[expected.index("--workspace") + 1], str(default_workspace()))
-        self.assertEqual(expected[-2:], ["--agent", sys.executable])
-        dialog.agent.set("gem-agent-that-does-not-exist")
-        with self.assertRaises(ValueError):
-            dialog.arguments()
-        dialog.agent.set(sys.executable)
-        dialog.launch()
-        self.assertEqual(launched, [expected])
+        from gem import macos_launcher
+
+        with mock.patch("gem.cli.main", return_value=0) as launch:
+            self.assertEqual(macos_launcher.main([]), 0)
+        launch.assert_called_once_with(["launch"])
 
     def test_launcher_path_has_no_empty_entries(self):
         with mock.patch.dict(os.environ, {"PATH": ""}):

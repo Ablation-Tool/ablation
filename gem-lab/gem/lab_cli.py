@@ -6,7 +6,7 @@ import sys
 from . import __version__
 from .events import Session
 from metrix.agent import parse_agent_command
-from .launcher import choose_target, default_agent, default_workspace, session_for_target, show_launch_error
+from .launcher import default_agent, default_workspace, session_for_target, show_launch_error
 
 
 def session_path(value):
@@ -15,14 +15,14 @@ def session_path(value):
 
 def command_launch(args):
     try:
-        target = choose_target()
-        if target is None:
-            return 0
-        args.target = str(target)
-        args.session = str(session_for_target(target))
         args.workspace = str(default_workspace())
         if not args.no_agent and not args.agent_command and not args.agent:
             args.agent = default_agent() or None
+        target = command_desktop(args)
+        if not isinstance(target, Path):
+            return target
+        args.target = str(target)
+        args.session = str(session_for_target(target))
         return command_desktop(args)
     except Exception as error:
         show_launch_error(str(error))
@@ -31,9 +31,9 @@ def command_launch(args):
 
 def command_desktop(args):
     command = parse_agent_command(args.agent_command or args.agent) if args.agent_command or args.agent else None
-    workspace = session_path(args.workspace) if args.workspace else default_workspace()
-    target = session_path(args.target)
-    session = session_path(args.session)
+    workspace = session_path(args.workspace) if getattr(args, "workspace", None) else default_workspace()
+    target = session_path(args.target) if getattr(args, "target", None) else None
+    session = session_path(args.session) if target is not None else None
     if args.toolkit != "tk":
         system_packages = Path("/usr/lib/python3/dist-packages")
         if system_packages.is_dir() and str(system_packages) not in sys.path:
@@ -140,7 +140,7 @@ def build_parser():
     command.add_argument("--workspace", help="Interactive CLI working directory (default: gem-lab root)")
     add_desktop_options(command)
     command.set_defaults(function=command_desktop)
-    command = commands.add_parser("launch", help="Choose an investigation target and open the native Lab workspace")
+    command = commands.add_parser("launch", help="Open GEM and choose an investigation target inside the application")
     add_desktop_options(command)
     command.set_defaults(function=command_launch)
     command = commands.add_parser("emit", help="Append or update an investigation node")

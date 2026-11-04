@@ -38,7 +38,7 @@ fi
 
 printf '\nApplication: %s\n' "$SOURCE/GEM.app"
 cat <<'EOF'
-Open GEM.app to choose a target, project directory, and optional AI Agent.
+Open GEM.app and choose Open binary or Open directory in GEM.
 
 Start it with:
   . .venv/bin/activate

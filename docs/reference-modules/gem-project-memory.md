@@ -37,7 +37,7 @@ Use the same target and session directory:
 gem lab /path/to/target --session /path/to/project --agent kimi
 ```
 
-On native Windows and macOS, add `--toolkit tk`. On macOS, `GEM.app` also lets the user select an existing project in its first-run window.
+On native Windows and macOS, add `--toolkit tk`. Use this same explicit target-and-session command to resume a project after opening GEM.
 
 The target identity must match the session. A file session uses a full content SHA256; a directory session uses an identity based on its absolute path, not a claim about directory content. Reusing a session for a different target is rejected. The project directory must be outside the RE target directory.
 

@@ -90,7 +90,7 @@ fi
 
 cat <<'EOF'
 GEM is installed. Linux supports native GTK/VTE when its system packages are available, with Tk as a fallback.
-The application-menu icon opens a native target chooser.
+The application-menu icon opens GEM directly with in-app Open binary and Open directory actions.
 
 Start it with:
   . .venv/bin/activate

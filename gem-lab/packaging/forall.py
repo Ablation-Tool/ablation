@@ -209,7 +209,7 @@ def main(arguments=None):
     installed = "GEM is" if args.gui_only else "Ablation CLI and GEM are"
     print(f"\n{installed} installed in {destination}")
     if not args.no_desktop_shortcut:
-        print("Open GEM from its Desktop icon to choose an investigation target.")
+        print("Open GEM from its Desktop icon and choose Open binary or Open directory in GEM.")
     if sys.platform == "darwin":
         print(f"Application: {destination / 'GEM.app'}")
     print("Launch it with your installed AI Agent:")

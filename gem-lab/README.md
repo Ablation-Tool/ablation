@@ -104,7 +104,7 @@ Agent CLIs are installed and configured separately. Their authentication, permis
 
 By default, `desktop` selects the native GTK interface when GTK and VTE are available. Use `--toolkit gtk` to require it or `--toolkit tk` to select the Tk fallback explicitly.
 
-The macOS offline installer also creates **GEM.app**. Its first-run window selects the RE target, project directory, and optional installed AI Agent before opening the Tk workbench. The bundle includes its Python environment and icon and can be moved on the same Mac. `Contents/MacOS/GEM` accepts the same command-line arguments as `gem`; `Contents/MacOS/GEM --self-test` verifies the bundled runtime. The locally created app is not signed or Apple-notarized.
+The macOS offline installer also creates **GEM.app**. It opens the same GEM home screen with **Open binary** and **Open directory** actions, then creates a stable per-target session and opens the Tk workbench with an installed agent when available. The bundle includes its Python environment and icon and can be moved on the same Mac. `Contents/MacOS/GEM` accepts the same command-line arguments as `gem`; `Contents/MacOS/GEM --self-test` verifies the bundled runtime. The locally created app is not signed or Apple-notarized.
 
 Directory initialization adds the root and its real top-level entries. It does not recurse, hash directory contents, or claim analysis coverage. **Rescan directory** repeats the idempotent top-level inventory; deeper work is recorded by the agent after inspection. A directory's identity is based on its absolute path, not a content digest. Single files retain their full SHA256 identity.
 
