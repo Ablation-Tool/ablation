@@ -8,6 +8,7 @@
 - Consolidated node details and actions under a collapsed-by-default bowtie toggle in Tk and GTK, with normal and inverse icon states and preserved responsive layout behavior.
 - Adopted the woven-diamond master icon set across the README, Wiki, Tk and GTK headers, Linux hicolor launchers, native Windows shortcuts, and macOS application bundles.
 - Added optional next-token accessible-volume measurement with a local DistilGPT2 provider, strict thresholds, separate evidence events and raw probabilities, complementary volume, accessible momentum with advisory target-band guidance, and candidate-future concentration previews that never authorize or execute actions.
+- Added the NPZ VolumeBridge feedback loop with monotonic elapsed time and no-overwrite reports, plus a reproducible sacred-geometry dataset with exact math transcription, OCR, component measurements, lossless pixel vectors, VDI replay, and Procrustes landmark alignment.
 
 ## v2.94.0
 

@@ -949,6 +949,57 @@ class AccessibleVolumeCase(unittest.TestCase):
                 measure_session(session, provider=provider, momentum_band=-1)
 
 
+class VolumeBridgeCase(unittest.TestCase):
+    def write_distribution(self, path, probabilities):
+        np.savez(path, input_ids=np.arange(len(probabilities), dtype=np.int64), probabilities=np.asarray(probabilities, dtype=np.float64))
+
+    def test_forward_backward_feedback_and_no_overwrite(self):
+        from gem.volume_bridge import VolumeBridge
+
+        with tempfile.TemporaryDirectory(prefix="gem-volume-bridge-test-") as directory:
+            root = Path(directory)
+            previous = root / "previous.npz"
+            current = root / "current.npz"
+            self.write_distribution(previous, [0.70, 0.20, 0.08, 0.02])
+            self.write_distribution(current, [0.90, 0.04, 0.04, 0.02])
+            session = Session(root / "session", "/bin/true")
+            bridge = VolumeBridge(session)
+            observation = bridge.observe(current, previous=previous)
+            self.assertEqual(observation["counts"]["0.05"], 1)
+            self.assertEqual(observation["complement_counts"]["0.05"], 3)
+            self.assertEqual(observation["momentum"]["0.05"], -2)
+            self.assertEqual(observation["guidance"]["suggestion"], "Narrow context")
+            self.assertFalse(observation["guidance"]["executed"])
+            self.assertGreaterEqual(observation["elapsed_ns"], 0)
+            self.assertTrue(observation["created_utc"].endswith("Z"))
+            self.assertEqual(len(observation["input_ids_sha256"]), 64)
+            self.assertEqual(len(observation["probability_values_sha256"]), 64)
+            first_report = observation["feedback"]["report"]
+            self.assertTrue(Path(first_report).is_file())
+            self.assertTrue(Path(observation["feedback"]["probabilities"]).is_file())
+            second = bridge.observe(current, previous=previous)
+            self.assertNotEqual(second["feedback"]["report"], first_report)
+            self.assertTrue(Path(second["feedback"]["report"]).is_file())
+            self.assertTrue(any(event["type"] == "evidence" for event in session.events()))
+
+    def test_volume_cli_never_overwrites_output(self):
+        from gem.cli import main
+
+        with tempfile.TemporaryDirectory(prefix="gem-volume-bridge-test-") as directory:
+            root = Path(directory)
+            previous = root / "previous.npz"
+            current = root / "current.npz"
+            self.write_distribution(previous, [0.70, 0.20, 0.08, 0.02])
+            self.write_distribution(current, [0.90, 0.04, 0.04, 0.02])
+            output = root / "momentum.json"
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(main(["volume", str(current), "--previous", str(previous), "--output", str(output)]), 0)
+            original = output.read_text()
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(main(["volume", str(current), "--previous", str(previous), "--output", str(output)]), 2)
+            self.assertEqual(output.read_text(), original)
+
+
 class BrandingCase(unittest.TestCase):
     def test_packaged_assets_match_the_master_set(self):
         root = Path(__file__).resolve().parents[2]
@@ -994,6 +1045,7 @@ def main():
         unittest.defaultTestLoader.loadTestsFromTestCase(SafetyCase),
         unittest.defaultTestLoader.loadTestsFromTestCase(AccessibilityCase),
         unittest.defaultTestLoader.loadTestsFromTestCase(AccessibleVolumeCase),
+        unittest.defaultTestLoader.loadTestsFromTestCase(VolumeBridgeCase),
         unittest.defaultTestLoader.loadTestsFromTestCase(BrandingCase),
     ])
     result = unittest.TextTestRunner(verbosity=2, failfast=args.failfast).run(suite)

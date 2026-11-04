@@ -87,6 +87,18 @@ Each measurement writes under the session's `accessible-volume/` directory:
 
 Repeated measurements of identical context and candidates use a stable digest, making evidence idempotent. Changed selections, revisions, or candidate actions produce a different digest.
 
+## NPZ VolumeBridge
+
+`gem volume` replays a full-vocabulary NPZ distribution through `VolumeBridge`:
+
+```bash
+gem volume current.npz --previous earlier.npz --tau 0.05 --output momentum.json
+```
+
+The bridge has three stages: forward measurement, backward momentum guidance, and feedback into the next observation. It records UTC observation timestamps, monotonic elapsed nanoseconds, source/probability hashes, and no-overwrite feedback reports. Existing output files are never replaced. Supplying `--session` also emits a separate `tool` evidence event.
+
+The [sacred-geometry experiment](../../experiments/sacred-geometry/README.md) adds an immutable image dataset, raw OCR, curated math transcription, component measurements, exact pixel vectors, a replayable Spatial IR scene, and a Procrustes landmark-alignment example.
+
 ## Limits
 
 - The measurement describes forecast breadth only. It does not say which action is correct, safe, authorized, or worth executing.
