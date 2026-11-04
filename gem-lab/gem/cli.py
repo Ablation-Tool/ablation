@@ -12,6 +12,7 @@ from .model import Scene, demo_scene
 from .render import write_png, write_svg
 from .runner import export_run, replay, verify_vdi, write_failed_run
 from .vdi import write_metafile
+from .volume import DEFAULT_THRESHOLDS, measure_artifact, write_report
 
 
 def _parser():
@@ -76,12 +77,17 @@ def _parser():
     measure.add_argument("--momentum-band", type=int, default=1, help="accessible-momentum target band (default: 1)")
     measure.add_argument("--json", action="store_true", help="emit the complete measurement report")
 
-    volume = commands.add_parser("volume", help="measure accessible volume from a full-vocabulary NPZ distribution")
-    volume.add_argument("distribution", help="NPZ containing probabilities and optional input_ids")
-    volume.add_argument("--previous", help="optional earlier NPZ distribution for momentum")
-    volume.add_argument("--tau", type=float, action="append", help="probability threshold; repeat for a custom sweep")
+    volume = commands.add_parser("volume", help="measure accessible volume and optional accessible momentum from an NPZ artifact")
+    volume.add_argument("distribution", nargs="?", help="NPZ containing probabilities and optional input_ids for the VolumeBridge session flow")
+    volume.add_argument("--probabilities", help="NPZ file for a standalone artifact report instead of session feedback")
+    volume.add_argument("--key", default="probabilities", help="NPZ key for the current distribution")
+    volume.add_argument("--previous", help="earlier NPZ distribution used to compute momentum")
+    volume.add_argument("--previous-key", help="NPZ key for the earlier distribution; default: current key")
+    volume.add_argument("--tau", type=float, action="append", help="probability threshold; repeat for a sweep")
+    volume.add_argument("--min-volume", type=int, help="target volume lower bound; artifact default: 1")
+    volume.add_argument("--max-volume", type=int, help="target volume upper bound; artifact default: 4")
     volume.add_argument("--momentum-band", type=int, default=1, help="accessible-momentum target band (default: 1)")
-    volume.add_argument("--output", help="new JSON report path; existing files are never overwritten")
+    volume.add_argument("--output", help="new evidence JSON path; existing files are never overwritten")
     volume.add_argument("--session", help="optional investigation session for separate evidence")
 
     for name in ("state", "tree", "begin", "emit", "emit-many", "review"):
@@ -119,6 +125,66 @@ def _print_report(report):
 def main(argv=None):
     arguments = _parser().parse_args(argv)
     try:
+        if arguments.command == "volume":
+            artifact_options = (
+                arguments.key != "probabilities"
+                or arguments.previous_key is not None
+                or arguments.min_volume is not None
+                or arguments.max_volume is not None
+            )
+            if arguments.probabilities is not None or (artifact_options and arguments.session is None):
+                if arguments.distribution is not None and arguments.probabilities is not None:
+                    raise ValueError("use either a positional distribution or --probabilities, not both")
+                if arguments.session is not None:
+                    raise ValueError("--probabilities cannot be combined with --session; use a positional distribution")
+                if arguments.momentum_band != 1:
+                    raise ValueError("--momentum-band requires the positional VolumeBridge interface")
+                source = arguments.probabilities or arguments.distribution
+                if source is None:
+                    raise ValueError("an NPZ probability artifact is required")
+                if arguments.output is None:
+                    raise ValueError("--output is required for the probability artifact interface")
+                report = measure_artifact(
+                    source,
+                    key=arguments.key,
+                    previous_path=arguments.previous,
+                    previous_key=arguments.previous_key,
+                    thresholds=arguments.tau or DEFAULT_THRESHOLDS,
+                    minimum=arguments.min_volume if arguments.min_volume is not None else 1,
+                    maximum=arguments.max_volume if arguments.max_volume is not None else 4,
+                )
+                output = write_report(report, arguments.output)
+                print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+                print(f"Evidence: {output}")
+                return 0
+            if arguments.distribution is None:
+                raise ValueError("an NPZ distribution is required")
+            from .volume_bridge import VolumeBridge
+            from .accessible_volume import THRESHOLDS
+            from .events import Session
+
+            bridge = VolumeBridge(Session(arguments.session) if arguments.session else None)
+            observation = bridge.observe(
+                arguments.distribution,
+                previous=arguments.previous,
+                thresholds=arguments.tau or THRESHOLDS,
+                momentum_band=arguments.momentum_band,
+                key=arguments.key,
+                previous_key=arguments.previous_key,
+                minimum=arguments.min_volume,
+                maximum=arguments.max_volume,
+            )
+            public = {key: value for key, value in observation.items() if not key.startswith("_")}
+            if arguments.output:
+                output = Path(arguments.output)
+                output.parent.mkdir(parents=True, exist_ok=True)
+                with output.open("x", encoding="utf-8") as stream:
+                    json.dump(public, stream, indent=2, ensure_ascii=False, sort_keys=True)
+                    stream.write("\n")
+                print(f"Report: {output}")
+            else:
+                print(json.dumps(public, indent=2, ensure_ascii=False, sort_keys=True))
+            return 0
         if arguments.command == "lab-state":
             from gem.events import Session
             from .host import GemLabHost
@@ -142,29 +208,6 @@ def main(argv=None):
             elif arguments.no_agent:
                 command.append("--no-agent")
             return gem_main(command)
-        if arguments.command == "volume":
-            from .volume_bridge import VolumeBridge
-            from .accessible_volume import THRESHOLDS
-            from .events import Session
-
-            bridge = VolumeBridge(Session(arguments.session) if arguments.session else None)
-            observation = bridge.observe(
-                arguments.distribution,
-                previous=arguments.previous,
-                thresholds=arguments.tau or THRESHOLDS,
-                momentum_band=arguments.momentum_band,
-            )
-            public = {key: value for key, value in observation.items() if not key.startswith("_")}
-            if arguments.output:
-                output = Path(arguments.output)
-                output.parent.mkdir(parents=True, exist_ok=True)
-                with output.open("x", encoding="utf-8") as stream:
-                    json.dump(public, stream, indent=2, ensure_ascii=False, sort_keys=True)
-                    stream.write("\n")
-                print(f"Report: {output}")
-            else:
-                print(json.dumps(public, indent=2, ensure_ascii=False, sort_keys=True))
-            return 0
         if arguments.command == "measure":
             from .accessible_volume import THRESHOLDS, measure_session
             from .events import Session

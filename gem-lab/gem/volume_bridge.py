@@ -23,21 +23,23 @@ class VolumeBridge:
         self.output.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
-    def load_distribution(path):
+    def load_distribution(path, key="probabilities"):
         import numpy as np
 
         path = Path(path).expanduser().resolve(strict=True)
         with np.load(path, allow_pickle=False) as artifact:
-            probabilities = artifact["probabilities"]
+            if key not in artifact:
+                raise ValueError(f"NPZ artifact does not contain {key!r}")
+            probabilities = artifact[key]
             ids = artifact["input_ids"] if "input_ids" in artifact else np.arange(len(probabilities), dtype=np.int64)
         if probabilities.ndim != 1 or ids.ndim != 1 or len(ids) != len(probabilities):
             raise ValueError("distribution arrays must be one-dimensional and have matching lengths")
         accessible_volume(probabilities, [0.0])
         return ids, probabilities
 
-    def forward(self, source, thresholds=THRESHOLDS):
+    def forward(self, source, thresholds=THRESHOLDS, key="probabilities"):
         started = time.monotonic_ns()
-        ids, probabilities = self.load_distribution(source)
+        ids, probabilities = self.load_distribution(source, key=key)
         thresholds = normalized_thresholds(thresholds)
         counts = accessible_volume(probabilities, thresholds)
         decision_threshold = "0.05" if "0.05" in counts else threshold_name(thresholds[0])
@@ -56,13 +58,30 @@ class VolumeBridge:
             "_probabilities": probabilities,
         }
 
-    def backward(self, observation, previous=None, momentum_band=1):
+    def backward(self, observation, previous=None, momentum_band=1, minimum=None, maximum=None):
         previous_counts = previous.get("counts") if previous else None
         momentum = accessible_momentum(observation["counts"], previous_counts) if previous_counts else None
+        if minimum is None and maximum is None:
+            guidance = momentum_guidance(momentum, observation["decision_threshold"], momentum_band)
+        else:
+            if minimum is None or maximum is None:
+                raise ValueError("target volume band requires both minimum and maximum")
+            from .volume import steering_action
+
+            decision_threshold = observation["decision_threshold"]
+            delta = momentum.get(decision_threshold, 0) if momentum is not None else 0
+            guidance = {
+                "suggestion": steering_action(
+                    observation["counts"][decision_threshold], delta, minimum, maximum,
+                ),
+                "target_volume_band": [minimum, maximum],
+                "status": "experimental_recommendation_only",
+                "executed": False,
+            }
         recommendation = {
             "previous_source": previous.get("source") if previous else None,
             "momentum": momentum,
-            "guidance": momentum_guidance(momentum, observation["decision_threshold"], momentum_band),
+            "guidance": guidance,
         }
         return {**observation, **recommendation}
 
@@ -105,11 +124,15 @@ class VolumeBridge:
             )
         return result
 
-    def observe(self, source, previous=None, thresholds=THRESHOLDS, momentum_band=1):
+    def observe(self, source, previous=None, thresholds=THRESHOLDS, momentum_band=1,
+                key="probabilities", previous_key=None, minimum=None, maximum=None):
         if previous is not None and not isinstance(previous, dict):
             previous = {
                 "source": str(Path(previous).expanduser().resolve()),
-                "counts": accessible_volume(self.load_distribution(previous)[1], normalized_thresholds(thresholds)),
+                "counts": accessible_volume(
+                    self.load_distribution(previous, key=previous_key or key)[1],
+                    normalized_thresholds(thresholds),
+                ),
             }
         else:
             previous_path, previous_report = latest_measurement(self.output)
@@ -117,6 +140,6 @@ class VolumeBridge:
                 previous = previous_report
                 if previous_report is not None:
                     previous["source"] = previous.get("source") or str(previous_path)
-        observation = self.forward(source, thresholds)
-        observation = self.backward(observation, previous, momentum_band)
+        observation = self.forward(source, thresholds, key=key)
+        observation = self.backward(observation, previous, momentum_band, minimum, maximum)
         return self.feedback(observation)

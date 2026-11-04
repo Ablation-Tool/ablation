@@ -93,6 +93,27 @@ Kimi Pro supplies the account and inference; GEM supplies the bounded prompt, pr
 
 `--constraints required.json` supplies a JSON array of constraints the agent must preserve. A final export can fail even when source geometry passes if VDI recovery or a device invariant fails; its reports and trajectory are retained.
 
+## NPZ evidence and the two-way bridge
+
+`gem volume` complements the live `gem measure` provider with two offline interfaces for saved full-vocabulary distributions. The session bridge accepts a positional NPZ path, stores no-overwrite feedback artifacts, and can emit separate evidence with `--session`:
+
+```bash
+gem volume current.npz --output volume.json
+gem volume current.npz --previous earlier.npz --tau 0.05 --output momentum.json
+```
+
+For a standalone artifact report without session feedback, use `--probabilities`; this interface requires `--output`:
+
+```bash
+gem volume --probabilities current.npz --previous earlier.npz --tau 0.05 --output artifact.json
+```
+
+The key options `--key` and `--previous-key`, and the volume-band options `--min-volume` and `--max-volume`, select the artifact interface when no session is supplied, preserving the original artifact command form. Both interfaces validate the selected distribution and record strict threshold counts and complements. The bridge adds source/probability hashes, a UTC timestamp, monotonic elapsed time, and forward-measurement/backward-guidance feedback. It is a feedback loop, not an algebraic inverse. Accessible and complementary volumes sum to the vocabulary size; forward and reverse momentum sum to zero. All steering is advisory and never executes an action.
+
+![Programmer's view of the VDI, included as an architectural analogy for the two-way feedback interface](docs/images/vdi-bidirectional-interface.png)
+
+The VDI figure and the [combined 13-node topology sketch](docs/images/accessible-volume-topology.txt) are architectural analogies, not evidence of model behavior. Interactive text-only agent CLIs still require a compatible model or saved full-vocabulary distribution.
+
 ## Spatial IR
 
 Schema version 1 supports `rectangle`, `polygon`, `polyline`, `line`, `ellipse`, and `text`. A minimal scene is:

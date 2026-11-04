@@ -95,7 +95,9 @@ Repeated measurements of identical context and candidates use a stable digest, m
 gem volume current.npz --previous earlier.npz --tau 0.05 --output momentum.json
 ```
 
-The bridge has three stages: forward measurement, backward momentum guidance, and feedback into the next observation. It records UTC observation timestamps, monotonic elapsed nanoseconds, source/probability hashes, and no-overwrite feedback reports. Existing output files are never replaced. Supplying `--session` also emits a separate `tool` evidence event.
+The bridge has three stages: forward measurement, backward momentum guidance, and feedback into the next observation. It records UTC observation timestamps, monotonic elapsed nanoseconds, source/probability hashes, and no-overwrite feedback reports. Existing output files are never replaced. Supplying `--session` also emits a separate `tool` evidence event. `--key` and `--previous-key` select arrays independently; `--min-volume` and `--max-volume` add advisory target-volume steering without executing it.
+
+Use `gem volume --probabilities current.npz --output artifact.json` for a standalone artifact report without session feedback. This interface requires `--output` and accepts the same independent key and target-volume options.
 
 The [sacred-geometry experiment](../../experiments/sacred-geometry/README.md) adds an immutable image dataset, raw OCR, curated math transcription, component measurements, exact pixel vectors, a replayable Spatial IR scene, and a Procrustes landmark-alignment example.
 
