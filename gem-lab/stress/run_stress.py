@@ -1092,6 +1092,9 @@ class BrandingCase(unittest.TestCase):
         self.assertIn("GEM Woven Diamond", (packaged / "gem-woven-diamond.svg").read_text())
         desktop = root / "gem-lab" / "packaging" / "re.gem.workbench.desktop.in"
         self.assertIn("Icon=gem-woven-diamond", desktop.read_text())
+        linux_installer = (root / "gem-lab" / "packaging" / "install_linux.sh").read_text()
+        self.assertIn('install -m 0644 "$SOURCE/gem-woven-diamond.png"', linux_installer)
+        self.assertNotIn("gem-woven-diamond-logo.png", linux_installer)
         for obsolete in ("ablation-gem-logo.png", "ablation-gem-logo-32.png", "ablation-gem.ico", "ablation-gem.icns"):
             self.assertFalse((packaged / obsolete).exists(), obsolete)
 
