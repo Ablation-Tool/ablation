@@ -1,4 +1,4 @@
-<img src="../../../assets/branding/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
+<img src="../../../assets/branding/woven-diamond/repo/logo.png" width="160" alt="Ablation GEM woven diamond">
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 

@@ -156,7 +156,7 @@ class MacOSNativeCase(unittest.TestCase):
         try:
             self.assertEqual(os.environ["GEM_WORKSPACE"], str(application.workspace))
             self.assertEqual(application.brand_header_image.width(), 32)
-            self.assertTrue(application.brand_header_image.transparency_get(0, 0))
+            self.assertEqual(application.brand_header_image.get(0, 0), (0, 0, 128))
             application.toggle_settings()
             self.assertEqual(application.settings_bar.winfo_manager(), "pack")
             application.run_safety_check()

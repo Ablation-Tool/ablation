@@ -23,7 +23,7 @@ def main():
     for name in ("install_linux.sh", "README.md"):
         shutil.copy(ROOT / "packaging" / name, DIST / name)
     shutil.copy(ROOT / "stress" / "native_stress.py", DIST / "native_stress.py")
-    shutil.copy(ROOT / "gem" / "icons" / "ablation-gem-logo.png", DIST / "ablation-gem-logo.png")
+    shutil.copy(ROOT / "gem" / "icons" / "gem-woven-diamond.png", DIST / "gem-woven-diamond.png")
     shutil.copy(ROOT / "packaging" / "re.gem.workbench.desktop.in", DIST / "re.gem.workbench.desktop.in")
     (DIST / "install_linux.sh").chmod(0o755)
     destination = ROOT / "dist" / "GEM-Linux.zip"

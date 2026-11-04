@@ -25,7 +25,7 @@ def main():
     for name in ("Install-WindowsNative.ps1", "README.md"):
         shutil.copy(ROOT / "packaging" / name, DIST / name)
     shutil.copy(ROOT / "stress" / "windows_stress.py", DIST / "windows_stress.py")
-    shutil.copy(ROOT / "gem" / "icons" / "ablation-gem.ico", DIST / "ablation-gem.ico")
+    shutil.copy(ROOT / "gem" / "icons" / "gem-woven-diamond.ico", DIST / "gem-woven-diamond.ico")
     destination = ROOT / "dist" / "GEM-Windows-Native.zip"
     with ZipFile(destination, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:
         for path in sorted(DIST.rglob("*")):

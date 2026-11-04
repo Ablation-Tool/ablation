@@ -786,6 +786,37 @@ class AccessibilityCase(unittest.TestCase):
         self.assertIn("read-only AI review", payload["instruction"])
 
 
+class BrandingCase(unittest.TestCase):
+    def test_packaged_assets_match_the_master_set(self):
+        root = Path(__file__).resolve().parents[2]
+        master = root / "assets" / "branding" / "woven-diamond"
+        packaged = root / "gem-lab" / "gem" / "icons"
+        pairs = {
+            "png/gem-woven-diamond-512x512.png": "gem-woven-diamond.png",
+            "png/gem-woven-diamond-32x32.png": "gem-woven-diamond-32.png",
+            "windows/gem-woven-diamond.ico": "gem-woven-diamond.ico",
+            "macos/gem-woven-diamond.icns": "gem-woven-diamond.icns",
+            "source/gem-woven-diamond.svg": "gem-woven-diamond.svg",
+        }
+        for source, destination in pairs.items():
+            with self.subTest(destination=destination):
+                self.assertEqual(
+                    (master / source).read_bytes(),
+                    (packaged / destination).read_bytes(),
+                )
+
+    def test_icon_containers_and_desktop_entry(self):
+        root = Path(__file__).resolve().parents[2]
+        packaged = root / "gem-lab" / "gem" / "icons"
+        self.assertEqual(int.from_bytes((packaged / "gem-woven-diamond.ico").read_bytes()[4:6], "little"), 7)
+        self.assertTrue((packaged / "gem-woven-diamond.icns").read_bytes().startswith(b"icns"))
+        self.assertIn("GEM Woven Diamond", (packaged / "gem-woven-diamond.svg").read_text())
+        desktop = root / "gem-lab" / "packaging" / "re.gem.workbench.desktop.in"
+        self.assertIn("Icon=gem-woven-diamond", desktop.read_text())
+        for obsolete in ("ablation-gem-logo.png", "ablation-gem-logo-32.png", "ablation-gem.ico", "ablation-gem.icns"):
+            self.assertFalse((packaged / obsolete).exists(), obsolete)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run GEM core stress tests")
     parser.add_argument("--failfast", action="store_true")
@@ -799,6 +830,7 @@ def main():
         unittest.defaultTestLoader.loadTestsFromTestCase(DropPayloadCase),
         unittest.defaultTestLoader.loadTestsFromTestCase(SafetyCase),
         unittest.defaultTestLoader.loadTestsFromTestCase(AccessibilityCase),
+        unittest.defaultTestLoader.loadTestsFromTestCase(BrandingCase),
     ])
     result = unittest.TextTestRunner(verbosity=2, failfast=args.failfast).run(suite)
     raise SystemExit(0 if result.wasSuccessful() else 1)

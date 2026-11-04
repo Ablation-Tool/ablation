@@ -63,11 +63,11 @@ class InvestigationApp:
         header = ttk.Frame(self.root, style="Header.TFrame", padding=(12, 8))
         header.pack(fill="x")
         icon_root = Path(__file__).resolve().parent / "icons"
-        self.brand_image = tk.PhotoImage(master=self.root, file=str(icon_root / "ablation-gem-logo.png"))
-        self.brand_header_image = tk.PhotoImage(master=self.root, file=str(icon_root / "ablation-gem-logo-32.png"))
+        self.brand_image = tk.PhotoImage(master=self.root, file=str(icon_root / "gem-woven-diamond.png"))
+        self.brand_header_image = tk.PhotoImage(master=self.root, file=str(icon_root / "gem-woven-diamond-32.png"))
         self.root.iconphoto(True, self.brand_image)
         if os.name == "nt":
-            icon_bitmap = str(icon_root / "ablation-gem.ico")
+            icon_bitmap = str(icon_root / "gem-woven-diamond.ico")
             self.root.iconbitmap(icon_bitmap)
             self.root.iconbitmap(default=icon_bitmap)
         self.brand_button = ttk.Button(header, image=self.brand_header_image, text="Settings", compound="left", command=self.toggle_settings)
@@ -909,7 +909,7 @@ class WelcomeApp:
         root.minsize(520, 340)
         root.protocol("WM_DELETE_WINDOW", self.close)
         icon_root = Path(__file__).resolve().parent / "icons"
-        self.brand_image = tk.PhotoImage(master=root, file=str(icon_root / "ablation-gem-logo.png"))
+        self.brand_image = tk.PhotoImage(master=root, file=str(icon_root / "gem-woven-diamond.png"))
         root.iconphoto(True, self.brand_image)
         content = ttk.Frame(root, padding=32)
         content.pack(fill="both", expand=True)

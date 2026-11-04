@@ -207,11 +207,9 @@ with tempfile.TemporaryDirectory(prefix="gem-application-run-") as temporary:
             assert window is not None and window.get_visible(), "application window was not activated"
             assert window.get_title().startswith("GEM"), "visible application name is not GEM"
             assert window.header_bar.get_custom_title() is not None, "native title label is missing"
-            assert isinstance(window.brand_mark, Gtk.Image), "header must use the supplied transparent icon"
-            assert window.brand_mark.get_pixbuf().get_has_alpha(), "header icon must preserve transparency"
+            assert isinstance(window.brand_mark, Gtk.Image), "header must use the woven-diamond icon"
             assert window.brand_mark.get_pixbuf().get_width() == 24
             assert window.brand_mark.get_pixbuf().get_height() == 24
-            assert window.get_icon().get_has_alpha(), "program icon must preserve transparency"
             assert window.get_icon().get_width() == 512
             assert window.get_icon().get_height() == 512
             assert window.brand_button.get_image() is window.brand_mark
