@@ -1,5 +1,22 @@
 # Ablation Release Notes
 
+## v2.95.0 2026-11-04
+
+### Ablation + GEM integration
+
+- Established **GEM (Graphics Environment Manager)** as Ablation's default graphical environment and unified the GEM package, CLI, session protocol, documentation, artwork, and native launchers.
+- Added transactional selected-work operations, shared Lab state, typed analyzer outcomes, explicit IR unknown semantics, and fail-closed dynamic-function verification.
+- Integrated Spatial IR with the native Lab, including deterministic geometry checks, Cairo/SVG/VDI rendering, replayable evidence export, and bounded concurrent exports.
+- Added native Windows, Linux, and macOS installation packages and a universal installer that installs the standard Ablation CLI and GEM together with SHA-256 verification.
+
+### Validation and distribution
+
+- Release packages are validated by the main CI suite, native Windows and macOS workflows, and the Linux/Windows/macOS universal-installer matrix.
+- `forall.py` verifies the platform archive and standard Ablation wheel against `SHA256SUMS.txt` before installation and validates both command-line interfaces after installation.
+- macOS packages are built and validated without Developer ID signing or Apple notarization. Manual assistive-technology validation remains necessary; no complete accessibility certification is claimed.
+
+---
+
 ## v2.94.0 2026-11-02
 
 ### Desktop launchers and universal installation
