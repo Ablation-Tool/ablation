@@ -22,6 +22,7 @@ from gem.host import GemCommandBroker, GemLabHost
 from gem.model import MAX_POINTS, Scene, demo_scene, scene_from_events
 from gem.render import scene_to_svg, write_png
 from gem.runner import export_run, replay, verify_vdi
+from gem.volume import VolumeBridge, accessible_momentum, accessible_volume, steering_action
 from gem.vdi import (
     opcode_inventory,
     parse_metafile,
@@ -583,6 +584,56 @@ class NativeGemCase(unittest.TestCase):
             while time.monotonic() < deadline:
                 context.iteration(False)
                 time.sleep(0.005)
+
+
+class VolumeCase(unittest.TestCase):
+    def test_volume_complement_and_momentum_invariants(self):
+        probabilities = [0.70, 0.20, 0.08, 0.02]
+        self.assertEqual(accessible_volume(probabilities, 0.05), 3)
+        self.assertEqual(accessible_volume([0.05] * 20, 0.05), 0)
+        bridge = VolumeBridge(minimum=4, maximum=6)
+        first = bridge.observe([1.0, 0.0, 0.0, 0.0], thresholds=[0.05])
+        second = bridge.observe(probabilities, thresholds=[0.05])
+        entry = second["threshold_sweep"][0]
+        self.assertNotIn("accessible_momentum", first["threshold_sweep"][0])
+        self.assertEqual(entry["accessible_momentum"], 2)
+        self.assertEqual(entry["suggested_action"], "let_breadth_grow")
+        self.assertEqual(entry["accessible_volume"] + entry["complement_volume"], 4)
+        self.assertEqual(entry["accessible_momentum"] + (-entry["accessible_momentum"]), 0)
+
+    def test_steering_directions(self):
+        self.assertEqual(steering_action(2, -1, 3, 5), "broaden_context")
+        self.assertEqual(steering_action(2, 1, 3, 5), "let_breadth_grow")
+        self.assertEqual(steering_action(6, 1, 3, 5), "narrow_context")
+        self.assertEqual(steering_action(6, -1, 3, 5), "let_breadth_settle")
+        self.assertEqual(steering_action(4, 0, 3, 5), "continue")
+
+    def test_volume_command_and_validation(self):
+        import numpy as np
+        with tempfile.TemporaryDirectory() as directory:
+            current = Path(directory) / "current.npz"
+            previous = Path(directory) / "previous.npz"
+            output = Path(directory) / "evidence.json"
+            np.savez(current, probabilities=np.array([0.70, 0.20, 0.08, 0.02]))
+            np.savez(previous, probabilities=np.array([1.0, 0.0, 0.0, 0.0]))
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(gem_main([
+                    "volume", str(current), "--previous", str(previous),
+                    "--tau", "0.05", "--min-volume", "4", "--max-volume", "6",
+                    "--output", str(output),
+                ]), 0)
+            report = json.loads(output.read_text(encoding="utf-8"))
+            entry = report["threshold_sweep"][0]
+            self.assertEqual(entry["accessible_volume"], 3)
+            self.assertEqual(entry["complement_volume"], 1)
+            self.assertEqual(entry["accessible_momentum"], 2)
+            self.assertEqual(entry["suggested_action"], "let_breadth_grow")
+            self.assertGreaterEqual(report["time"]["elapsed_ms"], 0)
+            self.assertTrue(report["time"]["observed_at_utc"].endswith("Z"))
+            self.assertEqual(report["steering"]["status"], "experimental_recommendation_only")
+            self.assertEqual(gem_main(["volume", str(current), "--output", str(output)]), 2)
+            with self.assertRaises(ValueError):
+                accessible_volume([0.5, 0.2], 0.05)
 
 
 if __name__ == "__main__":

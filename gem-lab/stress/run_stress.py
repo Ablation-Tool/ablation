@@ -982,6 +982,71 @@ class VolumeBridgeCase(unittest.TestCase):
             self.assertTrue(Path(second["feedback"]["report"]).is_file())
             self.assertTrue(any(event["type"] == "evidence" for event in session.events()))
 
+    def test_custom_keys_and_target_volume_band(self):
+        from gem.volume_bridge import VolumeBridge
+
+        with tempfile.TemporaryDirectory(prefix="gem-volume-bridge-test-") as directory:
+            root = Path(directory)
+            previous = root / "previous.npz"
+            current = root / "current.npz"
+            np.savez(previous, earlier=np.asarray([1.0, 0.0, 0.0, 0.0]))
+            np.savez(current, current=np.asarray([0.70, 0.20, 0.08, 0.02]))
+            observation = VolumeBridge().observe(
+                current, previous=previous, thresholds=[0.05],
+                key="current", previous_key="earlier", minimum=4, maximum=6,
+            )
+            self.assertEqual(observation["counts"]["0.05"], 3)
+            self.assertEqual(observation["momentum"]["0.05"], 2)
+            self.assertEqual(observation["guidance"]["suggestion"], "let_breadth_grow")
+            self.assertEqual(observation["guidance"]["target_volume_band"], [4, 6])
+            self.assertFalse(observation["guidance"]["executed"])
+
+            from gem.cli import main
+
+            output = root / "session.json"
+            session = root / "cli-session"
+            Session(session, "/bin/true")
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(main([
+                    "volume", str(current), "--session", str(session),
+                    "--previous", str(previous), "--key", "current", "--previous-key", "earlier",
+                    "--tau", "0.05", "--min-volume", "4", "--max-volume", "6",
+                    "--output", str(output),
+                ]), 0)
+            report = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(report["counts"]["0.05"], 3)
+            self.assertEqual(report["momentum"]["0.05"], 2)
+            self.assertEqual(report["guidance"]["suggestion"], "let_breadth_grow")
+            self.assertFalse(report["guidance"]["executed"])
+
+    def test_artifact_volume_cli_keys_bands_and_required_output(self):
+        from gem.cli import main
+
+        with tempfile.TemporaryDirectory(prefix="gem-volume-bridge-test-") as directory:
+            root = Path(directory)
+            previous = root / "previous.npz"
+            current = root / "current.npz"
+            output = root / "artifact.json"
+            np.savez(previous, earlier=np.asarray([1.0, 0.0, 0.0, 0.0]))
+            np.savez(current, current=np.asarray([0.70, 0.20, 0.08, 0.02]))
+            arguments = [
+                "volume", "--probabilities", str(current), "--key", "current",
+                "--previous", str(previous), "--previous-key", "earlier",
+                "--tau", "0.05", "--min-volume", "4", "--max-volume", "6",
+            ]
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(main(arguments), 2)
+                self.assertEqual(main([*arguments, "--session", str(root / "session")]), 2)
+                self.assertEqual(main([*arguments, "--output", str(output)]), 0)
+            report = json.loads(output.read_text(encoding="utf-8"))
+            entry = report["threshold_sweep"][0]
+            self.assertEqual(entry["accessible_volume"], 3)
+            self.assertEqual(entry["complement_volume"], 1)
+            self.assertEqual(entry["accessible_momentum"], 2)
+            self.assertEqual(entry["suggested_action"], "let_breadth_grow")
+            self.assertEqual(report["source"]["key"], "current")
+            self.assertEqual(report["previous_source"]["key"], "earlier")
+
     def test_volume_cli_never_overwrites_output(self):
         from gem.cli import main
 
