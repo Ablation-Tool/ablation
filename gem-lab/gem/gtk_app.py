@@ -511,6 +511,12 @@ class AblationWindow(Gtk.Window):
         self.debug_button.get_style_context().add_class("suggested-action")
         self.debug_button.connect("clicked", self.run_debug_check)
         self.settings_bar.pack_start(self.debug_button, False, False, 0)
+        self.measurement_button = Gtk.Button(label="Accessible Volume")
+        self.measurement_button.get_accessible().set_name("Accessible Volume")
+        self.measurement_button.get_accessible().set_description("Measure next-token forecast breadth and store separate evidence")
+        self.measurement_button.get_style_context().add_class("suggested-action")
+        self.measurement_button.connect("clicked", lambda _button: self.current_workspace().run_accessible_volume())
+        self.settings_bar.pack_start(self.measurement_button, False, False, 0)
         self.settings_bar.reorder_child(self.accessibility_button, 0)
         self.settings_bar.reorder_child(self.safety_button, 1)
         header.pack_start(self.settings_bar)
@@ -954,6 +960,7 @@ class AblationWindow(Gtk.Window):
             self.preferences, self.sync_agent_label, start_agent=False,
         )
         workspace.investigation_number = number
+        workspace.measurement_button = self.measurement_button
         tab = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         title = Gtk.Label(label=f"Lab {number}")
         tab.pack_start(title, False, False, 0)
@@ -1470,6 +1477,39 @@ class InvestigationWorkspace(Gtk.Box):
         self.panes.pack2(self.terminal, True, True)
         self.apply_layout()
         self.register_actions()
+
+    def run_accessible_volume(self, _button=None):
+        if getattr(self, "measurement_running", False):
+            return
+        self.measurement_running = True
+        self.measurement_button.set_sensitive(False)
+        self.counts.set_text("Accessible volume: running the local model")
+        future = self.executor.submit(self.measure_accessible_volume)
+        future.add_done_callback(lambda completed: GLib.idle_add(self.finish_accessible_volume, completed))
+
+    def measure_accessible_volume(self):
+        from .accessible_volume import measure_session
+        return measure_session(self.session)
+
+    def finish_accessible_volume(self, future):
+        self.measurement_running = False
+        self.measurement_button.set_sensitive(True)
+        try:
+            report, event = future.result()
+        except Exception as error:
+            self.show_error(error)
+            return False
+        self.reload()
+        self.select_node(event["id"])
+        if not self.details_toggle.get_active():
+            self.details_toggle.set_active(True)
+        threshold = report["decision_threshold"]
+        message = f"Accessible volume: {report['counts'][threshold]} above {threshold}"
+        guidance = report.get("guidance", {})
+        if guidance.get("trend") not in (None, "unmeasured"):
+            message += f" · {guidance['suggestion']}"
+        self.counts.set_text(message + " · evidence saved")
+        return False
 
     def on_node_actions_allocate(self, _widget, allocation):
         if self.full_action_width is None:

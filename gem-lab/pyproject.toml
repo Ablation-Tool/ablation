@@ -14,6 +14,14 @@ dependencies = [
     "pywinpty>=2,<3; sys_platform == 'win32'",
 ]
 
+[project.optional-dependencies]
+measurement = [
+    "numpy>=1.26.0",
+    "onnxruntime>=1.24.2",
+    "tokenizers>=0.23.3",
+    "huggingface-hub>=1.0",
+]
+
 [project.scripts]
 gem = "gem.cli:main"
 metrix = "metrix.cli:main"

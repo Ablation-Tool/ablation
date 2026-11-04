@@ -5,6 +5,7 @@ from contextlib import redirect_stdout
 import io
 import json
 import multiprocessing as mp
+import numpy as np
 import os
 from pathlib import Path
 import subprocess
@@ -786,6 +787,168 @@ class AccessibilityCase(unittest.TestCase):
         self.assertIn("read-only AI review", payload["instruction"])
 
 
+class StubProvider:
+    def __init__(self):
+        self.np = np
+        self.context = None
+        self.contexts = []
+        self.probabilities = None
+
+    def forward(self, context):
+        self.context = context
+        self.contexts.append(context)
+        ids = np.array([1, 2, 3], dtype=np.int64)
+        if self.probabilities is not None:
+            probabilities = self.probabilities
+        elif "concentrated" in context:
+            probabilities = np.array([0.90, 0.04, 0.04, 0.02], dtype=np.float64)
+        else:
+            probabilities = np.array([0.70, 0.20, 0.08, 0.02], dtype=np.float64)
+        return ids, probabilities, {"model": {"id": "stub-model"}, "top_tokens": []}
+
+
+class AccessibleVolumeCase(unittest.TestCase):
+    def test_strict_threshold_excludes_equal_values(self):
+        from gem.accessible_volume import accessible_volume, complementary_volume
+
+        counts = accessible_volume([0.70, 0.20, 0.05, 0.05])
+        self.assertEqual(counts, {
+            "0.02": 4, "0.05": 2, "0.10": 2,
+            "0.15": 2, "0.30": 1, "0.50": 1,
+        })
+        self.assertEqual(complementary_volume([0.70, 0.20, 0.05, 0.05]), {
+            "0.02": 0, "0.05": 2, "0.10": 2,
+            "0.15": 2, "0.30": 3, "0.50": 3,
+        })
+
+    def test_distribution_and_threshold_validation(self):
+        from gem.accessible_volume import accessible_volume
+
+        for probabilities, thresholds in (
+            ([], [0.05]),
+            ([0.5, 0.6], [0.05]),
+            ([0.5, -0.1, 0.6], [0.05]),
+            ([0.5, 0.5], []),
+            ([0.5, 0.5], [1.1]),
+        ):
+            with self.subTest(probabilities=probabilities, thresholds=thresholds):
+                with self.assertRaises(ValueError):
+                    accessible_volume(probabilities, thresholds)
+
+    def test_measure_session_records_separate_evidence(self):
+        from gem.accessible_volume import measure_session
+
+        with tempfile.TemporaryDirectory(prefix="gem-accessible-volume-test-") as directory:
+            session = Session(Path(directory) / "session", "/bin/true")
+            provider = StubProvider()
+            report, event = measure_session(session, provider=provider)
+            self.assertEqual(report["counts"]["0.05"], 3)
+            self.assertEqual(report["vocabulary_size"], 4)
+            self.assertEqual(event["source"], "tool")
+            self.assertEqual(event["type"], "evidence")
+            self.assertEqual(event["parent_id"], session.root_id)
+            self.assertEqual(event["id"], report["evidence_event_id"])
+            self.assertIn("does not measure the interactive agent", report["scope"])
+            probability_path = Path(report["probability_artifact"])
+            self.assertTrue(probability_path.is_file())
+            with np.load(probability_path) as artifact:
+                self.assertEqual(artifact["input_ids"].tolist(), [1, 2, 3])
+                self.assertTrue(np.allclose(artifact["probabilities"], [0.70, 0.20, 0.08, 0.02]))
+            report_path = probability_path.with_suffix(".json")
+            saved = json.loads(report_path.read_text())
+            self.assertEqual(saved["counts"], report["counts"])
+            self.assertEqual(saved["evidence_event_id"], event["id"])
+            self.assertIn("recent_evidence", provider.context)
+
+    def test_measure_context_is_bounded(self):
+        from gem.accessible_volume import build_context
+
+        with tempfile.TemporaryDirectory(prefix="gem-accessible-volume-test-") as directory:
+            session = Session(Path(directory) / "session", "/bin/true")
+            for index in range(40):
+                session.emit(
+                    f"observation:{index}", session.root_id, "observation", f"Evidence {index}",
+                    "partial", "agent", "x" * 500,
+                )
+            context, state = build_context(session)
+            self.assertLessEqual(len(context), 6000)
+            self.assertIn("Evidence 39", context)
+            self.assertNotIn("Evidence 0", context)
+            self.assertEqual(state["selected_id"], session.root_id)
+
+    def test_cli_measure_records_report(self):
+        from gem.cli import main
+
+        with tempfile.TemporaryDirectory(prefix="gem-accessible-volume-test-") as directory:
+            session = Session(Path(directory) / "session", "/bin/true")
+            output = io.StringIO()
+            with mock.patch("gem.accessible_volume.DistilGpt2Provider", return_value=StubProvider()):
+                with redirect_stdout(output):
+                    result = main(["measure", "--session", str(session.root), "--json"])
+            self.assertEqual(result, 0)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report["counts"]["0.05"], 3)
+            self.assertTrue(any(event["id"] == report["evidence_event_id"] for event in session.events()))
+
+    def test_candidate_previews_are_advisory_not_execution(self):
+        from gem.accessible_volume import measure_session
+        from gem.cli import main
+
+        with tempfile.TemporaryDirectory(prefix="gem-accessible-volume-test-") as directory:
+            session = Session(Path(directory) / "session", "/bin/true")
+            provider = StubProvider()
+            candidates = ["inspect broadly", "concentrated review"]
+            report, _ = measure_session(session, provider=provider, candidates=candidates)
+            self.assertEqual(report["counts"]["0.05"], 3)
+            self.assertEqual(report["candidates"][0]["counts"]["0.05"], 3)
+            self.assertEqual(report["candidates"][1]["counts"]["0.05"], 1)
+            self.assertEqual(report["candidates"][1]["delta"]["0.05"], -2)
+            self.assertEqual(report["most_concentrated_candidate"]["action"], "concentrated review")
+            self.assertIn("no action is authorized or executed", report["scope"])
+            self.assertEqual(len(provider.contexts), 3)
+            with np.load(report["probability_artifact"]) as artifact:
+                self.assertIn("candidate_0_probabilities", artifact)
+                self.assertIn("candidate_1_probabilities", artifact)
+            output = io.StringIO()
+            with mock.patch("gem.accessible_volume.DistilGpt2Provider", return_value=StubProvider()):
+                with redirect_stdout(output):
+                    result = main([
+                        "measure", "--session", str(session.root), "--candidate", "concentrated review",
+                    ])
+            self.assertEqual(result, 0)
+            self.assertIn("Most concentrated candidate: concentrated review", output.getvalue())
+            before_invalid = len(provider.contexts)
+            with self.assertRaises(ValueError):
+                measure_session(session, provider=provider, candidates=[""])
+            with self.assertRaises(ValueError):
+                measure_session(session, provider=provider, candidates=[f"candidate-{index}" for index in range(17)])
+            self.assertEqual(len(provider.contexts), before_invalid)
+
+    def test_complement_and_momentum_history(self):
+        from gem.accessible_volume import measure_session, momentum_guidance
+
+        with tempfile.TemporaryDirectory(prefix="gem-accessible-volume-test-") as directory:
+            session = Session(Path(directory) / "session", "/bin/true")
+            provider = StubProvider()
+            first, _ = measure_session(session, provider=provider)
+            self.assertEqual(first["complement_counts"]["0.05"], 1)
+            provider.probabilities = np.array([0.90, 0.04, 0.04, 0.02], dtype=np.float64)
+            second, _ = measure_session(session, provider=provider)
+            self.assertEqual(second["complement_counts"]["0.05"], 3)
+            self.assertEqual(second["momentum"]["0.05"], -2)
+            self.assertEqual(second["guidance"]["trend"], "narrowing")
+            self.assertEqual(second["guidance"]["suggestion"], "Narrow context")
+            self.assertEqual(second["previous_report"], first["probability_artifact"].replace(".npz", ".json"))
+            self.assertFalse(second["guidance"]["executed"])
+            third, _ = measure_session(session, provider=provider)
+            self.assertEqual(third["momentum"]["0.05"], 0)
+            self.assertEqual(third["guidance"]["suggestion"], "Proceed within a target band")
+            self.assertEqual(momentum_guidance({"0.05": 2}, "0.05", 1)["suggestion"], "Broaden context")
+            self.assertEqual(momentum_guidance({"0.05": -1}, "0.05", 1)["suggestion"], "Let the current trend continue")
+            with self.assertRaises(ValueError):
+                measure_session(session, provider=provider, momentum_band=-1)
+
+
 class BrandingCase(unittest.TestCase):
     def test_packaged_assets_match_the_master_set(self):
         root = Path(__file__).resolve().parents[2]
@@ -830,6 +993,7 @@ def main():
         unittest.defaultTestLoader.loadTestsFromTestCase(DropPayloadCase),
         unittest.defaultTestLoader.loadTestsFromTestCase(SafetyCase),
         unittest.defaultTestLoader.loadTestsFromTestCase(AccessibilityCase),
+        unittest.defaultTestLoader.loadTestsFromTestCase(AccessibleVolumeCase),
         unittest.defaultTestLoader.loadTestsFromTestCase(BrandingCase),
     ])
     result = unittest.TextTestRunner(verbosity=2, failfast=args.failfast).run(suite)

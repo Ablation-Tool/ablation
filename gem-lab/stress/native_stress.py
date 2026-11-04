@@ -111,6 +111,19 @@ class NativeCase(unittest.TestCase):
                 self.app.allow_safety()
                 self.assertTrue(write.call_args_list[0].args[0].startswith(b"Debug requested by the user. "))
 
+    def test_accessible_volume_action_updates_lab(self):
+        event = self.session.events()[0]
+        report = {"decision_threshold": "0.05", "counts": {"0.05": 3}}
+        self.root.after(1000, self.root.quit)
+        with mock.patch("gem.accessible_volume.measure_session", return_value=(report, event)):
+            self.app.run_accessible_volume()
+            self.root.mainloop()
+        self.assertFalse(self.app.measurement_running)
+        self.assertTrue(self.app.details_visible)
+        self.assertEqual(self.app.counts_variable.get(), "Accessible volume: 3 above 0.05 · evidence saved")
+        self.assertEqual(self.app.measurement_button.cget("text"), "Accessible Volume")
+        self.assertEqual(self.session.current_state()["selected_id"], event["id"])
+
     def test_details_and_actions_collapse_under_inverting_icon(self):
         self.assertEqual(self.app.details_frame.winfo_manager(), "")
         self.assertEqual(self.app.details_label.winfo_manager(), "")

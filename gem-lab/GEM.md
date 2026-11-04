@@ -26,7 +26,13 @@ Here \(S\) is the model context and \(O\) is its output vocabulary. In a Lab, co
 B_\tau(S)=\sum_{a\in O}\mathbf{1}[P(a\mid S)>\tau]\cdot\mathbf{1}[a\in\operatorname{Allow}(S)]
 \]
 
-The operational sequence is `proposal → constrained action gate → deterministic execution → evidence on disk → verification/replay`. This reduces unbounded and uninspectable action; it does not eliminate stochastic variation or prove safety. Accessible volume must not be presented as a correctness, autonomy, or safety score. Current interactive agent CLIs do not expose token probabilities, so GEM does not calculate either score for them. A provider exposing suitable logits and complete structured actions would be required before making such a measurement.
+The operational sequence is `proposal → constrained action gate → deterministic execution → evidence on disk → verification/replay`. This reduces unbounded and uninspectable action; it does not eliminate stochastic variation or prove safety. Accessible volume must not be presented as a correctness, autonomy, or safety score.
+
+GEM can calculate \(A_\tau(S)\) with the optional local DistilGPT2 provider. `gem measure --session SESSION` builds the current selection and recent evidence into a bounded context, performs a forward pass, applies strict thresholds, and writes the raw probabilities and a separate `tool` evidence event. Repeated `--candidate` options evaluate proposed future actions with separate forward passes, concentration deltas, and a most-concentrated candidate for human review; no action is authorized or executed. The GUI exposes the same measurement through **Accessible Volume** in Settings.
+
+The complementary volume \(A^c_\tau(S)=|O|-A_\tau(S)\) records alternatives at or below each threshold; it is not an inverse and cannot recover the original distribution or context. Accessible momentum \(M_\tau(t)=A_\tau(S_t)-A_\tau(S_{t-1})\) compares consecutive reports and yields advisory guidance to broaden context, narrow context, continue the current trend, or proceed within a configurable target band. Guidance never authorizes or executes an action.
+
+Current interactive agent CLIs do not expose token probabilities, so GEM does not calculate either score for those agents. DistilGPT2 measures only the recorded context, not the interactive agent's correctness or safety. Computing \(B_\tau(S)\) still requires a provider exposing complete structured-action probabilities, which ordinary next-token distributions cannot supply.
 
 ## Environment and hosted Lab
 
