@@ -1,0 +1,33 @@
+name: GEM native macOS
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build native package
+        run: |
+          python -m pip install build
+          python gem-lab/packaging/build_macos.py
+      - name: Extract package
+        run: unzip -q gem-lab/dist/GEM-macOS.zip -d /tmp/gem-macos-native
+      - name: Install and validate native macOS
+        timeout-minutes: 3
+        run: bash /tmp/gem-macos-native/install_macos.sh
+      - name: Upload native package
+        uses: actions/upload-artifact@v4
+        with:
+          name: GEM-macOS
+          path: gem-lab/dist/GEM-macOS.zip
+          if-no-files-found: error

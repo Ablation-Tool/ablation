@@ -37,37 +37,37 @@ Semantic firmware analysis for vulnerability researchers.
 
 ---
 
-## ABL∀TION's Default GUIAI
+## ABL∀TION's Default GEM
 
 Native workspaces for agent-guided reverse engineering, with real agent terminals, persistent investigation state, visual navigation, review controls, and configurable Lab layouts.
 
 | Document | Description |
 |---|---|
-| [AI Agent Bridge](reference-modules/guiai-agent-bridge.md) | Runs your interactive AI agent inside the GUI. No credentials included. |
-| [Lab & Navigation](reference-modules/guiai-investigation-lab.md) | Organizes, searches, and visualizes discoveries, with directory inventory and METRIX tools. |
-| [Persistence & Isolation](reference-modules/guiai-project-memory.md) | Restores sessions and preferences while keeping each Lab's agent, history, and workspace separate. |
-| [Review & Evidence Integrity](reference-modules/guiai-review-workflow.md) | Tracks reviews, preserves evidence history, validates targets, and prevents duplicate discoveries. |
+| [AI Agent Bridge](reference-modules/gem-agent-bridge.md) | Runs your interactive AI agent inside the GUI. No credentials included. |
+| [Lab & Navigation](reference-modules/gem-investigation-lab.md) | Organizes, searches, and visualizes discoveries, with directory inventory and METRIX tools. |
+| [Persistence & Isolation](reference-modules/gem-project-memory.md) | Restores sessions and preferences while keeping each Lab's agent, history, and workspace separate. |
+| [Review & Evidence Integrity](reference-modules/gem-review-workflow.md) | Tracks reviews, preserves evidence history, validates targets, and prevents duplicate discoveries. |
 
 **Supporting topics**
 
-- [GUIAI workbench guide](../guiai-lab/README.md)
-- [Performance and investigation memory](reference-modules/guiai-performance.md)
+- [GEM workbench guide](../gem-lab/README.md)
+- [Performance and investigation memory](reference-modules/gem-performance.md)
 - [Unified Memory Architecture](reference-modules/unified-memory-architecture.md)
-- [Token Allocation](reference-modules/guiai-token-allocation.md)
-- [Operating System Support](reference-modules/guiai-operating-system-support.md)
-- [Independent Workspaces](reference-modules/guiai-independent-workspaces.md)
-- [Visual Navigation](reference-modules/guiai-visual-navigation.md)
-- [Layout Preferences](reference-modules/guiai-layout-preferences.md)
-- [Terminal](reference-modules/guiai-terminal.md)
-- [Directory Inventory](reference-modules/guiai-directory-inventory.md)
+- [Token Allocation](reference-modules/gem-token-allocation.md)
+- [Operating System Support](reference-modules/gem-operating-system-support.md)
+- [Independent Workspaces](reference-modules/gem-independent-workspaces.md)
+- [Visual Navigation](reference-modules/gem-visual-navigation.md)
+- [Layout Preferences](reference-modules/gem-layout-preferences.md)
+- [Terminal](reference-modules/gem-terminal.md)
+- [Directory Inventory](reference-modules/gem-directory-inventory.md)
 - [METRIX Support](reference-modules/metrix-support.md)
-- [Universal OS Installation Prompt](../guiai-lab/INSTALL-PROMPT.md)
-- [Installation guide](../guiai-lab/INSTALL.md)
-- [Native platform packages](../guiai-lab/packaging/README.md)
+- [Universal OS Installation Prompt](../gem-lab/INSTALL-PROMPT.md)
+- [Installation guide](../gem-lab/INSTALL.md)
+- [Native platform packages](../gem-lab/packaging/README.md)
 - [Agent configuration](integrations/agent-configuration.md)
 - [Kimi Code configuration](kimi-code-configuration.md)
 - [Claude Code workflow](integrations/claude-code.md)
-- [Validation and hardening](../guiai-lab/HARDENING.md)
+- [Validation and hardening](../gem-lab/HARDENING.md)
 
 ---
 
@@ -320,8 +320,8 @@ See [CHANGELOG.md](CHANGELOG.md) for full version history.
 | Version | Summary |
 |---|---|
 | Unreleased | Added bounded APK/XAPK decoding, overload-aware Java-like DEX decompilation, byte-backed ARM/Thumb ELF disassembly, exact JNI mapping, and converged DEX-to-native taint analysis with FORGE closure and capability documentation. |
-| v2.93.2 | Added the complete Installation Prompt and universal installer for the standard Ablation CLI and GUIAI, with verified release wheels, a shared environment, and native cross-platform validation. |
-| v2.93.1 | Added the offline `Ablation.app` bundle with native ICNS branding, first-run target/project/agent selection, relocation-safe launching, and native macOS application validation. |
+| v2.93.2 | Added the complete Installation Prompt and universal installer for the standard Ablation CLI and GEM, with verified release wheels, a shared environment, and native cross-platform validation. |
+| v2.93.1 | Added the offline `GEM.app` bundle with native ICNS branding, first-run target/project/agent selection, relocation-safe launching, and native macOS application validation. |
 | v2.93.0 | Added relocation-aware BfltBinaryContext with strict and explicit unresolved outcomes, corrected GZIP/GZDATA layouts, added bFLT-backed WindowAnalyzer support, and recovered legacy ARM PLT symbols and direct calls without the A1676 LIEF crash. |
 | v2.92.0 | Expanded C166 dispatch decoding and corrected condition/shift operands; resolved A3801 and N1470 update variants; added BfltArm32 link-time pointer and literal recovery with complete documentation. |
 | v2.91.0 | Added immediate SUBB decoding, bFLT pointer-endianness guidance, corrected A1676 update gating, confirmed C111C command-listener evidence, and documented the ALICE control FPGA command decoder. |

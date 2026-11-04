@@ -62,11 +62,10 @@ def cmd_analyze(args):
         print(f"  ISA/ABI    : {describe_mips_elf(args.binary)}")
 
     if args.entropy:
-        em = EntropyMapper(str(args.binary))
-        regions = em.scan()
-        print(f"\nEntropy regions ({len(regions)} found):")
-        for r in regions[:20]:
-            print(f"  {r}")
+        result = EntropyMapper(str(args.binary)).run()
+        print(f"\nEntropy regions ({len(result.regions)} found):")
+        for region in result.regions[:20]:
+            print(f"  {region.fmt()}")
 
 
 def cmd_search(args):

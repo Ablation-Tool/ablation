@@ -1,12 +1,12 @@
 # Unified Memory Architecture
 
-GUIAI's **Unified Memory Architecture (UMA)** is a project-specific way of organizing reverse-engineering work. It unifies the GUIAI workspace, the real CLI/AI Agent, and the human investigator around one authoritative investigation state.
+GEM's **Unified Memory Architecture (UMA)** is a project-specific way of organizing reverse-engineering work. It unifies the GEM workspace, the real CLI/AI Agent, and the human investigator around one authoritative investigation state.
 
 UMA is not a hardware memory standard, an operating-system memory manager, or a promise that an AI model retains its chat history. It describes how labor, navigation, memory, and judgment are separated without losing their connection to the same investigation.
 
 ## Workspace as address space
 
-The GUIAI workspace is the investigation's **address space**: the durable, navigable representation of what has been discovered, what remains untouched, and what the human wants to inspect next.
+The GEM workspace is the investigation's **address space**: the durable, navigable representation of what has been discovered, what remains untouched, and what the human wants to inspect next.
 
 It stores:
 
@@ -22,9 +22,9 @@ The workspace is not a second agent-memory database. The event log is authoritat
 
 ## CLI as processor
 
-The CLI/AI Agent is the **processor** that performs work within that address space. It can inspect artifacts, invoke Ablation and other tools, test hypotheses, and record supported discoveries through the GUIAI CLI.
+The CLI/AI Agent is the **processor** that performs work within that address space. It can inspect artifacts, invoke Ablation and other tools, test hypotheses, and record supported discoveries through the GEM CLI.
 
-The agent reads current state with commands such as `guiai state` and `guiai tree`, then records results with `guiai emit` or `guiai emit-many`. Its own conversation context is not authoritative. An agent can be replaced or restarted without discarding the investigation's recorded memory.
+The agent reads current state with commands such as `gem state` and `gem tree`, then records results with `gem emit` or `gem emit-many`. Its own conversation context is not authoritative. An agent can be replaced or restarted without discarding the investigation's recorded memory.
 
 The CLI supplies labor, not a guarantee of correctness or persistence. Observations, hypotheses, tool evidence, and human-confirmed findings remain distinct.
 
@@ -49,12 +49,12 @@ The three roles form one feedback loop:
 1. The human selects a target and a project directory.
 2. The workspace creates the authoritative session and top-level inventory.
 3. The CLI/AI Agent reads the selected state and performs actual analysis.
-4. The agent records evidence, limitations, and new branches through the GUIAI CLI.
+4. The agent records evidence, limitations, and new branches through the GEM CLI.
 5. The workspace propagates those events into the tree, charts, details, and status summaries.
 6. The human selects the next area to investigate, requests follow-up, or marks a reviewed result.
 7. The agent resumes from that shared state instead of rediscovering the session.
 
-The result is a **unified investigation address space**: the workspace remembers, the CLI works, and the human directs. GUIAI is the presentation and coordination layer that connects those roles.
+The result is a **unified investigation address space**: the workspace remembers, the CLI works, and the human directs. GEM is the presentation and coordination layer that connects those roles.
 
 ## Consistency and state
 
@@ -85,12 +85,12 @@ The live process and terminal scrollback are not the authoritative project recor
 
 | Role | Implementation |
 |---|---|
-| Authoritative session and event model | `guiai-lab/guiai/events.py` |
-| Tk investigation and selection interface | `guiai-lab/guiai/app.py` |
-| GTK multi-Lab workspace and native terminal | `guiai-lab/guiai/gtk_app.py` |
-| Agent-facing state and discovery commands | `guiai-lab/guiai/cli.py` |
-| Tk terminal and POSIX PTY support | `guiai-lab/metrix/desktop.py` |
-| Persistent workspace layout | `guiai-lab/guiai/layout.py` and `guiai-lab/guiai/preferences.py` |
-| Complete Ablation and GUIAI installation | `guiai-lab/packaging/forall.py` |
+| Authoritative session and event model | `gem-lab/gem/events.py` |
+| Tk investigation and selection interface | `gem-lab/gem/app.py` |
+| GTK multi-Lab workspace and native terminal | `gem-lab/gem/gtk_app.py` |
+| Agent-facing state and discovery commands | `gem-lab/gem/cli.py` |
+| Tk terminal and POSIX PTY support | `gem-lab/metrix/desktop.py` |
+| Persistent workspace layout | `gem-lab/gem/layout.py` and `gem-lab/gem/preferences.py` |
+| Complete Ablation and GEM installation | `gem-lab/packaging/forall.py` |
 
-See the [GUIAI workbench guide](../../guiai-lab/README.md) for the session-file layout, agent commands, and native platform behavior.
+See the [GEM workbench guide](../../gem-lab/README.md) for the session-file layout, agent commands, and native platform behavior.
