@@ -22,7 +22,7 @@ After installation, the turned-A logo exposes **a11y Optimization**, **OS Optimi
 
 Use `GEM-Linux.zip` with Python 3.10 or newer and Tkinter. Extract it and run `bash install_linux.sh`. The installer creates `.venv` inside the extracted directory, installs the Python dependencies offline, and runs the native stress suite unless `SKIP_TESTS=1` is set.
 
-The installer registers `ablation-gem.png` and `re.gem.workbench.desktop` in the user's XDG data directory, then creates `GEM.desktop` in the directory reported by `xdg-user-dir DESKTOP`. It preserves a customized existing shortcut and sets GNOME trusted-launcher metadata where supported. Set `NO_DESKTOP_SHORTCUT=1` to install only the application-menu entry. If Desktop shortcuts are disabled by the desktop configuration, the application-menu installation still succeeds and the limitation is reported.
+The installer registers `gem-woven-diamond.png` and `re.gem.workbench.desktop` in the user's XDG data directory, then creates `GEM.desktop` in the directory reported by `xdg-user-dir DESKTOP`. It preserves a customized existing shortcut and sets GNOME trusted-launcher metadata where supported. Set `NO_DESKTOP_SHORTCUT=1` to install only the application-menu entry. If Desktop shortcuts are disabled by the desktop configuration, the application-menu installation still succeeds and the limitation is reported.
 
 Linux can use the native GTK/VTE interface when the distribution's GTK, VTE, and Python GObject packages are installed. The installer uses `--system-site-packages` so those system libraries remain visible. Otherwise, use `--toolkit tk` for the single-investigation Tk interface. See the [workbench guide](../README.md) for Ubuntu/Debian prerequisites.
 

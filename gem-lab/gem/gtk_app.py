@@ -470,7 +470,7 @@ class AblationWindow(Gtk.Window):
         header.set_custom_title(Gtk.Box())
         header.set_size_request(-1, 36)
         self.header_bar = header
-        icon_path = Path(__file__).resolve().parent / "icons" / "ablation-gem-logo.png"
+        icon_path = Path(__file__).resolve().parent / "icons" / "gem-woven-diamond.png"
         icon_pixbuf = GdkPixbuf.Pixbuf.new_from_file(str(icon_path))
         Gtk.Window.set_default_icon(icon_pixbuf)
         self.set_icon(icon_pixbuf)
@@ -2313,12 +2313,12 @@ class WelcomeApplication(Gtk.Application):
         window.set_position(Gtk.WindowPosition.CENTER)
         window.connect("destroy", lambda _window: self.quit())
         icon_root = Path(__file__).resolve().parent / "icons"
-        window.set_icon_from_file(str(icon_root / "ablation-gem-logo.png"))
+        window.set_icon_from_file(str(icon_root / "gem-woven-diamond.png"))
         header = Gtk.HeaderBar(show_close_button=True)
         header.set_title("GEM Lab")
         window.set_titlebar(header)
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16, border_width=32)
-        content.pack_start(Gtk.Image.new_from_file(str(icon_root / "ablation-gem-logo.png")), False, False, 8)
+        content.pack_start(Gtk.Image.new_from_file(str(icon_root / "gem-woven-diamond.png")), False, False, 8)
         title = Gtk.Label()
         title.set_markup("<span size='xx-large' weight='bold'>Start an investigation</span>")
         content.pack_start(title, False, False, 0)

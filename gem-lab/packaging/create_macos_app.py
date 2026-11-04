@@ -1,7 +1,6 @@
 from pathlib import Path
 import plistlib
 import shutil
-import subprocess
 import sys
 import tempfile
 
@@ -11,24 +10,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../Resources" && pwd)"
 exec "$ROOT/.venv/bin/python" -m gem.macos_launcher "$@"
 '''
-
-
-def create_icon(source, resources):
-    if sys.platform != "darwin":
-        raise RuntimeError("The native macOS icon must be built on macOS with sips and iconutil.")
-    with tempfile.TemporaryDirectory(prefix="gem-iconset-") as temporary:
-        iconset = Path(temporary) / "GEM.iconset"
-        iconset.mkdir()
-        for size in (16, 32, 128, 256, 512):
-            for scale in (1, 2):
-                suffix = "@2x" if scale == 2 else ""
-                output = iconset / f"icon_{size}x{size}{suffix}.png"
-                subprocess.run([
-                    "sips", "-z", str(size * scale), str(size * scale), str(source), "--out", str(output),
-                ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.run([
-            "iconutil", "-c", "icns", str(iconset), "-o", str(resources / "GEM.icns"),
-        ], check=True)
 
 
 def repair_launchers(environment):
@@ -48,7 +29,7 @@ def repair_launchers(environment):
 def create_app(source):
     source = Path(source).resolve()
     environment = source / ".venv"
-    icon = source / "vendor" / "ablation-gem-logo.png"
+    icon = source / "vendor" / "gem-woven-diamond.icns"
     if not (environment / "bin" / "python").is_file() or not icon.is_file():
         raise RuntimeError("The offline Python environment or branding asset is missing.")
     destination = source / "GEM.app"
@@ -78,7 +59,7 @@ def create_app(source):
         }
         with (contents / "Info.plist").open("wb") as stream:
             plistlib.dump(metadata, stream, sort_keys=True)
-        create_icon(icon, resources)
+        shutil.copy2(icon, resources / "GEM.icns")
         (contents.parent).rename(destination)
     return destination
 

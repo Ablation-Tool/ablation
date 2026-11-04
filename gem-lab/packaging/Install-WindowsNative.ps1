@@ -14,7 +14,7 @@ if ($LASTEXITCODE -ne 0) {
 $source = $PSScriptRoot
 $wheel = Join-Path $source "gem_lab-0.1.0-py3-none-any.whl"
 $vendor = Join-Path $source "vendor"
-$icon = Join-Path $source "ablation-gem.ico"
+$icon = Join-Path $source "gem-woven-diamond.ico"
 if (-not (Test-Path $wheel) -or -not (Test-Path $vendor) -or -not (Test-Path $icon)) {
     throw "The package is incomplete. Extract GEM-Windows-Native.zip before running the installer."
 }
@@ -40,7 +40,7 @@ try {
             $shortcutRoot = $env:GEM_INSTALL_DESTINATION
         }
         $shortcutPythonw = Join-Path $shortcutRoot ".venv\Scripts\pythonw.exe"
-        $shortcutIcon = Join-Path $shortcutRoot "ablation-gem.ico"
+        $shortcutIcon = Join-Path $shortcutRoot "gem-woven-diamond.ico"
         $desktop = [Environment]::GetFolderPath("Desktop")
         if ([string]::IsNullOrWhiteSpace($desktop)) { throw "Windows did not report a Desktop directory." }
         if (-not (Test-Path $desktop -PathType Container)) {

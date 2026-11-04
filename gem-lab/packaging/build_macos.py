@@ -22,9 +22,10 @@ def main():
     ], check=True)
     for name in ("install_macos.sh", "create_macos_app.py", "README.md"):
         shutil.copy(ROOT / "packaging" / name, DIST / name)
-    shutil.copy(ROOT / "gem" / "icons" / "ablation-gem-logo.png", vendor / "ablation-gem-logo.png")
+    shutil.copy(ROOT / "gem" / "icons" / "gem-woven-diamond.png", vendor / "gem-woven-diamond.png")
     shutil.copy(ROOT / "stress" / "macos_stress.py", DIST / "macos_stress.py")
-    shutil.copy(ROOT / "gem" / "icons" / "ablation-gem.icns", DIST / "ablation-gem.icns")
+    shutil.copy(ROOT / "gem" / "icons" / "gem-woven-diamond.icns", vendor / "gem-woven-diamond.icns")
+    shutil.copy(ROOT / "gem" / "icons" / "gem-woven-diamond.icns", DIST / "gem-woven-diamond.icns")
     (DIST / "install_macos.sh").chmod(0o755)
     destination = ROOT / "dist" / "GEM-macOS.zip"
     with ZipFile(destination, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:

@@ -239,7 +239,7 @@ class NativeCase(unittest.TestCase):
         self.root.deiconify()
         self.assertEqual(self.app.brand_image.width(), 512)
         self.assertEqual(self.app.brand_header_image.width(), 32)
-        self.assertTrue(self.app.brand_header_image.transparency_get(0, 0))
+        self.assertEqual(self.app.brand_header_image.get(0, 0), (0, 0, 128))
         self.app.show_preferences()
         self.assertEqual(set(self.app.layout_buttons), set(LAYOUTS))
         terminal = self.app.terminal
