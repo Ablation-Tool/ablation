@@ -24,7 +24,7 @@ APPLICATIONS="$DATA_HOME/applications"
 ICON_DIRECTORY="$DATA_HOME/icons/hicolor/512x512/apps"
 DESKTOP_ENTRY="$APPLICATIONS/re.gem.workbench.desktop"
 install -d "$APPLICATIONS" "$ICON_DIRECTORY"
-install -m 0644 "$SOURCE/gem-woven-diamond-logo.png" "$ICON_DIRECTORY/gem-woven-diamond.png"
+install -m 0644 "$SOURCE/gem-woven-diamond.png" "$ICON_DIRECTORY/gem-woven-diamond.png"
 export SOURCE APPLICATIONS
 python - <<'PY'
 import os
