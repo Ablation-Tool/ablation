@@ -43,6 +43,7 @@ Native workspaces for agent-guided reverse engineering, with real agent terminal
 
 | Document | Description |
 |---|---|
+| [Accessible Volume](reference-modules/accessible-volume.md) | Measures next-token forecast breadth and stores separate evidence without scoring correctness or safety. |
 | [AI Agent Bridge](reference-modules/gem-agent-bridge.md) | Runs your interactive AI agent inside the GUI. No credentials included. |
 | [Lab & Navigation](reference-modules/gem-investigation-lab.md) | Organizes, searches, and visualizes discoveries, with directory inventory and METRIX tools. |
 | [Persistence & Isolation](reference-modules/gem-project-memory.md) | Restores sessions and preferences while keeping each Lab's agent, history, and workspace separate. |

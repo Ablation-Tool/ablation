@@ -105,6 +105,17 @@ class GtkCase(unittest.TestCase):
         self.pump(0.1)
         return self.app
 
+    def test_accessible_volume_action_updates_lab(self):
+        self.window.measurement_button = Gtk.Button()
+        event = self.window.session.events()[0]
+        report = {"decision_threshold": "0.05", "counts": {"0.05": 3}}
+        with mock.patch("gem.accessible_volume.measure_session", return_value=(report, event)):
+            self.window.run_accessible_volume()
+            self.wait_for(lambda: not self.window.measurement_running, "accessible-volume action did not finish")
+        self.assertTrue(self.window.details_toggle.get_active())
+        self.assertEqual(self.window.counts.get_text(), "Accessible volume: 3 above 0.05 · evidence saved")
+        self.assertTrue(self.window.measurement_button.get_sensitive())
+
     def test_welcome_target_choices_and_cancel(self):
         application = WelcomeApplication()
         for directory, filename in ((False, "/bin/true"), (True, str(self.corpus))):
@@ -274,7 +285,7 @@ with tempfile.TemporaryDirectory(prefix="gem-application-run-") as temporary:
                 assert not window.settings_bar.get_visible()
                 window.brand_button.emit("clicked")
                 assert window.settings_bar.get_visible()
-                assert len(window.settings_bar.get_children()) == 3
+                assert len(window.settings_bar.get_children()) == 4
                 assert window.settings_bar.get_children()[0] is window.accessibility_button
                 assert window.settings_bar.get_children()[2] is window.debug_button
                 assert all(child.get_visible() for child in window.settings_bar.get_children())

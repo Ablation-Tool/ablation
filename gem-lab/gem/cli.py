@@ -69,6 +69,13 @@ def _parser():
     launch_agents.add_argument("--agent-command", help="complete interactive agent command")
     launch_agents.add_argument("--no-agent", action="store_true")
 
+    measure = commands.add_parser("measure", help="measure next-token accessible volume and record separate evidence")
+    measure.add_argument("--session", required=True, help="investigation session directory")
+    measure.add_argument("--threshold", type=float, action="append", help="probability threshold; repeat for a custom sweep")
+    measure.add_argument("--candidate", action="append", default=[], help="proposed future action to evaluate without executing; repeat for alternatives")
+    measure.add_argument("--momentum-band", type=int, default=1, help="accessible-momentum target band (default: 1)")
+    measure.add_argument("--json", action="store_true", help="emit the complete measurement report")
+
     for name in ("state", "tree", "begin", "emit", "emit-many", "review"):
         command = commands.add_parser(name, help=f"{name} investigation state through the shared Lab protocol")
         command.add_argument("--session", default="gem-session")
@@ -127,6 +134,32 @@ def main(argv=None):
             elif arguments.no_agent:
                 command.append("--no-agent")
             return gem_main(command)
+        if arguments.command == "measure":
+            from .accessible_volume import THRESHOLDS, measure_session
+            from .events import Session
+
+            report, event = measure_session(
+                Session(arguments.session), arguments.threshold or THRESHOLDS,
+                candidates=arguments.candidate, momentum_band=arguments.momentum_band,
+            )
+            if arguments.json:
+                print(json.dumps(report, indent=2, ensure_ascii=False, sort_keys=True))
+            else:
+                for threshold, count in report["counts"].items():
+                    print(f"Accessible volume above {threshold}: {count}")
+                if report["momentum"] is not None:
+                    decision = report["decision_threshold"]
+                    print(f"Accessible momentum at {decision}: {report['momentum'][decision]:+d}")
+                    print(f"Guidance: {report['guidance']['suggestion']}")
+                for candidate in report["candidates"]:
+                    print(f"Candidate: {candidate['action']}")
+                    for threshold, delta in candidate["delta"].items():
+                        print(f"  {threshold}: {candidate['counts'][threshold]} ({delta:+d})")
+                if report["most_concentrated_candidate"] is not None:
+                    print(f"Most concentrated candidate: {report['most_concentrated_candidate']['action']}")
+                print(f"Evidence: {event['id']}")
+                print(f"Report: {Path(report['probability_artifact']).with_suffix('.json')}")
+            return 0
         if arguments.command == "launch":
             from gem.lab_cli import main as gem_main
 

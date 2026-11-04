@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import threading
 import tkinter as tk
 from tkinter import filedialog, ttk
 
@@ -86,7 +87,9 @@ class InvestigationApp:
         self.accessibility_button.pack(side="left")
         self.debug_button = tk.Button(self.settings_bar, text="Debug", command=self.run_debug_check)
         self.debug_button.pack(side="left")
-        self.accent_buttons = (self.accessibility_button, self.safety_button, self.debug_button)
+        self.measurement_button = tk.Button(self.settings_bar, text="Accessible Volume", command=self.run_accessible_volume)
+        self.measurement_button.pack(side="left")
+        self.accent_buttons = (self.accessibility_button, self.safety_button, self.debug_button, self.measurement_button)
         self.apply_system_accent()
         self.accessibility_button.pack(side="left", before=self.safety_button)
         self.safety_panel = ttk.Frame(self.root, padding=(8, 4, 8, 0))
@@ -197,6 +200,49 @@ class InvestigationApp:
         self.safety_panel.pack_forget()
         self.accessibility_panel.pack_forget()
         self.settings_bar.pack_forget()
+
+    def run_accessible_volume(self):
+        if getattr(self, "measurement_running", False):
+            return
+        self.measurement_running = True
+        self.measurement_button.configure(text="Measuring…", state="disabled")
+        self.counts_variable.set("Accessible volume: running the local model")
+
+        def worker():
+            try:
+                from .accessible_volume import measure_session
+                result = measure_session(self.session)
+            except Exception as error:
+                try:
+                    self.root.after_idle(lambda error=error: self.finish_measurement(None, error))
+                except tk.TclError:
+                    pass
+            else:
+                try:
+                    self.root.after_idle(lambda result=result: self.finish_measurement(result, None))
+                except tk.TclError:
+                    pass
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def finish_measurement(self, result, error):
+        self.measurement_running = False
+        self.measurement_button.configure(text="Accessible Volume", state="normal")
+        if error is not None:
+            self.counts_variable.set(f"Accessible volume failed: {error}")
+            return
+        report, event = result
+        self.reload()
+        self.tree.selection_set(event["id"])
+        self.on_select()
+        if not self.details_visible:
+            self.toggle_details()
+        threshold = report["decision_threshold"]
+        message = f"Accessible volume: {report['counts'][threshold]} above {threshold}"
+        guidance = report.get("guidance", {})
+        if guidance.get("trend") not in (None, "unmeasured"):
+            message += f" · {guidance['suggestion']}"
+        self.counts_variable.set(message + " · evidence saved")
 
     def show_accessibility(self):
         self.safety_panel.pack_forget()
