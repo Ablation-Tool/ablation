@@ -18,11 +18,9 @@ Usage:
 
     sandbox = DynamicSandbox.from_path('/path/to/binary', arch='arm64')
 
-    # Verify function is safe to run
-    checker = LeafFunctionChecker.from_path('/path/to/binary')
-    if checker.is_leaf(va):
-        result = sandbox.run_function(va, args={'x0': 0x1234, 'x1': 0x10})
-        print(result)
+    # Execution independently verifies the leaf before every new function.
+    result = sandbox.run_function(va, args={'x0': 0x1234, 'x1': 0x10})
+    print(result)
 """
 from __future__ import annotations
 
@@ -142,9 +140,10 @@ class LeafFunctionChecker:
     indirect calls whose target is outside the binary's load range.
     """
 
-    def __init__(self, callees_map: Dict[int, List[int]], plt_range: Optional[tuple]):
-        self._callees = callees_map      # va → list of callee VAs
-        self._plt_range = plt_range      # (start, end) or None
+    def __init__(self, callees_map: Dict[int, List[int]], plt_range: Optional[tuple], xref=None):
+        self._callees = callees_map
+        self._plt_range = plt_range
+        self._xref = xref
 
     @classmethod
     def from_path(cls, binary_path: str) -> "LeafFunctionChecker":
@@ -155,39 +154,37 @@ class LeafFunctionChecker:
             _, _, plt_range = _load_pe_segments(binary_path)
         else:
             _, _, plt_range = _load_elf_segments(binary_path)
-        # XRefGraph doesn't expose full callees_map directly; proxy via callees_of
-        return cls(callees_map={}, plt_range=plt_range)
+        return cls(callees_map={}, plt_range=plt_range, xref=xg)
 
     @classmethod
     def from_xref_graph(cls, xg, plt_range: Optional[tuple] = None) -> "LeafFunctionChecker":
-        return cls(callees_map={}, plt_range=plt_range)
+        return cls(callees_map={}, plt_range=plt_range, xref=xg)
 
     def is_leaf(self, va: int, ctx=None) -> bool:
-        """Return True if function at va has no external calls."""
-        if ctx is None:
-            return True  # can't verify without context; trust caller
+        """Return True only when known callees exclude external execution."""
         try:
-            from .xref_graph import XRefGraph
-            xg = XRefGraph.from_path(ctx.path)
+            xg = self._xref
+            if xg is None:
+                if ctx is None:
+                    return False
+                from .xref_graph import XRefGraph
+                xg = XRefGraph.from_path(ctx.path)
             if not getattr(xg, "_built", False):
                 xg.build()
             callees = list(xg.callees_of(va) or [])
             if not callees:
                 return True
             if self._plt_range is None:
-                return True
+                return False
             plt_start, plt_end = self._plt_range
-            for c in callees:
-                if plt_start <= c < plt_end:
-                    return False
-            return True
+            return all(not (plt_start <= callee < plt_end) for callee in callees)
         except Exception:
-            return True
+            return False
 
     def check_report(self, va: int, ctx=None) -> str:
         """Return a human-readable probe-safety report for va."""
         leaf = self.is_leaf(va, ctx)
-        status = "SAFE" if leaf else "UNSAFE (has PLT callees)"
+        status = "SAFE" if leaf else "NOT CLEARED (external calls or unverified safety)"
         return f"{hex(va)}: {status}"
 
 
@@ -263,8 +260,9 @@ class DynamicSandbox:
         self._uc = self._init_unicorn(arch)
         self._map_segments()
         self._map_infrastructure()
-        self._snap = self._uc.context_save()   # clean-state snapshot
-        self._mem_snap: bytes = self._read_all_mapped()
+        self._snap = self._uc.context_save()
+        self._mem_snap: Dict[int, bytes] = self._read_all_mapped()
+        self._leaf_checker = None
 
     @classmethod
     def from_path(cls, binary_path: str, arch: str = "arm64") -> "DynamicSandbox":
@@ -287,14 +285,20 @@ class DynamicSandbox:
         return uc
 
     def _map_segments(self) -> None:
+        ranges = sorted(
+            (vaddr & ~0xFFF, _page_align(vaddr + max(len(data), 1)))
+            for vaddr, data in self._segments
+        )
+        merged = []
+        for start, end in ranges:
+            if merged and start <= merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], end)
+            else:
+                merged.append([start, end])
+        for start, end in merged:
+            self._uc.mem_map(start, end - start, unicorn.UC_PROT_ALL)
         for vaddr, data in self._segments:
-            size = _page_align(max(len(data), 0x1000))
-            try:
-                self._uc.mem_map(vaddr & ~0xfff, size + 0x1000,
-                                 unicorn.UC_PROT_ALL)
-                self._uc.mem_write(vaddr, data)
-            except unicorn.UcError:
-                pass  # already mapped (overlapping segments)
+            self._uc.mem_write(vaddr, data)
 
     def _map_infrastructure(self) -> None:
         # Stack
@@ -307,27 +311,19 @@ class DynamicSandbox:
         else:
             self._uc.mem_write(_HALT_ADDR, b'\x90' * 64)  # NOP * 64
 
-    def _read_all_mapped(self) -> bytes:
-        """Read a snapshot of the first segment for rollback."""
-        if not self._segments:
-            return b''
-        va, data = self._segments[0]
-        try:
-            return bytes(self._uc.mem_read(va, len(data)))
-        except Exception:
-            return b''
+    def _read_all_mapped(self) -> Dict[int, bytes]:
+        return {
+            va: bytes(self._uc.mem_read(va, len(data)))
+            for va, data in self._segments
+        }
 
     # ── Snapshot / restore ────────────────────────────────────────────────────
 
     def _restore(self) -> None:
-        """Restore CPU context + writable memory to clean state."""
+        """Restore CPU context and every mapped artifact segment."""
         self._uc.context_restore(self._snap)
-        if self._segments and self._mem_snap:
-            va, _ = self._segments[0]
-            try:
-                self._uc.mem_write(va, self._mem_snap)
-            except Exception:
-                pass
+        for va, data in self._mem_snap.items():
+            self._uc.mem_write(va, data)
 
     # ── Register helpers ──────────────────────────────────────────────────────
 
@@ -380,6 +376,12 @@ class DynamicSandbox:
 
     # ── Probe execution ───────────────────────────────────────────────────────
 
+    def _verify_leaf(self, va):
+        if self._leaf_checker is None:
+            self._leaf_checker = LeafFunctionChecker.from_path(self._path)
+        if not self._leaf_checker.is_leaf(va):
+            raise ValueError(f"dynamic probe not cleared for function at {va:#x}")
+
     def run_function(
         self,
         va: int,
@@ -396,6 +398,7 @@ class DynamicSandbox:
         Returns:
             SandboxResult with output register values and behavioral observations.
         """
+        self._verify_leaf(va)
         self._restore()
         args = args or {}
         mem_writes: List[tuple] = []
@@ -501,90 +504,73 @@ class DynamicProbeAdapter:
 
     def execute(self, probe, ctx, session) -> list:
         if not _UNICORN_AVAILABLE:
-            return []
+            raise RuntimeError("dynamic probing requires the optional unicorn dependency")
         from .hypothesis_models import EvidenceRecord, EvidenceRelation
 
         evidence = []
-        arch = getattr(ctx, "arch", "arm64")
-
-        try:
-            sandbox = DynamicSandbox.from_context(ctx)
-        except Exception:
-            return []
-
-        # Collect target VAs from probe parameters or hypothesis subjects
+        sandbox = DynamicSandbox.from_context(ctx)
         vas = []
         params = probe.parameters
         if "va" in params:
-            try:
-                vas.append(int(str(params["va"]), 0))
-            except (ValueError, TypeError):
-                pass
+            vas.append(int(str(params["va"]), 0))
         if not vas:
             for hid in probe.target_hypothesis_ids:
                 h = session.get_hypothesis(hid)
                 if h is None:
                     continue
-                for k in ("va", "func_va", "target_va"):
-                    if k in h.subject:
-                        try:
-                            vas.append(int(str(h.subject[k]), 0))
-                        except (ValueError, TypeError):
-                            pass
+                for key in ("va", "func_va", "target_va"):
+                    if key in h.subject:
+                        vas.append(int(str(h.subject[key]), 0))
+        if not vas:
+            raise ValueError("dynamic probe requires a target function address")
 
-        # Generate a small set of diverse input patterns
-        input_sets = params.get("input_sets") or [
-            {},                                          # all-zero args
-            {"x0": 0x1, "x1": 0x1},
-            {"x0": 0xFF, "x1": 0x10},
-            {"x0": 0xFFFF_FFFF, "x1": 0x0},
-        ]
+        arch = getattr(ctx, "arch", "arm64")
+        if arch in ("x86_64", "x86"):
+            default_inputs = [
+                {},
+                {"rdi": 0x1, "rsi": 0x1},
+                {"rdi": 0xFF, "rsi": 0x10},
+                {"rdi": 0xFFFF_FFFF, "rsi": 0x0},
+            ]
+        else:
+            default_inputs = [
+                {},
+                {"x0": 0x1, "x1": 0x1},
+                {"x0": 0xFF, "x1": 0x10},
+                {"x0": 0xFFFF_FFFF, "x1": 0x0},
+            ]
+        input_sets = params.get("input_sets") or default_inputs
 
-        for va in set(vas):
-            try:
-                results = sandbox.probe_multiple(va, input_sets)
-                sigs = [r.behavioral_signature() for r in results]
-                consistent = len(set(sigs)) < len(sigs)  # some matching sigs
-                any_aborted = any(r.aborted for r in results)
-                write_counts = [len(r.memory_writes) for r in results]
-
-                obs = {
-                    "va": hex(va),
-                    "runs": len(results),
-                    "behavioral_signatures": sigs,
-                    "return_values": [
-                        hex(r.return_value) if r.return_value is not None else "N/A"
-                        for r in results
-                    ],
-                    "any_aborted": any_aborted,
-                    "total_mem_writes": sum(write_counts),
-                    "insns_executed": [r.executed_insns for r in results],
-                }
-
-                # Behavioral evidence: strength depends on completeness of runs
-                strength = 0.0
-                if any_aborted:
-                    strength = 0.40  # partial — PLT calls interrupted
-                elif consistent:
-                    strength = 0.75  # multiple runs show consistent behavior
-                else:
-                    strength = 0.60  # ran clean but outputs vary
-
-                ev = EvidenceRecord.create(
-                    analyzer="DynamicSandbox",
-                    family="behavioral",
-                    subject={"va": hex(va)},
-                    observation=obs,
-                    relation=EvidenceRelation.NEUTRAL,
-                    hypothesis_ids=probe.target_hypothesis_ids,
-                    strength=strength,
-                    reliability=0.85,
-                    notes=f"dynamic: {len(results)} runs, aborted={any_aborted}",
-                )
-                evidence.append(ev)
-            except Exception:
-                pass
-
+        for va in sorted(set(vas)):
+            results = sandbox.probe_multiple(va, input_sets)
+            sigs = [r.behavioral_signature() for r in results]
+            consistent = len(set(sigs)) < len(sigs)
+            any_aborted = any(r.aborted for r in results)
+            write_counts = [len(r.memory_writes) for r in results]
+            obs = {
+                "va": hex(va),
+                "runs": len(results),
+                "behavioral_signatures": sigs,
+                "return_values": [
+                    hex(r.return_value) if r.return_value is not None else "N/A"
+                    for r in results
+                ],
+                "any_aborted": any_aborted,
+                "total_mem_writes": sum(write_counts),
+                "insns_executed": [r.executed_insns for r in results],
+            }
+            strength = 0.40 if any_aborted else (0.75 if consistent else 0.60)
+            evidence.append(EvidenceRecord.create(
+                analyzer="DynamicSandbox",
+                family="behavioral",
+                subject={"va": hex(va)},
+                observation=obs,
+                relation=EvidenceRelation.NEUTRAL,
+                hypothesis_ids=probe.target_hypothesis_ids,
+                strength=strength,
+                reliability=0.85,
+                notes=f"dynamic: {len(results)} runs, aborted={any_aborted}",
+            ))
         return evidence
 
 

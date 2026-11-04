@@ -1,4 +1,4 @@
-<img src="assets/branding/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
+<img src="assets/branding/woven-diamond/repo/logo.png" width="160" alt="Ablation GEM woven diamond">
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey) [![NIST SP 800-218](https://img.shields.io/badge/NIST%20SP%20800--218-SSDF-grey)](docs/standards-ablation.md) [![CISA Secure by Design](https://img.shields.io/badge/CISA-Secure%20by%20Design-grey)](docs/standards-ablation.md) [![MIL-HDBK-115C](https://img.shields.io/badge/MIL--HDBK--115C-Compliant-grey)](docs/standards-ablation.md)
 
@@ -6,19 +6,34 @@ ABL∀TION is an AI-assisted reverse engineering (AIARE) framework.
 
 ---
 
-![GUIAI native workbench demo](assets/demos/guiai-workbench-demo.gif)
+![GEM native workbench demo](assets/demos/gem-workbench-demo.gif)
+
+## Ablation + GEM (Graphics Environment Manager)
+
+**Ablation + GEM (Graphics Environment Manager) is one product and one default download.** Ablation supplies the required CLI, analysis framework, artifact parsers, reverse-engineering tools, target context, and evidence model. GEM (Graphics Environment Manager) is the native UI for that framework, with the shared investigation Lab, embedded AI Agent, Spatial IR, graphical execution, deterministic verification, and replayable visual evidence.
+
+Ablation can operate CLI-only. GEM's complete investigation workflows require Ablation. The default installation includes both; **CLI Only** remains available for users who do not want a graphical environment. The former GUIAI is obsolete, not an alternate interface or supported alias.
+
+![Unified Memory Architecture: human, AI Agent, Ablation, and GEM](assets/demos/gem-unified-memory-architecture.png)
+
+The Lab and AI Agent share the same workspace. The agent reads `gem state`, begins exact selected work with `gem begin`, performs real analysis through Ablation, and records evidence-backed results with `gem emit` or `gem emit-many`. It does not need to infer the Lab from screenshots. Investigation events remain authoritative; Spatial IR, Cairo scenes, VDI commands, and layouts are derived views. Geometric passes are tool evidence, not human confirmation or proof of reverse-engineering coverage. See the [GEM guide](gem-lab/GEM.md) for implementation details and the visual demonstrations below.
 
 ## Capabilities
 
 <details>
-<summary>ABL∀TION's Default GUIAI</summary>
+<summary>ABL∀TION's Default GEM</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**Agent Bridge**](guiai-lab/README.md) | [1](guiai-lab/guiai/environment.py)&nbsp;[2](guiai-lab/metrix/desktop.py) | Embeds your AI Agent inside the GUIAI |
-| [**Evidence Integrity**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/cli.py)&nbsp;[3](guiai-lab/guiai/app.py) | Tracks reviews and validates evidence targets |
-| [**Lab Navigation**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/map_view.py)&nbsp;[3](guiai-lab/metrix/cli.py) | Organizes, searches, and visualizes discoveries |
-| [**Session Persistence**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/preferences.py)&nbsp;[3](guiai-lab/guiai/gtk_app.py) | Restores Lab sessions, agents, and preferences |
+| [**a11y Optimization**](gem-lab/README.md) | [1](gem-lab/gem/app.py)&nbsp;[2](gem-lab/gem/gtk_app.py) | Auto-detects & merges your accessibility settings & tools into the GUI |
+| [**Accessible Volume**](docs/reference-modules/accessible-volume.md) | [1](gem-lab/gem/accessible_volume.py)&nbsp;[2](gem-lab/gem/cli.py) | Measures and records next-token forecast breadth with a local model |
+| [**Agent Bridge**](gem-lab/README.md) | [1](gem-lab/gem/environment.py)&nbsp;[2](gem-lab/metrix/desktop.py) | Embeds your AI Agent into the GEM |
+| [**Debug Diagnostics**](gem-lab/README.md) | [1](gem-lab/gem/app.py)&nbsp;[2](gem-lab/gem/gtk_app.py) | Shows dependency and terminal diagnostics before requesting troubleshooting permission |
+| [**Evidence Integrity**](gem-lab/README.md) | [1](gem-lab/gem/events.py)&nbsp;[2](gem-lab/gem/cli.py)&nbsp;[3](gem-lab/gem/app.py) | Tracks reviews and validates evidence targets |
+| [**GEM Verification**](gem-lab/GEM.md) | [1](gem-lab/gem/model.py)&nbsp;[2](gem-lab/gem/geometry.py)&nbsp;[3](gem-lab/gem/runner.py) | Verifies and replays spatial investigation evidence |
+| [**Lab Navigation**](gem-lab/README.md) | [1](gem-lab/gem/events.py)&nbsp;[2](gem-lab/gem/map_view.py)&nbsp;[3](gem-lab/metrix/cli.py) | Searches and visualizes discoveries while restoring sessions, agents, and preferences |
+| [**OS Optimization**](gem-lab/README.md) | [1](gem-lab/gem/app.py)&nbsp;[2](gem-lab/gem/gtk_app.py) | Recognizes the operating system in use and adapts GEM to that environment |
+| [**OS Support**](gem-lab/README.md) | [1](gem-lab/gem/launcher.py)&nbsp;[2](gem-lab/packaging/forall.py)&nbsp;[3](gem-lab/packaging/install_linux.sh) | Supports Linux, Windows, macOS, adaptive presentation, and safe installation |
 
 </details>
 
@@ -243,26 +258,28 @@ ABL∀TION is an AI-assisted reverse engineering (AIARE) framework.
 ```text
 Ask me to choose one installation type and wait for my answer before installing anything:
 
-1. GUIAI — install the standard Ablation CLI and GUIAI, then launch the workbench with you—the AI Agent I am currently using—embedded in its terminal.
-2. CLI Only — install the standard Ablation CLI without GUIAI.
+1. GEM — install the standard Ablation CLI and GEM, then launch the workbench with you—the AI Agent I am currently using—embedded in its terminal.
+2. CLI Only — install the standard Ablation CLI without GEM.
 
-Do not continue until I explicitly choose GUIAI or CLI Only.
+Do not continue until I explicitly choose GEM or CLI Only.
 
-If I choose GUIAI:
+If I choose GEM:
 - Check my operating system and Python first. Native Windows requires Python 3.11 x64 with Tcl/Tk; macOS and Linux require Python 3.10 or newer with Tkinter. Explain missing prerequisites and ask before system changes.
-- Download and review https://github.com/Ablation-Tool/ablation/releases/latest/download/forall.py and run it with the checked Python. Use the default full installation, which includes both Ablation and GUIAI, verifies release checksums, installs GUIAI's wheels offline, and downloads standard Ablation dependencies from PyPI.
-- Ask me for the RE target and a project directory outside it. On macOS, open the generated Ablation.app. On Windows and macOS, use --toolkit tk when launching through the CLI. Use your actual executable for the embedded AI Agent; if you cannot identify it, ask me instead of substituting another agent.
-- Verify ablation --help and guiai --help, and confirm that the native window opens with your real CLI inside it.
+- Download and review https://github.com/Ablation-Tool/ablation/releases/latest/download/forall.py and run it with the checked Python. Use the default full installation, which includes both Ablation and GEM, verifies release checksums, installs GEM's wheels offline, and downloads standard Ablation dependencies from PyPI.
+- Open GEM and choose the RE target inside the application; the session is created automatically outside the target. On macOS, open the generated GEM.app. On Windows and macOS, use --toolkit tk when launching through the CLI. Use your actual executable for the embedded AI Agent; if you cannot identify it, ask me instead of substituting another agent.
+- Verify ablation --help and gem --help, choose a target in GEM, and confirm that the workbench opens with your real CLI inside it. Select an artifact, ask the agent to begin working on the selected item, and verify that it reads the current GEM selection and records an evidence-backed status update visible in the Lab; do not treat terminal startup alone as proof of integration.
+- If I explicitly do not want a Desktop shortcut, use python forall.py --no-desktop-shortcut. Otherwise, confirm that the installed icon opens GEM directly with in-app Open binary and Open directory actions, stable per-target sessions, installed Kimi, Claude, or Codex CLI detection when available, and the GEM session and workspace environment supplied to its embedded terminal. Use gem launch --no-agent only when I explicitly want the investigation tree without an agent. Dropping local files or folders into the embedded CLI inserts quoted paths without pressing Enter; never execute an RE artifact merely to validate it.
+- The turned-A logo exposes **a11y Optimization**, **OS Optimization**, and **Debug**. Each provides a read-only audit with visible findings and proposed commands before requesting permission; Deny must do nothing, and Allow may send only the displayed bounded request to the active AI agent. Accessibility includes persistent colorblind-safe and high-contrast palettes, descriptive labels, text alternatives, and keyboard navigation. Do not claim screen-reader or accessibility compliance without testing with the user's assistive technology.
 
 If I choose CLI Only:
 - Create a project-local virtual environment and activate it for my operating system. For an existing source checkout, verify its origin and preserve uncommitted changes.
-- Install the standard package with python -m pip install ablation-tool, or from a reviewed source checkout with python -m pip install . Do not run forall.py because its default includes GUIAI.
-- Verify ablation --help. Do not launch GUIAI.
+- Install the standard package with python -m pip install ablation-tool, or from a reviewed source checkout with python -m pip install . Do not run forall.py because its default includes GEM.
+- Verify ablation --help. Do not launch GEM.
 
 For either choice:
 - Preserve my files and local changes. Do not use sudo, overwrite an existing installation, skip failed validation, or bypass my permissions.
 - Do not install an AI model, credentials, optional analysis extras, or firmware analysis. Do not execute the RE target.
-- Report my selected option, operating system, Ablation and GUIAI versions when applicable, installation and project paths, validation result, and exact launch command.
+- Report my selected option, operating system, Ablation and GEM versions when applicable, installation and project paths, validation result, and exact launch command.
 ```
 
 </details>
@@ -318,6 +335,10 @@ Thank you.
 | Real-World Cryptography | David Wong |
 | Agentic GraphRAG | [Anthony Alcaraz](https://github.com/anthonyalcaraz), [Sam Julien](https://github.com/samjulien) |
 
+**GEM Design and Direction**
+
+[Dr. Helen R Horkan](https://github.com/HorkanHR) contributed ideas and design feedback that helped shape GEM’s development and the direction of its native workbench. I’m grateful for her insight and for the influence it had on the project.
+
 **Honorable Mention**
 
 [Microsoft Excel (Data Analysis ToolPak)](https://support.microsoft.com/en-us/office/use-the-analysis-toolpak-to-perform-complex-data-analysis-6c67ccf0-f4a9-487c-8dec-bdb5a2cefab6). When analyzing closed infrastructure or securing black-box systems, this exact process is called timing analysis or telemetry reverse engineering. Without source code, the Data Analysis ToolPak mathematically deconstructs how an application works on the backend by strictly observing its inputs and outputs.
@@ -337,23 +358,75 @@ Following coordinated disclosure, the **Cisco Product Security Incident Response
 | [CVE‑2026‑76412](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) | Secure Firewall Management Center (FMC) | Privilege Escalation to root | **8.5 High** |
 | [CVE‑2026‑76413](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) | Secure Firewall Management Center (FMC) | Single Sign-On Token Forgery | **8.5 High** |
 | [CVE‑2026‑76447](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4) | Identity Services Engine (ISE) | OCSP Responder Authentication Bypass | **5.3 Medium** |
+| [CVE‑2026‑20241](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-cert-mE9BD5GO) | Identity Services Engine (ISE) and ISE Passive Identity Connector (ISE-PIC) | Authorization Bypass | **5.3 Medium** |
 
 </details>
 
 <details>
 <summary>Demonstrations</summary>
 
-### Ablation in Action
+### Ablation + GEM (Graphics Environment Manager) architecture notes
 
-![Ablation in Action](assets/demos/Ablation-In-Action-01.gif)
+These visual notes explain the naming, framework relationship, shared Lab protocol, and single Ablation + GEM (Graphics Environment Manager) distribution.
 
-### How to Use Ablation
+<table>
+  <tr>
+    <td><a href="assets/demos/gem-architecture-01.png"><img src="assets/demos/gem-architecture-01.png" alt="Comparison of the former GUIAI workbench with GEM (Graphics Environment Manager) and its graphical verification capabilities" width="600"></a></td>
+    <td><a href="assets/demos/gem-architecture-02.png"><img src="assets/demos/gem-architecture-02.png" alt="GEM (Graphics Environment Manager) naming and architecture layers" width="600"></a></td>
+  </tr>
+  <tr>
+    <td><a href="assets/demos/gem-architecture-03.png"><img src="assets/demos/gem-architecture-03.png" alt="AI Agent interaction with the shared GEM (Graphics Environment Manager) Lab" width="600"></a></td>
+    <td><a href="assets/demos/gem-architecture-04.png"><img src="assets/demos/gem-architecture-04.png" alt="Ablation framework dependency and GEM (Graphics Environment Manager) graphical environment" width="600"></a></td>
+  </tr>
+  <tr>
+    <td><a href="assets/demos/gem-architecture-05.png"><img src="assets/demos/gem-architecture-05.png" alt="One Ablation and GEM (Graphics Environment Manager) distribution with a CLI Only option" width="600"></a></td>
+  </tr>
+</table>
 
-![How to Use Ablation](assets/demos/How-To-Use-Ablation.gif)
+### GEM (Graphics Environment Manager) Workbench
 
-### Learn as You RE
-
-![Learn as You RE](assets/demos/Learn-As-You-RE.gif)
+<table>
+  <tr>
+    <td><a href="assets/demos/gem-demo-01.png"><img src="assets/demos/gem-demo-01.png" alt="Investigation Lab and embedded AI terminal" width="600"></a></td>
+    <td><a href="assets/demos/gem-demo-02.png"><img src="assets/demos/gem-demo-02.png" alt="GEM settings controls and optimization buttons" width="600"></a></td>
+    <td><a href="assets/demos/gem-demo-03.png"><img src="assets/demos/gem-demo-03.png" alt="Accessibility audit and keyboard navigation options" width="600"></a></td>
+  </tr>
+  <tr>
+    <td><a href="assets/demos/gem-demo-04.png"><img src="assets/demos/gem-demo-04.png" alt="OS Optimization read-only audit with permission controls" width="600"></a></td>
+    <td><a href="assets/demos/gem-demo-05.png"><img src="assets/demos/gem-demo-05.png" alt="Debug diagnostics with pass and review findings" width="600"></a></td>
+    <td><a href="assets/demos/gem-demo-06.png"><img src="assets/demos/gem-demo-06.png" alt="Node details for an investigation artifact" width="600"></a></td>
+  </tr>
+  <tr>
+    <td><a href="assets/demos/gem-demo-07.png"><img src="assets/demos/gem-demo-07.png" alt="Resizable Lab and embedded terminal panes" width="600"></a></td>
+    <td><a href="assets/demos/gem-demo-08.png"><img src="assets/demos/gem-demo-08.png" alt="Full-width Lab with radial chart" width="600"></a></td>
+    <td><a href="assets/demos/gem-demo-09.png"><img src="assets/demos/gem-demo-09.png" alt="Treemap visualization of investigation nodes" width="600"></a></td>
+  </tr>
+  <tr>
+    <td><a href="assets/demos/gem-demo-10.png"><img src="assets/demos/gem-demo-10.png" alt="Lab tree and embedded AI terminal layout" width="600"></a></td>
+    <td><a href="assets/demos/gem-demo-11.png"><img src="assets/demos/gem-demo-11.png" alt="Treemap chart beside the embedded AI terminal" width="600"></a></td>
+    <td><a href="assets/demos/gem-demo-12.png"><img src="assets/demos/gem-demo-12.png" alt="Radial chart beside the embedded AI terminal" width="600"></a></td>
+  </tr>
+  <tr>
+    <td><a href="assets/demos/gem-demo-13.png"><img src="assets/demos/gem-demo-13.png" alt="Expanded embedded AI terminal workspace" width="600"></a></td>
+    <td><a href="assets/demos/gem-demo-14.png"><img src="assets/demos/gem-demo-14.png" alt="Workspace layout and terminal preferences" width="600"></a></td>
+    <td><a href="assets/demos/gem-demo-15.png"><img src="assets/demos/gem-demo-15.png" alt="Dragging a folder into the embedded AI terminal" width="600"></a></td>
+  </tr>
+  <tr>
+    <td><a href="assets/demos/gem-demo-16.png"><img src="assets/demos/gem-demo-16.png" alt="Investigation review statuses and flagged follow-up" width="600"></a></td>
+    <td><a href="assets/demos/gem-demo-17.png"><img src="assets/demos/gem-demo-17.png" alt="Reviewed status filter for Lab nodes" width="600"></a></td>
+    <td><a href="assets/demos/gem-demo-18.png"><img src="assets/demos/gem-demo-18.png" alt="Status selection menu for Lab review" width="600"></a></td>
+  </tr>
+  <tr>
+    <td><a href="assets/demos/gem-demo-19.png"><img src="assets/demos/gem-demo-19.png" alt="Teal accent applied to the desktop workbench" width="600"></a></td>
+    <td><a href="assets/demos/gem-demo-20.png"><img src="assets/demos/gem-demo-20.png" alt="Teal OS accent color in GEM" width="600"></a></td>
+    <td><a href="assets/demos/gem-demo-21.png"><img src="assets/demos/gem-demo-21.png" alt="Green OS accent color in GEM" width="600"></a></td>
+  </tr>
+  <tr>
+    <td><a href="assets/demos/gem-demo-22.png"><img src="assets/demos/gem-demo-22.png" alt="Orange OS accent color in GEM" width="600"></a></td>
+    <td><a href="assets/demos/gem-demo-23.png"><img src="assets/demos/gem-demo-23.png" alt="Red OS accent color in GEM" width="600"></a></td>
+    <td><a href="assets/demos/gem-demo-24.png"><img src="assets/demos/gem-demo-24.png" alt="Purple OS accent color in GEM" width="600"></a></td>
+  </tr>
+</table>
 
 </details>
 

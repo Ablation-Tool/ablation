@@ -147,3 +147,12 @@ def test_elf_endian_reads_elf_identity(tmp_path):
 
 def test_detect_arch_returns_unknown_for_invalid_object():
     assert _detect_arch(object()) == 'unknown'
+
+
+def test_analyze_entropy_prints_regions(capsys):
+    cli.cmd_analyze(_args(binary='/bin/true', entropy=True))
+
+    output = capsys.readouterr().out
+    assert 'Entropy regions (' in output
+    assert 'H=' in output
+    assert 'CODE/DATA' in output or 'SPARSE' in output

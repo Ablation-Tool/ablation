@@ -1,0 +1,42 @@
+================================================================================
+0O0 — THE COMBINED FIGURE
+One clean, symmetrical diagram: the 8-node ring (h1..h8, [loop]) as the outer
+octagon, the 5-spoke wheel (v1..v5) as the inner star, hub at the center,
+leaf--spine running horizontally through the middle, and the wedge/fire-team
+as the upper half of the star.
+================================================================================
+
+                         h1
+                         |
+                h8       |       h2
+               [loop]    |    [loop]
+                   \     |     /
+                    \    |    /
+           v5 -------\---|---/------- v2
+            (GRN)     \  |  /      (AR)
+                       \ | /
+      h7 [loop] -------+-------+---- [loop] h3
+      (SL)          ( hub )    |        (RFLM)
+           v4 -------/---|---\------- v1
+            (TL)     /  |  \      (TL)
+                    /   |   \
+               [loop]   |   [loop]
+                h6      |      h4
+                        |
+                        h5
+
+--------------------------------------------------------------------------------
+KEY
+--------------------------------------------------------------------------------
+  OUTER RING  h1..h8 with [loop] ......... diagram 3 (ring / loop topology)
+  INNER STAR  v1..v5 around hub ......... diagram 1 (wheel graph)
+  HORIZONTAL  h7 --- hub --- h3 ......... diagram 2 (leaf--spine / center link)
+  TOP STAR HALF  TL/AR/GRN/RFLM + SL .... diagram 4 (squad wedge: TL at the
+                                          tip, AR/GRN on the arms, RFLM right,
+                                          SL behind on the spine)
+  CENTERED 13th POINT  hub .............. diagram 5 (Metatron's Cube:
+                                          13 nodes, all paths through center)
+================================================================================
+One ring, five spokes, one center: 8 + 5 + 1 = 14? No — the hub is shared:
+8 ring nodes + 4 inner + 1 center = 13, exactly Metatron's Cube.
+================================================================================

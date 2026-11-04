@@ -19,12 +19,15 @@ Two things were not possible before this module:
 
 ## Safety contract <sup>[↑](#dynamic-sandbox)</sup>
 
-The sandbox only executes functions that pass `LeafFunctionChecker`. A function is probe-safe if it has no calls to PLT stubs and no indirect calls outside the binary's load range. Four additional guards prevent runaway execution:
+The sandbox independently verifies every new function with `LeafFunctionChecker` before execution. Missing context, verification failures, external callees, and callees that cannot be classified are not cleared. Five additional guards constrain execution:
 
 1. PLT stub detection aborts execution immediately on any PLT entry and returns a partial result.
 2. A hard instruction-count timeout stops execution at 100,000 instructions.
-3. A snapshot/restore cycle resets CPU registers and binary memory to a clean state between probe runs so consecutive probes do not interfere with each other.
+3. A snapshot/restore cycle resets CPU registers and every mapped artifact segment between probe runs so consecutive probes do not interfere with each other.
 4. A halt page at a fixed VA acts as a return address. Execution stops when the function returns rather than running off into unmapped memory.
+5. Overlapping segment pages are mapped once and every segment is written explicitly; mapping and restore failures are not ignored.
+
+This is constrained CPU emulation, not proof of hardware behavior or a host security sandbox. Static call recovery can still miss unresolved indirect behavior; unsupported or uncertain execution must remain blocked or visibly partial.
 
 ---
 

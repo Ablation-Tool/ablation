@@ -62,10 +62,9 @@ from .evidence_scorer import EvidenceScorer, score_report
 from .probe_ranker import ProbeRanker
 
 
-def _lazy_execute_probe(probe, ctx, session):
-    """Import and call execute_probe without creating a top-level circular import."""
-    from .probe_adapters import execute_probe
-    return execute_probe(probe, ctx, session)
+def _lazy_execute_probe_result(probe, ctx, session):
+    from .probe_adapters import execute_probe_result
+    return execute_probe_result(probe, ctx, session)
 
 
 class HypothesisEngine:
@@ -313,16 +312,22 @@ class HypothesisEngine:
         self.session.add_probe(probe)
 
         if approved and self._ctx is not None:
-            # Milestone 3: execute via concrete adapter, feed evidence back into scoring
-            evidence_list = _lazy_execute_probe(probe, self._ctx, self.session)
+            result = _lazy_execute_probe_result(probe, self._ctx, self.session)
+            evidence_list = result.evidence
             for ev in evidence_list:
                 self.session.add_evidence(ev)
                 for hid in ev.hypothesis_ids:
                     h = self.session.get_hypothesis(hid)
                     if h:
                         self._scorer.update_hypothesis(h, self.session.evidence_for(hid))
-            probe.mark_executed([ev.id for ev in evidence_list])
-            self._executed_kinds.append(probe.kind)
+            probe.mark_executed(
+                [ev.id for ev in evidence_list],
+                status=result.status.value,
+                diagnostics=[diagnostic.to_dict() for diagnostic in result.diagnostics],
+                coverage=result.coverage,
+            )
+            if result.succeeded:
+                self._executed_kinds.append(probe.kind)
         elif approved:
             # ctx not attached — mark for planning only, analyst adds evidence manually
             self._executed_kinds.append(probe.kind)
@@ -399,9 +404,13 @@ class HypothesisEngine:
                 status_mark = "✓" if p.executed else "○"
                 lines.append(
                     f"  {status_mark} [{p.kind}] {p.analyzer}  "
-                    f"eig={p.expected_information_gain:.3f}  "
-                    f"{'executed' if p.executed else 'pending'}"
+                    f"eig={p.expected_information_gain:.3f}  {p.status}"
                 )
+                for diagnostic in p.diagnostics:
+                    lines.append(
+                        f"    {diagnostic.get('code', 'diagnostic')}: "
+                        f"{diagnostic.get('message', '')}"
+                    )
             lines.append("")
 
         lines.append("=" * 72)

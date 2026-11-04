@@ -2,9 +2,9 @@
 
 ## Purpose and distinction
 
-METRIX is the inventory and navigation support package bundled with GUIAI. It helps turn a material directory into searchable artifact records and corpus summaries. It is not identical to the GUIAI investigation workbench: GUIAI adds the agent-driven Lab, project memory, visual investigation tree, and embedded real CLI.
+METRIX is the inventory and navigation support package bundled with GEM. It helps turn a material directory into searchable artifact records and corpus summaries. It is not identical to the GEM investigation workbench: GEM adds the agent-driven Lab, project memory, visual investigation tree, and embedded real CLI.
 
-METRIX is supporting infrastructure, not a second built-in AI or a replacement for GUIAI's event history. No separate METRIX checkout is required.
+METRIX is supporting infrastructure, not a second built-in AI or a replacement for GEM's event history. No separate METRIX checkout is required.
 
 ## Inventory and summaries
 
@@ -48,22 +48,22 @@ The default query limit is 50. `--limit 0` explicitly requests unlimited output,
 
 `metrix desktop` opens the native artifact dashboard with an optional embedded interactive CLI. The `gui` command can serve the local dashboard on loopback and optionally connect an external agent command; `--no-browser` disables automatic browser opening.
 
-The external `AgentBridge` is a read-only request path for chat, active filters, recent chat, and explicitly selected artifact records. It uses the external CLI's own model, authentication, permissions, and data policy. It is separate from GUIAI's full interactive investigation workspace.
+The external `AgentBridge` is a read-only request path for chat, active filters, recent chat, and explicitly selected artifact records. It uses the external CLI's own model, authentication, permissions, and data policy. It is separate from GEM's full interactive investigation workspace.
 
 Custom commands can contain `{prompt}` for substitution; otherwise the prompt is sent through stdin. Agent timeout and error output are reported instead of being presented as successful analysis.
 
 ## Packaging and implementation
 
-The `guiai-lab` distribution bundles `metrix` and its Python dependencies. `pyte` supports the native terminal parser, and `wcwidth` supports display-width calculations. The offline native GUIAI packages include these wheels; optional full Ablation analysis dependencies are separate.
+The `gem-lab` distribution bundles `metrix` and its Python dependencies. `pyte` supports the native terminal parser, and `wcwidth` supports display-width calculations. The offline native GEM packages include these wheels; optional full Ablation analysis dependencies are separate.
 
 Implementation map:
 
-- `guiai-lab/metrix/inventory.py`: artifact inventory and metadata
-- `guiai-lab/metrix/render.py`: summary loading and matrix generation
-- `guiai-lab/metrix/cli.py`: scan, summary, query, show, render, GUI, and desktop commands
-- `guiai-lab/metrix/agent.py`: command parsing and external read-only agent bridge
-- `guiai-lab/metrix/desktop.py`: native dashboard, terminal display, and PTY/ConPTY handling
-- `guiai-lab/metrix/server.py`: loopback dashboard service
+- `gem-lab/metrix/inventory.py`: artifact inventory and metadata
+- `gem-lab/metrix/render.py`: summary loading and matrix generation
+- `gem-lab/metrix/cli.py`: scan, summary, query, show, render, GUI, and desktop commands
+- `gem-lab/metrix/agent.py`: command parsing and external read-only agent bridge
+- `gem-lab/metrix/desktop.py`: native dashboard, terminal display, and PTY/ConPTY handling
+- `gem-lab/metrix/server.py`: loopback dashboard service
 
 ## Limits and validation
 

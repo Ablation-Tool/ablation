@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=GEM
+Comment=Agent-guided reverse-engineering workbench
+Exec=@GEM_EXECUTABLE@ launch
+Icon=gem-woven-diamond
+Terminal=false
+StartupNotify=true
+StartupWMClass=re.gem.workbench
+Categories=Development;
