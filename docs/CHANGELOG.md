@@ -2,6 +2,11 @@
 
 ---
 
+## Unreleased
+
+- Replaced the pre-launch target prompts with a direct GEM home screen on Linux, Windows, and macOS. **Open binary** and **Open directory** now select the target inside GEM before creating a stable session and opening the full workbench.
+- Consolidated node details and actions under a collapsed-by-default bowtie toggle in Tk and GTK, with normal and inverse icon states and preserved responsive layout behavior.
+
 ## v2.94.0
 
 **Cross-platform GEM desktop integration.**

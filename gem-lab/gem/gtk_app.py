@@ -80,7 +80,7 @@ TYPE_LABELS = {
 Gtk.IconTheme.get_default().append_search_path(str(Path(__file__).resolve().parent / "icons"))
 
 
-ORIGINAL_COLOR_ICONS = {"p-icon--success", "p-icon--open-terminal-inverse"}
+ORIGINAL_COLOR_ICONS = {"p-icon--success", "p-icon--open-terminal-inverse", "p-icon--expand-inverse"}
 
 
 def themed_pixbuf(icon_name, widget, size=16, state=Gtk.StateFlags.NORMAL, cache=None):
@@ -1352,11 +1352,9 @@ class InvestigationWorkspace(Gtk.Box):
         self.map_stack.hide()
         self.details_toggle = Gtk.ToggleButton()
         self.details_toggle.set_relief(Gtk.ReliefStyle.NONE)
+        self.details_toggle.set_size_request(32, 28)
         self.details_icon = Gtk.Image()
-        details_content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        details_content.pack_start(self.details_icon, False, False, 0)
-        details_content.pack_start(Gtk.Label(label="Node details"), False, False, 0)
-        self.details_toggle.add(details_content)
+        self.details_toggle.add(self.details_icon)
         left.pack_start(self.details_toggle, False, False, 0)
         self.details_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, border_width=8)
         self.details_box.set_hexpand(True)
@@ -1384,6 +1382,7 @@ class InvestigationWorkspace(Gtk.Box):
             self.details_box.pack_start(label, False, False, 0)
             label.show()
         self.node_actions = Gtk.Grid(column_spacing=6)
+        self.node_actions.set_no_show_all(True)
         self.node_actions.set_border_width(6)
         self.node_actions.set_hexpand(True)
         self.star_button = action_button("Star selected node", "p-icon--starred", self.toggle_selected_star, compact=True)
@@ -1449,6 +1448,7 @@ class InvestigationWorkspace(Gtk.Box):
         footer.pack_end(self.undo_button, False, False, 0)
         left.pack_end(footer, False, False, 0)
         left.pack_end(self.node_actions, False, False, 0)
+        self.on_details_toggled(self.details_toggle)
         self.terminal = Vte.Terminal()
         self.terminal.get_accessible().set_name("Embedded AI agent terminal")
         self.terminal.get_accessible().set_description(
@@ -1901,15 +1901,30 @@ class InvestigationWorkspace(Gtk.Box):
         self.star_button.set_sensitive(self.selected_event is not None)
 
     def on_details_toggled(self, button):
-        self.details_box.set_visible(button.get_active())
-        self.details_scroller.set_visible(button.get_active())
+        expanded = button.get_active()
+        self.details_box.set_visible(expanded)
+        self.details_scroller.set_visible(expanded)
+        if hasattr(self, "node_actions"):
+            if expanded:
+                self.node_actions.set_no_show_all(False)
+                self.node_actions.show_all()
+            else:
+                self.node_actions.hide()
+                self.node_actions.set_no_show_all(True)
         self.update_details_icon()
 
     def update_details_icon(self, *_args):
         expanded = self.details_toggle.get_active()
-        icon_name = "p-icon--hide" if expanded else "p-icon--show"
+        icon_name = "p-icon--expand-inverse" if expanded else "p-icon--expand"
         self.details_icon.set_from_pixbuf(themed_pixbuf(icon_name, self.details_toggle, 16, cache=self.icon_cache))
-        self.details_toggle.set_tooltip_text("Hide node details" if expanded else "Show node details")
+        style = self.details_toggle.get_style_context()
+        if expanded:
+            style.add_class("suggested-action")
+        else:
+            style.remove_class("suggested-action")
+        label = "Hide node details and actions" if expanded else "Show node details and actions"
+        self.details_toggle.set_tooltip_text(label)
+        self.details_toggle.get_accessible().set_name(label)
 
     def toggle_details(self):
         self.details_toggle.set_active(not self.details_toggle.get_active())
@@ -2287,7 +2302,68 @@ class InvestigationWorkspace(Gtk.Box):
                 wait_for_agents([self], timeout=10)
 
 
+class WelcomeApplication(Gtk.Application):
+    def __init__(self):
+        super().__init__(application_id="re.gem.welcome", flags=Gio.ApplicationFlags.FLAGS_NONE)
+        self.selected_target = None
+
+    def do_activate(self):
+        window = Gtk.ApplicationWindow(application=self, title="GEM")
+        window.set_default_size(640, 420)
+        window.set_position(Gtk.WindowPosition.CENTER)
+        window.connect("destroy", lambda _window: self.quit())
+        icon_root = Path(__file__).resolve().parent / "icons"
+        window.set_icon_from_file(str(icon_root / "ablation-gem-logo.png"))
+        header = Gtk.HeaderBar(show_close_button=True)
+        header.set_title("GEM Lab")
+        window.set_titlebar(header)
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16, border_width=32)
+        content.pack_start(Gtk.Image.new_from_file(str(icon_root / "ablation-gem-logo.png")), False, False, 8)
+        title = Gtk.Label()
+        title.set_markup("<span size='xx-large' weight='bold'>Start an investigation</span>")
+        content.pack_start(title, False, False, 0)
+        description = Gtk.Label(label="Open a binary or material directory to begin. Choose your target here in GEM.")
+        description.set_line_wrap(True)
+        content.pack_start(description, False, False, 0)
+        actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12, homogeneous=True)
+        binary = Gtk.Button(label="Open binary")
+        binary.get_accessible().set_name("Open binary")
+        binary.connect("clicked", lambda _button: self.choose_target(window, False))
+        actions.pack_start(binary, True, True, 0)
+        directory = Gtk.Button(label="Open directory")
+        directory.get_accessible().set_name("Open directory")
+        directory.connect("clicked", lambda _button: self.choose_target(window, True))
+        actions.pack_start(directory, True, True, 0)
+        content.pack_start(actions, False, False, 0)
+        quit_button = Gtk.Button(label="Quit")
+        quit_button.get_accessible().set_name("Quit")
+        quit_button.connect("clicked", lambda _button: self.quit())
+        content.pack_start(quit_button, False, False, 0)
+        window.add(content)
+        window.show_all()
+
+    def choose_target(self, parent, directory):
+        dialog = Gtk.FileChooserDialog(
+            title="Choose an investigation directory" if directory else "Choose a binary to investigate",
+            transient_for=parent,
+            action=Gtk.FileChooserAction.SELECT_FOLDER if directory else Gtk.FileChooserAction.OPEN,
+        )
+        dialog.add_buttons("Cancel", Gtk.ResponseType.CANCEL, "Open", Gtk.ResponseType.ACCEPT)
+        try:
+            if dialog.run() == Gtk.ResponseType.ACCEPT:
+                selected = dialog.get_filename()
+                if selected:
+                    self.selected_target = Path(selected).resolve()
+                    self.quit()
+        finally:
+            dialog.destroy()
+
+
 def run_desktop(target, session_root, command=None, workspace=None):
+    if target is None:
+        application = WelcomeApplication()
+        application.run([sys.executable])
+        return application.selected_target or 0
     session = Session(session_root, target)
     workspace = Path(workspace).expanduser().resolve() if workspace else session.root
     if not workspace.is_dir():

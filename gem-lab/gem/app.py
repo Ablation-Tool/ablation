@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import sys
 import tkinter as tk
-from tkinter import ttk
+from tkinter import filedialog, ttk
 
 from metrix.desktop import TerminalPanel
 
@@ -29,10 +29,6 @@ STATUS_COLORS = {
     "blocked": "#c01c28", "reviewed": "#1a7f37", "complete_scoped": "#1a7f37",
     "rejected": "#c01c28", "not_applicable": "#6e6e6e",
 }
-DETAILS_COLLAPSED = "▸ Node details"
-DETAILS_EXPANDED = "▾ Node details"
-
-
 class InvestigationApp:
     def __init__(self, root, session, command=None, workspace=None):
         self.root = root
@@ -623,26 +619,31 @@ class InvestigationApp:
         self.details.configure(state="disabled")
         self.details.bind("<Configure>", self.fit_details)
         self.actions = ttk.Frame(parent)
-        self.actions.pack(fill="x")
         ttk.Button(self.actions, text="Mark needs work", command=lambda: self.mark_selected("partial")).pack(side="left")
         ttk.Button(self.actions, text="Mark reviewed", command=lambda: self.mark_selected("reviewed")).pack(side="left", padx=6)
         ttk.Button(self.actions, text="Copy follow-up", command=self.copy_follow_up).pack(side="left")
         ttk.Button(self.actions, text="Focus CLI", command=self.focus_agent, style="Accent.TButton").pack(side="left", padx=6)
         ttk.Button(self.actions, text="Show in Files", command=self.show_in_files).pack(side="left")
-        self.details_button = ttk.Button(self.actions, text=DETAILS_COLLAPSED, command=self.toggle_details)
+        icon_root = Path(__file__).resolve().parent / "icons"
+        self.details_icon_normal = tk.PhotoImage(master=self.root, file=str(icon_root / "p-icon--expand.png"))
+        self.details_icon_inverse = tk.PhotoImage(master=self.root, file=str(icon_root / "p-icon--expand-inverse.png"))
+        self.details_button = ttk.Button(controls, image=self.details_icon_normal, style="TButton", command=self.toggle_details)
         self.details_button.pack(side="right")
 
     def toggle_details(self):
         self.details_visible = not self.details_visible
         if self.details_visible:
+            self.actions.pack(fill="x")
             self.details_label.pack(before=self.actions, fill="x", pady=(8, 0))
             self.details_frame.pack(before=self.actions, fill="x", pady=(4, 4))
-            self.details_button.configure(text=DETAILS_EXPANDED)
+            self.details_button.configure(image=self.details_icon_inverse, style="Accent.TButton")
             self.fit_details()
+            self.root.after_idle(self.fit_details)
         else:
             self.details_label.pack_forget()
             self.details_frame.pack_forget()
-            self.details_button.configure(text=DETAILS_COLLAPSED)
+            self.actions.pack_forget()
+            self.details_button.configure(image=self.details_icon_normal, style="TButton")
 
     def fit_details(self, _event=None):
         if not self.details_visible or getattr(self, "closed", False):
@@ -899,7 +900,63 @@ class InvestigationApp:
             pass
 
 
+class WelcomeApp:
+    def __init__(self, root):
+        self.root = root
+        self.selected_target = None
+        root.title("GEM")
+        root.geometry("640x420")
+        root.minsize(520, 340)
+        root.protocol("WM_DELETE_WINDOW", self.close)
+        icon_root = Path(__file__).resolve().parent / "icons"
+        self.brand_image = tk.PhotoImage(master=root, file=str(icon_root / "ablation-gem-logo.png"))
+        root.iconphoto(True, self.brand_image)
+        content = ttk.Frame(root, padding=32)
+        content.pack(fill="both", expand=True)
+        ttk.Label(content, image=self.brand_image).pack(pady=(8, 16))
+        ttk.Label(content, text="Start an investigation", font=("TkDefaultFont", 18, "bold")).pack()
+        ttk.Label(
+            content,
+            text="Open a binary or material directory to begin. Choose your target here in GEM.",
+            wraplength=520, justify="center",
+        ).pack(pady=(12, 20))
+        actions = ttk.Frame(content)
+        actions.pack()
+        ttk.Button(actions, text="Open binary", command=self.open_binary).pack(side="left", padx=6)
+        ttk.Button(actions, text="Open directory", command=self.open_directory).pack(side="left", padx=6)
+        ttk.Button(content, text="Quit", command=self.close).pack(pady=(20, 0))
+        root.bind("<Escape>", lambda _event: self.close())
+
+    def open_binary(self):
+        selected = filedialog.askopenfilename(parent=self.root, title="Choose a binary to investigate")
+        if selected:
+            self.selected_target = Path(selected).resolve()
+            self.root.destroy()
+
+    def open_directory(self):
+        selected = filedialog.askdirectory(parent=self.root, title="Choose an investigation directory")
+        if selected:
+            self.selected_target = Path(selected).resolve()
+            self.root.destroy()
+
+    def close(self):
+        self.selected_target = None
+        self.root.destroy()
+
+
 def run_desktop(target, session_root, command=None, workspace=None):
+    if target is None:
+        root = tk.Tk()
+        welcome = WelcomeApp(root)
+        try:
+            root.mainloop()
+        finally:
+            try:
+                if root.winfo_exists():
+                    root.destroy()
+            except tk.TclError:
+                pass
+        return welcome.selected_target or 0
     session = Session(session_root, target)
     if workspace is not None and not Path(workspace).expanduser().is_dir():
         raise ValueError(f"CLI workspace is not a directory: {workspace}")

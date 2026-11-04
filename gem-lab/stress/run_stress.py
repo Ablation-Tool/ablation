@@ -468,11 +468,9 @@ class LauncherCase(unittest.TestCase):
                 with self.subTest(target=target):
                     args = build_parser().parse_args(["launch", "--toolkit", "tk", "--agent", "kimi"])
                     with mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(root / "data")}):
-                        with mock.patch.object(cli, "choose_target", return_value=target), mock.patch.object(
-                            cli, "command_desktop", return_value=23,
-                        ) as desktop:
+                        with mock.patch.object(cli, "command_desktop", side_effect=[target, 23]) as desktop:
                             self.assertEqual(args.function(args), 23)
-                    desktop.assert_called_once_with(args)
+                    self.assertEqual(desktop.call_args_list, [mock.call(args), mock.call(args)])
                     self.assertEqual(args.target, str(target.resolve()))
                     self.assertEqual(args.workspace, str(Path(launcher.__file__).resolve().parent.parent))
                     self.assertEqual(Path(args.session).parent.parent, root / "data" / "Ablation" / "GEM")
@@ -510,36 +508,30 @@ class LauncherCase(unittest.TestCase):
 
         with tempfile.TemporaryDirectory(prefix="gem-launch-test-") as temporary:
             root = Path(temporary)
-            target = root / "material"
-            target.mkdir()
             for detected in ("kimi", ""):
                 with self.subTest(detected=detected or "none"):
                     args = build_parser().parse_args(["launch"])
                     with mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(root / "data")}), mock.patch.object(
-                        cli, "choose_target", return_value=target,
-                    ), mock.patch.object(cli, "default_agent", return_value=detected), mock.patch.object(
-                        cli, "command_desktop", return_value=0,
-                    ):
+                        cli, "default_agent", return_value=detected,
+                    ), mock.patch.object(cli, "command_desktop", return_value=0):
                         self.assertEqual(args.function(args), 0)
                     self.assertEqual(args.agent, detected or None)
 
     def test_launch_preserves_agent_choices_and_opt_out(self):
         from gem import lab_cli as cli
 
-        with tempfile.TemporaryDirectory(prefix="gem-launch-test-") as temporary:
-            target = Path(temporary)
-            for arguments in (
-                ["launch", "--no-agent"],
-                ["launch", "--agent", "codex"],
-                ["launch", "--agent-command", "custom-agent --flag"],
-            ):
-                with self.subTest(arguments=arguments):
-                    args = build_parser().parse_args(arguments)
-                    with mock.patch.object(cli, "choose_target", return_value=target), mock.patch.object(
-                        cli, "default_agent",
-                    ) as detect, mock.patch.object(cli, "command_desktop", return_value=0):
-                        self.assertEqual(args.function(args), 0)
-                    detect.assert_not_called()
+        for arguments in (
+            ["launch", "--no-agent"],
+            ["launch", "--agent", "codex"],
+            ["launch", "--agent-command", "custom-agent --flag"],
+        ):
+            with self.subTest(arguments=arguments):
+                args = build_parser().parse_args(arguments)
+                with mock.patch.object(cli, "default_agent") as detect, mock.patch.object(
+                    cli, "command_desktop", return_value=0,
+                ):
+                    self.assertEqual(args.function(args), 0)
+                detect.assert_not_called()
 
     def test_agent_discovery_prepares_graphical_path(self):
         from gem import launcher
@@ -560,19 +552,35 @@ class LauncherCase(unittest.TestCase):
             ):
                 self.assertEqual(launcher.default_agent(), "claude")
 
+    def test_launch_opens_home_without_creating_a_session(self):
+        from gem import lab_cli as cli
+
+        args = build_parser().parse_args(["launch", "--toolkit", "tk"])
+        with mock.patch.object(cli, "default_agent", return_value=None), mock.patch(
+            "gem.app.run_desktop", return_value=0,
+        ) as home:
+            self.assertEqual(args.function(args), 0)
+        home.assert_called_once()
+        self.assertIsNone(home.call_args.args[0])
+        self.assertIsNone(home.call_args.args[1])
+        self.assertFalse(hasattr(args, "target"))
+        self.assertFalse(hasattr(args, "session"))
+
     def test_launch_cancel_is_clean(self):
         from gem import lab_cli as cli
 
         args = build_parser().parse_args(["launch"])
-        with mock.patch.object(cli, "choose_target", return_value=None), mock.patch.object(cli, "command_desktop") as desktop:
+        with mock.patch.object(cli, "command_desktop", return_value=0) as desktop:
             self.assertEqual(args.function(args), 0)
-        desktop.assert_not_called()
+        desktop.assert_called_once_with(args)
+        self.assertFalse(hasattr(args, "target"))
+        self.assertFalse(hasattr(args, "session"))
 
     def test_launch_failure_is_visible(self):
         from gem import lab_cli as cli
 
         args = build_parser().parse_args(["launch"])
-        with mock.patch.object(cli, "choose_target", side_effect=OSError("display unavailable")), mock.patch.object(
+        with mock.patch.object(cli, "command_desktop", side_effect=OSError("display unavailable")), mock.patch.object(
             cli, "show_launch_error",
         ) as show_error:
             self.assertEqual(args.function(args), 1)

@@ -58,33 +58,6 @@ def session_for_target(target):
     return session
 
 
-def choose_target():
-    import tkinter as tk
-    from tkinter import filedialog, messagebox
-
-    root = tk.Tk()
-    root.withdraw()
-    try:
-        try:
-            root.attributes("-topmost", True)
-        except tk.TclError:
-            pass
-        directory = messagebox.askyesnocancel(
-            "Ablation",
-            "Investigate a directory?\n\nChoose Yes for a material directory or No for a single binary.",
-            parent=root,
-        )
-        if directory is None:
-            return None
-        if directory:
-            selected = filedialog.askdirectory(title="Choose an investigation directory", parent=root)
-        else:
-            selected = filedialog.askopenfilename(title="Choose a binary to investigate", parent=root)
-        return Path(selected).resolve() if selected else None
-    finally:
-        root.destroy()
-
-
 def show_launch_error(message):
     try:
         import tkinter as tk

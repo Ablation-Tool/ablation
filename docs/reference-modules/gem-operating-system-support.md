@@ -34,7 +34,7 @@ MacOS uses **Tk with POSIX PTY** and a double-clickable `GEM.app`.
 
 - Python 3.10 or newer with Tkinter.
 - Offline Python environment and native `Ablation.icns` branding.
-- First-run selection for the RE target, project directory, and optional installed AI Agent.
+- Direct GEM home screen with **Open binary** and **Open directory** actions, stable per-target sessions, and installed AI Agent detection.
 - Native app execution through Launch Services and relocation-safe launchers on the same Mac.
 - Finder evidence reveal and saved layout/project preferences.
 

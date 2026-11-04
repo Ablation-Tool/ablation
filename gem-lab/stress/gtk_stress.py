@@ -11,7 +11,7 @@ import unittest
 from unittest import mock
 
 from gem.gtk_app import (
-    AblationWindow, GemGtkApplication, InvestigationWorkspace, PreferencesDialog,
+    AblationWindow, GemGtkApplication, InvestigationWorkspace, PreferencesDialog, WelcomeApplication,
     ORIGINAL_COLOR_ICONS, STATUS_LABELS, TYPE_LABELS,
     action_button, choose_workspace, configure_native_fonts, themed_pixbuf, wait_for_agents,
 )
@@ -104,6 +104,31 @@ class GtkCase(unittest.TestCase):
         self.window.show_all()
         self.pump(0.1)
         return self.app
+
+    def test_welcome_target_choices_and_cancel(self):
+        application = WelcomeApplication()
+        for directory, filename in ((False, "/bin/true"), (True, str(self.corpus))):
+            with self.subTest(directory=directory):
+                chooser = mock.Mock()
+                chooser.run.return_value = Gtk.ResponseType.ACCEPT
+                chooser.get_filename.return_value = filename
+                with mock.patch("gem.gtk_app.Gtk.FileChooserDialog", return_value=chooser), mock.patch.object(
+                    application, "quit",
+                ) as quit_application:
+                    application.choose_target(self.host, directory)
+                self.assertEqual(application.selected_target, Path(filename).resolve())
+                quit_application.assert_called_once_with()
+                chooser.destroy.assert_called_once_with()
+                application.selected_target = None
+        chooser = mock.Mock()
+        chooser.run.return_value = Gtk.ResponseType.CANCEL
+        with mock.patch("gem.gtk_app.Gtk.FileChooserDialog", return_value=chooser), mock.patch.object(
+            application, "quit",
+        ) as quit_application:
+            application.choose_target(self.host, False)
+        self.assertIsNone(application.selected_target)
+        quit_application.assert_not_called()
+        chooser.destroy.assert_called_once_with()
 
     def pump(self, seconds=0.05):
         deadline = time.monotonic() + seconds
@@ -899,9 +924,10 @@ with tempfile.TemporaryDirectory(prefix="gem-tab-churn-") as temporary:
             fixed_width = star_column.get_width() + type_column.get_width() + status_column.get_width()
             self.assertLessEqual(width + fixed_width, self.window.tree.get_allocation().width)
 
-    def test_starred_nodes_and_eye_disclosure(self):
+    def test_starred_nodes_and_bowtie_disclosure(self):
         self.assertFalse(self.window.details_toggle.get_active())
-        self.assertEqual(self.window.details_toggle.get_tooltip_text(), "Show node details")
+        self.assertFalse(self.window.node_actions.get_visible())
+        self.assertEqual(self.window.details_toggle.get_tooltip_text(), "Show node details and actions")
         with mock.patch.object(self.window, "update_map", wraps=self.window.update_map) as update_map:
             self.window.details_toggle.emit("clicked")
             update_map.assert_not_called()
@@ -917,13 +943,16 @@ with tempfile.TemporaryDirectory(prefix="gem-tab-churn-") as temporary:
         self.assertEqual(self.window.details_scroller.get_policy()[0], Gtk.PolicyType.NEVER)
         self.assertTrue(self.window.node_actions.get_mapped())
         self.assertTrue(self.window.counts.get_mapped())
-        self.assertEqual(self.window.details_toggle.get_tooltip_text(), "Hide node details")
-        self.assertIn("p-icon--hide", {key[0] for key in self.window.icon_cache})
+        self.assertEqual(self.window.details_toggle.get_tooltip_text(), "Hide node details and actions")
+        self.assertIn("p-icon--expand-inverse", {key[0] for key in self.window.icon_cache})
+        self.assertIn("suggested-action", self.window.details_toggle.get_style_context().list_classes())
         self.window.details_toggle.emit("clicked")
         self.pump(0.1)
         self.assertFalse(self.window.details_toggle.get_active())
         self.assertFalse(self.window.details_box.get_visible())
-        self.assertIn("p-icon--show", {key[0] for key in self.window.icon_cache})
+        self.assertFalse(self.window.node_actions.get_visible())
+        self.assertIn("p-icon--expand", {key[0] for key in self.window.icon_cache})
+        self.assertNotIn("suggested-action", self.window.details_toggle.get_style_context().list_classes())
 
         root = self.window.session.root_id
         self.window.select_node(root)
@@ -951,8 +980,11 @@ with tempfile.TemporaryDirectory(prefix="gem-tab-churn-") as temporary:
         self.host.show_all()
         self.pump(0.2)
         self.assertIs(self.window.node_actions.get_parent(), self.window.left)
-        self.assertTrue(self.window.node_actions.get_visible())
+        self.assertFalse(self.window.node_actions.get_visible())
         self.assertFalse(self.window.details_toggle.get_active())
+        self.window.details_toggle.set_active(True)
+        self.pump(0.1)
+        self.assertTrue(self.window.node_actions.get_visible())
         self.assertIs(self.window.counts.get_parent().get_parent(), self.window.left)
         self.assertEqual(self.window.counts.get_text(), "1 node")
         self.assertIn("1 Not started", self.window.counts.get_tooltip_text())

@@ -62,7 +62,7 @@ def _parser():
     state = commands.add_parser("lab-state", help="inspect unified investigation and derived spatial objects")
     state.add_argument("--session", required=True, help="investigation session directory")
 
-    launch = commands.add_parser("launch", help="choose a target and open the Lab inside GEM")
+    launch = commands.add_parser("launch", help="open GEM and choose a target inside the application")
     launch.add_argument("--toolkit", choices=("auto", "gtk", "tk"), default="auto")
     launch_agents = launch.add_mutually_exclusive_group()
     launch_agents.add_argument("--agent", help="interactive agent executable")
