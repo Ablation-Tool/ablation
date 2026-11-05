@@ -19,8 +19,10 @@ from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango, Vte
 import metrix
 from .environment import agent_environment, configure_environment
 from .events import Session
+from .gem.model import scene_from_events
+from .gem.runner import export_run, next_run_directory, replay
+from .gem.view import GemView
 from .map_view import InvestigationMap
-from .layout import LAYOUTS
 from .rings_view import InvestigationRings
 from .preferences import (
     SCHEME_LABELS, SCHEMES,
@@ -174,62 +176,6 @@ def wait_for_agents(workspaces, timeout=2):
     return reaped(reap_fallback=True)
 
 
-LAYOUT_LABELS = {
-    "lab-left": "Lab left, AI Agent right",
-    "lab-right": "AI Agent left, Lab right",
-    "lab-top": "Lab above, AI Agent below",
-    "lab-bottom": "AI Agent above, Lab below",
-}
-
-
-def layout_preview(layout):
-    drawing = Gtk.DrawingArea()
-    drawing.set_size_request(180, 100)
-
-    def draw(widget, cairo):
-        foreground = widget.get_style_context().get_color(Gtk.StateFlags.NORMAL)
-        allocation = widget.get_allocation()
-        width, height = allocation.width, allocation.height
-        margin, gap = 12, 8
-        horizontal = layout in {"lab-left", "lab-right"}
-        first_lab = layout in {"lab-left", "lab-top"}
-        width_available = width - 2 * margin - (gap if horizontal else 0)
-        height_available = height - 2 * margin - (0 if horizontal else gap)
-        first = (
-            margin, margin,
-            width_available / 2 if horizontal else width_available,
-            height_available if horizontal else height_available / 2,
-        )
-        second = (
-            margin + (width_available / 2 + gap if horizontal else 0),
-            margin + (0 if horizontal else height_available / 2 + gap),
-            first[2], first[3],
-        )
-        for number, rectangle in enumerate((first, second) if first_lab else (second, first), 1):
-            x, y, rectangle_width, rectangle_height = rectangle
-            cairo.rectangle(x, y, rectangle_width, rectangle_height)
-            cairo.set_source_rgba(foreground.red, foreground.green, foreground.blue, 0.12)
-            cairo.fill_preserve()
-            cairo.set_source_rgba(foreground.red, foreground.green, foreground.blue, 0.85)
-            cairo.set_line_width(1.2)
-            cairo.stroke()
-            cairo.set_source_rgba(foreground.red, foreground.green, foreground.blue, 1)
-            cairo.select_font_face("Sans")
-            cairo.set_font_size(14)
-            extents = cairo.text_extents(str(number))
-            cairo.move_to(
-                x + (rectangle_width - extents.width) / 2 - extents.x_bearing,
-                y + (rectangle_height - extents.height) / 2 - extents.y_bearing,
-            )
-            cairo.show_text(str(number))
-        return False
-
-    drawing.connect("draw", draw)
-    drawing.set_tooltip_text(LAYOUT_LABELS[layout])
-    drawing.get_accessible().set_name(LAYOUT_LABELS[layout])
-    return drawing
-
-
 class PreferencesDialog(Gtk.Dialog):
     def __init__(self, parent, preferences, on_apply, session=None):
         super().__init__(title="Preferences", transient_for=parent)
@@ -261,27 +207,6 @@ class PreferencesDialog(Gtk.Dialog):
             session_path.set_tooltip_text(str(session.root))
             lab_content.pack_start(session_path, False, False, 0)
             self.add_section("lab", "Lab", lab_content)
-        self.selected_layout = preferences.layout
-        self.layout_buttons = {}
-        layout_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        legend = Gtk.Label(label="1 Lab · 2 AI Agent", xalign=0)
-        layout_content.pack_start(legend, False, False, 0)
-        layout_grid = Gtk.Grid(column_spacing=12, row_spacing=12, column_homogeneous=True)
-        group = None
-        for index, layout in enumerate(LAYOUTS):
-            button = Gtk.RadioButton.new_from_widget(group)
-            button.set_property("draw-indicator", False)
-            button.add(layout_preview(layout))
-            button.set_tooltip_text(LAYOUT_LABELS[layout])
-            button.get_accessible().set_name(LAYOUT_LABELS[layout])
-            button.set_active(layout == self.selected_layout)
-            button.connect("toggled", self.on_layout, layout)
-            layout_grid.attach(button, index % 2, index // 2, 1, 1)
-            self.layout_buttons[layout] = button
-            group = button
-        self.on_layout(self.layout_buttons[self.selected_layout], self.selected_layout)
-        layout_content.pack_start(layout_grid, False, False, 0)
-        self.add_section("layout", "Workspace layout", layout_content)
         terminal_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         grid = Gtk.Grid(column_spacing=12, row_spacing=10)
         terminal_content.pack_start(grid, False, False, 0)
@@ -314,17 +239,6 @@ class PreferencesDialog(Gtk.Dialog):
         self.error_label = Gtk.Label(xalign=0)
         self.error_label.set_line_wrap(True)
         area.pack_start(self.error_label, False, False, 0)
-
-    def on_layout(self, button, layout):
-        if not button.get_active():
-            return
-        self.selected_layout = layout
-        for name, item in self.layout_buttons.items():
-            style = item.get_style_context()
-            if name == layout:
-                style.add_class("suggested-action")
-            else:
-                style.remove_class("suggested-action")
 
     def add_section(self, key, title, child):
         expander = Gtk.Expander()
@@ -393,7 +307,6 @@ class PreferencesDialog(Gtk.Dialog):
             self.preferences.update(
                 scheme=self.scheme_combo.get_active_id(),
                 font_name=self.font_button.get_font_name(),
-                layout=self.selected_layout,
                 **self.custom,
             )
             self.on_apply()
@@ -449,10 +362,9 @@ class AblationWindow(Gtk.Window):
         header.set_custom_title(Gtk.Box())
         self.header_bar = header
         brand_pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-            str(Path(__file__).resolve().parent / "icons" / "ablation-guiai-logo.png"),
+            str(Path(__file__).resolve().parent / "icons" / "ablation-riveted-icon-transparent.svg"),
             32, 32, True,
         )
-        self.set_icon(brand_pixbuf)
         self.brand_mark = Gtk.Image.new_from_pixbuf(brand_pixbuf)
         self.brand_mark.set_tooltip_text("ABL∀TION")
         self.brand_mark.get_accessible().set_name("Ablation")
@@ -468,9 +380,6 @@ class AblationWindow(Gtk.Window):
         if self.preferences.error:
             self.preferences_error.set_text(f"Preferences could not be loaded: {self.preferences.error}")
         outer.pack_start(self.preferences_error, False, False, 0)
-        self.project_status = Gtk.Label(xalign=0)
-        self.project_status.set_no_show_all(True)
-        outer.pack_end(self.project_status, False, False, 0)
         self.notebook = Gtk.Notebook()
         self.notebook.set_scrollable(True)
         self.notebook.set_show_tabs(True)
@@ -491,9 +400,6 @@ class AblationWindow(Gtk.Window):
         new_item = Gtk.MenuItem(label="New lab")
         new_item.connect("activate", lambda _item: self.new_investigation())
         menu.append(new_item)
-        save_item = Gtk.MenuItem(label="Save project")
-        save_item.connect("activate", lambda _item: self.save_project())
-        menu.append(save_item)
         preferences_item = Gtk.MenuItem(label="Preferences")
         preferences_item.connect("activate", lambda _item: self.show_preferences())
         menu.append(preferences_item)
@@ -528,16 +434,6 @@ class AblationWindow(Gtk.Window):
             number = int(path.name)
             self.add_workspace(session, number, activate=False, start_agent=False)
             self.next_number = max(self.next_number, number + 1)
-        try:
-            active_lab = self.session.project_active_lab()
-        except (OSError, ValueError, json.JSONDecodeError) as error:
-            errors.append(f"Project manifest could not be restored: {error}")
-        else:
-            for workspace in self.workspaces:
-                if workspace.investigation_number == active_lab:
-                    self.notebook.set_current_page(self.notebook.page_num(workspace))
-                    workspace.schedule_agent()
-                    break
         notices = list(self.workspace_warnings)
         if errors:
             notices.append("Some investigations could not be restored: " + "; ".join(errors))
@@ -651,28 +547,6 @@ class AblationWindow(Gtk.Window):
                 f"{workspace.session.root}\nTerminal directory: {workspace.workspace}\n{workspace.agent_status}"
             )
 
-    def save_project(self):
-        current = self.current_workspace()
-        try:
-            self.preferences.save(
-                self.preferences.scheme, self.preferences.font_name, self.preferences.custom,
-            )
-            manifest = self.session.save_project([
-                {
-                    "number": workspace.investigation_number,
-                    "session": workspace.session,
-                    "workspace": workspace.workspace,
-                }
-                for workspace in self.workspaces
-            ], current.investigation_number if current is not None else 1)
-        except (OSError, ValueError, KeyError, json.JSONDecodeError) as error:
-            self.project_status.set_text(f"Could not save project: {error}")
-            self.project_status.show()
-            return None
-        self.project_status.set_text(f"Project saved · {len(manifest['labs'])} Labs · {self.session.root}")
-        self.project_status.show()
-        return manifest
-
     def show_preferences(self):
         if self.preferences_dialog is not None:
             self.preferences_dialog.present()
@@ -694,7 +568,6 @@ class AblationWindow(Gtk.Window):
         group = Gio.SimpleActionGroup()
         callbacks = {
             "new-investigation": self.new_investigation,
-            "save-project": self.save_project,
             "preferences": self.show_preferences,
             "focus-cli": lambda: self.current_workspace().focus_agent(),
         }
@@ -712,7 +585,6 @@ class AblationWindow(Gtk.Window):
     def close(self):
         if self.closed:
             return
-        self.save_project()
         self.closed = True
         if self.preferences_dialog is not None:
             self.preferences_dialog.destroy()
@@ -780,7 +652,7 @@ class InvestigationWorkspace(Gtk.Box):
         self.rescan_future = None
         self.rescan_cancel = threading.Event()
         self.rescan_poll_id = 0
-        self.layout = None
+        self.layout = "horizontal"
         configure_environment(session)
         self.build_ui()
         self.reload()
@@ -852,13 +724,14 @@ class InvestigationWorkspace(Gtk.Box):
         self.chart_selector = Gtk.ComboBoxText()
         self.chart_selector.append("rings", "Rings")
         self.chart_selector.append("map", "Treemap")
+        self.chart_selector.append("gem", "GEM")
         self.chart_selector.set_active_id("rings")
         self.chart_selector.set_tooltip_text("Choose the Lab visualization")
         self.chart_selector.set_no_show_all(True)
         self.chart_selector.connect("changed", self.on_chart_changed)
         navigation.pack_end(self.chart_selector, False, False, 0)
         self.map_toggle = Gtk.ToggleButton(label="Chart")
-        self.map_toggle.set_tooltip_text("Show or hide Rings/Treemap beside the Lab tree")
+        self.map_toggle.set_tooltip_text("Show or hide Rings, Treemap, or GEM beside the Lab tree")
         self.map_toggle.connect("toggled", self.on_map_toggled)
         navigation.pack_end(self.map_toggle, False, False, 0)
         self.store = Gtk.TreeStore(str, str, str, bool, str, str, str)
@@ -922,6 +795,30 @@ class InvestigationWorkspace(Gtk.Box):
         rings_page.pack_end(self.rings_caption, False, False, 0)
         self.map_stack.add_named(rings_page, "rings")
         rings_page.show_all()
+        gem_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        gem_toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self.gem_export_button = action_button(
+            "Export GEM + VDI", "document-save-symbolic", self.export_gem, compact=True,
+        )
+        gem_toolbar.pack_start(self.gem_export_button, False, False, 0)
+        self.gem_atlas_button = action_button(
+            "Zoe / MASTER GEM", "applications-graphics-symbolic", self.open_geometry_atlas, compact=True,
+        )
+        gem_toolbar.pack_start(self.gem_atlas_button, False, False, 0)
+        gem_toolbar.pack_start(Gtk.Label(label="Spatial IR → VDI → verify", xalign=0), True, True, 0)
+        gem_page.pack_start(gem_toolbar, False, False, 0)
+        self.investigation_gem = GemView(self.select_node)
+        gem_page.pack_start(self.investigation_gem, True, True, 0)
+        self.gem_caption = Gtk.Label(xalign=0)
+        self.gem_caption.set_ellipsize(Pango.EllipsizeMode.END)
+        self.gem_caption.set_tooltip_text(
+            "GEM checks axis-aligned bounds and connector endpoints, writes a real GEM metafile, "
+            "recovers its objects, and rechecks CGA, VGA, and normalized-device profiles. "
+            "These machine checks do not imply human confirmation or investigation coverage."
+        )
+        gem_page.pack_end(self.gem_caption, False, False, 0)
+        self.map_stack.add_named(gem_page, "gem")
+        gem_page.show_all()
         self.investigation_panes.pack2(self.map_stack, False, True)
         left.pack_start(self.investigation_panes, True, True, 0)
         self.map_stack.hide()
@@ -1033,7 +930,6 @@ class InvestigationWorkspace(Gtk.Box):
         self.terminal.set_vexpand(True)
         self.terminal.connect("child-exited", self.on_agent_exit)
         self.panes.pack2(self.terminal, True, True)
-        self.apply_layout()
         self.register_actions()
 
     def on_node_actions_allocate(self, _widget, allocation):
@@ -1162,6 +1058,77 @@ class InvestigationWorkspace(Gtk.Box):
             parent_id = event["parent_id"] if event and event["parent_id"] else self.session.root_id
         self.investigation_map.set_model(self.events, parent_id, node_id)
         self.investigation_rings.set_model(self.events, parent_id, node_id)
+        scene = scene_from_events(self.events, parent_id, node_id)
+        self.investigation_gem.set_model(scene, parent_id, node_id)
+        self.update_gem_caption()
+
+    def update_gem_caption(self):
+        report = self.investigation_gem.report
+        if report is None or not self.investigation_gem.scene.objects:
+            self.gem_caption.set_text("GEM · No investigation nodes")
+            return
+        counts = report.to_dict()
+        caption = (
+            f"GEM · {'PASS' if report.passed else 'FAIL'} source · "
+            f"{counts['constraints_passed']}/{counts['constraints_total']} constraints · Click = inspect"
+        )
+        if "outside display limits" in self.investigation_gem.scene.document.get("title", ""):
+            caption += " · Display limits reached"
+        self.gem_caption.set_text(caption)
+
+    def open_geometry_atlas(self):
+        from .gem.atlas_view import show_atlas
+        self.geometry_atlas = show_atlas("brain")
+        self.geometry_atlas.set_transient_for(self.get_toplevel())
+        self.geometry_atlas.present()
+        return self.geometry_atlas
+
+    def export_gem(self):
+        scene = self.investigation_gem.scene
+        if scene is None or not scene.objects:
+            self.show_error(ValueError("No investigation nodes are available for GEM export"))
+            return None
+        try:
+            path = next_run_directory(self.session.root / "gem-runs", scene)
+            result = export_run(scene, path, trajectory=[{
+                "sequence": 1,
+                "kind": "guiai_export",
+                "parent_id": self.investigation_gem.parent_id,
+                "scene_digest": scene.digest(),
+                "outcome": "exported",
+            }])
+            replayed = replay(path)
+            passed = (
+                result.passed and replayed.passed and replayed.matches_recorded
+                and bool(scene.constraints)
+            )
+            relative = path.relative_to(self.session.root).as_posix()
+            evidence_id = "evidence:gem:" + scene.digest()[:24]
+            note = (
+                "Deterministic Spatial IR, VDI-roundtrip, and device-profile checks; not human confirmation "
+                f"or investigation coverage.\nRun: {relative}\n{result.scope()}\n"
+                f"Replay matches recorded reports: {replayed.matches_recorded}"
+            )
+            self.session.emit(
+                evidence_id,
+                self.investigation_gem.parent_id or self.session.root_id,
+                "evidence",
+                "GEM verified investigation geometry" if passed else "GEM geometry export with verification limits",
+                "complete_scoped" if passed else "partial",
+                "tool",
+                relative,
+                note,
+                result.scope() if passed else None,
+            )
+            self.reload()
+            self.gem_caption.set_text(
+                f"{'PASS' if passed else 'CHECK'} · {result.scope()} · {relative}"
+            )
+            self.gem_caption.set_tooltip_text(str(path))
+            return result
+        except (OSError, RuntimeError, ValueError, KeyError) as error:
+            self.show_error(error)
+            return None
 
     def update_rings_caption(self, omitted):
         caption = "Rings · Angle = subtree nodes · Click = inspect · Scroll = depth"
@@ -1183,8 +1150,11 @@ class InvestigationWorkspace(Gtk.Box):
             width = self.investigation_panes.get_allocated_width()
             self.investigation_panes.set_position(max(1, width // 2))
             self.on_chart_changed()
-        if show_map and self.chart_selector.get_active_id() == "rings":
+        chart = self.chart_selector.get_active_id()
+        if show_map and chart == "rings":
             self.investigation_rings.grab_focus()
+        elif show_map and chart == "gem":
+            self.investigation_gem.grab_focus()
         elif show_map and self.investigation_map.tile_buttons:
             self.investigation_map.tile_buttons[0][1].grab_focus()
         else:
@@ -1624,43 +1594,8 @@ class InvestigationWorkspace(Gtk.Box):
             self.counts.set_text("Cancelling directory rescan…")
             self.cancel_button.set_sensitive(False)
 
-    def apply_layout(self):
-        layout = self.preferences.layout
-        if layout == self.layout:
-            return
-        previous_position = self.panes.get_position()
-        previous_horizontal = self.panes.get_orientation() == Gtk.Orientation.HORIZONTAL
-        allocation = self.panes.get_allocation()
-        previous_extent = allocation.width if previous_horizontal else allocation.height
-        horizontal = layout in {"lab-left", "lab-right"}
-        if self.layout is None:
-            position = 800 if horizontal else 450
-        else:
-            ratio = previous_position / previous_extent if previous_extent > 0 else 0.5
-            previous_lab_first = self.layout in {"lab-left", "lab-top"}
-            if previous_lab_first != (layout in {"lab-left", "lab-top"}):
-                ratio = 1 - ratio
-            extent = previous_extent if horizontal == previous_horizontal else (
-                allocation.height if previous_horizontal else allocation.width
-            )
-            if extent <= 1:
-                extent = 800 if horizontal else 450
-            position = round(extent * ratio)
-        self.panes.remove(self.left)
-        self.panes.remove(self.terminal)
-        self.panes.set_orientation(
-            Gtk.Orientation.HORIZONTAL if horizontal else Gtk.Orientation.VERTICAL
-        )
-        first, second = (self.left, self.terminal) if layout in {"lab-left", "lab-top"} else (self.terminal, self.left)
-        self.panes.pack1(first, True, True)
-        self.panes.pack2(second, True, True)
-        self.panes.set_position(position)
-        self.layout = layout
-        self.panes.show_all()
-
     def apply_preferences(self):
         self.preferences.apply_terminal(self.terminal)
-        self.apply_layout()
         self.show_all()
 
     def schedule_agent(self):

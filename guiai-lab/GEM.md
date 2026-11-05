@@ -18,6 +18,14 @@ Open **Chart** and select **GEM** beside **Rings** and **Treemap**. The chart is
 
 A successful evidence node is `complete_scoped` only for the stated source/VDI/device checks. It does not mean human confirmation, correct reverse engineering, or complete target coverage. Failed or constraint-free exports remain partial. Detailed agent attempts belong in `trajectory.jsonl`, not the high-level investigation history.
 
+## Zoe and the native geometry atlas
+
+Open **Chart → GEM → Zoe / MASTER GEM**, or run `gem zoe`, to enter the unified workspace. `gem master` and `gem brain` are compatibility aliases. Zoe adds deterministic BRAIN observation and recommendations, lazy HELEN predictions, exact toy multi-horizon continuations, and hash-checked research evidence to the native atlas. See [Zoe](docs/ZOE.md) for launch, evidence scope, and verification.
+
+Run `gem atlas` to explore the native Procrustes, ellipse, parabola, circle, modular-clock, graph, accessible-volume, and onset-forecast modules directly. Procrustes landmarks support pointer dragging and keyboard movement; other modules expose their geometric parameters beside the Cairo view. **Export SVG**, **Export PNG**, and **Export GEM + VDI** all use the current Spatial IR scene.
+
+Headless defaults are also available, for example `gem atlas --module procrustes --output atlas.svg` and `gem atlas --module onset --output onset.gem`. The Onset experiment requires NumPy and scikit-learn; other atlas modules do not require scikit-learn. See [Geometry Atlas](docs/GEOMETRY-ATLAS.md) for controls, equations, measured baselines, dependencies, and validation commands.
+
 ## CLI
 
 After installing `guiai-lab`, the `gem` command is available. `python3 -m guiai.gem` is equivalent when running from a source checkout with `guiai-lab` on `PYTHONPATH`.

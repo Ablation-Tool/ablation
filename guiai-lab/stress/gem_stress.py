@@ -13,9 +13,13 @@ import unittest
 from unittest import mock
 
 from guiai.gem.agent import AgentError, extract_scene, invoke_agent, solve
+from guiai.gem.atlas import (
+    ATLAS_MODULES, default_document, graph_invariants, procrustes,
+)
 from guiai.gem.cli import main as gem_main
 from guiai.gem.geometry import verify
 from guiai.gem.model import MAX_POINTS, Scene, demo_scene, scene_from_events
+from guiai.gem.onset import experiment_summary, retrograde_intervals, run_synthetic_experiment, temper
 from guiai.gem.render import scene_to_svg, write_png
 from guiai.gem.runner import export_run, replay, verify_vdi
 from guiai.gem.volume import VolumeBridge, accessible_momentum, accessible_volume, steering_action
@@ -27,6 +31,7 @@ from guiai.gem.vdi import (
 )
 
 
+HAS_ONSET = importlib.util.find_spec("numpy") is not None and importlib.util.find_spec("sklearn") is not None
 HAS_GTK = False
 if os.environ.get("DISPLAY"):
     try:
@@ -36,6 +41,7 @@ if os.environ.get("DISPLAY"):
         gi.require_version("Gtk", "3.0")
         gi.require_foreign("cairo")
         from gi.repository import GLib, Gtk
+        from guiai.gem.atlas_view import AtlasWindow
         from guiai.gem.view import GemView
         HAS_GTK = True
     except (ImportError, ValueError):
@@ -300,6 +306,59 @@ class VolumeCase(unittest.TestCase):
                 accessible_volume([0.5, 0.2], 0.05)
 
 
+class AtlasCase(unittest.TestCase):
+    def test_exact_similarity_rigid_residual_and_affine(self):
+        result = procrustes([[101, 114], [285, 159]], [[345, 35], [500, 205]])
+        self.assertAlmostEqual(result["scale"], 1.2145018039)
+        self.assertAlmostEqual(result["rotation_degrees"], 33.8997475549)
+        self.assertLess(result["squared_error"], 1e-12)
+        rigid = procrustes([[101, 114], [285, 159]], [[345, 35], [500, 205]], "rigid")
+        self.assertAlmostEqual(rigid["squared_error"], 825.4607739262)
+        affine = procrustes([[0, 0], [1, 0], [0, 1]], [[2, 3], [4, 3], [2, 5]], "affine")
+        self.assertLess(affine["squared_error"], 1e-12)
+        with self.assertRaisesRegex(ValueError, "at least three"):
+            procrustes([[0, 0], [1, 0]], [[2, 3], [4, 3]], "affine")
+
+    def test_atlas_scene_vdi_roundtrips_and_cli(self):
+        for name in ATLAS_MODULES:
+            if name == "onset" and not HAS_ONSET:
+                continue
+            with self.subTest(module=name):
+                scene, _ = default_document(name)
+                self.assertTrue(verify(scene).passed, verify(scene).text())
+                self.assertTrue(verify_vdi(scene).passed)
+        self.assertEqual(graph_invariants()["cycle_rank"], 16 - 13 + 3)
+        self.assertEqual(graph_invariants(True)["cycle_rank"], 28 - 19 + 1)
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "atlas.svg"
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(gem_main(["atlas", "--module", "procrustes", "--output", str(output)]), 0)
+            self.assertIn('data-object-id="source-segment"', output.read_text(encoding="utf-8"))
+
+
+@unittest.skipUnless(HAS_ONSET, "onset tests require NumPy and scikit-learn")
+class OnsetCase(unittest.TestCase):
+    def test_seeded_experiment_metrics_and_probability_invariants(self):
+        import numpy as np
+        experiment = run_synthetic_experiment()
+        self.assertEqual(experiment.forward["observations"], 1920)
+        self.assertEqual(experiment.retrograde["observations"], 1920)
+        self.assertAlmostEqual(experiment.forward["top1"], .84375)
+        self.assertAlmostEqual(experiment.retrograde["top1"], .5895833333333333)
+        self.assertAlmostEqual(experiment.forward["log_loss"], .33885633598124937)
+        self.assertAlmostEqual(experiment.retrograde["log_loss"], 2.898662373434196)
+        self.assertAlmostEqual(experiment.deterministic_forward, .3701923076923077)
+        self.assertAlmostEqual(experiment.deterministic_retrograde, .3283653846153846)
+        self.assertTrue(np.all(np.diff(experiment.forward_curve) <= 1e-12))
+        self.assertTrue(np.all(np.diff(experiment.retrograde_curve) <= 1e-12))
+        transformed = temper(experiment.forward_probabilities, 1.7)
+        self.assertTrue(np.allclose(transformed.sum(axis=1), 1))
+        self.assertTrue(np.array_equal(retrograde_intervals([1, 2, 4]), np.array([4, 2, 1])))
+        summary = experiment_summary(experiment)
+        self.assertIsNone(summary["deterministic_linear_extrapolation"]["accessible_volume"])
+        self.assertIn("measured negative baseline", summary["hop_negative_baseline"]["scope"])
+
+
 class CliCase(unittest.TestCase):
     def test_demo_verify_render_and_replay_commands(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -359,6 +418,57 @@ class NativeGemCase(unittest.TestCase):
             while time.monotonic() < deadline:
                 context.iteration(False)
                 time.sleep(0.005)
+
+    def test_native_atlas_drag_modules_bridge_and_export(self):
+        window = AtlasWindow(experiment_factory=lambda: run_synthetic_experiment(train_count=2, test_count=1))
+        context = GLib.MainContext.default()
+        window.show_all()
+        deadline = time.monotonic() + .2
+        while time.monotonic() < deadline:
+            context.iteration(False)
+            time.sleep(.005)
+        try:
+            self.assertLess(window.report["squared_error"], 1e-12)
+            point = window.source[0]
+            layout = window.canvas.update_layout()
+            x = layout.offset_x + point[0] * layout.scale
+            y = layout.offset_y + point[1] * layout.scale
+            self.assertTrue(window.canvas.on_button(window.canvas, mock.Mock(button=1, x=x, y=y)))
+            window.canvas.on_motion(window.canvas, mock.Mock(x=x + 20, y=y + 10))
+            self.assertIsNotNone(window.canvas.dragging)
+            window.canvas.on_release(window.canvas, mock.Mock())
+            self.assertNotEqual(window.source[0], point)
+            self.assertGreater(window.report["squared_error"], 0)
+            window.reset_landmarks()
+            window.add_landmark_pair()
+            window.controls["mode"].set_active_id("affine")
+            self.assertNotIn("error", window.report)
+            self.assertEqual(window.report["landmark_count"], 3)
+            for name in ATLAS_MODULES:
+                if name == "onset" and not HAS_ONSET:
+                    continue
+                window.module_selector.set_active_id(name)
+                deadline = time.monotonic() + .03
+                while time.monotonic() < deadline:
+                    context.iteration(False)
+                    time.sleep(.005)
+                self.assertEqual(window.module, name)
+                self.assertIsNotNone(window.scene)
+            window.module_selector.set_active_id("volume")
+            window.observe_volume()
+            self.assertIsNotNone(window.volume_previous)
+            with tempfile.TemporaryDirectory() as directory:
+                svg = window.export_current(Path(directory) / "atlas.svg")
+                png = window.export_current(Path(directory) / "atlas.png")
+                self.assertTrue(svg.is_file())
+                surface = cairo.ImageSurface.create_from_png(str(png))
+                self.assertGreater(len(set(surface.get_data())), 20)
+        finally:
+            window.destroy()
+            deadline = time.monotonic() + .05
+            while time.monotonic() < deadline:
+                context.iteration(False)
+                time.sleep(.005)
 
 
 if __name__ == "__main__":

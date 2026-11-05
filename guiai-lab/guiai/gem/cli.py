@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -56,6 +57,19 @@ def _parser():
     volume.add_argument("--min-volume", type=int, default=1, help="target band lower bound")
     volume.add_argument("--max-volume", type=int, default=4, help="target band upper bound")
     volume.add_argument("--output", required=True, help="new evidence JSON path")
+
+    module_choices = ("brain", "procrustes", "ellipses", "parabola", "circle", "clock", "graph", "volume", "onset", "horizon", "research")
+    atlas = commands.add_parser("atlas", help="open the native geometry atlas or export one module")
+    atlas.add_argument("--module", choices=module_choices, default="procrustes")
+    atlas.add_argument("--output", help="export the default scene to .svg, .png, or .gem instead of opening GTK")
+    atlas.add_argument("--format", choices=("svg", "png", "gem"), help="default: infer from output suffix")
+    atlas.add_argument("--width", type=int, default=1200, help="SVG/PNG width in pixels")
+    master = commands.add_parser("master", aliases=["brain", "zoe"], help="open Zoe / MASTER GEM with the BRAIN orchestrator")
+    master.add_argument("--module", choices=module_choices, default="brain")
+    master.add_argument("--research-root", help="next-token-predictability repository; default: MASTER_GEM_RESEARCH_ROOT")
+    master.add_argument("--output", help="export the default scene to .svg, .png, or .gem instead of opening GTK")
+    master.add_argument("--format", choices=("svg", "png", "gem"), help="default: infer from output suffix")
+    master.add_argument("--width", type=int, default=1200, help="SVG/PNG width in pixels")
     return parser
 
 
@@ -66,6 +80,26 @@ def _print_report(report):
 def main(argv=None):
     arguments = _parser().parse_args(argv)
     try:
+        if arguments.command in {"atlas", "master", "brain", "zoe"}:
+            research_root = getattr(arguments, "research_root", None) or os.environ.get("MASTER_GEM_RESEARCH_ROOT")
+            if arguments.output:
+                from .atlas import default_document
+                scene, report = default_document(arguments.module, research_root=research_root)
+                output = Path(arguments.output)
+                kind = arguments.format or output.suffix.lower().lstrip(".")
+                if kind == "svg":
+                    write_svg(scene, output, arguments.width)
+                elif kind == "png":
+                    write_png(scene, output, arguments.width)
+                elif kind == "gem":
+                    write_metafile(scene, output)
+                else:
+                    raise ValueError("atlas output format must be svg, png, or gem")
+                print(json.dumps({"module": arguments.module, "output": str(output), "bytes": output.stat().st_size, "measurement": report}, ensure_ascii=False, indent=2, sort_keys=True))
+            else:
+                from .atlas_view import launch_atlas
+                launch_atlas(arguments.module, research_root=research_root)
+            return 0
         if arguments.command == "volume":
             report = measure_artifact(
                 arguments.probabilities,
@@ -149,7 +183,7 @@ def main(argv=None):
             print(f"Source+VDI+devices: {'PASS' if run.passed else 'FAIL'}")
             print(f"Run: {run.path}")
             return 0 if run.passed else 1
-    except (OSError, RuntimeError, ValueError) as error:
+    except (OSError, ImportError, RuntimeError, ValueError) as error:
         print(f"gem: {error}", file=sys.stderr)
         return 2
     return 2
