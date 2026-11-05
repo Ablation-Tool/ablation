@@ -5,10 +5,13 @@ import math
 
 from .model import Scene
 from .onset import run_synthetic_experiment, temper
+from .qualia import qualia_scene
 from .volume import measure_probabilities
 
 ATLAS_MODULES = {
     "brain": "Zoe · BRAIN orchestration",
+    "field": "Zoe · Bayesian field notebook",
+    "qualia": "Zoe is Quale. Zoe is Red. · IIT 2009 visual guide",
     "procrustes": "Procrustes landmark alignment",
     "ellipses": "Ellipse family",
     "parabola": "Parabolic line envelope",
@@ -383,6 +386,11 @@ def default_document(module, research_root=None):
         kernel = BrainKernel()
         kernel.observe_onset()
         return brain_scene(kernel)
+    if module == "field":
+        from .field import FieldNotebook, field_scene
+        return field_scene(FieldNotebook.demo())
+    if module == "qualia":
+        return qualia_scene()
     if module == "procrustes":
         source, target = deepcopy(DEFAULT_SOURCE), deepcopy(DEFAULT_TARGET)
         result = procrustes(source, target)

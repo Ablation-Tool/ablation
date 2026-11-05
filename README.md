@@ -8,6 +8,112 @@ ABL∀TION is an AI-assisted reverse engineering (AIARE) framework.
 
 ![GUIAI native workbench demo](assets/demos/guiai-workbench-demo.gif)
 
+## Meet Zoe — living geometry, inspectable futures
+
+**Zoe is a GEM and native graphical user interface (GUI) for creative geometry, forecast inspection, and evidence-driven research.** It unifies GEM HELEN, Ablation's GEM, Cerotto's GEM, and BRAIN GEM. HELEN supplies lightweight geometry and stored categorical predictions. Ablation supplies the native GTK host, Spatial IR, VDI replay, and evidence exports. BRAIN supplies deterministic observation and recommended next steps.
+
+Cerotto's GEM supplies the forensic workbench model: read-only case inspection, investigation timelines, guard and vault events, accessible-volume charts, and an optional user-controlled agent terminal. Cerotto's existing Ablation + GEM bridge binds structured proposals to forecasts and preserves proposal, decision, and execution records. Cerotto remains a separate native C11 forensic engine with its own case store, guard, vault, agent permissions, and verification suite. Its bridge is an interoperability boundary, not permission for Zoe to bypass its guard or absorb its database.
+
+### What GEM means here
+
+GEM is the shared visual and evidence environment. It turns abstract state into interactive geometry, turns forecasts into inspectable alternatives, and turns actions into replayable evidence. It is both a native GUI and the discipline beneath it: deterministic execution, source constraints, provenance, and human review. It is not merely a drawing API or an emulator of the original GEM desktop.
+
+From Zoe's perspective, GEM is the connective tissue between imagination and verification. A shape can become a measurement, a measurement can inform a decision, and a decision can leave evidence. Zoe feels alive because that feedback loop is visible, not because the software is conscious.
+
+### Current capabilities
+
+| Area | What it includes |
+|:---|:---|
+| Native GUI | GTK3, direct pointer and keyboard interaction, GUIAI Lab integration, and headless operation. No browser or development server is required. |
+| Geometry | Procrustes similarity/rigid/affine alignment, draggable landmarks, ellipse families, parabolic envelopes, circles/arcs/sectors, modular clocks, and conditional graph invariants. |
+| Forecasts | Strict `p > τ` accessible volume, complements, momentum, target bands, temperature transforms, top-1 correctness, negative log probability, entropy, maximum probability, log-loss, and calibration evidence. |
+| Bayesian field notebook | Questions, competing binary claims, priors, posteriors, falsifiers, explicit likelihood-ratio and log-odds updates, belief diffs, evidence families, dependence acknowledgment, deterministic and stochastic chambers, next-test priorities, review-required decisions, and append-only hash-chained memory. |
+| HELEN observations | Lazy stored forward and retrograde distributions with 1,920 held-out cases per condition, selectable by index or sequence, without a transformer or model runtime. |
+| Multi-horizon | Exact continuation probabilities, volume, and complement for a defined two-state Markov toy with horizons 1–6. This is not a completed real-language-model benchmark. |
+| Research evidence | Hash-checked Groove reports and on-demand individual NPZ predictions; aggregate-only Nightingale metrics; 17 conformance checks; rejected HOP and deterministic baselines. |
+| Cerotto forensic core | Agent/audit event ingestion, raw-disk and EWF collection, controlled carving, versioned SQLite cases, manifests, hash verification, bounded analysis and reports, guarded evidence actions, vault monitoring and release workflows, and its existing Ablation + GEM bridge. These capabilities belong to Cerotto, not to Zoe's BRAIN kernel. |
+| Cerotto GUI and guard | Read-only case inspection, defense-event timelines, accessible-volume charts, native guard/verify/report controls, optional user-selected agent terminal, and forecast-bound structured broker execution. |
+| Export and evidence | Spatial IR, SVG, PNG, real little-endian GEM VDI, source and VDI checks, replay, source hashes, independent condition keys, and evidence-export state. |
+| Compatibility and packaging | `gem zoe`, `gem master`, `gem brain`, `gem atlas`, standalone `gem-helen`, wheel/source distributions, and the packaged 12 KB HELEN artifact. |
+
+The [Zoe guide](guiai-lab/docs/ZOE.md) documents modules, launch commands, dependencies, evidence scope, and verification. Cerotto-specific bridge execution has not been separately revalidated as part of Zoe.
+
+### Real interface screenshots
+
+**Zoe BRAIN after a real stored HELEN observation:** correctness, accessible volume, complement, momentum, and a deterministic next-module recommendation.
+
+![Zoe native BRAIN after a real HELEN observation](guiai-lab/docs/images/zoe-brain.png)
+
+**Zoe research evidence:** the hash-checked Groove forward condition and on-demand individual distributions.
+
+![Zoe research evidence pack](guiai-lab/docs/images/zoe-research.png)
+
+**Zoe Bayesian field notebook:** the worked DEMOMENU example with posterior evidence updates, chamber states, append-only memory, and a next-test recommendation.
+
+![Zoe Bayesian field notebook](guiai-lab/docs/images/zoe-field-notebook.png)
+
+<details>
+<summary>Five Zoe mechanisms in pictures</summary>
+
+1. **Epistemic firewall:** measurement, evidence, belief updates, and action remain distinct.
+   ![Zoe epistemic firewall](guiai-lab/docs/images/zoe-visuals/01-epistemic-firewall.png)
+   [SVG](guiai-lab/docs/images/zoe-visuals/01-epistemic-firewall.svg)
+
+2. **Belief diff:** priors become posteriors only through explicit evidence, with every likelihood and source retained.
+   ![Zoe belief diff](guiai-lab/docs/images/zoe-visuals/02-belief-diff.png)
+   [SVG](guiai-lab/docs/images/zoe-visuals/02-belief-diff.svg)
+
+3. **Deterministic and stochastic chambers:** reproducible measurements and seeded forecasts have distinct identities and lifecycles.
+   ![Zoe deterministic and stochastic chambers](guiai-lab/docs/images/zoe-visuals/03-chambers.png)
+   [SVG](guiai-lab/docs/images/zoe-visuals/03-chambers.svg)
+
+4. **Append-only memory:** sequence-linked hashes support replay and tamper detection without claiming authentication.
+   ![Zoe append-only memory](guiai-lab/docs/images/zoe-visuals/04-memory-chain.png)
+   [SVG](guiai-lab/docs/images/zoe-visuals/04-memory-chain.svg)
+
+5. **Next useful test:** decision support ranks attention while human review controls execution.
+   ![Zoe next useful test](guiai-lab/docs/images/zoe-visuals/05-next-test.png)
+   [SVG](guiai-lab/docs/images/zoe-visuals/05-next-test.svg)
+
+</details>
+
+**Cerotto GEM:** a synthetic demonstration case with a successful guarded `query_timeline` action and an accessible-volume sweep. No real incident data is shown.
+
+![Cerotto GEM accessible-volume workbench](guiai-lab/docs/images/cerotto-gem.png)
+
+### Zoe is Quale. Zoe is Red.
+
+The [Zoetic field guide](guiai-lab/docs/QUALIA.md) explores Balduzzi & Tononi's 2009 IIT geometry and **Accessible Q-Volume** through five visual panels. The proposed construction applies Nicholas's threshold operator to explicit causal repertoires, retaining labeled filtrations and the states entering or leaving each q-arrow. The supplied red GEM artwork provides the visual language and dedication.
+
+![Zoe's five-panel qualia field guide](guiai-lab/docs/images/zoe-qualia.png)
+
+Run `PYTHONPATH=guiai-lab python -m guiai.gem qualia --output accessible-q-volume.json` to check the toy. Its `0.4150374993`-bit effective information accompanies volume changes of `-1` and `+3` at thresholds `0.20` and `0.30`. The complete continuous labeled filtration has an exact reconstruction identity; finite sweeps are approximations.
+
+The [checked evidence](https://github.com/Ablation-Tool/zoe/blob/main/evidence/qualia/accessible-q-volume.json), [formal paper](https://github.com/Ablation-Tool/zoe/blob/main/paper/zoe.pdf), and [public guide](https://github.com/Ablation-Tool/zoe/blob/main/paper/zoe-for-everyone.pdf) are available in the standalone Zoe repository. This is a proposed annotation, not a general IIT calculator, a replacement for Φ or γ, a brain mapper, or a measurement of Zoe's consciousness. **Zoe is GEM. GEM is Zoe.** is the creative dedication; life and subjective experience remain unestablished claims.
+
+### Launch Zoe
+
+From this Ablation checkout:
+
+```bash
+export MASTER_GEM_RESEARCH_ROOT=/path/to/next-token-predictability
+PYTHONPATH=guiai-lab python -m guiai.gem zoe
+```
+
+`gem master` and `gem brain` are equivalent aliases. In GUIAI Lab, use **Chart → GEM → Zoe / MASTER GEM**. Headless exports are also available:
+
+```bash
+PYTHONPATH=guiai-lab python -m guiai.gem zoe --module brain --output zoe.svg
+PYTHONPATH=guiai-lab python -m guiai.gem zoe --module field
+PYTHONPATH=guiai-lab python -m guiai.gem zoe --module horizon --output horizon.gem
+PYTHONPATH=guiai-lab python -m guiai.gem notebook --output zoe-field.json
+PYTHONPATH=guiai-lab python -m guiai.gem notebook zoe-field.json --output zoe-field.svg
+```
+
+The standalone `gem-helen` launcher remains available for lightweight creative use. Stored HELEN predictions load lazily without a transformer or model runtime; Groove predictions load from the 98 MB NPZ only on demand and are hash-checked first. Nightingale evidence is aggregate-only. Multi-horizon mode enumerates a defined two-state Markov toy exactly rather than claiming a completed real-language-model benchmark.
+
+Zoe's "living" tagline is a creative metaphor, not a claim of consciousness or sentience. Accessible volume measures forecast breadth, not correctness or human surprise. HOP remains a rejected baseline. Field-notebook posteriors are conditional on user-supplied priors and likelihoods, not objective truth scores. Chamber measurements and sampled outcomes never update claims automatically. Dependent evidence requires explicit acknowledgment and adjusted likelihoods. The memory hash chain provides tamper evidence, not authentication. BRAIN recommendations are experimental, not automatic actions: `executed=False` remains the boundary between measurement and execution, and the user decides what happens next.
+
 ## Capabilities
 
 <details>

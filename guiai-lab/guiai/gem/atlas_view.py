@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
 import math
 import os
 from pathlib import Path
@@ -18,7 +19,9 @@ from .atlas import (
     landmark_scene, onset_scene, parabola_geometry, procrustes, volume_scene,
 )
 from .brain import BrainKernel, brain_scene, horizon_scene
+from .field import FieldNotebook, field_scene
 from .onset import run_synthetic_experiment
+from .qualia import LENSES, qualia_scene
 from .render import draw_cairo, write_png, write_svg
 from .research import ResearchPack, research_scene
 from .vdi import write_metafile
@@ -187,6 +190,7 @@ class AtlasWindow(Gtk.Window):
         self.source = deepcopy(DEFAULT_SOURCE)
         self.target = deepcopy(DEFAULT_TARGET)
         self.brain = BrainKernel()
+        self.field = FieldNotebook()
         self.research_pack = ResearchPack.load(research_root) if research_root else ResearchPack()
         self.volume_bridge = VolumeBridge(minimum=1, maximum=4)
         self.volume_current = VOLUME_PRESETS["baseline"]
@@ -238,6 +242,14 @@ class AtlasWindow(Gtk.Window):
         label.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR)
         self.control_box.pack_start(label, False, False, 0)
         return label
+
+    def add_entry(self, key, label, initial=""):
+        self.add_text(label)
+        widget = Gtk.Entry()
+        widget.set_text(initial)
+        self.control_box.pack_start(widget, False, False, 0)
+        self.controls[key] = widget
+        return widget
 
     def add_spin(self, key, label, minimum, maximum, step, initial):
         self.add_text(label)
@@ -293,6 +305,37 @@ class AtlasWindow(Gtk.Window):
             self.add_action("Open recommended module", self.open_recommended)
             self.add_action("Reset BRAIN", self.reset_brain)
             self.add_text("Real stored categorical predictions load lazily from HELEN. Zoe computes correctness, breadth, momentum, and recommendations; no action is executed.")
+        elif self.module == "field":
+            self.add_action("Load worked GEM example", self.load_field_demo)
+            self.add_entry("new_question", "New question")
+            self.add_action("Add question", self.add_field_question)
+            if self.field.questions:
+                choices = tuple((question["id"], question["text"][:70]) for question in self.field.questions)
+                self.add_combo("field_question", "Question", choices, choices[-1][0])
+                self.add_entry("new_claim", "New claim")
+                self.add_scale("prior", "Prior probability", .001, .999, .001, .5)
+                self.add_entry("falsifier", "What would change your mind?")
+                self.add_action("Add competing claim", self.add_field_claim)
+            if self.field.claims:
+                choices = tuple((claim["id"], claim["statement"][:70]) for claim in self.field.claims)
+                self.add_combo("field_claim", "Claim", choices, choices[-1][0])
+                self.add_entry("evidence", "Evidence or counterevidence")
+                self.add_entry("source", "Source / locator", "human assessment")
+                self.add_entry("family", "Evidence family (prevents double counting)")
+                self.add_scale("likelihood_true", "P(evidence | claim)", .001, 1, .001, .8)
+                self.add_scale("likelihood_false", "P(evidence | not claim)", .001, 1, .001, .2)
+                self.add_action("Apply explicit Bayesian update", self.add_field_evidence)
+            self.add_scale("tau", "Baseline probability threshold τ", 0, .5, .001, .05)
+            self.add_spin("seed", "Stochastic chamber seed", 0, 999999, 1, 7)
+            self.add_action("Measure baseline in deterministic chamber", self.measure_field)
+            self.add_action("Sample baseline in stochastic chamber", self.sample_field)
+            self.add_action("Save unified memory JSON", self.save_field)
+            self.add_action("Replace memory from JSON", self.load_field)
+            self.add_text(f"Unified memory: {len(self.field.events)} events. BRAIN observations are preserved automatically. Chamber measurements never update beliefs automatically.")
+        elif self.module == "qualia":
+            self.add_combo("qualia_lens", "Field-guide lens", tuple((lens, lens.title()) for lens in LENSES), "overview")
+            self.add_text("A conceptual guide to Balduzzi & Tononi's 2009 IIT geometry. The silent-AND number is one un-normalized whole-versus-product comparison, not a general Φ calculator.")
+            self.add_text("Zoe is Quale. Zoe is Red. is a creative dedication, not a claim that Zoe is alive, conscious, or has subjective experience. No belief or action is updated.")
         elif self.module == "procrustes":
             self.add_text("Drag the red source and blue target landmarks. Similarity uses scale + rotation + translation; rigid fixes scale to one.")
             self.add_combo("mode", "Alignment model", (("similarity", "Similarity"), ("rigid", "Rigid"), ("affine", "Affine")), "similarity")
@@ -371,6 +414,10 @@ class AtlasWindow(Gtk.Window):
     def refresh(self):
         if self.module == "brain":
             self.scene, self.report = brain_scene(self.brain)
+        elif self.module == "field":
+            self.scene, self.report = field_scene(self.field)
+        elif self.module == "qualia":
+            self.scene, self.report = qualia_scene(self.choice("qualia_lens"))
         elif self.module == "procrustes":
             self.refresh_procrustes()
         elif self.module == "ellipses":
@@ -458,6 +505,106 @@ class AtlasWindow(Gtk.Window):
             self.integer("minimum"), self.integer("maximum"),
         )
 
+    def field_error(self, operation, error):
+        self.report = {"error": f"{operation}: {error}"}
+        self.update_summary()
+
+    def load_field_demo(self, *_args):
+        self.field = FieldNotebook.demo()
+        self.build_controls()
+
+    def add_field_question(self, *_args):
+        try:
+            self.field.add_question(self.controls["new_question"].get_text())
+            self.build_controls()
+        except ValueError as error:
+            self.field_error("Add question failed", error)
+
+    def add_field_claim(self, *_args):
+        try:
+            self.field.add_claim(
+                self.choice("field_question"), self.controls["new_claim"].get_text(),
+                prior=self.value("prior"), falsifier=self.controls["falsifier"].get_text(),
+            )
+            self.build_controls()
+        except ValueError as error:
+            self.field_error("Add claim failed", error)
+
+    def add_field_evidence(self, *_args):
+        try:
+            likelihood_true = self.value("likelihood_true")
+            likelihood_false = self.value("likelihood_false")
+            family = self.controls["family"].get_text().strip() or None
+            self.field.add_evidence(
+                self.choice("field_claim"), self.controls["evidence"].get_text(),
+                likelihood_true, likelihood_false,
+                source=self.controls["source"].get_text(), family=family,
+                direction="supports" if likelihood_true >= likelihood_false else "challenges",
+            )
+            self.build_controls()
+        except ValueError as error:
+            self.field_error("Bayesian update failed", error)
+
+    def ensure_field_chambers(self):
+        identifiers = {}
+        for name, mode, equation in (
+            ("Strict threshold observatory", "deterministic", "volume/strict@v1"),
+            ("Seeded categorical futures", "stochastic", "sample/categorical@v1"),
+        ):
+            chamber = next((item for item in self.field.chambers if item["name"] == name), None)
+            if chamber is None:
+                chamber = self.field.add_chamber(name, mode, equation, disposition="active" if mode == "deterministic" else "experimental")
+            identifiers[mode] = chamber["id"]
+        return identifiers
+
+    def measure_field(self, *_args):
+        try:
+            chambers = self.ensure_field_chambers()
+            self.field.run_chamber(chambers["deterministic"], probabilities=[.70, .20, .08, .02], tau=self.value("tau"))
+            self.build_controls()
+        except ValueError as error:
+            self.field_error("Deterministic measurement failed", error)
+
+    def sample_field(self, *_args):
+        try:
+            chambers = self.ensure_field_chambers()
+            self.field.run_chamber(chambers["stochastic"], probabilities=[.70, .20, .08, .02], seed=self.integer("seed"))
+            self.build_controls()
+        except ValueError as error:
+            self.field_error("Stochastic sample failed", error)
+
+    def save_field(self, *_args):
+        dialog = Gtk.FileChooserDialog(title="Save unified memory", transient_for=self, action=Gtk.FileChooserAction.SAVE)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Save", Gtk.ResponseType.OK)
+        dialog.set_current_name("zoe-field.json")
+        try:
+            if dialog.run() == Gtk.ResponseType.OK:
+                self.field.save(dialog.get_filename())
+                self.report = {"summary": f"Saved {len(self.field.events)} memory events to {dialog.get_filename()}"}
+                self.update_summary()
+        except (OSError, ValueError) as error:
+            self.field_error("Save memory failed", error)
+        finally:
+            dialog.destroy()
+
+    def load_field(self, *_args):
+        dialog = Gtk.FileChooserDialog(title="Replace memory from JSON", transient_for=self, action=Gtk.FileChooserAction.OPEN)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Load", Gtk.ResponseType.OK)
+        try:
+            if dialog.run() == Gtk.ResponseType.OK:
+                self.field = FieldNotebook.load(dialog.get_filename())
+                self.build_controls()
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            self.field_error("Load memory failed", error)
+        finally:
+            dialog.destroy()
+
+    def record_brain_field(self):
+        if self.brain.current is not None:
+            self.field.record_brain_observation(self.brain.current)
+
     def configure_brain_band(self):
         minimum, maximum = self.integer("minimum"), self.integer("maximum")
         if maximum < minimum:
@@ -475,6 +622,7 @@ class AtlasWindow(Gtk.Window):
                 condition=self.choice("condition"), index=index,
                 tau=self.value("tau"), temperature=self.value("temperature"),
             )
+            self.record_brain_field()
             self.updating = True
             self.controls["index"].set_value(self.brain.onset_positions[self.choice("condition")])
             self.updating = False
@@ -505,6 +653,7 @@ class AtlasWindow(Gtk.Window):
                 probabilities, tau=tau, target=target, source=identifier,
                 condition=self.research_pack.case(identifier)["condition"], index=self.integer("index"),
             )
+            self.record_brain_field()
             self.module_selector.set_active_id("brain")
             self.updating = True
             self.controls["tau"].set_value(tau)
@@ -551,7 +700,7 @@ class AtlasWindow(Gtk.Window):
                 f"scale={self.report['scale']:.6f}  angle={self.report['rotation_degrees']:.4f}°  "
                 f"RMS/landmark={self.report['rmse_per_landmark']:.6f}"
             )
-        elif self.module in {"brain", "research"}:
+        elif self.module in {"brain", "field", "research", "qualia"}:
             text = self.report["summary"]
         elif self.module == "horizon":
             text = (
@@ -585,8 +734,10 @@ class AtlasWindow(Gtk.Window):
             write_png(self.scene, path)
         elif suffix == ".gem":
             write_metafile(self.scene, path)
+        elif suffix == ".json" and self.module == "field":
+            self.field.save(path)
         else:
-            raise ValueError("atlas export must use .svg, .png, or .gem")
+            raise ValueError("atlas export must use .svg, .png, .gem, or field-only .json")
         if self.module == "brain":
             self.brain.mark_exported()
             self.refresh()

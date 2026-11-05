@@ -58,7 +58,7 @@ def _parser():
     volume.add_argument("--max-volume", type=int, default=4, help="target band upper bound")
     volume.add_argument("--output", required=True, help="new evidence JSON path")
 
-    module_choices = ("brain", "procrustes", "ellipses", "parabola", "circle", "clock", "graph", "volume", "onset", "horizon", "research")
+    module_choices = ("brain", "field", "qualia", "procrustes", "ellipses", "parabola", "circle", "clock", "graph", "volume", "onset", "horizon", "research")
     atlas = commands.add_parser("atlas", help="open the native geometry atlas or export one module")
     atlas.add_argument("--module", choices=module_choices, default="procrustes")
     atlas.add_argument("--output", help="export the default scene to .svg, .png, or .gem instead of opening GTK")
@@ -70,6 +70,14 @@ def _parser():
     master.add_argument("--output", help="export the default scene to .svg, .png, or .gem instead of opening GTK")
     master.add_argument("--format", choices=("svg", "png", "gem"), help="default: infer from output suffix")
     master.add_argument("--width", type=int, default=1200, help="SVG/PNG width in pixels")
+    qualia = commands.add_parser("qualia", help="run the Accessible Q-Volume toy demonstration and save JSON evidence")
+    qualia.add_argument("--tau", action="append", type=float, help="additional q-arrow threshold; repeat to override the default 0.20 and 0.30")
+    qualia.add_argument("--output", required=True, help="new JSON evidence path")
+    notebook = commands.add_parser("notebook", help="verify, save, or render a Zoe Bayesian field notebook")
+    notebook.add_argument("input", nargs="?", help="saved notebook JSON; omit to use the worked GEM example")
+    notebook.add_argument("--output", required=True, help="new .json, .svg, .png, or .gem output path")
+    notebook.add_argument("--format", choices=("json", "svg", "png", "gem"), help="default: infer from output suffix")
+    notebook.add_argument("--width", type=int, default=1200, help="SVG/PNG width in pixels")
     return parser
 
 
@@ -80,6 +88,77 @@ def _print_report(report):
 def main(argv=None):
     arguments = _parser().parse_args(argv)
     try:
+        if arguments.command == "qualia":
+            import math
+            from .qualia import accessible_sweep, accessible_q_toy, q_arrow_annotation, reconstruct_filtration
+            toy = accessible_q_toy()
+            thresholds = arguments.tau or [0.20, 0.30]
+            toy["arrows"] = [q_arrow_annotation(toy["before"], toy["after"], tau) for tau in thresholds]
+            for name in ("before", "after"):
+                levels = [level["tau"] for level in toy[f"{name}_sweep"]] + thresholds
+                toy[f"{name}_sweep"] = accessible_sweep(toy[name], levels)
+            deltas = [row["delta_accessible_q_volume"] for row in toy["arrows"]]
+            arithmetic_passed = (
+                (thresholds != [0.20, 0.30] or (
+                    deltas == [-1, 3]
+                    and toy["arrows"][0]["exited"] == ["11"]
+                    and toy["arrows"][1]["entered"] == ["00", "01", "10"]
+                ))
+                and all(
+                    row["delta_accessible_q_volume"] == sum(p > row["tau"] for p in toy["after"].values()) - sum(p > row["tau"] for p in toy["before"].values())
+                    and row["entered"] == sorted(state for state, probability in toy["after"].items() if probability > row["tau"] and toy["before"][state] <= row["tau"])
+                    and row["exited"] == sorted(state for state, probability in toy["before"].items() if probability > row["tau"] and toy["after"][state] <= row["tau"])
+                    and math.isclose(row["ei_bits"], math.log2(4 / 3))
+                    for row in toy["arrows"]
+                )
+                and next(level for level in toy["after_sweep"] if level["tau"] == 1 / 3)["states"] == []
+                and toy["two_way"]["past"]["accessible_q_volume"] == 3
+                and toy["two_way"]["future"]["accessible_volume"] == 3
+            )
+            if not arithmetic_passed:
+                raise RuntimeError("Accessible Q-Volume toy arithmetic did not match its checked contract")
+            report = {
+                "schema_version": 1,
+                "instrument": "Accessible Q-Volume toy demonstration",
+                "source": "Balduzzi & Tononi (2009), Qualia: The Geometry of Integrated Information",
+                "original_equation_credit": "Nicholas Michael Kloster, March 6, 2026",
+                "extension_status": "proposed formal construction; toy arithmetic verified, not an empirically validated IIT implementation",
+                "complete_filtration_identity": "rho(z) = sup{tau : z is in QB_tau}, with sup(empty) = 0; this is the continuous labeled-filtration identity",
+                "finite_sweep_is_approximate": True,
+                "phi_computed": False,
+                "gamma_calculator": False,
+                "consciousness_measured": False,
+                "checks": {"arithmetic": "passed", "strict_threshold_equality": "passed", "two_way_record": "passed"},
+                "sampled_reconstruction": {name: reconstruct_filtration(toy[f"{name}_sweep"]) for name in ("before", "after")},
+                "toy": toy,
+            }
+            output = Path(arguments.output)
+            if output.suffix.lower() != ".json":
+                raise ValueError("qualia evidence output must use .json")
+            with output.open("x", encoding="utf-8") as handle:
+                json.dump(report, handle, ensure_ascii=False, allow_nan=False, indent=2, sort_keys=True)
+                handle.write("\n")
+            print(json.dumps({"instrument": report["instrument"], "output": str(output), "bytes": output.stat().st_size, "deltas": deltas, "ei_bits": toy["arrows"][0]["ei_bits"], "checks": report["checks"]}, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
+        if arguments.command == "notebook":
+            from .field import FieldNotebook, field_scene
+            notebook = FieldNotebook.load(arguments.input) if arguments.input else FieldNotebook.demo()
+            output = Path(arguments.output)
+            kind = arguments.format or output.suffix.lower().lstrip(".")
+            if kind == "json":
+                notebook.save(output)
+            else:
+                scene, _ = field_scene(notebook)
+                if kind == "svg":
+                    write_svg(scene, output, arguments.width)
+                elif kind == "png":
+                    write_png(scene, output, arguments.width)
+                elif kind == "gem":
+                    write_metafile(scene, output)
+                else:
+                    raise ValueError("notebook output format must be json, svg, png, or gem")
+            print(json.dumps({"instrument": "Zoe Bayesian field notebook", "events": len(notebook.events), "questions": len(notebook.questions), "claims": len(notebook.claims), "measurements": len(notebook.measurements), "output": str(output), "bytes": output.stat().st_size}, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
         if arguments.command in {"atlas", "master", "brain", "zoe"}:
             research_root = getattr(arguments, "research_root", None) or os.environ.get("MASTER_GEM_RESEARCH_ROOT")
             if arguments.output:

@@ -99,6 +99,12 @@ class ResearchPack:
         strict = self.document["strict_volume"]
         count = accessible_volume(strict["probabilities"], strict["tau"])
         checks.append({"case": "strict-volume", "passed": count == strict["accessible_volume"] and len(strict["probabilities"])-count == strict["complement_volume"]})
+        from .field import EquationRegistry, bayes_binary
+        field = self.document["bayesian_field"]
+        update = field["worked_update"]
+        result = bayes_binary(update["prior"], update["likelihood_true"], update["likelihood_false"])
+        checks.append({"case": "bayes-binary", "passed": _close(result["posterior"], update["posterior"])})
+        checks.append({"case": "field-equation-count", "passed": len(EquationRegistry().specifications()) == field["equation_sections"]})
         from .atlas import procrustes
         expected = self.document["procrustes"]
         result = procrustes(expected["source"], expected["target"])

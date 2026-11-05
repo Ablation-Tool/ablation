@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="47" height="29" viewBox="0 0 47 29" role="img" aria-labelledby="title description">
+  <title id="title">Red gem outline icon</title>
+  <desc id="description">A symmetric hollow gemstone drawn in red inside a thin red rectangular frame.</desc>
+  <rect id="red-frame" width="47" height="29" fill="#ff0000"/>
+  <rect id="white-field" x="1" y="1" width="45" height="27" fill="#ffffff"/>
+  <path id="gem-outline" fill="#ff0000" fill-rule="evenodd" d="M 13 4 H 34 L 45 11 L 23.5 26 L 2 11 Z M 16 6 H 31 L 36 11 L 23.5 24 L 11 11 Z"/>
+</svg>
