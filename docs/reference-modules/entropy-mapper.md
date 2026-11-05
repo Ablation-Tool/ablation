@@ -122,7 +122,9 @@ for start, end in enc_ranges:
 
 ## How it works <sup>[↑](#entropy-mapper)</sup>
 
-`EntropyMapper.scan(path)` reads the binary and slides a configurable window default 256 bytes, step 64 across every byte. Shannon entropy is computed for each window. Consecutive windows above a high threshold are merged into `EntropyRegion` objects; transitions between high and low entropy are recorded as `EntropyTransition` objects. No disassembly occurs. No function starts are required.
+`EntropyMapper(path).run()` reads the binary and slides a configurable window default 256 bytes, step 64 across every byte. Shannon entropy is computed for each window. Consecutive windows above a high threshold are merged into `EntropyRegion` objects; transitions between high and low entropy are recorded as `EntropyTransition` objects. No disassembly occurs. No function starts are required.
+
+When NumPy is available, byte histograms are generated in batches of 64 windows to reduce per-window overhead. Window and step sizes must be positive integers. The pure-Python fallback remains available when NumPy is absent. The implementation still reads the complete file into memory; batching is not memory mapping.
 
 ---
 
@@ -136,7 +138,7 @@ for start, end in enc_ranges:
 
 ## Reading output <sup>[↑](#entropy-mapper)</sup>
 
-`EntropyMapper(path).scan()` returns an `EntropyMapResult`:
+`EntropyMapper(path).run()` returns an `EntropyMapResult`:
 
 | Attribute | Content |
 |:---|:---|

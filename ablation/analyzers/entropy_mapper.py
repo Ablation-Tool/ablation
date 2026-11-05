@@ -181,26 +181,40 @@ def _entropy_of(data: bytes) -> float:
 
 def _entropy_numpy(data: bytes, window: int, step: int) -> Iterator[Tuple[int, float]]:
     """Fast numpy-accelerated sliding window entropy. Falls back if numpy absent."""
+    if isinstance(window, bool) or not isinstance(window, int) or window <= 0:
+        raise ValueError("window must be a positive integer")
+    if isinstance(step, bool) or not isinstance(step, int) or step <= 0:
+        raise ValueError("step must be a positive integer")
     try:
         import numpy as np
-        arr = np.frombuffer(data, dtype=np.uint8)
-        n = len(arr)
-        offset = 0
-        while offset + window <= n:
-            chunk = arr[offset: offset + window]
-            counts = np.bincount(chunk, minlength=256).astype(np.float64)
-            total = counts.sum()
-            probs = counts[counts > 0] / total
-            h = float(-np.sum(probs * np.log2(probs)))
-            yield offset, h
-            offset += step
     except ImportError:
-        # Pure Python fallback
         n = len(data)
         offset = 0
         while offset + window <= n:
             yield offset, _entropy_of(data[offset: offset + window])
             offset += step
+        return
+
+    arr = np.frombuffer(data, dtype=np.uint8)
+    if len(arr) < window:
+        return
+    windows = np.lib.stride_tricks.sliding_window_view(arr, window)[::step]
+    batch_size = 64
+    for start in range(0, len(windows), batch_size):
+        block = windows[start:start + batch_size]
+        identifiers = np.arange(len(block), dtype=np.uint16)[:, None]
+        counts = np.bincount(
+            (block.astype(np.uint16) + identifiers * 256).ravel(),
+            minlength=len(block) * 256,
+        )[:len(block) * 256].reshape(len(block), 256)
+        probabilities = counts / counts.sum(axis=1)[:, None]
+        nonzero = counts > 0
+        entropies = -np.sum(
+            probabilities * np.log2(probabilities, out=np.zeros_like(probabilities), where=nonzero),
+            axis=1,
+        )
+        for index, entropy in enumerate(entropies):
+            yield (start + index) * step, float(entropy)
 
 
 def _merge_regions(windows: List[EntropyWindow]) -> List[EntropyRegion]:
