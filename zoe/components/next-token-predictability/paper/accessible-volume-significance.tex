@@ -1,0 +1,479 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[english]{babel}
+\usepackage[a4paper,top=25mm,bottom=25mm,left=25mm,right=25mm,headheight=14pt]{geometry}
+\usepackage[protrusion=true,expansion=false]{microtype}
+\usepackage{parskip}
+\emergencystretch=3em
+\widowpenalty=10000
+\clubpenalty=10000
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small The Significance of Accessible Volume}
+\fancyhead[R]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+\usepackage[colorlinks=true,linkcolor=blue!60!black,urlcolor=blue!60!black,pdftitle={The Significance of Accessible Volume},pdfauthor={Nicholas Michael Kloster}]{hyperref}
+\usepackage{listings}
+\usepackage{embedfile}
+\embedfilesetup{stringmethod=escape}
+\lstset{basicstyle=\ttfamily\scriptsize,breaklines=true,breakatwhitespace=false,columns=fullflexible,keepspaces=true,showstringspaces=false}
+
+\title{\textbf{The Significance of Accessible Volume}\\[5pt]
+\large A way to observe the shape of a model's next decision\\before it happens}
+\author{Nicholas Michael Kloster}
+\date{November 2026}
+
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+
+\begin{abstract}
+Before a language model produces a token, it assigns probabilities to the alternatives. Accessible volume turns that forecast into a direct measurement of next-token predictability. It counts how many alternatives have probabilities above a chosen threshold. A small count means the next-token choice is concentrated on a few alternatives; a large count means many alternatives remain in play. The final text records which token was selected, while accessible volume shows how open or settled the decision was before selection. This makes the model's hidden decision surface measurable, comparable, and reproducible. Experiments with Ablation + GEM, XLNet, and sixteen additional models demonstrate the measurement on real probability distributions. In a subsequent 120-case BioBERT experiment, the original fixed rule at $\tau=0.05$ outperformed an optimized adaptive equation on held-out biomedical documents, achieving AUROC $0.7737$ and AUPRC $0.7978$ compared with $0.7008$ and $0.6599$ for distinguishing incorrect and correct top predictions. The adaptive rule improved validation measurements, but the simpler original equation transferred better to unseen cases.
+\end{abstract}
+
+\section{The missing information in an output}
+A generated answer is a record of what happened. It is not a complete description of the decision that produced it.
+
+Two model states can produce the same next token while having very different distributions of alternatives. In one state, the selected token may dominate every other possibility. In another, many tokens may remain plausible. Reading only the final token hides that distinction.
+
+The relevant question is therefore not merely, ``What did the model choose?'' It is also, ``How much room did the model have to choose differently?'' Accessible volume provides one way to answer that question with a number.
+
+\section{Origin of the research}
+This work grew from Nicholas Michael Kloster's March 2026 research into how a language model's input context shapes the alternatives available at the next prediction step. The central question was simple: can the distribution before selection tell us something that the selected token alone cannot?
+
+The first observation was recorded on \textbf{March 4, 2026}, and the accessible-volume equation was created on \textbf{March 6, 2026}. That work motivated direct examination of full next-token probability distributions.
+
+The present experiment tests that question with controlled measurements using actual Ablation + GEM evidence. It focuses on reproducible token-level measurements and does not make claims about complete responses or later behavior.
+
+\section{The equation}
+Let $S$ be the full input context and $\mathcal{O}$ a finite output vocabulary. Let $P(a\mid h_T(S))$ be the probability that the model assigns to token $a$ as the next token after processing $S$. For a threshold $\tau$, accessible volume is
+\begin{equation}
+A_\tau(S)=\sum_{a\in\mathcal{O}}\mathbf{1}\!\left[P(a\mid h_T(S))>\tau\right].
+\label{eq:accessible-volume}
+\end{equation}
+
+The indicator is one when the probability is strictly greater than $\tau$ and zero otherwise. Tokens exactly at the threshold are excluded. The count measures the number of continuations that remain above the selected probability bar.
+
+For example, suppose the model assigns probabilities $0.70$, $0.20$, $0.08$, and $0.02$ to four possible next tokens. At $\tau=0.05$, the first three tokens are above the cutoff, so $A_{0.05}(S)=3$. A smaller count means a more concentrated, predictable choice; a larger count means a broader choice with more plausible alternatives. This is next-token predictability expressed as a reproducible number.
+
+A normalized form divides the count by vocabulary size:
+\begin{equation}
+A_{\mathrm{norm},\tau}(S)=\frac{A_\tau(S)}{|\mathcal{O}|}.
+\end{equation}
+This reports the fraction of the vocabulary above the threshold. It does not make different models directly comparable.
+
+The computation is simple: after obtaining the distribution, evaluate one comparison per token. The important part is not computational novelty. It is the decision to observe the distribution as an object of measurement rather than treating only the generated text as evidence.
+
+\section{Why the measurement matters}
+\subsection{It distinguishes a forecast from an outcome}
+The probability distribution is the forecast. Sampling or taking the maximum selects an outcome. Accessible volume describes the shape of the forecast without committing to that outcome.
+
+A small count indicates that the model has concentrated its above-threshold alternatives. A large count indicates a broader set. The measurement does not say which token will win. It says how much of the vocabulary remains meaningfully in play at the selected threshold.
+
+\subsection{It makes concentration observable}
+Concentration is usually discussed through entropy, maximum probability, or top-token mass. Accessible volume adds a different description: the size of the region above a chosen cutoff.
+
+The three descriptions are not interchangeable. A distribution can have one dominant token and few above-threshold alternatives, or one dominant token and many alternatives just below the threshold. The count captures a boundary that a single maximum or entropy value does not fully express.
+
+The threshold sweep is more informative than one reading. As $\tau$ increases, $A_\tau(S)$ cannot increase. Watching where alternatives disappear reveals whether probability is concentrated in a narrow elite or spread across a broad collection of viable continuations.
+
+\subsection{It creates a boundary for inspection}
+Ablation + GEM is built around the interaction of a stochastic agent, deterministic execution, shared memory, and human judgment. The agent proposes. The environment executes and records. The human directs and reviews.
+
+Accessible volume supplies a way to inspect the agent before its proposal becomes an action. Actual investigation evidence can be placed into a model context, and the resulting distribution can be measured without generating another token. The deterministic environment can then preserve that measurement alongside the rest of the evidence.
+
+This does not make the metric an authorization mechanism. It makes it an instrument for understanding the agent's immediate decision surface while the rest of the system remains constrained and inspectable.
+
+\section{Evidence from Ablation + GEM}
+The measurement was performed on a real forward pass using 963 tokens of actual Ablation + GEM investigation context. The context included a selected artifact, a scoped observation, and real entropy-inspection output from Ablation. A local autoregressive model returned a full distribution over 50,257 next tokens.
+
+\begin{table}[h]
+\centering
+\caption{Measured accessible volume for the actual Ablation + GEM context.}
+\label{tab:result}
+\begin{tabular}{cc}
+\toprule
+Threshold $\tau$ & Accessible volume $A_\tau(S)$ \\
+\midrule
+0.02 & 4 \\
+0.05 & 2 \\
+0.10 & 2 \\
+0.15 & 1 \\
+0.30 & 1 \\
+0.50 & 1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The distribution is concentrated. A newline has probability $0.535587$. End-of-text follows with probability $0.109893$. The ten most probable tokens contain $75.45\%$ of the total probability mass. Entropy over the full distribution is $4.2998$ bits.
+
+The immediate meaning is straightforward: the model is not spreading its above-threshold probability across many alternatives. Its next-token decision is concentrated on a small set. Accessible volume turns that observation into a precise, reproducible statement rather than an impression based on the final text.
+
+A repeated forward pass on the same context produced identical input IDs and probability values. Controlled context perturbations changed some threshold counts and left others unchanged. This confirms that the instrument measures the distribution associated with a particular model and context rather than a universal property of the prompt.
+
+\section{Three ways to hold back a target}
+The same equation can measure different prediction mechanisms, provided that each model supplies a complete probability distribution over a finite vocabulary. The input construction must remain explicit because these mechanisms are not interchangeable.
+
+A BERT-style masked-language model replaces the target with its special mask token. It can use the context on both sides of that mask. The target's position remains known, but its identity is removed from the model input.
+
+XLNet uses a different mechanism. Its content stream represents token identities for use as context, while its query stream represents the target position without access to the target identity. Target mapping selects the position, and the permutation mask blocks query-stream access to that token. This is not the same as inserting a BERT-style mask token.
+
+An autoregressive model receives only the prefix preceding the target. Its final-position logits therefore describe an ordinary next-token forecast. The target and all later text are absent by construction.
+
+In every case, accessible volume is applied without changing the equation, threshold grid, temperature, or model weights. The result describes one model's distribution for one input construction. It does not by itself compare training objectives or establish which architecture is better.
+
+\section{An XLNet query-stream extension}
+The instrument can also examine a prediction for a token already present in the input, not only an ordinary next-token forecast. We used the public XLNet-Base and XLNet-Large models' query streams with the target token masked out of query-stream attention. The input ended with the paper's phrase ``Accessible volume addresses this gap.'' Each resulting distribution contained 32,000 token probabilities.
+
+For XLNet-Base, the most likely token was a period, with probability $0.559758$. The second was ``issue,'' with probability $0.068510$. The actual hidden token ``gap'' had probability $0.012354$, ranked 12th. Entropy was $3.5946$ bits and the ten most probable tokens contained $82.22\%$ of the mass.
+
+XLNet-Large assigned the highest probability to ``problem'' ($0.235085$), followed by ``in'' ($0.139887$) and a period ($0.099426$). The hidden token ``gap'' had probability $0.015083$, ranked eighth. Entropy was $5.7603$ bits and the ten most probable tokens contained $65.16\%$ of the mass.
+
+\begin{table}[h]
+\centering
+\caption{Accessible volume for two XLNet query-stream predictions.}
+\label{tab:xlnet}
+\begin{tabular}{lrrrrrr}
+\toprule
+Variant & 0.02 & 0.05 & 0.10 & 0.15 & 0.30 & 0.50 \\
+\midrule
+XLNet-Base & 6 & 2 & 1 & 1 & 1 & 1 \\
+XLNet-Large & 5 & 4 & 2 & 1 & 0 & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For each model, replacing the target token ID with each of three alternatives produced bit-for-bit identical probability distributions. This confirms that the target token's identity did not enter either query-stream prediction. The query stream could use the remaining context, but not the hidden token itself. Both experiments used PyTorch 2.14.1+cu130 and Transformers 5.18.0; the scripts, complete probability vectors, and input IDs are included as evidence.
+
+A separate offline XLNet-Base reproduction matched the input IDs, all six threshold counts, and the target-token rank and ordering. Its maximum absolute probability difference was $2.3443\times10^{-7}$. It was therefore numerically close, but not bit-for-bit identical across the two runtimes. The reported threshold counts are reproducible observations; exact raw-probability equality across different runtimes is not claimed.
+
+This extension demonstrates that accessible volume can describe a leakage-free prediction for an existing input token as well as a forecast of what comes next. The two model results are measurements of specific contexts, not a general ranking of model capability. They remain token-level measurements, not evidence about complete actions, correctness, or safety.
+
+\section{Cross-model and domain comparisons}
+We next applied the unchanged equation to sixteen additional models. The general-language cases used the same target, ``gap,'' for BERT-Base, RoBERTa-Base, ALBERT-Base, and GPT-2. Security models used a firmware-vulnerability reporting sentence. The remaining cases covered biomedical, clinical, scientific, legal, financial, programming, multilingual, chemistry, protein-sequence, and mathematical inputs. Every requested category is represented.
+
+\begin{table}[h]
+\centering
+\caption{Accessible volume across the fixed threshold grid. Counts describe individual model--input pairs, not a quality leaderboard.}
+\label{tab:model-comparison}
+{\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llrrrrrr}
+\toprule
+Category & Model & 0.02 & 0.05 & 0.10 & 0.15 & 0.30 & 0.50 \\
+\midrule
+General & BERT-Base & 2 & 1 & 1 & 1 & 1 & 1 \\
+General & RoBERTa-Base & 2 & 2 & 1 & 1 & 1 & 1 \\
+General & ALBERT-Base & 5 & 1 & 1 & 1 & 1 & 0 \\
+General & GPT-2 (causal) & 7 & 3 & 2 & 1 & 0 & 0 \\
+Security & SecureBERT & 6 & 4 & 2 & 0 & 0 & 0 \\
+Security & CySecBERT & 2 & 0 & 0 & 0 & 0 & 0 \\
+Biomedical & BioBERT & 1 & 0 & 0 & 0 & 0 & 0 \\
+Clinical & Bio\_ClinicalBERT & 6 & 2 & 2 & 1 & 0 & 0 \\
+Scientific & SciBERT & 6 & 3 & 2 & 0 & 0 & 0 \\
+Legal & Legal-BERT & 7 & 2 & 1 & 1 & 1 & 0 \\
+Financial & FinBERT & 5 & 3 & 2 & 2 & 0 & 0 \\
+Programming & CodeBERT & 4 & 3 & 1 & 1 & 1 & 0 \\
+Multilingual & XLM-RoBERTa-Base & 6 & 3 & 1 & 0 & 0 & 0 \\
+Chemistry & ChemBERTa & 8 & 5 & 0 & 0 & 0 & 0 \\
+Protein & ProtBERT & 18 & 9 & 0 & 0 & 0 & 0 \\
+Mathematics & Qwen2.5-Math-1.5B (causal) & 9 & 8 & 4 & 2 & 0 & 0 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+The results illustrate why accessible volume and entropy are different instruments. BioBERT had entropy $9.8879$ bits but only one token above probability 0.02. CySecBERT had entropy $9.7536$ bits but two tokens above that threshold. A broad tail of very small probabilities can produce high entropy without producing many alternatives above a fixed cutoff.
+
+The target was the highest-probability token in two of these sixteen cases: Legal-BERT's ``agreement'' and Qwen2.5-Math-1.5B's ``4.'' This is not a model ranking. Most domain cases used different contexts, targets, vocabularies, and input formats. A single masked-token or next-token prediction is not a benchmark of correctness or domain competence.
+
+The case manifest records every exact public model identifier, immutable revision, input, target, and prediction style. The sixteen runs used CPU inference with PyTorch 2.14.1+cu130 and Transformers 4.56.2. Evaluation mode and deterministic inference were used throughout, with no sampling or model-weight training. Every model repeated its forward pass bit-for-bit. Masked cases contained exactly one prediction mask, and causal cases included only tokens preceding the target.
+
+The complete input IDs and probability vectors are included for all sixteen cases. The verification script independently recomputed every threshold count, target rank, entropy, top-ten mass, top-token ordering, and raw-array hash from the saved artifacts. All sixteen cases passed.
+
+\section{BioBERT: does an adaptive equation improve the original?}
+We next tested whether an adaptive version of accessible volume could improve detection of BioBERT's top-1 masked-token prediction errors. The experiment used 120 cases from 30 Creative Commons-licensed Europe PMC abstracts. Each document supplied four eligible, non-repeated, single-token targets. Document-grouped splits contained 60 development, 20 validation, and 40 test cases, assigned with seed 20261103 before inference. No document crossed splits.
+
+The original equation was evaluated first on every case. BioBERT produced 29 errors among 60 development cases, 11 among 20 validation cases, and 23 among 40 test cases. Every prediction was repeated bit-for-bit, and every original threshold count was recomputed from the saved full-vocabulary distribution.
+
+The candidate adaptive equation was
+\begin{equation}
+A_{\alpha,\beta}(x)=\sum_i\mathbf{1}\!\left[p_i>\max\!\left(\beta,\alpha p_{\max}(x)\right)\right].
+\label{eq:adaptive-volume}
+\end{equation}
+It replaces a fixed cutoff with the larger of an absolute floor $\beta$ and a fraction $\alpha$ of the maximum probability. The search covered 54 predefined parameter pairs. Selection used validation AUROC (area under the receiver-operating-characteristic curve), then validation AUPRC (average precision), then development AUROC, with deterministic tie-breaking. Only after selection were the parameters evaluated on the test documents.
+
+The selected rule was $\alpha=0.001,\beta=0$, counting every token above $0.1\%$ of the maximum probability. Table~\ref{tab:biobert-optimization} reports the result. AUROC and AUPRC measure how well each score separates incorrect top predictions from correct ones; larger values are better.
+
+\begin{table}[h]
+\centering
+\caption{BioBERT original and adaptive equations for top-1 error detection.}
+\label{tab:biobert-optimization}
+{\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{p{5.2cm}rrrr}
+\toprule
+Rule & Dev AUROC & Val AUROC & Test AUROC & Test AUPRC \\
+\midrule
+Adaptive ($\alpha=0.001,\beta=0$) & 0.7848 & 0.8737 & 0.7008 & 0.6599 \\
+Original ($\tau=0.05$) & 0.7219 & 0.8232 & \textbf{0.7737} & \textbf{0.7978} \\
+Best validation original ($\tau=0.02$) & 0.7681 & 0.8283 & 0.7391 & 0.7502 \\
+Entropy & 0.7920 & 0.8990 & 0.6957 & 0.6538 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\textbf{The original equation worked better on the held-out BioBERT cases.} The fixed $\tau=0.05$ rule exceeded the adaptive rule by $0.0729$ AUROC and $0.1379$ AUPRC. The adaptive equation improved development and validation measurements but did not transfer that improvement to unseen documents. On test cases, its mean score was 42.43 for errors and 36.59 for correct predictions; the original $\tau=0.05$ scores were 3.17 and 1.88, a substantially clearer separation.
+
+The significance is direct: making the threshold responsive to the maximum probability did not improve the instrument on this dataset. The original fixed-threshold equation was simpler and stronger where it mattered, on data excluded from parameter selection. All 120 raw distributions, reports, source manifests, candidate searches, and per-case scores are included. An independent implementation recomputed every reported AUROC and AUPRC value from the raw artifacts.
+
+\section{What the result does not establish}
+The experiment does not establish that a concentrated choice is a correct choice. It does not establish that a broad choice is a better choice. It does not demonstrate how later tokens will behave, and it does not turn a single-step measurement into a prediction of a complete response.
+
+The measured models are also not interchangeable with Kimi, Claude, or Ablation's semantic encoders. Those systems require their own probability distributions before equivalent measurements can be made. A distribution over command-text tokens is not automatically a distribution over complete structured actions.
+
+The two Foundation-Sec-8B variants were not run. Each published repository contains approximately 16.06 GB of model weights, exceeding the available test-system storage for this experiment. They require a separate resource configuration; no result or limitation of those models is inferred here.
+
+These limits do not weaken the measurement. They define its proper use. Accessible volume describes the shape of a particular forecast at a particular moment. Broader interpretations require separate evidence.
+
+\section{Possible paths opened by the equation}
+The measurement also suggests directions for further work, without establishing them as completed findings.
+
+\textbf{Prediction-aware review.} Repeated observations could provide early-warning metadata for an agent review system. An unusual change in the distribution might lead to additional review, a read-only restriction, or a request for human judgment. It would not establish why the change occurred. Any response would still need deterministic policy and signed evidence for later investigation.
+
+\textbf{From tokens to structured actions.} A future experiment could examine distributions over complete permitted actions rather than command-text tokens. This might help a system prepare for several plausible next steps while preserving the same constraints on every action. It would not establish a user's intent or make an action safe by virtue of being predicted.
+
+\textbf{Authenticated, evolving evidence.} Prediction observations could become part of a signed evidence record whose keys rotate over time. Standard cryptographic key derivation and authenticated encryption would be required. A timestamp could determine when to rotate a key, but neither timing nor accessible volume should determine the key itself. The metric is not an entropy source or a source of cryptographic key material.
+
+These are possible paths for investigation, not claims established by the present experiment.
+
+\section{Conclusion}
+Accessible volume turns next-token predictability into a measurement. It counts the alternatives above a probability cutoff, showing whether a model's immediate choice is concentrated on a few options or spread across many. The final output records a selection; accessible volume reveals the decision surface that preceded it.
+
+The measured example shows the instrument working in practice. Four tokens exceed 0.02, two exceed 0.05, and one exceeds 0.15. That is the finding: a real investigation context produced a concentrated next-token decision surface, and the equation made it measurable.
+
+The XLNet and sixteen additional comparisons show the same instrument operating across masked, query-stream, and causal prediction mechanisms. Their results also demonstrate that accessible volume and entropy can describe different aspects of the same distribution. These are individual, reproducible observations, not universal claims about model quality or safety.
+
+The BioBERT experiment provides a direct practical result. The original fixed rule at $\tau=0.05$ distinguished incorrect and correct top predictions more effectively than the optimized adaptive equation on held-out biomedical documents. Although the adaptive rule improved validation measurements, the original equation achieved the stronger test AUROC and AUPRC. For this experiment, the simpler original equation was the better measurement of prediction uncertainty.
+
+\appendix
+
+\section{Ablation + GEM as the working implementation}
+Ablation is the reverse-engineering framework. GEM (Graphics Environment Manager) is its graphical environment and shared investigation Lab. The public implementation is available at \url{https://github.com/Ablation-Tool/ablation}.
+
+Ablation + GEM is itself a working demonstration of the chamber model. The AI Agent supplies probabilistic labor and proposals. Ablation + GEM supplies constrained execution, persistent state, verification, and replay. The human supplies direction and judgment. Investigation events, selected objects, evidence, and verification receipts form a unified memory architecture shared by the human and agent.
+
+The implementation used for this experiment is revision \href{https://github.com/Ablation-Tool/ablation/commit/d596bed31ba5fe361efa1c6fdad6d86e3126ab63}{\texttt{d596bed3}}. At that revision, the main Ablation CI passed 2,803 tests with 93 skips, and native Linux, Windows, and macOS workflows passed. Those results demonstrate the implementation's behavior. The accessible-volume experiment adds a separate measurement using actual session evidence produced by that implementation; it is not a claim that the metric was already part of the framework.
+
+\section{Accessible Q-Volume and the mirrored workbench}
+This appendix is a later engineering and editorial update. It does not change the original research question, experimental results, or sole authorship of Nicholas Michael Kloster's original accessible-volume equation and paper. The later Zoe and Q-volume developments are identified separately.
+
+The strict threshold operator can also annotate an explicitly modeled causal repertoire $\rho_m(x_0\mid x_1)$. For submechanism $m$ and current state $x_1$,
+\begin{equation}
+QA_\tau(m;x_1)=\sum_{x_0\in\mathcal X_0}\mathbf 1[\rho_m(x_0\mid x_1)>\tau].
+\end{equation}
+The corresponding accessible set is $QB_\tau(m;x_1)=\{x_0:\rho_m(x_0\mid x_1)>\tau\}$. A complete labeled threshold filtration preserves the repertoire through
+\begin{equation}
+\rho_m(x_0\mid x_1)=\sup\{\tau:x_0\in QB_\tau(m;x_1)\},
+\end{equation}
+with $\sup\varnothing=0$. Scalar counts without membership lose state labels; finite threshold grids are approximations rather than guaranteed exact reconstructions.
+
+For the silent AND gate, the empty mechanism assigns probability $1/4$ to each previous input, while the complete mechanism assigns $(1/3,1/3,1/3,0)$. Effective information is $\log_2(4/3)=0.4150374993\ldots$ bits. At $\tau=0.20$, accessible Q-volume falls from four to three and input $11$ leaves. At $\tau=0.30$, it rises from zero to three and inputs $00,01,10$ enter. The threshold annotation therefore does not replace $\Phi$ or $\gamma$, does not infer a causal repertoire from a forecast, and does not measure consciousness.
+
+The mirrored workbench pairs forward and retrograde observations at the same held-out index. Both distributions remain separate. It records correctness and accessible volume independently, whether the selected category agrees, and the volume difference $A_{\tau,i}^{\mathrm{forward}}-A_{\tau,i}^{\mathrm{retrograde}}$. This is paired evaluation, not a time-reversed model or a combined forecast. The shared field notebook preserves observations without changing a posterior or executing an action.
+
+The unified workbench contains 17 operations: the 13 original equation sections, causal-repertoire normalization, q-arrow annotation, two-way accessible records, and mirrored observation. Independent expected-result checks passed for all 17. The full mirrored test covered 1,920 aligned pairs and preserved accessible-set invariants and a bounded shared history of 128 pairs. The canonical mirror, library, and authorization suite passed all seven X11 tests; its headless run passed five tests with two native-only skips. Redundant child-history copying is avoided so the bounded history does not duplicate a second growing observation log.
+
+The implementation and reproduction commands are available at \url{https://github.com/Ablation-Tool/graphics-environment-manager}. Run \texttt{python -m gem workbench check} for the unified checks, or \texttt{python -m gem os} to inspect the mirrored brain. The separate Zoe research implementation remains at \url{https://github.com/Ablation-Tool/zoe}. The Q-volume and workbench verification records are embedded below. They establish toy arithmetic and software behavior, not an empirically validated implementation of integrated information theory.
+
+\section{Evidence manifest}
+The experiment used the public \href{https://huggingface.co/onnx-community/distilgpt2-ONNX}{\texttt{distilgpt2-ONNX}} model and ONNX Runtime 1.31.1. Table~\ref{tab:manifest} records the identities needed to verify the evidence independently.
+
+\begin{table}[h]
+\centering
+\caption{Evidence identity and scope.}
+\label{tab:manifest}
+\begin{tabular}{lp{8cm}}
+\toprule
+Item & Value \\
+\midrule
+Model SHA-256 & \begin{minipage}[t]{8cm}\ttfamily\scriptsize 0f79f192f3137e9a90213f1b5d4a52b6d896\\b735f9cb82160e5de7cc6e539c41\end{minipage} \\
+Tokenizer SHA-256 & \begin{minipage}[t]{8cm}\ttfamily\scriptsize a6aa29bf8416d74ad795a73262b1aa3f98\\5564ee338adbee7ffbc5861f78b6b8\end{minipage} \\
+Model configuration SHA-256 & \begin{minipage}[t]{8cm}\ttfamily\scriptsize dffb0253be590126da5dc43b75475f6f\\6ef4576439dec46e8ec83bf0408fcf83\end{minipage} \\
+Probability values SHA-256 & \begin{minipage}[t]{8cm}\ttfamily\scriptsize 5f6313599e77e72947435e52b273054fab\\da1e97006d0636658350ac253ed638\end{minipage} \\
+Input IDs SHA-256 & \begin{minipage}[t]{8cm}\ttfamily\scriptsize 970665aaaafdd2964012f3759b993e53\\dfe43e6d1793edc68a6b3896089fdbf8\end{minipage} \\
+Entropy evidence SHA-256 & \begin{minipage}[t]{8cm}\ttfamily\scriptsize fd551e583e54753744900d66acee85b9\\9a6c07bdcef123f4fd92186a0cc8880d\end{minipage} \\
+Original AFL paper SHA-256 & \begin{minipage}[t]{8cm}\ttfamily\scriptsize dec64904f5954e29b44105ba6d41a97f\\38915ffbecf972554e4eda70d8abbebc\end{minipage} \\
+AFL disclosure SHA-256 & \begin{minipage}[t]{8cm}\ttfamily\scriptsize bfa75181d631aca4f8a95d0344819ec6c\\80ad3ac16ac9cd92ce3986e03055196\end{minipage} \\
+XLNet-Base probability values SHA-256 & \begin{minipage}[t]{8cm}\ttfamily\scriptsize c445b5ca7d6e46a01b071720c65f88db\\4411c69fcaf32a59b2a124c472b6d2ff\end{minipage} \\
+XLNet-Large probability values SHA-256 & \begin{minipage}[t]{8cm}\ttfamily\scriptsize a304a47ccd7d55bc3e5dbb2d616715e0\\8444641529372789e2158da1ff72014\end{minipage} \\
+XLNet input IDs SHA-256 (both models) & \begin{minipage}[t]{8cm}\ttfamily\scriptsize 2b84113e5c3b6006c097f5bea0966a97\\2833d7a43de8e745c22a15c7b10c60ac\end{minipage} \\
+Comparison manifest SHA-256 & \begin{minipage}[t]{8cm}\ttfamily\scriptsize a278cbc15b5d9c6027678154c76a591f\\a5c95fb8c6e3e01ee26034d4a224e129\end{minipage} \\
+Comparison summary SHA-256 & \begin{minipage}[t]{8cm}\ttfamily\scriptsize c4e69b647d1f9ceb6f1c4c0d292ae1f2\\a3f7e6ee3bc4c778103f7ccd4d632611\end{minipage} \\
+Verified comparison cases & 16 models, each with a complete raw probability vector \\
+BioBERT case manifest SHA-256 & \begin{minipage}[t]{8cm}\ttfamily\scriptsize cd743b76dc7e9ccc6d1c17dba546544271ea\\c22dc557cb152c601c824e8922b6\end{minipage} \\
+BioBERT baseline SHA-256 & \begin{minipage}[t]{8cm}\ttfamily\scriptsize 2f213c3e0338895c63e292ea2fe09ababa\\904cce22132eb99a8a2a8626de1b6d\end{minipage} \\
+BioBERT optimization SHA-256 & \begin{minipage}[t]{8cm}\ttfamily\scriptsize 3c5829a65876959a904d417cffa7b95361\\6be446b60b16fce768167d8e6fb42f\end{minipage} \\
+BioBERT attachment list SHA-256 & \begin{minipage}[t]{8cm}\ttfamily\scriptsize e612fe3b6b0cfdd80c1e02adfb1b233bdb\\5321eeff28a3fa0ded3d7313aafd20\end{minipage} \\
+Verified BioBERT cases & 120 distributions; 60 development, 20 validation, 40 test \\
+Context length & 963 tokens \\
+Vocabulary size & 50,257 tokens \\
+Probability sum & Approximately 1.0 within floating-point precision \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The raw NPZ artifact contains the complete input-ID sequence and every probability value, not only the ten largest values. The JSON report contains the exact prompt, model metadata, threshold sweep, top tokens, and scope. The full entropy output and model configuration are reproduced below. The context-sweep artifact contains every controlled prompt variant and its raw probability vector.
+
+\section{Reproduction procedure}
+The following procedure reproduces the numerical measurement in the tested CPU environment. It uses the public Ablation repository and the public ONNX model, with no API accounts.
+
+\begin{enumerate}[nosep]
+  \item Clone \url{https://github.com/Ablation-Tool/ablation} and check out revision \texttt{d596bed31ba5fe361efa1c6fdad6d86e3126ab63}.
+  \item Create an isolated Python 3.14 environment and install Ablation, GEM Lab, NumPy 2.3.5, ONNX Runtime 1.31.1, Tokenizers 0.23.3, and Hugging Face Hub 1.33.0.
+  \item Obtain the measurement harness embedded in this PDF and place it in a writable working directory.
+  \item Run \texttt{python scripts/ablation-gem-measure.py --project /path/to/ablation --output results}. The harness downloads and hash-checks the model, constructs real Lab evidence, runs inference, computes the sweep, and reloads the resulting probability vector for verification.
+  \item Confirm the reference sweep $5,4,3,2,1,0$ and the actual sweep $4,2,2,1,1,1$ at thresholds $0.02,0.05,0.10,0.15,0.30,0.50$.
+  \item Load the embedded probability vector and independently recompute each count using the strict comparison $P(a\mid h_T(S))>\tau$. Compare the raw-value and input-ID hashes with the manifest.
+\end{enumerate}
+
+The numerical values and raw-value hashes are the reproducible evidence. Timing values and archive-container metadata may differ between runs.
+
+For the XLNet extension, extract \texttt{scripts/xlnet-accessible-volume.py}. Place the artifact writer, \texttt{scripts/ablation\_gem\_artifacts.py}, in the same working directory. Install NumPy, PyTorch 2.14.1, Transformers 5.18.0, and the tokenizer requirements. Run the script with \texttt{--model xlnet/xlnet-base-cased} and then with \texttt{--model xlnet/xlnet-large-cased}, using a different \texttt{--output} directory for each. The script performs a repeated prediction, checks all three target-token replacements, saves every probability and input ID, and independently recomputes the sweep. Compare the saved reports and raw arrays with the included evidence. Small floating-point differences may occur across runtimes; compare threshold counts and token ordering separately from exact probability hashes.
+
+For the sixteen additional comparisons, use a separate Python 3.14 environment with NumPy 2.5.3, PyTorch 2.14.1, Transformers 4.56.2, Tokenizers 0.22.1, SentencePiece 0.2.2, and Hugging Face Hub 0.36.2. Keep the case manifest, runner, measurement harness, verifier, and artifact writer together. The runner uses the immutable revisions in the manifest, executes models sequentially, and removes only its own temporary per-model caches.
+
+\begin{lstlisting}
+python scripts/run-model-comparison.py --all \
+  --output evidence/comparison \
+  --cache-dir /path/to/temporary-cache
+
+python scripts/verify-model-comparison.py \
+  --manifest evidence/comparison/model-comparison-cases.json \
+  --evidence evidence/comparison
+\end{lstlisting}
+
+The optional cache directory must be writable and have enough space for the largest selected model. Use \texttt{--model} with an exact identifier from the manifest instead of \texttt{--all} to repeat one case. The second command verifies the included evidence without downloading model weights. A repeated BERT-Base case executed through this runner produced bit-identical probabilities, input IDs, and JSON output in the tested runtime. As with XLNet, exact raw-value equality across other runtimes is not assumed.
+
+The BioBERT experiment uses the same Python and model-runtime versions as the sixteen additional comparisons. Keep the three experiment scripts, the independent verifier, the artifact writer, and the frozen \texttt{evidence/biobert-optimization} directory together. The included case and split manifests are the authoritative inputs; downloading new source documents is not required. Run:
+
+\begin{lstlisting}
+python scripts/biobert-accessible-volume.py
+python scripts/optimize-biobert.py
+python scripts/verify-biobert-optimization.py
+\end{lstlisting}
+
+The first command downloads the pinned BioBERT model and reproduces all 120 baseline distributions and reports. The second verifies the raw artifacts, selects adaptive parameters using development and validation cases only, and evaluates the frozen choice on the test cases. The third independently recomputes every AUROC and AUPRC value. Use \texttt{scripts/prepare-biobert-cases.py} only when constructing a new source-document manifest; it must complete before any model predictions are inspected.
+
+\section{Controlled context evidence}
+The baseline was repeated before perturbing the context. It produced identical input IDs and probability values. Table~\ref{tab:context-proof} reports the controlled follow-up measurements.
+
+{\scriptsize
+\begin{table}[h]
+\centering
+\caption{Accessible volume across controlled context variants.}
+\label{tab:context-proof}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrrrrrr}
+\toprule
+Variant & Tokens & 0.02 & 0.05 & 0.10 & 0.15 & 0.30 & 0.50 \\
+\midrule
+Baseline & 963 & 4 & 2 & 2 & 1 & 1 & 1 \\
+Metadata only & 522 & 4 & 2 & 2 & 2 & 1 & 0 \\
+Abbreviated evidence & 295 & 4 & 2 & 2 & 2 & 1 & 1 \\
+No evidence & 103 & 3 & 1 & 1 & 1 & 1 & 1 \\
+Summary request & 968 & 3 & 2 & 1 & 1 & 1 & 0 \\
+Repeated short evidence & 487 & 3 & 2 & 2 & 1 & 1 & 1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+}
+
+These differences are observations about specific model/context pairs. They do not establish a universal rule about which context increases or decreases breadth.
+
+\section{Complete Ablation entropy evidence}
+\lstinputlisting{evidence/ablation-gem-entropy-evidence.txt}
+
+\section{Model configuration}
+\lstinputlisting{evidence/ablation-gem-distilgpt2-config.json}
+
+\section{Embedded evidence}
+The complete evidence package is embedded in this PDF as 305 attachments. It includes the baseline experiment, XLNet Base and Large results, all sixteen additional model comparisons, and the focused BioBERT optimization study. Exact model inputs, complete probability vectors, JSON reports, immutable revisions, and raw-artifact hashes are preserved. The BioBERT package contains all 120 raw distributions and reports, frozen cases and document splits, source metadata and licenses, the complete parameter search, per-case scores, and an independent metric verifier. No external filesystem is needed to inspect the evidence; public model downloads are needed only to repeat inference.
+
+\embedfile{evidence/ablation-gem-accessible-volume.json}
+\embedfile{evidence/ablation-gem-next-token-probabilities.npz}
+\embedfile{evidence/ablation-gem-entropy-evidence.txt}
+\embedfile{evidence/ablation-gem-distilgpt2-config.json}
+\embedfile{evidence/ablation-gem-context-sweep.json}
+\embedfile{evidence/ablation-gem-context-sweep.npz}
+\embedfile{scripts/ablation-gem-measure.py}
+\embedfile{scripts/ablation-gem-context-sweep.py}
+\embedfile{scripts/ablation_gem_artifacts.py}
+\embedfile{scripts/xlnet-accessible-volume.py}
+\embedfile{evidence/xlnet-hidden-token-accessible-volume.json}
+\embedfile{evidence/xlnet-hidden-token-probabilities.npz}
+\embedfile{evidence/xlnet-large/xlnet-hidden-token-accessible-volume.json}
+\embedfile{evidence/xlnet-large/xlnet-hidden-token-probabilities.npz}
+\embedfile{evidence/xlnet-offline-reproduction.json}
+\embedfile{evidence/comparison/model-comparison-cases.json}
+\embedfile{scripts/prediction-accessible-volume.py}
+\embedfile{scripts/run-model-comparison.py}
+\embedfile{scripts/verify-model-comparison.py}
+\embedfile{evidence/comparison/model-comparison-summary.json}
+\embedfile{evidence/comparison/model-comparison-summary.csv}
+\embedfile{evidence/comparison/bert-base-cased-accessible-volume.json}
+\embedfile{evidence/comparison/bert-base-cased-probabilities.npz}
+\embedfile{evidence/comparison/roberta-base-accessible-volume.json}
+\embedfile{evidence/comparison/roberta-base-probabilities.npz}
+\embedfile{evidence/comparison/albert-base-v2-accessible-volume.json}
+\embedfile{evidence/comparison/albert-base-v2-probabilities.npz}
+\embedfile{evidence/comparison/gpt2-accessible-volume.json}
+\embedfile{evidence/comparison/gpt2-probabilities.npz}
+\embedfile{evidence/comparison/securebert-accessible-volume.json}
+\embedfile{evidence/comparison/securebert-probabilities.npz}
+\embedfile{evidence/comparison/cysecbert-accessible-volume.json}
+\embedfile{evidence/comparison/cysecbert-probabilities.npz}
+\embedfile{evidence/comparison/biobert-base-cased-v1.2-accessible-volume.json}
+\embedfile{evidence/comparison/biobert-base-cased-v1.2-probabilities.npz}
+\embedfile{evidence/comparison/bio_clinicalbert-accessible-volume.json}
+\embedfile{evidence/comparison/bio_clinicalbert-probabilities.npz}
+\embedfile{evidence/comparison/scibert_scivocab_cased-accessible-volume.json}
+\embedfile{evidence/comparison/scibert_scivocab_cased-probabilities.npz}
+\embedfile{evidence/comparison/legal-bert-base-uncased-accessible-volume.json}
+\embedfile{evidence/comparison/legal-bert-base-uncased-probabilities.npz}
+\embedfile{evidence/comparison/finbert-pretrain-accessible-volume.json}
+\embedfile{evidence/comparison/finbert-pretrain-probabilities.npz}
+\embedfile{evidence/comparison/codebert-base-accessible-volume.json}
+\embedfile{evidence/comparison/codebert-base-probabilities.npz}
+\embedfile{evidence/comparison/xlm-roberta-base-accessible-volume.json}
+\embedfile{evidence/comparison/xlm-roberta-base-probabilities.npz}
+\embedfile{evidence/comparison/chemberta-zinc-base-v1-accessible-volume.json}
+\embedfile{evidence/comparison/chemberta-zinc-base-v1-probabilities.npz}
+\embedfile{evidence/comparison/prot_bert-accessible-volume.json}
+\embedfile{evidence/comparison/prot_bert-probabilities.npz}
+\embedfile{evidence/comparison/qwen2.5-math-1.5b-accessible-volume.json}
+\embedfile{evidence/comparison/qwen2.5-math-1.5b-probabilities.npz}
+\embedfile{scripts/prepare-biobert-cases.py}
+\embedfile{scripts/biobert-accessible-volume.py}
+\embedfile{scripts/optimize-biobert.py}
+\embedfile{scripts/verify-biobert-optimization.py}
+\embedfile{evidence/biobert-optimization/cases.json}
+\embedfile{evidence/biobert-optimization/splits.json}
+\embedfile{evidence/biobert-optimization/sources.json}
+\embedfile{evidence/biobert-optimization/baseline-summary.json}
+\embedfile{evidence/biobert-optimization/optimization.json}
+\embedfile{evidence/biobert-optimization/optimization-scores.csv}
+\input{paper/biobert-attachments}
+\embedfile{evidence/qualia/accessible-q-volume.json}
+\embedfile{evidence/workbench/verification.json}
+
+\end{document}

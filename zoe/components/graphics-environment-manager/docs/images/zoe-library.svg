@@ -1,0 +1,137 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="807" viewBox="0 0 1100 740" role="img" aria-label="GEM OS manual library">
+  <title>GEM OS manual library</title>
+  <rect x="0" y="0" width="1100.0" height="740.0" fill="#ffffff" />
+  <g data-object-id="background">
+    <title>background</title>
+    <rect x="0.0" y="0.0" width="1100.0" height="740.0" fill="#000000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="title">
+    <title>title</title>
+    <text x="38.0" y="46.0" font-family="sans-serif" font-size="24.0" fill="#00ffff">ZOE OS · MANUAL LIBRARY</text>
+  </g>
+  <g data-object-id="subtitle">
+    <title>subtitle</title>
+    <text x="38.0" y="78.0" font-family="sans-serif" font-size="14.0" fill="#d3d3d3">Original GEM sources, indexed locally. Read, search, and cite without executing content.</text>
+  </g>
+  <g data-object-id="library-rule">
+    <title>library-rule</title>
+    <polyline points="38,104 1060,104" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="library-stats">
+    <title>library-stats</title>
+    <text x="38.0" y="137.0" font-family="sans-serif" font-size="17.0" fill="#ffffff">358 documents · 13023 text pages · 16720 total pages</text>
+  </g>
+  <g data-object-id="library-groups">
+    <title>library-groups</title>
+    <text x="38.0" y="168.0" font-family="sans-serif" font-size="12.0" fill="#d3d3d3">7 source groups · 755 unsupported files excluded · read-only index</text>
+  </g>
+  <g data-object-id="query">
+    <title>query</title>
+    <text x="38.0" y="205.0" font-family="sans-serif" font-size="14.0" fill="#00ffff">Search: VDI</text>
+  </g>
+  <g data-object-id="result-title-0">
+    <title>result-title-0</title>
+    <text x="38.0" y="252.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">1. ATARI Profibuch ST-STE-TT</text>
+  </g>
+  <g data-object-id="result-source-0">
+    <title>result-source-0</title>
+    <text x="38.0" y="272.0" font-family="sans-serif" font-size="11.0" fill="#d3d3d3">Atari · page 1520 · Stichwortverzeichnis                        1487 v_clswk ([VDI] 2) 325, 336 v_contourfi…</text>
+  </g>
+  <g data-object-id="result-open-0">
+    <title>result-open-0</title>
+    <text x="950.0" y="252.0" font-family="sans-serif" font-size="11.0" fill="#00ffff">open source</text>
+  </g>
+  <g data-object-id="result-title-1">
+    <title>result-title-1</title>
+    <text x="38.0" y="300.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">2. ATARI Profibuch ST-STE-TT</text>
+  </g>
+  <g data-object-id="result-source-1">
+    <title>result-source-1</title>
+    <text x="38.0" y="320.0" font-family="sans-serif" font-size="11.0" fill="#d3d3d3">Atari · page 1518 · Stichwortverzeichnis                     1485 vql_attributes ([VDI] 35) 461 vqm_attribu…</text>
+  </g>
+  <g data-object-id="result-open-1">
+    <title>result-open-1</title>
+    <text x="950.0" y="300.0" font-family="sans-serif" font-size="11.0" fill="#00ffff">open source</text>
+  </g>
+  <g data-object-id="result-title-2">
+    <title>result-title-2</title>
+    <text x="38.0" y="348.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">3. ATARI Profibuch ST-STE-TT</text>
+  </g>
+  <g data-object-id="result-source-2">
+    <title>result-source-2</title>
+    <text x="38.0" y="368.0" font-family="sans-serif" font-size="11.0" fill="#d3d3d3">Atari · page 11 · XII                                                ATARI Profibueh     Elliptkal Pie ([…</text>
+  </g>
+  <g data-object-id="result-open-2">
+    <title>result-open-2</title>
+    <text x="950.0" y="348.0" font-family="sans-serif" font-size="11.0" fill="#00ffff">open source</text>
+  </g>
+  <g data-object-id="result-title-3">
+    <title>result-title-3</title>
+    <text x="38.0" y="396.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">4. ATARI Profibuch ST-STE-TT</text>
+  </g>
+  <g data-object-id="result-source-3">
+    <title>result-source-3</title>
+    <text x="38.0" y="416.0" font-family="sans-serif" font-size="11.0" fill="#d3d3d3">Atari · page 12 · Inhal ts verzeichnis                                             XIII    Input String, …</text>
+  </g>
+  <g data-object-id="result-open-3">
+    <title>result-open-3</title>
+    <text x="950.0" y="396.0" font-family="sans-serif" font-size="11.0" fill="#00ffff">open source</text>
+  </g>
+  <g data-object-id="result-title-4">
+    <title>result-title-4</title>
+    <text x="38.0" y="444.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">5. ATARI Profibuch ST-STE-TT</text>
+  </g>
+  <g data-object-id="result-source-4">
+    <title>result-source-4</title>
+    <text x="38.0" y="464.0" font-family="sans-serif" font-size="11.0" fill="#d3d3d3">Atari · page 10 · … GOP 5)                        367    Elliptical Are ([VDI] 11, GDP 6)                …</text>
+  </g>
+  <g data-object-id="result-open-4">
+    <title>result-open-4</title>
+    <text x="950.0" y="444.0" font-family="sans-serif" font-size="11.0" fill="#00ffff">open source</text>
+  </g>
+  <g data-object-id="result-title-5">
+    <title>result-title-5</title>
+    <text x="38.0" y="492.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">6. ATARI Profibuch ST-STE-TT</text>
+  </g>
+  <g data-object-id="result-source-5">
+    <title>result-source-5</title>
+    <text x="38.0" y="512.0" font-family="sans-serif" font-size="11.0" fill="#d3d3d3">Atari · page 1519 · 1486                                       AT AR! Profibuch vsCtype (VDr 15) 384 vsl_ud…</text>
+  </g>
+  <g data-object-id="result-open-5">
+    <title>result-open-5</title>
+    <text x="950.0" y="492.0" font-family="sans-serif" font-size="11.0" fill="#00ffff">open source</text>
+  </g>
+  <g data-object-id="result-title-6">
+    <title>result-title-6</title>
+    <text x="38.0" y="540.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">7. ATARI Profibuch ST-STE-TT</text>
+  </g>
+  <g data-object-id="result-source-6">
+    <title>result-source-6</title>
+    <text x="38.0" y="560.0" font-family="sans-serif" font-size="11.0" fill="#d3d3d3">Atari · page 13 · XIV                                                               ATARI Profibueh    Ha…</text>
+  </g>
+  <g data-object-id="result-open-6">
+    <title>result-open-6</title>
+    <text x="950.0" y="540.0" font-family="sans-serif" font-size="11.0" fill="#00ffff">open source</text>
+  </g>
+  <g data-object-id="result-title-7">
+    <title>result-title-7</title>
+    <text x="38.0" y="588.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">8. vdi main</text>
+  </g>
+  <g data-object-id="result-source-7">
+    <title>result-source-7</title>
+    <text x="38.0" y="608.0" font-family="sans-serif" font-size="11.0" fill="#d3d3d3">Online_Manuals · page 1 · … [VDI] Seedfill About the [VDI] 7 [VDI] 7.1 About the [VDI] …</text>
+  </g>
+  <g data-object-id="result-open-7">
+    <title>result-open-7</title>
+    <text x="950.0" y="588.0" font-family="sans-serif" font-size="11.0" fill="#00ffff">open source</text>
+  </g>
+  <g data-object-id="scope">
+    <title>scope</title>
+    <text x="38.0" y="663.0" font-family="sans-serif" font-size="13.0" fill="#ff0000">Read-only search · original manuals stay in place · no commands from documents</text>
+  </g>
+  <g data-object-id="boundary">
+    <title>boundary</title>
+    <text x="38.0" y="693.0" font-family="sans-serif" font-size="12.0" fill="#d3d3d3">Image-only PDFs have no text layer. Unsupported binary/archive formats are reported, not executed.</text>
+  </g>
+</svg>

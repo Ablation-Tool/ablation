@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "identity": "ZOE is allgems",
+  "zoe_baseline": "f30c981",
+  "knowledge_engineering": {
+    "trust_context": "source, repository, revision, evidence scope, and authorization boundary",
+    "stability_context": "component-specific processes, version locks, replayable memory, and separately tested behavior"
+  },
+  "components": {
+    "ablation": {
+      "path": "components/ablation",
+      "repository": "https://github.com/Ablation-Tool/ablation",
+      "revision": "b56f91e4c54cfd996bceea63a38d8136dc1e689f",
+      "includes": "Complete repository: core engine, framework, analyzers, parsers, modules, sweeps, gem-lab, tests, documentation, and assets"
+    },
+    "graphics-environment-manager": {
+      "path": "components/graphics-environment-manager",
+      "repository": "https://github.com/Ablation-Tool/graphics-environment-manager",
+      "revision": "e63f6a7b84c2e8fffc0fcf01001986ae928f66b5"
+    },
+    "gem-helen": {
+      "path": "components/gem-helen",
+      "repository": "https://github.com/Ablation-Tool/gem-helen",
+      "revision": "55fb1e494662e9b69e964ac2f9df41724cffeb0c"
+    },
+    "brain-gem": {
+      "path": "components/brain-gem",
+      "repository": "https://github.com/Ablation-Tool/brain-gem",
+      "revision": "ed819c2824a55b019a532f4fa2cb440532030127"
+    },
+    "cerotto": {
+      "path": "components/cerotto",
+      "repository": "https://github.com/Ablation-Tool/cerotto",
+      "revision": "5e2f0c06f1c9b6f6fe7d2489175ce89e7abb6ec4"
+    },
+    "next-token-predictability": {
+      "path": "components/next-token-predictability",
+      "repository": "https://github.com/Ablation-Tool/next-token-predictability",
+      "revision": "83b89a385aa4e67fb0c1b60ba30a21efcc0e50f9"
+    },
+    "kevlar": {
+      "path": "components/kevlar",
+      "repository": "https://github.com/Ablation-Tool/kevlar",
+      "revision": "8ac3e0181e98572d6c41f964385393aa441a5f2a"
+    },
+    "pdf-signature-toolkit": {
+      "path": "components/pdf-signature-toolkit",
+      "repository": "https://github.com/Ablation-Tool/pdf-signature-toolkit",
+      "revision": "1198165962958c5132130f3854626ff39c333941"
+    },
+    "Chalkboard": {
+      "path": "components/Chalkboard",
+      "repository": "https://github.com/Ablation-Tool/Chalkboard",
+      "revision": "63646eb15737d822316073ba1f2114c608571c72",
+      "includes": "Reusable ideas, templates, and prompts; content library, not a GUI process"
+    }
+  },
+  "scope": "Complete tracked source snapshots of all ten organization repositories including Zoe, imported with git subtree --squash. Component processes, evidence, and authorization remain distinct."
+}

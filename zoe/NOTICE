@@ -1,0 +1,22 @@
+# ZOE · allgems — notices and historical recognition
+
+ZOE is built using GEM: native graphical components, Spatial IR, VDI scenes, replayable geometry, and inspectable evidence. ZOE is the GEM, but the GEM is not ZOE. ZOE is allgems.
+
+## Gary Kildall and the original GEM
+
+ZOE honors **Gary Arlen Kildall (1942–1994)** for his technical talent, creativity, and lasting influence on personal computing. He created **CP/M**, co-founded **Digital Research**, and **oversaw the creation of Digital Research's graphical environment, GEM**, introduced on February 28, 1985. His work on operating systems, the BIOS, and graphical environments helped make personal computing more capable and more accessible.
+
+The original desktop is not assigned to one person alone. It was a **Digital Research** product with documented contributions from **Lee Jay Lorenzen**, **Don Heiskell's GSX team**, and other engineers. Kildall's role is recognized without erasing theirs.
+
+Historical references:
+
+- [Gary Kildall: CP/M, Digital Research, and oversight of GEM](https://en.wikipedia.org/wiki/Gary_Kildall)
+- [GEM desktop environment: Digital Research, Lee Jay Lorenzen, GSX, and Don Heiskell](https://en.wikipedia.org/wiki/GEM_(desktop_environment))
+
+ZOE is a separate modern project, not the original 1985 desktop or a claim of authorship by its historical contributors. The orbital eye emblem and the G, E, and M symbol-grid references are visual identities for this project, not claims about the original font or symbols.
+
+## Source components
+
+The ten source repositories retain their original copyright, licenses, and notices. Their upstream identities and source revisions are recorded in `components.lock.json`. Kevlar's MIT license and the other component licenses remain with their respective source trees. No component is presented as evidence of another component's correctness, security, or authorization.
+
+The original accessible-volume equation is credited to **Nicholas Michael Kloster alone, March 6, 2026**. Later Zoe and Accessible Q-Volume developments are identified separately.

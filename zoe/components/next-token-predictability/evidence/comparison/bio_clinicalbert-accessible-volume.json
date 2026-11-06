@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "instrument": "accessible volume of a full-vocabulary token distribution",
+  "model": "emilyalsentzer/Bio_ClinicalBERT",
+  "model_revision": "d5892b39a4adaed74b92212a44081509db72f87b",
+  "requested_revision": "d5892b39a4adaed74b92212a44081509db72f87b",
+  "runtime": {
+    "torch": "2.14.1+cu130",
+    "transformers": "4.56.2"
+  },
+  "prediction_style": "masked",
+  "text": "The clinician documented the diagnosis",
+  "sequence_length": 8,
+  "target_position": 6,
+  "target_token_id": 12645,
+  "target_token": "diagnosis",
+  "vocabulary_size": 28996,
+  "probability_sum": 1.0000000000000002,
+  "threshold_sweep": [
+    {
+      "tau": 0.02,
+      "accessible_volume": 6,
+      "normalized_accessible_volume": 0.00020692509311629191
+    },
+    {
+      "tau": 0.05,
+      "accessible_volume": 2,
+      "normalized_accessible_volume": 6.897503103876396e-05
+    },
+    {
+      "tau": 0.1,
+      "accessible_volume": 2,
+      "normalized_accessible_volume": 6.897503103876396e-05
+    },
+    {
+      "tau": 0.15,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.448751551938198e-05
+    },
+    {
+      "tau": 0.3,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.5,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    }
+  ],
+  "entropy_bits": 6.615658712806766,
+  "top_10_probability_mass": 0.5458412684259784,
+  "target_probability": 0.0006536957990977444,
+  "target_rank": 121,
+  "top_tokens": [
+    {
+      "token_id": 5351,
+      "token": "patient",
+      "probability": 0.23717074044451752
+    },
+    {
+      "token_id": 7791,
+      "token": "procedure",
+      "probability": 0.12684784268114646
+    },
+    {
+      "token_id": 2686,
+      "token": "results",
+      "probability": 0.040121867062432384
+    },
+    {
+      "token_id": 1692,
+      "token": "case",
+      "probability": 0.03359167269714335
+    },
+    {
+      "token_id": 9505,
+      "token": "findings",
+      "probability": 0.02392175421233447
+    },
+    {
+      "token_id": 119,
+      "token": ".",
+      "probability": 0.02015563772514699
+    },
+    {
+      "token_id": 136,
+      "token": "?",
+      "probability": 0.017438801228636183
+    },
+    {
+      "token_id": 1807,
+      "token": "above",
+      "probability": 0.016778298026163277
+    },
+    {
+      "token_id": 2197,
+      "token": "plan",
+      "probability": 0.01505147682039429
+    },
+    {
+      "token_id": 1958,
+      "token": "events",
+      "probability": 0.014763177528063429
+    }
+  ],
+  "checks": {
+    "repeated_probabilities_identical": true,
+    "target_replaced_with_mask": true,
+    "mask_count": 1
+  },
+  "probability_values_sha256": "c1e288e8c870df95d29879de7b034bb7560f2fe04f1a8fb59b1ff992bacdceaf",
+  "input_ids_sha256": "b81475dd9f0c63296a854ba14c6fed6e916c6afcc765171f1f535daa5ea74b1e",
+  "original_input_ids_sha256": "ece1b62c98ee7cb90a5d2dc79c73d9f152a9001f11fbea4be5c9970d126b4992",
+  "scope": [
+    "One emilyalsentzer/Bio_ClinicalBERT distribution for the final non-special token of the recorded text.",
+    "The target is replaced by a mask token.",
+    "This is a token-level measurement, not a model-quality, security, or action-level benchmark."
+  ]
+}

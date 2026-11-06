@@ -1,0 +1,32 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build and forensic tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential python3 sleuthkit e2fsprogs ewf-tools foremost scalpel curl
+      - name: Build and test
+        run: |
+          make clean
+          make -j2
+          make check
+      - name: Sanitizer build and test
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          make sanitize -j2
+          make check BUILD_DIR=build/sanitize

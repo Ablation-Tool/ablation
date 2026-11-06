@@ -1,0 +1,207 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-label="Bayesian evidence, made inspectable">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#070b14"/><stop offset="1" stop-color="#101027"/></linearGradient><marker id="arrow-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#67e8f9"/></marker><marker id="arrow-magenta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#f0abfc"/></marker><marker id="arrow-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#c4b5fd"/></marker><marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#86efac"/></marker><marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#fde68a"/></marker><marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#93c5fd"/></marker><marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#fca5a5"/></marker><marker id="arrow-line" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#334155"/></marker></defs>
+<rect width="100%" height="100%" fill="url(#bg)"/>
+<ellipse cx="800" cy="490" rx="180" ry="90" fill="none" stroke="#67e8f9" stroke-opacity=".10" transform="rotate(0 800 490)"/>
+<ellipse cx="800" cy="490" rx="232" ry="113" fill="none" stroke="#f0abfc" stroke-opacity=".10" transform="rotate(17 800 490)"/>
+<ellipse cx="800" cy="490" rx="284" ry="136" fill="none" stroke="#c4b5fd" stroke-opacity=".10" transform="rotate(34 800 490)"/>
+<ellipse cx="800" cy="490" rx="336" ry="159" fill="none" stroke="#67e8f9" stroke-opacity=".10" transform="rotate(51 800 490)"/>
+<ellipse cx="800" cy="490" rx="388" ry="182" fill="none" stroke="#f0abfc" stroke-opacity=".10" transform="rotate(68 800 490)"/>
+<ellipse cx="800" cy="490" rx="440" ry="205" fill="none" stroke="#c4b5fd" stroke-opacity=".10" transform="rotate(85 800 490)"/>
+<ellipse cx="800" cy="490" rx="492" ry="228" fill="none" stroke="#67e8f9" stroke-opacity=".10" transform="rotate(102 800 490)"/>
+<ellipse cx="800" cy="490" rx="544" ry="251" fill="none" stroke="#f0abfc" stroke-opacity=".10" transform="rotate(119 800 490)"/>
+<ellipse cx="800" cy="490" rx="596" ry="274" fill="none" stroke="#c4b5fd" stroke-opacity=".10" transform="rotate(136 800 490)"/>
+<ellipse cx="800" cy="490" rx="648" ry="297" fill="none" stroke="#67e8f9" stroke-opacity=".10" transform="rotate(153 800 490)"/>
+<ellipse cx="800" cy="490" rx="700" ry="320" fill="none" stroke="#f0abfc" stroke-opacity=".10" transform="rotate(170 800 490)"/>
+<ellipse cx="800" cy="490" rx="752" ry="343" fill="none" stroke="#c4b5fd" stroke-opacity=".10" transform="rotate(187 800 490)"/>
+<circle cx="525.2" cy="245.2" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="133.0" cy="564.8" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="929.1" cy="875.1" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="78.5" cy="479.9" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="395.4" cy="577.4" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="1309.9" cy="222.8" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="1003.8" cy="603.9" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="920.3" cy="449.2" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="92.7" cy="832.5" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="673.9" cy="568.8" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="894.0" cy="686.1" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="927.3" cy="650.3" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="172.0" cy="711.1" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="985.7" cy="532.0" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="1232.5" cy="506.4" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="584.1" cy="326.2" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="1110.4" cy="322.6" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="839.3" cy="846.4" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="469.2" cy="933.5" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="818.6" cy="256.9" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="257.1" cy="525.8" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="1520.7" cy="184.4" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="550.6" cy="410.6" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="924.6" cy="498.7" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="1493.7" cy="513.5" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="114.6" cy="702.2" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="464.0" cy="440.2" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="55.2" cy="503.2" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="973.0" cy="529.8" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="1218.4" cy="227.4" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="640.7" cy="881.0" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="145.7" cy="492.8" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="1398.1" cy="800.0" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="1122.0" cy="938.8" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="1514.1" cy="245.3" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="256.0" cy="666.6" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="776.5" cy="609.0" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="459.8" cy="240.9" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="971.3" cy="384.4" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="1097.2" cy="547.9" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="732.4" cy="842.9" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="641.0" cy="447.1" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="1009.5" cy="171.7" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="1556.1" cy="485.7" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="550.5" cy="163.6" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="904.2" cy="565.4" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="977.4" cy="178.4" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="977.9" cy="243.3" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="1510.5" cy="619.9" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="211.6" cy="824.6" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="769.4" cy="378.8" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="179.4" cy="404.4" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="766.7" cy="694.4" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="340.1" cy="910.2" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="248.7" cy="570.8" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="1202.7" cy="367.4" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="1106.1" cy="336.7" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="1436.9" cy="415.2" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="850.8" cy="766.6" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="1012.8" cy="629.0" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="1277.5" cy="799.2" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="331.9" cy="529.0" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="1563.8" cy="775.8" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="424.3" cy="694.8" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="717.7" cy="897.7" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="1509.8" cy="422.6" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="179.4" cy="510.2" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="338.8" cy="638.0" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="768.0" cy="662.0" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="1322.1" cy="219.5" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="1240.4" cy="742.6" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="1406.9" cy="480.2" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="155.3" cy="905.3" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="742.5" cy="737.0" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="1150.7" cy="261.1" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="63.0" cy="610.4" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="1278.1" cy="241.3" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="1045.3" cy="410.8" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="53.4" cy="783.5" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="841.5" cy="894.9" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="1559.0" cy="281.7" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="63.7" cy="296.6" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="1211.3" cy="390.6" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="1321.3" cy="170.6" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="1420.4" cy="669.9" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="1310.3" cy="848.9" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="849.6" cy="554.5" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="1381.6" cy="764.5" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="1230.6" cy="244.3" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="758.6" cy="721.9" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="528.5" cy="550.2" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="1243.5" cy="208.1" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="407.7" cy="349.8" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="812.0" cy="586.2" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="711.5" cy="628.4" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="1100.7" cy="495.4" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="812.1" cy="325.6" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="1459.5" cy="861.0" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="1330.4" cy="233.8" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="632.1" cy="382.3" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="688.2" cy="296.5" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="1242.9" cy="864.5" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="1485.6" cy="654.1" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="243.0" cy="852.8" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="362.6" cy="910.6" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="1400.5" cy="255.1" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="271.9" cy="478.2" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="549.0" cy="282.5" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="163.8" cy="423.7" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="884.3" cy="485.6" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="619.6" cy="549.5" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="819.1" cy="173.4" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="1535.8" cy="207.0" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="444.2" cy="871.9" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="441.9" cy="227.5" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="1345.4" cy="681.1" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="653.3" cy="565.4" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="1112.7" cy="194.3" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="1267.4" cy="272.2" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="439.5" cy="134.0" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="1270.5" cy="189.5" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="123.9" cy="836.1" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="38.0" cy="945.3" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="1465.6" cy="342.3" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="87.4" cy="708.9" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="1532.0" cy="337.4" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="334.8" cy="379.0" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="848.5" cy="290.9" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="800.1" cy="267.7" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="1273.7" cy="945.4" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="43.9" cy="728.5" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="822.2" cy="323.9" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="185.8" cy="799.7" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="1044.2" cy="573.1" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="1533.7" cy="375.5" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="1552.6" cy="404.4" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="651.3" cy="408.5" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="1325.7" cy="131.8" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="692.0" cy="166.0" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="1378.0" cy="676.6" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="954.1" cy="694.9" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="736.7" cy="250.8" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="25.7" cy="422.2" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<circle cx="1537.3" cy="574.1" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="73.7" cy="852.4" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="576.3" cy="120.9" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="150.9" cy="351.5" r="1.3" fill="#f0abfc" opacity=".20"/>
+<circle cx="407.2" cy="764.3" r="1.3" fill="#67e8f9" opacity=".20"/>
+<circle cx="432.1" cy="194.5" r="1.3" fill="#86efac" opacity=".20"/>
+<circle cx="935.4" cy="447.0" r="1.3" fill="#c4b5fd" opacity=".20"/>
+<text x="48" y="58" fill="#67e8f9" font-size="15" font-family="DejaVu Sans Mono, monospace" font-weight="700" text-anchor="start">02 · BELIEF DIFF</text>
+<text x="48" y="98" fill="#e5eefb" font-size="34" font-family="DejaVu Sans Mono, monospace" font-weight="700" text-anchor="start">Bayesian evidence, made inspectable</text>
+<text x="48" y="128" fill="#9fb1c8" font-size="17" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">A posterior is a model-dependent state—not an objective truth score.</text>
+<rect x="50" y="170" width="350" height="260" rx="20" fill="#0d1728" stroke="#c4b5fd" stroke-width="2"/><rect x="70" y="190" width="4" height="220" fill="#c4b5fd"/><text x="92" y="202" fill="#c4b5fd" font-size="15" font-family="DejaVu Sans Mono, monospace" font-weight="700" text-anchor="start">PRIOR</text>
+<text x="92" y="240" fill="#e5eefb" font-size="19" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">DEMOMENU is the main menu tree</text>
+<text x="92" y="280" fill="#c4b5fd" font-size="24" font-family="DejaVu Sans Mono, monospace" font-weight="700" text-anchor="start">prior = 0.620</text>
+<rect x="92" y="310" width="260" height="18" rx="9" fill="#1e293b"/><rect x="92" y="310" width="161.20" height="18" rx="9" fill="#c4b5fd"/>
+<text x="92" y="365" fill="#9fb1c8" font-size="16" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">falsifier:</text>
+<text x="92" y="395" fill="#9fb1c8" font-size="16" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">a contradictory primary definition</text>
+<rect x="450" y="140" width="500" height="150" rx="20" fill="#0d1728" stroke="#86efac" stroke-width="2"/><rect x="470" y="160" width="4" height="110" fill="#86efac"/><text x="492" y="172" fill="#86efac" font-size="15" font-family="DejaVu Sans Mono, monospace" font-weight="700" text-anchor="start">EXPLICIT EVIDENCE</text>
+<text x="492" y="188" fill="#e5eefb" font-size="18" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">DEMO.H definition</text>
+<text x="492" y="222" fill="#86efac" font-size="17" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">P(E|H)=.96  P(E|not H)=.03</text>
+<text x="492" y="252" fill="#9fb1c8" font-size="15" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">support · primary source</text>
+<rect x="450" y="330" width="500" height="150" rx="20" fill="#0d1728" stroke="#fca5a5" stroke-width="2"/><rect x="470" y="350" width="4" height="110" fill="#fca5a5"/><text x="492" y="362" fill="#fca5a5" font-size="15" font-family="DejaVu Sans Mono, monospace" font-weight="700" text-anchor="start">EXPLICIT EVIDENCE</text>
+<text x="492" y="378" fill="#e5eefb" font-size="18" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">Version-dependent appearance</text>
+<text x="492" y="412" fill="#fca5a5" font-size="17" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">P(E|H)=.40  P(E|not H)=.60</text>
+<text x="492" y="442" fill="#9fb1c8" font-size="15" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">challenge · negative result kept</text>
+<rect x="450" y="520" width="500" height="150" rx="20" fill="#0d1728" stroke="#86efac" stroke-width="2"/><rect x="470" y="540" width="4" height="110" fill="#86efac"/><text x="492" y="552" fill="#86efac" font-size="15" font-family="DejaVu Sans Mono, monospace" font-weight="700" text-anchor="start">EXPLICIT EVIDENCE</text>
+<text x="492" y="568" fill="#e5eefb" font-size="18" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">Initialization code</text>
+<text x="492" y="602" fill="#86efac" font-size="17" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">P(E|H)=.95  P(E|not H)=.08</text>
+<text x="492" y="632" fill="#9fb1c8" font-size="15" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">support · independent family</text>
+<line x1="400" y1="300" x2="450" y2="300" stroke="#c4b5fd" stroke-width="3" marker-end="url(#arrow-purple)"/>
+<line x1="950" y1="300" x2="1000" y2="300" stroke="#86efac" stroke-width="3" marker-end="url(#arrow-green)"/>
+<rect x="1000" y="170" width="550" height="300" rx="20" fill="#0d1728" stroke="#86efac" stroke-width="2"/><rect x="1020" y="190" width="4" height="260" fill="#86efac"/><text x="1042" y="202" fill="#86efac" font-size="15" font-family="DejaVu Sans Mono, monospace" font-weight="700" text-anchor="start">POSTERIOR + BELIEF DIFF</text>
+<text x="1042" y="240" fill="#86efac" font-size="27" font-family="DejaVu Sans Mono, monospace" font-weight="700" text-anchor="start">posterior = 0.998</text>
+<rect x="1042" y="270" width="450" height="18" rx="9" fill="#1e293b"/><rect x="1042" y="270" width="449.10" height="18" rx="9" fill="#86efac"/>
+<text x="1042" y="330" fill="#e5eefb" font-size="17" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">prior log-odds + log LR → posterior log-odds</text>
+<text x="1042" y="365" fill="#9fb1c8" font-size="15" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">prior / posterior · LR · log LR · source</text>
+<text x="1042" y="400" fill="#fde68a" font-size="16" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">conditional on the supplied likelihood model</text>
+<rect x="450" y="710" width="500" height="170" rx="20" fill="#0d1728" stroke="#fde68a" stroke-width="2"/><rect x="470" y="730" width="4" height="130" fill="#fde68a"/><text x="492" y="742" fill="#fde68a" font-size="15" font-family="DejaVu Sans Mono, monospace" font-weight="700" text-anchor="start">EVIDENCE FAMILY GATE</text>
+<text x="492" y="760" fill="#fca5a5" font-size="17" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">same family again → blocked by default</text>
+<text x="492" y="794" fill="#9fb1c8" font-size="16" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">dependent copy → acknowledge + adjust likelihoods</text>
+<text x="492" y="828" fill="#fde68a" font-size="16" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">no silent double counting</text>
+<rect x="1000" y="560" width="550" height="290" rx="20" fill="#0d1728" stroke="#67e8f9" stroke-width="2"/><rect x="1020" y="580" width="4" height="250" fill="#67e8f9"/><text x="1042" y="592" fill="#67e8f9" font-size="15" font-family="DejaVu Sans Mono, monospace" font-weight="700" text-anchor="start">THE MEMORY IS THE DIFF</text>
+<text x="1042" y="615" fill="#67e8f9" font-size="20" font-family="DejaVu Sans Mono, monospace" font-weight="700" text-anchor="start">0.620  →  0.950  →  0.900  →  0.998</text>
+<text x="1042" y="660" fill="#9fb1c8" font-size="17" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">support → challenge → support</text>
+<text x="1042" y="700" fill="#9fb1c8" font-size="16" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">every transition keeps its prior and evidence source</text>
+<text x="1042" y="740" fill="#fca5a5" font-size="16" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">no automatic belief change from a measurement</text>
+<text x="1042" y="780" fill="#86efac" font-size="16" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">counterevidence remains inspectable</text>
+<text x="48" y="962" fill="#fca5a5" font-size="15" font-family="DejaVu Sans Mono, monospace" font-weight="400" text-anchor="start">Bayesian update = explicit evidence + explicit likelihood model + preserved belief history.</text>
+<text x="1552" y="962" fill="#67e8f9" font-size="15" font-family="DejaVu Sans Mono, monospace" font-weight="700" text-anchor="end">ZOE</text>
+</svg>

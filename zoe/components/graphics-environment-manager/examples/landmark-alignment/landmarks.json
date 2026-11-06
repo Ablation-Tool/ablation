@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "description": "Four marked landmark points forming two correspondences from Figure 2.1",
+  "coordinate_system": "pixels in the original 554 by 659 screenshot; x increases rightward and y increases downward",
+  "extraction": "Centers estimated to the nearest pixel from the supplied screenshot",
+  "source_caption": "Aligning the two shapes by minimizing the distance of corresponding landmark points.",
+  "chapter": "Linear Algebra?",
+  "authors": ["Daniel Cohen-Or", "Olga Sorkine-Hornung", "Chen Greif"],
+  "image_dimensions": [554, 659],
+  "source_label": "red lion",
+  "target_label": "blue unicorn",
+  "correspondences": [
+    {
+      "name": "lion nose to unicorn horn",
+      "source": [83, 467],
+      "target": [328, 389]
+    },
+    {
+      "name": "lion tail to unicorn tail",
+      "source": [270, 513],
+      "target": [485, 560]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+include GEM.md
+include HARDENING.md
+include INSTALL.md
+include INSTALL-PROMPT.md
+include WORKBENCH.md
+include COGNITION.md
+include NOTICE
+include UPSTREAM-NOTICE
+recursive-include licenses *.txt
+recursive-include gem/assets *.png *.ico *.icns *.json.gz
+recursive-include gem/icons *.svg *.png *.ico *.icns
+recursive-include metrix/templates *.html
+recursive-include metrix/gui *.html *.css *.js
+recursive-include examples *.md *.json *.py
+recursive-include docs *.md *.png *.svg *.gem
+recursive-include evidence *.json
+recursive-include tools *.py
+recursive-include stress *.py
+recursive-include stress *.sh

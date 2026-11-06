@@ -1,0 +1,426 @@
+{
+  "schema_version": 1,
+  "dataset": {
+    "name": "Magenta Groove MIDI Dataset v1.0.0 MIDI-only",
+    "url": "https://storage.googleapis.com/magentadata/datasets/groove/groove-v1.0.0-midionly.zip",
+    "archive_sha256": "651cbc524ffb891be1a3e46d89dc82a1cecb09a57c748c7b45b844c4841dcc1e",
+    "license": "CC BY 4.0",
+    "usable_4_4_performances": 514,
+    "train_performances": 396,
+    "test_performances": 118,
+    "train_sessions": [
+      "drummer1/eval_session",
+      "drummer1/session3",
+      "drummer10/session1",
+      "drummer2/session2",
+      "drummer2/session3",
+      "drummer3/session1",
+      "drummer3/session2",
+      "drummer4/session1",
+      "drummer5/session1",
+      "drummer6/session2",
+      "drummer6/session3",
+      "drummer7/eval_session",
+      "drummer7/session1",
+      "drummer7/session2",
+      "drummer7/session3",
+      "drummer8/eval_session",
+      "drummer8/session2",
+      "drummer9/session1"
+    ],
+    "test_sessions": [
+      "drummer1/session1",
+      "drummer1/session2",
+      "drummer2/session1",
+      "drummer5/eval_session",
+      "drummer5/session2",
+      "drummer8/session1"
+    ],
+    "session_overlap": false,
+    "official_split_not_used": "17 recording sessions cross the official train/test boundaries"
+  },
+  "preprocessing": {
+    "drum_channel_zero_indexed": 9,
+    "simultaneous_onset_merge_tolerance_beats": 0.02,
+    "interval_units": "MIDI quarter-note beats; tempo cancels",
+    "target_quantization_bins_per_beat": 48,
+    "maximum_interval_beats": 4.0,
+    "vocabulary_size": 192,
+    "minimum_onsets_per_performance": 32,
+    "trailing_intervals_per_context": 4,
+    "context_clusters": 16,
+    "split_before_context_clustering_and_window_training": true
+  },
+  "model": {
+    "type": "clustered previous-two-interval categorical model with hierarchical smoothing",
+    "alpha": 4.0,
+    "forward_training_windows": 218033,
+    "backward_training_windows": 218033,
+    "backward_model_trained_on_reversed_training_performances": true
+  },
+  "conditions": {
+    "forward": {
+      "predictions": 121392,
+      "top_1_accuracy": 0.17327336233030183,
+      "top_5_accuracy": 0.5611901937524714,
+      "log_loss_nats": 3.194485105331553,
+      "mean_max_probability": 0.2330132681443473,
+      "mean_entropy_nats": 2.4215213243769935,
+      "expected_calibration_error": 0.05973990581404548,
+      "accessible_volume_fixed_thresholds": {
+        "0.02": {
+          "mean": 10.892579412152365,
+          "correct_mean": 10.350337548730627,
+          "incorrect_mean": 11.006227704816755
+        },
+        "0.05": {
+          "mean": 6.18559707394227,
+          "correct_mean": 5.885138347437482,
+          "incorrect_mean": 6.248570118974073
+        },
+        "0.1": {
+          "mean": 3.0965467246606035,
+          "correct_mean": 3.135019492250642,
+          "incorrect_mean": 3.0884832300364695
+        },
+        "0.2": {
+          "mean": 0.8584667852906287,
+          "correct_mean": 1.01540363221451,
+          "incorrect_mean": 0.8255744434922976
+        },
+        "0.3": {
+          "mean": 0.1756870304468169,
+          "correct_mean": 0.2448892269658648,
+          "incorrect_mean": 0.16118296498535245
+        }
+      },
+      "mean_accessible_volume_over_sweep": 1.8856218696454465,
+      "accessible_volume_sweep_area": 0.8990660010544352,
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "count": 840,
+          "mean_confidence": 0.09324139598757028,
+          "accuracy": 0.06666666666666667
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 42364,
+          "mean_confidence": 0.16224084619494947,
+          "accuracy": 0.12234444339533566
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.30000000000000004,
+          "count": 57391,
+          "mean_confidence": 0.24616912941267077,
+          "accuracy": 0.18766008607621404
+        },
+        {
+          "lower": 0.30000000000000004,
+          "upper": 0.4,
+          "count": 18608,
+          "mean_confidence": 0.33437623942362166,
+          "accuracy": 0.24392734307824593
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 1923,
+          "mean_confidence": 0.4345481944344531,
+          "accuracy": 0.22568902756110246
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6000000000000001,
+          "count": 210,
+          "mean_confidence": 0.5372322386219388,
+          "accuracy": 0.19047619047619047
+        },
+        {
+          "lower": 0.6000000000000001,
+          "upper": 0.7000000000000001,
+          "count": 48,
+          "mean_confidence": 0.6328408507009348,
+          "accuracy": 0.20833333333333334
+        },
+        {
+          "lower": 0.7000000000000001,
+          "upper": 0.8,
+          "count": 8,
+          "mean_confidence": 0.7069734483957291,
+          "accuracy": 0.25
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "mean_confidence": null,
+          "accuracy": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "count": 0,
+          "mean_confidence": null,
+          "accuracy": null
+        }
+      ]
+    },
+    "reversal_transfer": {
+      "predictions": 121392,
+      "top_1_accuracy": 0.1601423487544484,
+      "top_5_accuracy": 0.529870172663767,
+      "log_loss_nats": 3.33339580697935,
+      "mean_max_probability": 0.2316935223813143,
+      "mean_entropy_nats": 2.427760955213848,
+      "expected_calibration_error": 0.0715511736268659,
+      "accessible_volume_fixed_thresholds": {
+        "0.02": {
+          "mean": 10.905899894556478,
+          "correct_mean": 10.365946502057612,
+          "incorrect_mean": 11.008857109227872
+        },
+        "0.05": {
+          "mean": 6.1948975220772375,
+          "correct_mean": 5.868055555555555,
+          "incorrect_mean": 6.25721908349027
+        },
+        "0.1": {
+          "mean": 3.1012340187162253,
+          "correct_mean": 3.137654320987654,
+          "incorrect_mean": 3.0942894695543
+        },
+        "0.2": {
+          "mean": 0.8376911163832872,
+          "correct_mean": 0.982664609053498,
+          "incorrect_mean": 0.8100478656622725
+        },
+        "0.3": {
+          "mean": 0.16703736654804271,
+          "correct_mean": 0.23364197530864197,
+          "incorrect_mean": 0.1543373352165725
+        }
+      },
+      "mean_accessible_volume_over_sweep": 1.8847912547779098,
+      "accessible_volume_sweep_area": 0.8984746935547647,
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "count": 753,
+          "mean_confidence": 0.0945232639591374,
+          "accuracy": 0.08366533864541832
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 43445,
+          "mean_confidence": 0.16267862288802878,
+          "accuracy": 0.11653815168603981
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.30000000000000004,
+          "count": 57295,
+          "mean_confidence": 0.24617593187563436,
+          "accuracy": 0.17189981673793525
+        },
+        {
+          "lower": 0.30000000000000004,
+          "upper": 0.4,
+          "count": 18015,
+          "mean_confidence": 0.33499016062504644,
+          "accuracy": 0.2308631695809048
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 1632,
+          "mean_confidence": 0.43356277695035234,
+          "accuracy": 0.16911764705882354
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6000000000000001,
+          "count": 211,
+          "mean_confidence": 0.5365485280610939,
+          "accuracy": 0.10426540284360189
+        },
+        {
+          "lower": 0.6000000000000001,
+          "upper": 0.7000000000000001,
+          "count": 34,
+          "mean_confidence": 0.6398786727119895,
+          "accuracy": 0.20588235294117646
+        },
+        {
+          "lower": 0.7000000000000001,
+          "upper": 0.8,
+          "count": 7,
+          "mean_confidence": 0.7073504328727722,
+          "accuracy": 0.14285714285714285
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "mean_confidence": null,
+          "accuracy": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "count": 0,
+          "mean_confidence": null,
+          "accuracy": null
+        }
+      ]
+    },
+    "backward_matched": {
+      "predictions": 121392,
+      "top_1_accuracy": 0.1705713720838276,
+      "top_5_accuracy": 0.5552095689996046,
+      "log_loss_nats": 3.183202906563205,
+      "mean_max_probability": 0.23036123871905415,
+      "mean_entropy_nats": 2.432238266485086,
+      "expected_calibration_error": 0.05978986663522655,
+      "accessible_volume_fixed_thresholds": {
+        "0.02": {
+          "mean": 11.055267233425596,
+          "correct_mean": 10.494590939824205,
+          "incorrect_mean": 11.170569890550821
+        },
+        "0.05": {
+          "mean": 6.168561354949255,
+          "correct_mean": 5.8454071283685884,
+          "incorrect_mean": 6.235017778042628
+        },
+        "0.1": {
+          "mean": 3.0743953473046,
+          "correct_mean": 3.105766444508838,
+          "incorrect_mean": 3.067943904812983
+        },
+        "0.2": {
+          "mean": 0.8716225121919072,
+          "correct_mean": 1.0664058726939052,
+          "incorrect_mean": 0.8315654609379656
+        },
+        "0.3": {
+          "mean": 0.1608672729669171,
+          "correct_mean": 0.2242345213947648,
+          "incorrect_mean": 0.14783584609578293
+        }
+      },
+      "mean_accessible_volume_over_sweep": 1.8856544088572555,
+      "accessible_volume_sweep_area": 0.8986172688480295,
+      "calibration_bins": [
+        {
+          "lower": 0.0,
+          "upper": 0.1,
+          "count": 762,
+          "mean_confidence": 0.09456854080903561,
+          "accuracy": 0.07874015748031496
+        },
+        {
+          "lower": 0.1,
+          "upper": 0.2,
+          "count": 44769,
+          "mean_confidence": 0.1629761321698848,
+          "accuracy": 0.12229444481672586
+        },
+        {
+          "lower": 0.2,
+          "upper": 0.30000000000000004,
+          "count": 56906,
+          "mean_confidence": 0.24521245600229047,
+          "accuracy": 0.18695743858292624
+        },
+        {
+          "lower": 0.30000000000000004,
+          "upper": 0.4,
+          "count": 16705,
+          "mean_confidence": 0.3362236873845218,
+          "accuracy": 0.24232265788686022
+        },
+        {
+          "lower": 0.4,
+          "upper": 0.5,
+          "count": 1914,
+          "mean_confidence": 0.4367531036788767,
+          "accuracy": 0.2173458725182863
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.6000000000000001,
+          "count": 283,
+          "mean_confidence": 0.5438160885770413,
+          "accuracy": 0.18374558303886926
+        },
+        {
+          "lower": 0.6000000000000001,
+          "upper": 0.7000000000000001,
+          "count": 44,
+          "mean_confidence": 0.6456912864338268,
+          "accuracy": 0.3409090909090909
+        },
+        {
+          "lower": 0.7000000000000001,
+          "upper": 0.8,
+          "count": 9,
+          "mean_confidence": 0.7488080263137817,
+          "accuracy": 0.1111111111111111
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "mean_confidence": null,
+          "accuracy": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.0,
+          "count": 0,
+          "mean_confidence": null,
+          "accuracy": null
+        }
+      ]
+    }
+  },
+  "retrograde_procrustes": {
+    "performances": 118,
+    "mean_rms_residual_beats": 5.633132337210213,
+    "median_rms_residual_beats": 2.5572838248315284,
+    "mean_normalized_residual": 0.06251999269585166,
+    "degenerate_scale_count": 0
+  },
+  "runtime": {
+    "python": "3.14.4",
+    "numpy": "2.5.3",
+    "mido": "1.3.3",
+    "scikit_learn": "1.9.1",
+    "matplotlib": "3.11.2"
+  },
+  "artifacts": {
+    "forward_probabilities_sha256": "bea5a3fd5d34973c36ca0f88df72f7d14770066dae43a9653b41f11e4f2486b4",
+    "forward_targets_sha256": "dc360b5a9c2beb5d7ec0eed4c221af1d0aa5c7658f4515142fc747f15a000f2f",
+    "reversal_transfer_probabilities_sha256": "c9d66efacb2a2876e88e566489ae5a89fb92b136d33b95a757f52e7c9f3b62e8",
+    "reversal_transfer_targets_sha256": "988f326d452dbe465ba4d2b06ecc9ff6dcb2e06451b8aee3d258d3cd86b6e640",
+    "backward_matched_probabilities_sha256": "bc69a55ee5e83321c85265233499bfca5400fe1634d07edb335763798a6e274a",
+    "backward_matched_targets_sha256": "988f326d452dbe465ba4d2b06ecc9ff6dcb2e06451b8aee3d258d3cd86b6e640",
+    "predictions.npz_sha256": "61e2be13296cd306cf9552840b1f0f51eb9ba02fe6a7777d0f5b216a8d4c51c1",
+    "sources.json_sha256": "25fad8ea3d2425f6a295d28402a052a892cc52402365230f5f4a23a9a973e685",
+    "accessible-volume.png_sha256": "0323b1c3b49b2e8a40a9d9366ec05a55ecca12b8d68b8298bd0da4aa8f65aa5a",
+    "predictability-map.png_sha256": "1a4dd98e6f8ac4c4ef34e0ba0c2275cc3beed43b4e9722ed62f313d6b7cac3b7"
+  },
+  "scope": [
+    "Measurements describe this categorical model, quantization, and session-grouped held-out split.",
+    "Reversal transfer evaluates reversed test performances with the forward-trained model.",
+    "Backward matched trains the same architecture on reversed training performances and evaluates reversed test performances.",
+    "Accessible volume measures forecast breadth, not correctness or human surprise.",
+    "No claim is made about other instruments, genres, models, or all future events."
+  ]
+}

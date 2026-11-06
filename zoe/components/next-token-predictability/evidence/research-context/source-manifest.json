@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "purpose": "Provenance for the curated historical research-context files. These files document development history and are not new experimental results.",
+  "source_archives": [
+    {
+      "file": "autonomy-framework-20261104T164739Z-1-001.zip",
+      "sha256": "051db3302b39ec4ae940b91d797ae84f9d0ad0577374ea09065dbf15fceb9613"
+    }
+  ],
+  "selected_files": [
+    {
+      "path": "origin-prompt.txt",
+      "source_archive": "autonomy-framework-20261104T164739Z-1-001.zip",
+      "source_member": "autonomy-framework/give me the vector score.txt",
+      "sha256": "f48e90e51ef993808406937b7aa756c1dcfbc568495ab6f1775569b8de29dd03"
+    },
+    {
+      "path": "early-equations.txt",
+      "source_archive": "autonomy-framework-20261104T164739Z-1-001.zip",
+      "source_member": "autonomy-framework/A S vol a O P a h T S.txt",
+      "sha256": "f18a54026e5b9b4347cc710a646e1d94aee73ab38fbd90e60c377bbae4c92e85"
+    }
+  ]
+}

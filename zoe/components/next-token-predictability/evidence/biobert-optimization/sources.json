@@ -1,0 +1,765 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-11-03T22:18:20Z",
+  "accepted_documents": [
+    {
+      "source_document_id": "pmid-39678806",
+      "pmid": "39678806",
+      "pmcid": "PMC11577369",
+      "doi": "10.4251/wjgo.v16.i12.4778",
+      "title": "Crosslink among cyclin-dependent kinase 9, ATP binding cassette transporter G2 and Beclin 1 in colorectal cancer.",
+      "authors": "Shao ZB, He K, Su YB, Shi Z.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by-nc",
+      "url": "https://europepmc.org/article/MED/39678806",
+      "abstract_sha256": "2f9e6b6711a71da446107b8ff3ee8334eab5639911b34c7c7367a6f7c6882375",
+      "abstract_tokens": 231,
+      "eligible_target_count": 44
+    },
+    {
+      "source_document_id": "pmid-39564820",
+      "pmid": "39564820",
+      "pmcid": "PMC11589980",
+      "doi": "10.22074/ijfs.2024.2012554.1547",
+      "title": "Non-Hormonal Therapy for Endometriosis Based on Angiogenesis, Oxidative Stress and Inflammation.",
+      "authors": "Sanamiri K, Mahdian S, Moini A, Shahhoseini M.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by-nc",
+      "url": "https://europepmc.org/article/MED/39564820",
+      "abstract_sha256": "e207696388eeb133453ca7e338946b41c6ac6ea0af6a9f136e82c6881c80c2e4",
+      "abstract_tokens": 243,
+      "eligible_target_count": 50
+    },
+    {
+      "source_document_id": "pmid-39728965",
+      "pmid": "39728965",
+      "pmcid": "PMC11680163",
+      "doi": "10.3390/vetsci11120625",
+      "title": "Effects of Caffeic Acid Phenethyl Ester on Embryonic Development Through Regulation of Mitochondria and Endoplasmic Reticulum.",
+      "authors": "Huang CM, Huang HM, Li YH, Liang XW, Kim NH, Xu YN.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39728965",
+      "abstract_sha256": "9c37a43e91a239add09efd8135f62e91d65259eccdd7c35061e848884362f551",
+      "abstract_tokens": 328,
+      "eligible_target_count": 44
+    },
+    {
+      "source_document_id": "pmid-39768223",
+      "pmid": "39768223",
+      "pmcid": "PMC11675005",
+      "doi": "10.3390/cells13242135",
+      "title": "Myeloid Cell Mobilization and Recruitment by Human Mesothelioma in NSG-SGM3 Mice.",
+      "authors": "Shindyapin VV, Gubernatorova EO, Gorshkova EA, Chicherina NR, Sysonov FA, Yakovleva AS, Bogdanova DA, Demidov ON, Samsonova MV, Baklaushev VP, Yusubalieva GM, Drutskaya MS.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39768223",
+      "abstract_sha256": "8edf072f60810178c0a80bca917fbd5ad2bdaa02ad822dbddc51017066343f0c",
+      "abstract_tokens": 359,
+      "eligible_target_count": 54
+    },
+    {
+      "source_document_id": "pmid-39595642",
+      "pmid": "39595642",
+      "pmcid": "PMC11591637",
+      "doi": "10.3390/biom14111466",
+      "title": "Methyl Paraben Affects Porcine Oocyte Maturation Through Mitochondrial Dysfunction.",
+      "authors": "Huang H, Huang C, Li Y, Liang X, Kim N, Xu Y.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39595642",
+      "abstract_sha256": "32203acdb6516c330c41175481b13caa08ccd6b1b4f4ed143817ea5140ba20da",
+      "abstract_tokens": 451,
+      "eligible_target_count": 61
+    },
+    {
+      "source_document_id": "pmid-39857237",
+      "pmid": "39857237",
+      "pmcid": "PMC11759771",
+      "doi": "10.3390/biology14010006",
+      "title": "Can Cryptogonimids of the Same Genus Influence Each Other's Level of Genetic Variation?",
+      "authors": "Tokarskaya ES, Tatonova YV, Amissah HA, Shumenko PG, Shchelkanov MY.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39857237",
+      "abstract_sha256": "9b319a5bda91c3b3a9b2aa5523bf7c212055f8c1c3dd33503094b2d8498c2a1b",
+      "abstract_tokens": 382,
+      "eligible_target_count": 66
+    },
+    {
+      "source_document_id": "pmid-39659589",
+      "pmid": "39659589",
+      "pmcid": "PMC11631383",
+      "doi": "10.1093/bioadv/vbae178",
+      "title": "MeTEor: an R Shiny app for exploring longitudinal metabolomics data.",
+      "authors": "Grabert G, Dehncke D, More T, List M, Kraft ARM, Cornberg M, Hiller K, Kacprowski T.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39659589",
+      "abstract_sha256": "712c9737c47212f76952f1d8f41eec06c3158a70bd44b621a45e62a9dee047bb",
+      "abstract_tokens": 262,
+      "eligible_target_count": 40
+    },
+    {
+      "source_document_id": "pmid-39765677",
+      "pmid": "39765677",
+      "pmcid": "PMC11673833",
+      "doi": "10.3390/biology13121010",
+      "title": "Immune-Inflammatory Response in Lifespan-What Role Does It Play in Extreme Longevity? A Sicilian Semi- and Supercentenarians Study.",
+      "authors": "Accardi G, Calabrò A, Caldarella R, Caruso C, Ciaccio M, Di Simone M, Ligotti ME, Meraviglia S, Zarcone R, Candore G, Aiello A.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39765677",
+      "abstract_sha256": "115c87e9e9008ff2e6437abc695e416cbad0c88ec793df938e75a76c7e764910",
+      "abstract_tokens": 291,
+      "eligible_target_count": 49
+    },
+    {
+      "source_document_id": "pmid-39409754",
+      "pmid": "39409754",
+      "pmcid": "PMC11475669",
+      "doi": "10.3390/ani14192806",
+      "title": "Isoorientin Promotes Early Porcine Embryonic Development by Alleviating Oxidative Stress and Improving Lipid Metabolism.",
+      "authors": "Meng Z, Ren J, Huang C, Huang H, Yuan X, Li Y, Kim NH, Xu Y.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39409754",
+      "abstract_sha256": "66e4cac6d455f2b6acdad14b62780dc67db70b859c692041e225d04630a81eb5",
+      "abstract_tokens": 396,
+      "eligible_target_count": 49
+    },
+    {
+      "source_document_id": "pmid-39363912",
+      "pmid": "39363912",
+      "pmcid": "PMC11448471",
+      "doi": "10.1093/nsr/nwae327",
+      "title": "Electron spins from a molecular perspective: an interview with Song Gao.",
+      "authors": "Jiang SD, Zhu H.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39363912",
+      "abstract_sha256": "48d27aafdb94cd7194fa5e05c04ac4b56498b41adbb897f41d13dc6a6db45bff",
+      "abstract_tokens": 264,
+      "eligible_target_count": 51
+    },
+    {
+      "source_document_id": "pmid-39623868",
+      "pmid": "39623868",
+      "pmcid": "PMC11848127",
+      "doi": "10.1002/bies.202400196",
+      "title": "The Multiscale Wisdom of the Body: Collective Intelligence as a Tractable Interface for Next-Generation Biomedicine.",
+      "authors": "Levin M.",
+      "journal": null,
+      "publication_year": "2025",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39623868",
+      "abstract_sha256": "b15581c26c4ccaa0c3eb666150c945ee4d87afaab4abab828bd5cf6df3758e5d",
+      "abstract_tokens": 250,
+      "eligible_target_count": 80
+    },
+    {
+      "source_document_id": "pmid-39713159",
+      "pmid": "39713159",
+      "pmcid": "PMC11612855",
+      "doi": "10.3748/wjg.v30.i47.5076",
+      "title": "Roles of traditional Chinese medicine extracts in hyperuricemia and gout treatment: Mechanisms and clinical applications.",
+      "authors": "Wang YB, Jin CZ.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by-nc",
+      "url": "https://europepmc.org/article/MED/39713159",
+      "abstract_sha256": "ef80e7082e684563c87ccf937313dcd3f0be2501c5fd050b08d5651258fa3c55",
+      "abstract_tokens": 266,
+      "eligible_target_count": 51
+    },
+    {
+      "source_document_id": "pmid-39302990",
+      "pmid": "39302990",
+      "pmcid": "PMC11414929",
+      "doi": "10.1371/journal.pone.0310996",
+      "title": "Investigation of the biocompatibility of various pulp capping materials on zebrafish model.",
+      "authors": "Karahan M, Kiziltan Eliacik BB, Cagiral U, Iscan E, Ozhan G.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39302990",
+      "abstract_sha256": "19abd8c1198ac1e3f1f661a0b01929ce3c039ae13d405f0e251a15d7bbecf4fd",
+      "abstract_tokens": 254,
+      "eligible_target_count": 25
+    },
+    {
+      "source_document_id": "pmid-39192025",
+      "pmid": "39192025",
+      "pmcid": "PMC11349755",
+      "doi": "10.1038/s41598-024-70778-9",
+      "title": "Differential expression of ion channel coding genes in the endometrium of women experiencing recurrent implantation failures.",
+      "authors": "Davoodi Nik B, Hashemi Karoii D, Favaedi R, Ramazanali F, Jahangiri M, Movaghar B, Shahhoseini M.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39192025",
+      "abstract_sha256": "09afa6e8b0f69aaacfa2c87fc75d4455507412cbdc18ed3c12990e95254f13c1",
+      "abstract_tokens": 375,
+      "eligible_target_count": 62
+    },
+    {
+      "source_document_id": "pmid-39024305",
+      "pmid": "39024305",
+      "pmcid": "PMC11257307",
+      "doi": "10.1371/journal.pone.0307389",
+      "title": "The value of nanopore sequencing as a diagnostic tool in tuberculous meningitis: A protocol of systematic review and meta-analysis.",
+      "authors": "Shen Y, Ling Y, Yu G, Zhang X.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39024305",
+      "abstract_sha256": "bf277025610791a5e519dae439969dc501cbca4e88bc679559e4541419af9899",
+      "abstract_tokens": 386,
+      "eligible_target_count": 47
+    },
+    {
+      "source_document_id": "pmid-39684669",
+      "pmid": "39684669",
+      "pmcid": "PMC11641286",
+      "doi": "10.3390/ijms252312958",
+      "title": "Association of Inflammasome Gene Expression Levels with Pathogenesis of Familial Mediterranean Fever in Armenians.",
+      "authors": "Hayrapetyan V, Karapetyan L, Ghukasyan L, Atshemyan S, Ghazaryan H, Vardanyan V, Mukuchyan V, Arakelyan A, Zakharyan R.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39684669",
+      "abstract_sha256": "747e1fff5e098a67b8b28a2dc15fe324fd2bf51ddd850ed87304972b2c15c146",
+      "abstract_tokens": 169,
+      "eligible_target_count": 28
+    },
+    {
+      "source_document_id": "pmid-39386182",
+      "pmid": "39386182",
+      "pmcid": "PMC11460574",
+      "doi": "10.37796/2211-8039.1462",
+      "title": "Loss of tyrosine 211 phosphorylation of proliferating cell nuclear antigen (PCNA) enhances postnatal mammary gland development.",
+      "authors": "Shen YC, Lin YZ, Wu WR, Lin PL, Liao CC, Chung FC, Chen CY, Weng CY, Wang SC.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39386182",
+      "abstract_sha256": "75a13bf9785fdcd425abfac402adca6d8206d24bb70289cf5e3444ba5e1fc76f",
+      "abstract_tokens": 440,
+      "eligible_target_count": 78
+    },
+    {
+      "source_document_id": "pmid-38843269",
+      "pmid": "38843269",
+      "pmcid": "PMC11156269",
+      "doi": "10.1371/journal.pone.0304162",
+      "title": "Diagnostic accuracy of nanopore sequencing for the rapid diagnosis of pulmonary tuberculosis: A protocol for a systematic review and meta-analysis.",
+      "authors": "Yu G, Xu X, Shen Y, Fang B.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/38843269",
+      "abstract_sha256": "83669a20f97fa06111028876aa77f4f5ab91dadc07451470e06ff839471ec58e",
+      "abstract_tokens": 420,
+      "eligible_target_count": 56
+    },
+    {
+      "source_document_id": "pmid-39791729",
+      "pmid": "39791729",
+      "pmcid": "PMC11719663",
+      "doi": "10.3390/cells14010028",
+      "title": "Modeling Musculoskeletal Disorders in Zebrafish: Advancements in Muscle and Bone Research.",
+      "authors": "Dalle Carbonare L, Braggio M, Minoia A, Cominacini M, Romanelli MG, Pessoa J, Tiso N, Valenti MT.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39791729",
+      "abstract_sha256": "9824cd19c066a3595725593d21a05449e874976475bc5e0e05ebcacd2cc4884d",
+      "abstract_tokens": 216,
+      "eligible_target_count": 48
+    },
+    {
+      "source_document_id": "pmid-39768193",
+      "pmid": "39768193",
+      "pmcid": "PMC11675013",
+      "doi": "10.3390/cells13242102",
+      "title": "Tumor Intrinsic Immunogenicity Suppressor SETDB1 Worsens the Prognosis of Patients with Hepatocellular Carcinoma.",
+      "authors": "Yin CQ, Song CQ.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39768193",
+      "abstract_sha256": "44885935d5b7e2cbeb1417cb452780e9b913d9205395b88b9addf821be721b98",
+      "abstract_tokens": 353,
+      "eligible_target_count": 55
+    },
+    {
+      "source_document_id": "pmid-39858550",
+      "pmid": "39858550",
+      "pmcid": "PMC11764520",
+      "doi": "10.3390/genes16010003",
+      "title": "Construction of Promoter Elements for Strong, Moderate, and Weak Gene Expression in Drosophila melanogaster.",
+      "authors": "Kudryashova KS, Deriglazova IO, Osadchiy IS, Georgiev P, Maksimenko O.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39858550",
+      "abstract_sha256": "d850d0e290c193ea009cb338c6f6bd7c76f24db29f0ae25dcacf178da0a3ff20",
+      "abstract_tokens": 340,
+      "eligible_target_count": 69
+    },
+    {
+      "source_document_id": "pmid-39145612",
+      "pmid": "39145612",
+      "pmcid": "PMC12452115",
+      "doi": "10.17305/bb.2024.11067",
+      "title": "Hidden benefits of snail mucus: A natural skincare marvel.",
+      "authors": "Bazeer AB, Nagarajan P, Gayathiri E.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39145612",
+      "abstract_sha256": "e6e3906ab0837a923187b72c489981fecde752f5019d0693a90641b3389a656a",
+      "abstract_tokens": 250,
+      "eligible_target_count": 53
+    },
+    {
+      "source_document_id": "pmid-39194690",
+      "pmid": "39194690",
+      "pmcid": "PMC11352563",
+      "doi": "10.3390/cimb46080473",
+      "title": "Transcriptome Analyses of Liver Sinusoidal Endothelial Cells Reveal a Consistent List of Candidate Genes Associated with Endothelial Dysfunction and the Fibrosis Progression.",
+      "authors": "Li P, Xie W, Wei H, Yang F, Chen Y, Li Y.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39194690",
+      "abstract_sha256": "d7d0b66a75b8d37a1a4585dbf0da0f231bbc04f7eaed57c1df3167b6e0e6f9bd",
+      "abstract_tokens": 413,
+      "eligible_target_count": 53
+    },
+    {
+      "source_document_id": "pmid-38323478",
+      "pmid": "38323478",
+      "pmcid": "PMC11337005",
+      "doi": "10.1093/jmcb/mjae006",
+      "title": "Organization of microtubule plus-end dynamics by phase separation in mitosis.",
+      "authors": "Yang F, Ding M, Song X, Chen F, Yang T, Wang C, Hu C, Hu Q, Yao Y, Du S, Yao PY, Xia P, Adams G, Fu C, Xiang S, Liu D, Wang Z, Yuan K, Liu X.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by-nc",
+      "url": "https://europepmc.org/article/MED/38323478",
+      "abstract_sha256": "29e7e0b3ebb218f94465b9441ecdf038fa43a94def89bbb25587162505952fe3",
+      "abstract_tokens": 277,
+      "eligible_target_count": 28
+    },
+    {
+      "source_document_id": "pmid-38338092",
+      "pmid": "38338092",
+      "pmcid": "PMC10854851",
+      "doi": "10.3390/ani14030449",
+      "title": "Supplementation with Eupatilin during In Vitro Maturation Improves Porcine Oocyte Developmental Competence by Regulating Oxidative Stress and Endoplasmic Reticulum Stress.",
+      "authors": "Wang J, Li YH, Liu RP, Wang XQ, Zhu MB, Cui XS, Dai Z, Kim NH, Xu YN.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/38338092",
+      "abstract_sha256": "356a8fb97a5544c8b0a9141dcc7c7eac0ded9c5840f81d19d9c8e5f2ca2a7518",
+      "abstract_tokens": 384,
+      "eligible_target_count": 50
+    },
+    {
+      "source_document_id": "pmid-39663244",
+      "pmid": "39663244",
+      "pmcid": "PMC11634536",
+      "doi": "10.1093/bioinformatics/btae714",
+      "title": "OpenVariant: a toolkit to parse and operate multiple input file formats.",
+      "authors": "Martínez-Millán D, Brando F, L Grau M, Sánchez-Guixé M, López-Elorduy C, Reyes-Salazar I, Deu-Pons J, López-Bigas N, González-Pérez A.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39663244",
+      "abstract_sha256": "ba9cd2974d6804ae6f09f7805c22f609c85a29f7d66e30e11e961c9cb252187e",
+      "abstract_tokens": 193,
+      "eligible_target_count": 32
+    },
+    {
+      "source_document_id": "pmid-38803272",
+      "pmid": "38803272",
+      "pmcid": "PMC11130521",
+      "doi": "10.1093/database/baae041",
+      "title": "PDB NextGen Archive: centralizing access to integrated annotations and enriched structural information by the Worldwide Protein Data Bank.",
+      "authors": "Choudhary P, Feng Z, Berrisford J, Chao H, Ikegawa Y, Peisach E, Piehl DW, Smith J, Tanweer A, Varadi M, Westbrook JD, Young JY, Patwardhan A, Morris KL, Hoch JC, Kurisu G, Velankar S, Burley SK.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/38803272",
+      "abstract_sha256": "0f33f786b2c78ba1d5b3aca400d4ad00d410938bd7b98093be06ffc40a3ee90d",
+      "abstract_tokens": 296,
+      "eligible_target_count": 50
+    },
+    {
+      "source_document_id": "pmid-39499190",
+      "pmid": "39499190",
+      "pmcid": "PMC11752983",
+      "doi": "10.1002/mds.30039",
+      "title": "Insulin Resistance Is a Modifying Factor for Parkinson's Disease.",
+      "authors": "Zagare A, Hemedan A, Almeida C, Frangenberg D, Gomez-Giro G, Antony P, Halder R, Krüger R, Glaab E, Ostaszewski M, Arena G, Schwamborn JC.",
+      "journal": null,
+      "publication_year": "2025",
+      "license": "cc by-nc-nd",
+      "url": "https://europepmc.org/article/MED/39499190",
+      "abstract_sha256": "d40ecb2b1def7441cd02a54266161009b9204c5ba47a5c030c8eeacfeedb14c9",
+      "abstract_tokens": 419,
+      "eligible_target_count": 74
+    },
+    {
+      "source_document_id": "pmid-39676795",
+      "pmid": "39676795",
+      "pmcid": "PMC11638181",
+      "doi": "10.3389/fcell.2024.1484955",
+      "title": "Generation of an inducible dCas9-SAM human PSC line for endogenous gene activation.",
+      "authors": "Petazzi P, Gutierrez-Agüera F, Roca-Ho H, Castaño J, Bueno C, Alvarez N, Forrester LM, Sevilla A, Fidanza A, Menendez P.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39676795",
+      "abstract_sha256": "5a51b51d93ef59786a32dcd2600ff94036046e9d3c3f68e6b0588d315edb79ef",
+      "abstract_tokens": 368,
+      "eligible_target_count": 67
+    },
+    {
+      "source_document_id": "pmid-39336807",
+      "pmid": "39336807",
+      "pmcid": "PMC11430849",
+      "doi": "10.3390/genes15091216",
+      "title": "Ethical Aspects of Human Genome Research in Sports-A Narrative Review.",
+      "authors": "Bojarczuk A.",
+      "journal": null,
+      "publication_year": "2024",
+      "license": "cc by",
+      "url": "https://europepmc.org/article/MED/39336807",
+      "abstract_sha256": "b97280112d93f47fd40a753c034e094ac0d1780e75ff3dbab742ef87db4ea1be",
+      "abstract_tokens": 255,
+      "eligible_target_count": 49
+    }
+  ],
+  "excluded_documents": [
+    {
+      "source_id": "pmid-39766304",
+      "reason": "Abstract outside the 80–400 word range",
+      "license": "cc by"
+    },
+    {
+      "source_id": "pmid-39944813",
+      "reason": "Abstract exceeds 480 BioBERT tokens",
+      "license": "cc by"
+    },
+    {
+      "source_id": "pmid-39906092",
+      "reason": "Abstract outside the 80–400 word range",
+      "license": "cc by"
+    },
+    {
+      "source_id": "pmid-39451361",
+      "reason": "Abstract outside the 80–400 word range",
+      "license": "cc by"
+    },
+    {
+      "source_id": "pmid-39451403",
+      "reason": "Abstract outside the 80–400 word range",
+      "license": "cc by"
+    },
+    {
+      "source_id": "pmid-39166980",
+      "reason": "Abstract outside the 80–400 word range",
+      "license": "cc by"
+    },
+    {
+      "source_id": "pmid-39202469",
+      "reason": "Abstract outside the 80–400 word range",
+      "license": "cc by"
+    },
+    {
+      "source_id": "pmid-39051240",
+      "reason": "Abstract outside the 80–400 word range",
+      "license": "cc by"
+    },
+    {
+      "source_id": "pmid-39564825",
+      "reason": "Abstract exceeds 480 BioBERT tokens",
+      "license": "cc by-nc"
+    },
+    {
+      "source_id": "pmid-39702299",
+      "reason": "Abstract exceeds 480 BioBERT tokens",
+      "license": "cc by"
+    },
+    {
+      "source_id": "pmid-39005486",
+      "reason": "Abstract outside the 80–400 word range",
+      "license": "cc by-nc-nd"
+    },
+    {
+      "source_id": "pmid-39425116",
+      "reason": "Abstract exceeds 480 BioBERT tokens",
+      "license": "cc by-nc-nd"
+    },
+    {
+      "source_id": "pmid-39404744",
+      "reason": "Abstract outside the 80–400 word range",
+      "license": "cc by-nc-sa"
+    }
+  ],
+  "target_eligibility": [
+    {
+      "source_document_id": "pmid-39678806",
+      "lexical": 78,
+      "stopword": 7,
+      "repeated": 20,
+      "non_single_token": 7,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39564820",
+      "lexical": 106,
+      "stopword": 18,
+      "repeated": 31,
+      "non_single_token": 7,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39728965",
+      "lexical": 112,
+      "stopword": 4,
+      "repeated": 47,
+      "non_single_token": 17,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39768223",
+      "lexical": 124,
+      "stopword": 9,
+      "repeated": 42,
+      "non_single_token": 19,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39595642",
+      "lexical": 175,
+      "stopword": 10,
+      "repeated": 78,
+      "non_single_token": 26,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39857237",
+      "lexical": 167,
+      "stopword": 33,
+      "repeated": 51,
+      "non_single_token": 17,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39659589",
+      "lexical": 85,
+      "stopword": 6,
+      "repeated": 32,
+      "non_single_token": 7,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39765677",
+      "lexical": 110,
+      "stopword": 18,
+      "repeated": 36,
+      "non_single_token": 7,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39409754",
+      "lexical": 128,
+      "stopword": 8,
+      "repeated": 50,
+      "non_single_token": 21,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39363912",
+      "lexical": 92,
+      "stopword": 3,
+      "repeated": 32,
+      "non_single_token": 6,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39623868",
+      "lexical": 120,
+      "stopword": 9,
+      "repeated": 12,
+      "non_single_token": 19,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39713159",
+      "lexical": 97,
+      "stopword": 12,
+      "repeated": 20,
+      "non_single_token": 14,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39302990",
+      "lexical": 88,
+      "stopword": 8,
+      "repeated": 49,
+      "non_single_token": 6,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39192025",
+      "lexical": 132,
+      "stopword": 10,
+      "repeated": 46,
+      "non_single_token": 14,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39024305",
+      "lexical": 142,
+      "stopword": 26,
+      "repeated": 62,
+      "non_single_token": 7,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39684669",
+      "lexical": 47,
+      "stopword": 3,
+      "repeated": 13,
+      "non_single_token": 3,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39386182",
+      "lexical": 172,
+      "stopword": 12,
+      "repeated": 63,
+      "non_single_token": 19,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-38843269",
+      "lexical": 137,
+      "stopword": 19,
+      "repeated": 57,
+      "non_single_token": 5,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39791729",
+      "lexical": 90,
+      "stopword": 12,
+      "repeated": 22,
+      "non_single_token": 8,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39768193",
+      "lexical": 120,
+      "stopword": 12,
+      "repeated": 36,
+      "non_single_token": 17,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39858550",
+      "lexical": 163,
+      "stopword": 19,
+      "repeated": 71,
+      "non_single_token": 4,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39145612",
+      "lexical": 98,
+      "stopword": 5,
+      "repeated": 20,
+      "non_single_token": 20,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39194690",
+      "lexical": 141,
+      "stopword": 10,
+      "repeated": 62,
+      "non_single_token": 16,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-38323478",
+      "lexical": 96,
+      "stopword": 5,
+      "repeated": 42,
+      "non_single_token": 21,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-38338092",
+      "lexical": 128,
+      "stopword": 10,
+      "repeated": 56,
+      "non_single_token": 12,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39663244",
+      "lexical": 75,
+      "stopword": 6,
+      "repeated": 17,
+      "non_single_token": 20,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-38803272",
+      "lexical": 103,
+      "stopword": 10,
+      "repeated": 31,
+      "non_single_token": 12,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39499190",
+      "lexical": 145,
+      "stopword": 12,
+      "repeated": 47,
+      "non_single_token": 12,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39676795",
+      "lexical": 139,
+      "stopword": 10,
+      "repeated": 44,
+      "non_single_token": 18,
+      "unknown_token": 0
+    },
+    {
+      "source_document_id": "pmid-39336807",
+      "lexical": 135,
+      "stopword": 6,
+      "repeated": 73,
+      "non_single_token": 7,
+      "unknown_token": 0
+    }
+  ]
+}

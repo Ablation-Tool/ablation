@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "instrument": "accessible volume of a full-vocabulary token distribution",
+  "model": "FacebookAI/roberta-base",
+  "model_revision": "e2da8e2f811d1448a5b465c236feacd80ffbac7b",
+  "requested_revision": "e2da8e2f811d1448a5b465c236feacd80ffbac7b",
+  "runtime": {
+    "torch": "2.14.1+cu130",
+    "transformers": "4.56.2"
+  },
+  "prediction_style": "masked",
+  "text": "A language model's output tells us what it generated. It does not, by itself, tell us how many plausible continuations preceded that output. Accessible volume addresses this gap",
+  "sequence_length": 37,
+  "target_position": 35,
+  "target_token_id": 4044,
+  "target_token": " gap",
+  "vocabulary_size": 50265,
+  "probability_sum": 1.0000000000000007,
+  "threshold_sweep": [
+    {
+      "tau": 0.02,
+      "accessible_volume": 2,
+      "normalized_accessible_volume": 3.9789117676315525e-05
+    },
+    {
+      "tau": 0.05,
+      "accessible_volume": 2,
+      "normalized_accessible_volume": 3.9789117676315525e-05
+    },
+    {
+      "tau": 0.1,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 1.9894558838157762e-05
+    },
+    {
+      "tau": 0.15,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 1.9894558838157762e-05
+    },
+    {
+      "tau": 0.3,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 1.9894558838157762e-05
+    },
+    {
+      "tau": 0.5,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 1.9894558838157762e-05
+    }
+  ],
+  "entropy_bits": 0.4506686193845855,
+  "top_10_probability_mass": 0.9962055253144915,
+  "target_probability": 2.9973262398040968e-05,
+  "target_rank": 27,
+  "top_tokens": [
+    {
+      "token_id": 4,
+      "token": ".",
+      "probability": 0.9345209890422012
+    },
+    {
+      "token_id": 35,
+      "token": ":",
+      "probability": 0.053950514535114506
+    },
+    {
+      "token_id": 936,
+      "token": " problem",
+      "probability": 0.004961584673186983
+    },
+    {
+      "token_id": 696,
+      "token": " issue",
+      "probability": 0.0007180724675851492
+    },
+    {
+      "token_id": 479,
+      "token": " .",
+      "probability": 0.0005578472718031693
+    },
+    {
+      "token_id": 328,
+      "token": "!",
+      "probability": 0.00048339945273221145
+    },
+    {
+      "token_id": 6,
+      "token": ",",
+      "probability": 0.0004251534501475475
+    },
+    {
+      "token_id": 2,
+      "token": "</s>",
+      "probability": 0.0002010568887032366
+    },
+    {
+      "token_id": 131,
+      "token": ";",
+      "probability": 0.00019418942436817585
+    },
+    {
+      "token_id": 2024,
+      "token": " directly",
+      "probability": 0.00019271810864941548
+    }
+  ],
+  "checks": {
+    "repeated_probabilities_identical": true,
+    "target_replaced_with_mask": true,
+    "mask_count": 1
+  },
+  "probability_values_sha256": "47b37920b2514043fe9d88ba007bbcf82c05e82387abad5eab6d783cec574344",
+  "input_ids_sha256": "2ef5b2ba1f7cabc44a6efb80d2525ca7307bd688cf2a4d68869250c1e6fa4197",
+  "original_input_ids_sha256": "9b8551ce8c216904d5d1230f85368d8db0bf87fd9d8e65508dd5f67aec78f5d9",
+  "scope": [
+    "One FacebookAI/roberta-base distribution for the final non-special token of the recorded text.",
+    "The target is replaced by a mask token.",
+    "This is a token-level measurement, not a model-quality, security, or action-level benchmark."
+  ]
+}

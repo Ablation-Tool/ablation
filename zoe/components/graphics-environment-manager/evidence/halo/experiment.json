@@ -1,0 +1,140 @@
+{
+  "anatomical_model": false,
+  "autonomous_action": false,
+  "boundary_exchange": "candidate summaries are exchanged for comparison; metric scores are never averaged",
+  "disagreement": true,
+  "encryption": false,
+  "inspiration": [
+    "Zeng medical-image projection geometry",
+    "Tokareva bent functions and Walsh-Hadamard nonlinearity",
+    "Warren framed observation channels",
+    "PETSc distributed ownership and boundary exchange",
+    "DR Draw circle construction and the circled Zoe mark as visual boundaries"
+  ],
+  "instrument": "Halo Field",
+  "medical_data": false,
+  "metric_rotation_difference_degrees": 79.72662503508916,
+  "metric_translation_difference": 0.08336519811938162,
+  "metrics": {
+    "l2": {
+      "alternatives": [
+        {
+          "pose": {
+            "rx": -0.6210356083541555,
+            "ry": -17.66310594528069,
+            "rz": 46.06731682949658,
+            "tx": 0.08867172559622005,
+            "ty": -0.14374175543594048,
+            "tz": 0.0608677569229714
+          },
+          "rotation_error_degrees": 21.44707377708619,
+          "score": 1.1062933043782268e-06,
+          "translation_error": 0.07099316004885023
+        },
+        {
+          "pose": {
+            "rx": -26.835989931613263,
+            "ry": 2.0853165676489667,
+            "rz": -22.508884823013275,
+            "tx": -0.10594592031450592,
+            "ty": -0.04613467608790996,
+            "tz": 0.11302996794197116
+          },
+          "rotation_error_degrees": 73.78738014330324,
+          "score": 4.882816143633262e-06,
+          "translation_error": 0.20997847909075784
+        }
+      ],
+      "best": {
+        "pose": {
+          "rx": 19.685356690789625,
+          "ry": -19.949482754389145,
+          "rz": 22.780201685976834,
+          "tx": 0.10087504561140949,
+          "ty": -0.0800684246414484,
+          "tz": 0.08729086188392886
+        },
+        "rotation_error_degrees": 4.265002549425187,
+        "score": 6.502466534094814e-08,
+        "translation_error": 0.002847773882448151
+      },
+      "score_gap": 1.0412686390372787e-06,
+      "tied_with_next": false,
+      "truth_score": 0.0
+    },
+    "walsh": {
+      "alternatives": [
+        {
+          "pose": {
+            "rx": -11.314643309210375,
+            "ry": 24.300517245610855,
+            "rz": 9.780201685976834,
+            "tx": 0.09670837894474282,
+            "ty": -0.36340175797478175,
+            "tz": 0.016457528550595513
+          },
+          "rotation_error_degrees": 55.29648607141127,
+          "score": 0.0625,
+          "translation_error": 0.29280690958250055
+        },
+        {
+          "pose": {
+            "rx": -22.121035608354155,
+            "ry": 1.336894054719309,
+            "rz": 18.567316829496583,
+            "tx": 0.16367172559622006,
+            "ty": -0.13957508876927383,
+            "tz": 0.1733677569229714
+          },
+          "rotation_error_degrees": 46.80474391031544,
+          "score": 0.0625,
+          "translation_error": 0.12063773346940354
+        }
+      ],
+      "best": {
+        "pose": {
+          "rx": -44.33598993161326,
+          "ry": 26.335316567648967,
+          "rz": -2.2588848230132754,
+          "tx": 0.019054079685494107,
+          "ty": -0.07113467608790996,
+          "tz": 0.10052996794197117
+        },
+        "rotation_error_degrees": 79.6067378186163,
+        "score": 0.0625,
+        "translation_error": 0.08210795459934168
+      },
+      "score_gap": 0.0,
+      "tied_with_next": true,
+      "truth_score": 0.0
+    }
+  },
+  "noise": 0.0,
+  "optimizer": "moment-ranked starts followed by bounded coordinate descent over rx, ry, rz, tx, ty, tz",
+  "original_code": true,
+  "physical_xray_simulation": false,
+  "point_count": 450,
+  "projection_model": "orthographic projection with exponential depth attenuation and separable [1,2,1] smoothing",
+  "projection_shape": [
+    48,
+    48
+  ],
+  "representations": {
+    "l2": "normalized 48x48 pixel intensities; mean squared difference summed over two views",
+    "walsh_template": "mean-pool to a 4x4 grid; Boolean threshold at 0.35 times the grid maximum; 16 signed Walsh magnitudes; L2-normalized and sorted; mean absolute difference summed over two views"
+  },
+  "schema_version": 1,
+  "seed": 7,
+  "source": "original synthetic point cloud and two orthographic projections",
+  "summary": "L2: translation=0.003, rotation=4.27° · WALSH: translation=0.082, rotation=79.61° · independent poses disagree=True",
+  "truth": {
+    "rx": 17.0,
+    "ry": -21.0,
+    "rz": 27.0,
+    "tx": 0.1,
+    "ty": -0.08,
+    "tz": 0.09
+  },
+  "uncertainty_scope": "score gaps and competing candidates are evidence of ambiguity, not posterior probabilities",
+  "view_angle_degrees": 65.0
+}

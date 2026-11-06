@@ -1,0 +1,669 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-label="Proportional Field: golden rectangles and architectural ratios">
+  <title>Proportional Field: golden rectangles and architectural ratios</title>
+  <rect x="0" y="0" width="1920.0" height="1080.0" fill="#ffffff" />
+  <g data-object-id="background">
+    <title>background</title>
+    <rect x="0.0" y="0.0" width="1920.0" height="1080.0" fill="#000000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="title">
+    <title>title</title>
+    <text x="70.0" y="72.0" font-family="sans-serif" font-size="28.0" fill="#00ffff">PROPORTIONAL FIELD</text>
+  </g>
+  <g data-object-id="headline">
+    <title>headline</title>
+    <text x="70.0" y="124.0" font-family="sans-serif" font-size="34.0" fill="#ffffff">Proportion is structure. Beauty is a judgment.</text>
+  </g>
+  <g data-object-id="subtitle">
+    <title>subtitle</title>
+    <text x="70.0" y="164.0" font-family="sans-serif" font-size="17.0" fill="#d3d3d3">Golden rectangles · nested spatial ratios · architecture as mathematics</text>
+  </g>
+  <g data-object-id="rectangle-label">
+    <title>rectangle-label</title>
+    <text x="100.0" y="218.0" font-family="sans-serif" font-size="17.0" fill="#00ffff">GOLDEN RECTANGLE / phi = (1 + sqrt(5)) / 2</text>
+  </g>
+  <g data-object-id="golden-outer">
+    <title>golden-outer</title>
+    <rect x="100.0" y="250.0" width="900.0" height="618.0339887498948" fill="#000000" stroke="#00ffff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="proportion-0">
+    <title>proportion-0</title>
+    <rect x="100.0" y="250.0" width="618.0339887498948" height="618.0339887498948" fill="#000000" stroke="#00ffff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="proportion-arc-0-0">
+    <title>proportion-arc-0-0</title>
+    <polyline points="718.034,250 714.648,314.602" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-0-1">
+    <title>proportion-arc-0-1</title>
+    <polyline points="714.648,314.602 704.528,378.496" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-0-2">
+    <title>proportion-arc-0-2</title>
+    <polyline points="704.528,378.496 687.785,440.983" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-0-3">
+    <title>proportion-arc-0-3</title>
+    <polyline points="687.785,440.983 664.602,501.377" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-0-4">
+    <title>proportion-arc-0-4</title>
+    <polyline points="664.602,501.377 635.233,559.017" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-0-5">
+    <title>proportion-arc-0-5</title>
+    <polyline points="635.233,559.017 600,613.271" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-0-6">
+    <title>proportion-arc-0-6</title>
+    <polyline points="600,613.271 559.289,663.545" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-0-7">
+    <title>proportion-arc-0-7</title>
+    <polyline points="559.289,663.545 513.545,709.289" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-0-8">
+    <title>proportion-arc-0-8</title>
+    <polyline points="513.545,709.289 463.271,750" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-0-9">
+    <title>proportion-arc-0-9</title>
+    <polyline points="463.271,750 409.017,785.233" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-0-10">
+    <title>proportion-arc-0-10</title>
+    <polyline points="409.017,785.233 351.377,814.602" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-0-11">
+    <title>proportion-arc-0-11</title>
+    <polyline points="351.377,814.602 290.983,837.785" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-0-12">
+    <title>proportion-arc-0-12</title>
+    <polyline points="290.983,837.785 228.496,854.528" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-0-13">
+    <title>proportion-arc-0-13</title>
+    <polyline points="228.496,854.528 164.602,864.648" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-0-14">
+    <title>proportion-arc-0-14</title>
+    <polyline points="164.602,864.648 100,868.034" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-1">
+    <title>proportion-1</title>
+    <rect x="718.0339887498948" y="250.0" width="281.9660112501052" height="281.9660112501052" fill="#000000" stroke="#0000ff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="proportion-arc-1-0">
+    <title>proportion-arc-1-0</title>
+    <polyline points="1000,250 998.455,279.473" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-1-1">
+    <title>proportion-arc-1-1</title>
+    <polyline points="998.455,279.473 993.838,308.624" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-1-2">
+    <title>proportion-arc-1-2</title>
+    <polyline points="993.838,308.624 986.2,337.132" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-1-3">
+    <title>proportion-arc-1-3</title>
+    <polyline points="986.2,337.132 975.623,364.686" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-1-4">
+    <title>proportion-arc-1-4</title>
+    <polyline points="975.623,364.686 962.224,390.983" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-1-5">
+    <title>proportion-arc-1-5</title>
+    <polyline points="962.224,390.983 946.149,415.735" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-1-6">
+    <title>proportion-arc-1-6</title>
+    <polyline points="946.149,415.735 927.576,438.672" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-1-7">
+    <title>proportion-arc-1-7</title>
+    <polyline points="927.576,438.672 906.706,459.542" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-1-8">
+    <title>proportion-arc-1-8</title>
+    <polyline points="906.706,459.542 883.769,478.115" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-1-9">
+    <title>proportion-arc-1-9</title>
+    <polyline points="883.769,478.115 859.017,494.19" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-1-10">
+    <title>proportion-arc-1-10</title>
+    <polyline points="859.017,494.19 832.72,507.589" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-1-11">
+    <title>proportion-arc-1-11</title>
+    <polyline points="832.72,507.589 805.166,518.166" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-1-12">
+    <title>proportion-arc-1-12</title>
+    <polyline points="805.166,518.166 776.658,525.804" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-1-13">
+    <title>proportion-arc-1-13</title>
+    <polyline points="776.658,525.804 747.507,530.421" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-1-14">
+    <title>proportion-arc-1-14</title>
+    <polyline points="747.507,530.421 718.034,531.966" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-2">
+    <title>proportion-2</title>
+    <rect x="718.0339887498948" y="531.9660112501052" width="281.9660112501052" height="281.9660112501052" fill="#000000" stroke="#ffff00" stroke-width="1.5" />
+  </g>
+  <g data-object-id="proportion-arc-2-0">
+    <title>proportion-arc-2-0</title>
+    <polyline points="1000,531.966 998.455,561.439" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-2-1">
+    <title>proportion-arc-2-1</title>
+    <polyline points="998.455,561.439 993.838,590.59" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-2-2">
+    <title>proportion-arc-2-2</title>
+    <polyline points="993.838,590.59 986.2,619.098" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-2-3">
+    <title>proportion-arc-2-3</title>
+    <polyline points="986.2,619.098 975.623,646.652" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-2-4">
+    <title>proportion-arc-2-4</title>
+    <polyline points="975.623,646.652 962.224,672.949" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-2-5">
+    <title>proportion-arc-2-5</title>
+    <polyline points="962.224,672.949 946.149,697.701" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-2-6">
+    <title>proportion-arc-2-6</title>
+    <polyline points="946.149,697.701 927.576,720.638" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-2-7">
+    <title>proportion-arc-2-7</title>
+    <polyline points="927.576,720.638 906.706,741.508" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-2-8">
+    <title>proportion-arc-2-8</title>
+    <polyline points="906.706,741.508 883.769,760.081" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-2-9">
+    <title>proportion-arc-2-9</title>
+    <polyline points="883.769,760.081 859.017,776.156" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-2-10">
+    <title>proportion-arc-2-10</title>
+    <polyline points="859.017,776.156 832.72,789.555" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-2-11">
+    <title>proportion-arc-2-11</title>
+    <polyline points="832.72,789.555 805.166,800.132" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-2-12">
+    <title>proportion-arc-2-12</title>
+    <polyline points="805.166,800.132 776.658,807.77" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-2-13">
+    <title>proportion-arc-2-13</title>
+    <polyline points="776.658,807.77 747.507,812.387" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-2-14">
+    <title>proportion-arc-2-14</title>
+    <polyline points="747.507,812.387 718.034,813.932" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-3">
+    <title>proportion-3</title>
+    <rect x="718.0339887498948" y="813.9320225002105" width="54.101966249684324" height="54.101966249684324" fill="#000000" stroke="#ff00ff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="proportion-arc-3-0">
+    <title>proportion-arc-3-0</title>
+    <polyline points="772.136,813.932 771.84,819.587" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-3-1">
+    <title>proportion-arc-3-1</title>
+    <polyline points="771.84,819.587 770.954,825.18" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-3-2">
+    <title>proportion-arc-3-2</title>
+    <polyline points="770.954,825.18 769.488,830.65" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-3-3">
+    <title>proportion-arc-3-3</title>
+    <polyline points="769.488,830.65 767.459,835.937" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-3-4">
+    <title>proportion-arc-3-4</title>
+    <polyline points="767.459,835.937 764.888,840.983" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-3-5">
+    <title>proportion-arc-3-5</title>
+    <polyline points="764.888,840.983 761.803,845.732" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-3-6">
+    <title>proportion-arc-3-6</title>
+    <polyline points="761.803,845.732 758.24,850.133" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-3-7">
+    <title>proportion-arc-3-7</title>
+    <polyline points="758.24,850.133 754.235,854.138" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-3-8">
+    <title>proportion-arc-3-8</title>
+    <polyline points="754.235,854.138 749.834,857.701" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-3-9">
+    <title>proportion-arc-3-9</title>
+    <polyline points="749.834,857.701 745.085,860.786" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-3-10">
+    <title>proportion-arc-3-10</title>
+    <polyline points="745.085,860.786 740.039,863.357" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-3-11">
+    <title>proportion-arc-3-11</title>
+    <polyline points="740.039,863.357 734.752,865.386" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-3-12">
+    <title>proportion-arc-3-12</title>
+    <polyline points="734.752,865.386 729.282,866.852" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-3-13">
+    <title>proportion-arc-3-13</title>
+    <polyline points="729.282,866.852 723.689,867.738" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-3-14">
+    <title>proportion-arc-3-14</title>
+    <polyline points="723.689,867.738 718.034,868.034" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-4">
+    <title>proportion-4</title>
+    <rect x="772.1359549995791" y="813.9320225002105" width="54.101966249684324" height="54.101966249684324" fill="#000000" stroke="#008000" stroke-width="1.5" />
+  </g>
+  <g data-object-id="proportion-arc-4-0">
+    <title>proportion-arc-4-0</title>
+    <polyline points="826.238,813.932 825.942,819.587" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-4-1">
+    <title>proportion-arc-4-1</title>
+    <polyline points="825.942,819.587 825.056,825.18" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-4-2">
+    <title>proportion-arc-4-2</title>
+    <polyline points="825.056,825.18 823.59,830.65" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-4-3">
+    <title>proportion-arc-4-3</title>
+    <polyline points="823.59,830.65 821.561,835.937" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-4-4">
+    <title>proportion-arc-4-4</title>
+    <polyline points="821.561,835.937 818.99,840.983" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-4-5">
+    <title>proportion-arc-4-5</title>
+    <polyline points="818.99,840.983 815.905,845.732" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-4-6">
+    <title>proportion-arc-4-6</title>
+    <polyline points="815.905,845.732 812.342,850.133" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-4-7">
+    <title>proportion-arc-4-7</title>
+    <polyline points="812.342,850.133 808.337,854.138" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-4-8">
+    <title>proportion-arc-4-8</title>
+    <polyline points="808.337,854.138 803.936,857.701" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-4-9">
+    <title>proportion-arc-4-9</title>
+    <polyline points="803.936,857.701 799.187,860.786" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-4-10">
+    <title>proportion-arc-4-10</title>
+    <polyline points="799.187,860.786 794.141,863.357" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-4-11">
+    <title>proportion-arc-4-11</title>
+    <polyline points="794.141,863.357 788.854,865.386" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-4-12">
+    <title>proportion-arc-4-12</title>
+    <polyline points="788.854,865.386 783.384,866.852" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-4-13">
+    <title>proportion-arc-4-13</title>
+    <polyline points="783.384,866.852 777.791,867.738" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-4-14">
+    <title>proportion-arc-4-14</title>
+    <polyline points="777.791,867.738 772.136,868.034" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-5">
+    <title>proportion-5</title>
+    <rect x="826.2379212492634" y="813.9320225002105" width="54.101966249684324" height="54.101966249684324" fill="#000000" stroke="#ff0000" stroke-width="1.5" />
+  </g>
+  <g data-object-id="proportion-arc-5-0">
+    <title>proportion-arc-5-0</title>
+    <polyline points="880.34,813.932 880.044,819.587" stroke-linejoin="round" fill="none" stroke="#ff0000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-5-1">
+    <title>proportion-arc-5-1</title>
+    <polyline points="880.044,819.587 879.158,825.18" stroke-linejoin="round" fill="none" stroke="#ff0000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-5-2">
+    <title>proportion-arc-5-2</title>
+    <polyline points="879.158,825.18 877.692,830.65" stroke-linejoin="round" fill="none" stroke="#ff0000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-5-3">
+    <title>proportion-arc-5-3</title>
+    <polyline points="877.692,830.65 875.663,835.937" stroke-linejoin="round" fill="none" stroke="#ff0000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-5-4">
+    <title>proportion-arc-5-4</title>
+    <polyline points="875.663,835.937 873.092,840.983" stroke-linejoin="round" fill="none" stroke="#ff0000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-5-5">
+    <title>proportion-arc-5-5</title>
+    <polyline points="873.092,840.983 870.007,845.732" stroke-linejoin="round" fill="none" stroke="#ff0000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-5-6">
+    <title>proportion-arc-5-6</title>
+    <polyline points="870.007,845.732 866.444,850.133" stroke-linejoin="round" fill="none" stroke="#ff0000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-5-7">
+    <title>proportion-arc-5-7</title>
+    <polyline points="866.444,850.133 862.439,854.138" stroke-linejoin="round" fill="none" stroke="#ff0000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-5-8">
+    <title>proportion-arc-5-8</title>
+    <polyline points="862.439,854.138 858.038,857.701" stroke-linejoin="round" fill="none" stroke="#ff0000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-5-9">
+    <title>proportion-arc-5-9</title>
+    <polyline points="858.038,857.701 853.289,860.786" stroke-linejoin="round" fill="none" stroke="#ff0000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-5-10">
+    <title>proportion-arc-5-10</title>
+    <polyline points="853.289,860.786 848.243,863.357" stroke-linejoin="round" fill="none" stroke="#ff0000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-5-11">
+    <title>proportion-arc-5-11</title>
+    <polyline points="848.243,863.357 842.956,865.386" stroke-linejoin="round" fill="none" stroke="#ff0000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-5-12">
+    <title>proportion-arc-5-12</title>
+    <polyline points="842.956,865.386 837.486,866.852" stroke-linejoin="round" fill="none" stroke="#ff0000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-5-13">
+    <title>proportion-arc-5-13</title>
+    <polyline points="837.486,866.852 831.893,867.738" stroke-linejoin="round" fill="none" stroke="#ff0000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-5-14">
+    <title>proportion-arc-5-14</title>
+    <polyline points="831.893,867.738 826.238,868.034" stroke-linejoin="round" fill="none" stroke="#ff0000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-6">
+    <title>proportion-6</title>
+    <rect x="880.3398874989477" y="813.9320225002105" width="54.101966249684324" height="54.101966249684324" fill="#000000" stroke="#ffffff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="proportion-arc-6-0">
+    <title>proportion-arc-6-0</title>
+    <polyline points="934.442,813.932 934.145,819.587" stroke-linejoin="round" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-6-1">
+    <title>proportion-arc-6-1</title>
+    <polyline points="934.145,819.587 933.26,825.18" stroke-linejoin="round" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-6-2">
+    <title>proportion-arc-6-2</title>
+    <polyline points="933.26,825.18 931.794,830.65" stroke-linejoin="round" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-6-3">
+    <title>proportion-arc-6-3</title>
+    <polyline points="931.794,830.65 929.764,835.937" stroke-linejoin="round" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-6-4">
+    <title>proportion-arc-6-4</title>
+    <polyline points="929.764,835.937 927.194,840.983" stroke-linejoin="round" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-6-5">
+    <title>proportion-arc-6-5</title>
+    <polyline points="927.194,840.983 924.109,845.732" stroke-linejoin="round" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-6-6">
+    <title>proportion-arc-6-6</title>
+    <polyline points="924.109,845.732 920.545,850.133" stroke-linejoin="round" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-6-7">
+    <title>proportion-arc-6-7</title>
+    <polyline points="920.545,850.133 916.541,854.138" stroke-linejoin="round" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-6-8">
+    <title>proportion-arc-6-8</title>
+    <polyline points="916.541,854.138 912.14,857.701" stroke-linejoin="round" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-6-9">
+    <title>proportion-arc-6-9</title>
+    <polyline points="912.14,857.701 907.391,860.786" stroke-linejoin="round" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-6-10">
+    <title>proportion-arc-6-10</title>
+    <polyline points="907.391,860.786 902.345,863.357" stroke-linejoin="round" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-6-11">
+    <title>proportion-arc-6-11</title>
+    <polyline points="902.345,863.357 897.058,865.386" stroke-linejoin="round" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-6-12">
+    <title>proportion-arc-6-12</title>
+    <polyline points="897.058,865.386 891.588,866.852" stroke-linejoin="round" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-6-13">
+    <title>proportion-arc-6-13</title>
+    <polyline points="891.588,866.852 885.995,867.738" stroke-linejoin="round" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-6-14">
+    <title>proportion-arc-6-14</title>
+    <polyline points="885.995,867.738 880.34,868.034" stroke-linejoin="round" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-7">
+    <title>proportion-7</title>
+    <rect x="934.4418537486321" y="813.9320225002105" width="54.101966249684324" height="54.101966249684324" fill="#000000" stroke="#00ffff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="proportion-arc-7-0">
+    <title>proportion-arc-7-0</title>
+    <polyline points="988.544,813.932 988.247,819.587" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-7-1">
+    <title>proportion-arc-7-1</title>
+    <polyline points="988.247,819.587 987.362,825.18" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-7-2">
+    <title>proportion-arc-7-2</title>
+    <polyline points="987.362,825.18 985.896,830.65" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-7-3">
+    <title>proportion-arc-7-3</title>
+    <polyline points="985.896,830.65 983.866,835.937" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-7-4">
+    <title>proportion-arc-7-4</title>
+    <polyline points="983.866,835.937 981.296,840.983" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-7-5">
+    <title>proportion-arc-7-5</title>
+    <polyline points="981.296,840.983 978.211,845.732" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-7-6">
+    <title>proportion-arc-7-6</title>
+    <polyline points="978.211,845.732 974.647,850.133" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-7-7">
+    <title>proportion-arc-7-7</title>
+    <polyline points="974.647,850.133 970.643,854.138" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-7-8">
+    <title>proportion-arc-7-8</title>
+    <polyline points="970.643,854.138 966.242,857.701" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-7-9">
+    <title>proportion-arc-7-9</title>
+    <polyline points="966.242,857.701 961.493,860.786" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-7-10">
+    <title>proportion-arc-7-10</title>
+    <polyline points="961.493,860.786 956.447,863.357" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-7-11">
+    <title>proportion-arc-7-11</title>
+    <polyline points="956.447,863.357 951.16,865.386" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-7-12">
+    <title>proportion-arc-7-12</title>
+    <polyline points="951.16,865.386 945.69,866.852" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-7-13">
+    <title>proportion-arc-7-13</title>
+    <polyline points="945.69,866.852 940.097,867.738" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-7-14">
+    <title>proportion-arc-7-14</title>
+    <polyline points="940.097,867.738 934.442,868.034" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-8">
+    <title>proportion-8</title>
+    <rect x="988.5438199983164" y="813.9320225002105" width="11.456180001683606" height="11.456180001683606" fill="#000000" stroke="#0000ff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="proportion-arc-8-0">
+    <title>proportion-arc-8-0</title>
+    <polyline points="1000,813.932 999.937,815.13" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-8-1">
+    <title>proportion-arc-8-1</title>
+    <polyline points="999.937,815.13 999.75,816.314" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-8-2">
+    <title>proportion-arc-8-2</title>
+    <polyline points="999.75,816.314 999.439,817.472" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-8-3">
+    <title>proportion-arc-8-3</title>
+    <polyline points="999.439,817.472 999.01,818.592" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-8-4">
+    <title>proportion-arc-8-4</title>
+    <polyline points="999.01,818.592 998.465,819.66" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-8-5">
+    <title>proportion-arc-8-5</title>
+    <polyline points="998.465,819.66 997.812,820.666" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-8-6">
+    <title>proportion-arc-8-6</title>
+    <polyline points="997.812,820.666 997.057,821.598" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-8-7">
+    <title>proportion-arc-8-7</title>
+    <polyline points="997.057,821.598 996.21,822.446" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-8-8">
+    <title>proportion-arc-8-8</title>
+    <polyline points="996.21,822.446 995.278,823.2" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-8-9">
+    <title>proportion-arc-8-9</title>
+    <polyline points="995.278,823.2 994.272,823.853" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-8-10">
+    <title>proportion-arc-8-10</title>
+    <polyline points="994.272,823.853 993.203,824.398" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-8-11">
+    <title>proportion-arc-8-11</title>
+    <polyline points="993.203,824.398 992.084,824.827" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-8-12">
+    <title>proportion-arc-8-12</title>
+    <polyline points="992.084,824.827 990.926,825.138" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-8-13">
+    <title>proportion-arc-8-13</title>
+    <polyline points="990.926,825.138 989.741,825.325" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="proportion-arc-8-14">
+    <title>proportion-arc-8-14</title>
+    <polyline points="989.741,825.325 988.544,825.388" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="formula-title">
+    <title>formula-title</title>
+    <text x="1220.0" y="270.0" font-family="sans-serif" font-size="18.0" fill="#00ffff">THE RATIO</text>
+  </g>
+  <g data-object-id="formula-phi">
+    <title>formula-phi</title>
+    <text x="1220.0" y="320.0" font-family="sans-serif" font-size="26.0" fill="#ffff00">phi = 1.61803398875</text>
+  </g>
+  <g data-object-id="formula-relation">
+    <title>formula-relation</title>
+    <text x="1220.0" y="370.0" font-family="sans-serif" font-size="20.0" fill="#ffffff">a / b = (a + b) / a = phi</text>
+  </g>
+  <g data-object-id="formula-note">
+    <title>formula-note</title>
+    <text x="1220.0" y="420.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">Each small square fits beside</text>
+  </g>
+  <g data-object-id="formula-note-2">
+    <title>formula-note-2</title>
+    <text x="1220.0" y="448.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">the preceding rectangle.</text>
+  </g>
+  <g data-object-id="rule-line">
+    <title>rule-line</title>
+    <polyline points="1210,486 1830,486" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="architecture-title">
+    <title>architecture-title</title>
+    <text x="1220.0" y="535.0" font-family="sans-serif" font-size="18.0" fill="#00ffff">MATHEMATICS + ARCHITECTURE</text>
+  </g>
+  <g data-object-id="architecture-1">
+    <title>architecture-1</title>
+    <text x="1220.0" y="580.0" font-family="sans-serif" font-size="16.0" fill="#ffffff">Spatial form is chosen before</text>
+  </g>
+  <g data-object-id="architecture-2">
+    <title>architecture-2</title>
+    <text x="1220.0" y="610.0" font-family="sans-serif" font-size="16.0" fill="#ffffff">it becomes visible.</text>
+  </g>
+  <g data-object-id="architecture-3">
+    <title>architecture-3</title>
+    <text x="1220.0" y="650.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">Proportion can organize harmony;</text>
+  </g>
+  <g data-object-id="architecture-4">
+    <title>architecture-4</title>
+    <text x="1220.0" y="680.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">it cannot guarantee it.</text>
+  </g>
+  <g data-object-id="scope">
+    <title>scope</title>
+    <text x="70.0" y="1032.0" font-family="sans-serif" font-size="14.0" fill="#808080">Exact phi geometry · illustrative composition · not a universal theory of beauty</text>
+  </g>
+  <g data-object-id="power-phi">
+    <title>power-phi</title>
+    <text x="1220.0" y="730.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">phi = 1.618034</text>
+  </g>
+  <g data-object-id="power-phi^2">
+    <title>power-phi^2</title>
+    <text x="1220.0" y="775.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">phi^2 = 2.618034</text>
+  </g>
+  <g data-object-id="power-phi^3">
+    <title>power-phi^3</title>
+    <text x="1220.0" y="820.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">phi^3 = 4.236068</text>
+  </g>
+  <g data-object-id="power-phi^4">
+    <title>power-phi^4</title>
+    <text x="1220.0" y="865.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">phi^4 = 6.854102</text>
+  </g>
+</svg>

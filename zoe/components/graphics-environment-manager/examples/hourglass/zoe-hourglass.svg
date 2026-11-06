@@ -1,0 +1,357 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1040" viewBox="0 0 1200 1040" role="img" aria-label="Zoe · Accessible Q-Volume as a GEM/Artline two-way hourglass">
+  <title>Zoe · Accessible Q-Volume as a GEM/Artline two-way hourglass</title>
+  <rect x="0" y="0" width="1200.0" height="1040.0" fill="#ffffff" />
+  <g data-object-id="paper">
+    <title>paper</title>
+    <rect x="0.0" y="0.0" width="1200.0" height="1040.0" fill="#000000" stroke="#000000" stroke-width="0.0" />
+  </g>
+  <g data-object-id="threshold-frame-0">
+    <title>threshold-frame-0</title>
+    <rect x="20.0" y="20.0" width="1160.0" height="980.0" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="threshold-frame-1">
+    <title>threshold-frame-1</title>
+    <rect x="40.0" y="40.0" width="1120.0" height="940.0" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="threshold-frame-2">
+    <title>threshold-frame-2</title>
+    <rect x="60.0" y="60.0" width="1080.0" height="900.0" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="threshold-frame-3">
+    <title>threshold-frame-3</title>
+    <rect x="82.0" y="82.0" width="1036.0" height="856.0" fill="none" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="past-hourglass">
+    <title>past-hourglass</title>
+    <polygon points="250,190 950,190 600,480" stroke-linejoin="round" fill="#000000" stroke="#00ffff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="future-hourglass">
+    <title>future-hourglass</title>
+    <polygon points="250,770 950,770 600,480" stroke-linejoin="round" fill="#000000" stroke="#ff00ff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="past-hatch-0">
+    <title>past-hatch-0</title>
+    <polyline points="252.414,192 947.586,192" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="past-hatch-1">
+    <title>past-hatch-1</title>
+    <polyline points="281.379,216 918.621,216" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="past-hatch-2">
+    <title>past-hatch-2</title>
+    <polyline points="310.345,240 889.655,240" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="past-hatch-3">
+    <title>past-hatch-3</title>
+    <polyline points="339.31,264 860.69,264" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="past-hatch-4">
+    <title>past-hatch-4</title>
+    <polyline points="368.276,288 831.724,288" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="past-hatch-5">
+    <title>past-hatch-5</title>
+    <polyline points="397.241,312 802.759,312" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="past-hatch-6">
+    <title>past-hatch-6</title>
+    <polyline points="426.207,336 773.793,336" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="past-hatch-7">
+    <title>past-hatch-7</title>
+    <polyline points="455.172,360 744.828,360" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="past-hatch-8">
+    <title>past-hatch-8</title>
+    <polyline points="484.138,384 715.862,384" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="past-hatch-9">
+    <title>past-hatch-9</title>
+    <polyline points="513.103,408 686.897,408" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="past-hatch-10">
+    <title>past-hatch-10</title>
+    <polyline points="542.069,432 657.931,432" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="past-hatch-11">
+    <title>past-hatch-11</title>
+    <polyline points="571.034,456 628.966,456" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="past-hatch-12">
+    <title>past-hatch-12</title>
+    <polyline points="600,480 600,480" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="future-hatch-0">
+    <title>future-hatch-0</title>
+    <polyline points="600,480 600,480" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="future-hatch-1">
+    <title>future-hatch-1</title>
+    <polyline points="571.034,504 628.966,504" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="future-hatch-2">
+    <title>future-hatch-2</title>
+    <polyline points="542.069,528 657.931,528" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="future-hatch-3">
+    <title>future-hatch-3</title>
+    <polyline points="513.103,552 686.897,552" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="future-hatch-4">
+    <title>future-hatch-4</title>
+    <polyline points="484.138,576 715.862,576" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="future-hatch-5">
+    <title>future-hatch-5</title>
+    <polyline points="455.172,600 744.828,600" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="future-hatch-6">
+    <title>future-hatch-6</title>
+    <polyline points="426.207,624 773.793,624" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="future-hatch-7">
+    <title>future-hatch-7</title>
+    <polyline points="397.241,648 802.759,648" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="future-hatch-8">
+    <title>future-hatch-8</title>
+    <polyline points="368.276,672 831.724,672" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="future-hatch-9">
+    <title>future-hatch-9</title>
+    <polyline points="339.31,696 860.69,696" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="future-hatch-10">
+    <title>future-hatch-10</title>
+    <polyline points="310.345,720 889.655,720" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="future-hatch-11">
+    <title>future-hatch-11</title>
+    <polyline points="281.379,744 918.621,744" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="future-hatch-12">
+    <title>future-hatch-12</title>
+    <polyline points="252.414,768 947.586,768" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="past-1-contour-0">
+    <title>past-1-contour-0</title>
+    <polyline points="512.858,404.52 516.4,403.262 520,402.058 523.655,400.906 527.362,399.809 531.118,398.767 534.922,397.781 538.771,396.851 542.661,395.978 546.591,395.162 550.557,394.405 554.558,393.706 558.589,393.067 562.649,392.487 566.734,391.967 570.842,391.507 574.97,391.108 579.116,390.77 583.275,390.493 587.447,390.277 591.626,390.123 595.812,390.031 600,390 604.188,390.031 608.374,390.123 612.553,390.277 616.725,390.493 620.884,390.77 625.03,391.108 629.158,391.507 633.266,391.967 637.351,392.487 641.411,393.067 645.442,393.706 649.443,394.405 653.409,395.162 657.339,395.978 661.229,396.851 665.078,397.781 668.882,398.767 672.638,399.809 676.345,400.906 680,402.058 683.6,403.262 687.142,404.52" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="future-1-contour-0">
+    <title>future-1-contour-0</title>
+    <polyline points="687.142,555.48 683.6,556.738 680,557.942 676.345,559.094 672.638,560.191 668.882,561.233 665.078,562.219 661.229,563.149 657.339,564.022 653.409,564.838 649.443,565.595 645.442,566.294 641.411,566.933 637.351,567.513 633.266,568.033 629.158,568.493 625.03,568.892 620.884,569.23 616.725,569.507 612.553,569.723 608.374,569.877 604.188,569.969 600,570 595.812,569.969 591.626,569.877 587.447,569.723 583.275,569.507 579.116,569.23 574.97,568.892 570.842,568.493 566.734,568.033 562.649,567.513 558.589,566.933 554.558,566.294 550.557,565.595 546.591,564.838 542.661,564.022 538.771,563.149 534.922,562.219 531.118,561.233 527.362,560.191 523.655,559.094 520,557.942 516.4,556.738 512.858,555.48" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="past-2-contour-0">
+    <title>past-2-contour-0</title>
+    <polyline points="458.932,362.693 464.063,360.502 469.287,358.393 474.6,356.367 480,354.426 485.482,352.572 491.042,350.804 496.677,349.125 502.383,347.536 508.156,346.037 513.992,344.631 519.886,343.317 525.836,342.097 531.836,340.971 537.883,339.941 543.973,339.006 550.101,338.169 556.263,337.428 562.456,336.785 568.674,336.24 574.913,335.794 581.17,335.447 587.439,335.199 593.718,335.05 600,335 606.282,335.05 612.561,335.199 618.83,335.447 625.087,335.794 631.326,336.24 637.544,336.785 643.737,337.428 649.899,338.169 656.027,339.006 662.117,339.941 668.164,340.971 674.164,342.097 680.114,343.317 686.008,344.631 691.844,346.037 697.617,347.536 703.323,349.125 708.958,350.804 714.518,352.572 720,354.426 725.4,356.367 730.713,358.393 735.937,360.502 741.068,362.693" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="future-2-contour-0">
+    <title>future-2-contour-0</title>
+    <polyline points="741.068,597.307 735.937,599.498 730.713,601.607 725.4,603.633 720,605.574 714.518,607.428 708.958,609.196 703.323,610.875 697.617,612.464 691.844,613.963 686.008,615.369 680.114,616.683 674.164,617.903 668.164,619.029 662.117,620.059 656.027,620.994 649.899,621.831 643.737,622.572 637.544,623.215 631.326,623.76 625.087,624.206 618.83,624.553 612.561,624.801 606.282,624.95 600,625 593.718,624.95 587.439,624.801 581.17,624.553 574.913,624.206 568.674,623.76 562.456,623.215 556.263,622.572 550.101,621.831 543.973,620.994 537.883,620.059 531.836,619.029 525.836,617.903 519.886,616.683 513.992,615.369 508.156,613.963 502.383,612.464 496.677,610.875 491.042,609.196 485.482,607.428 480,605.574 474.6,603.633 469.287,601.607 464.063,599.498 458.932,597.307" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="past-3-contour-0">
+    <title>past-3-contour-0</title>
+    <polyline points="411.909,318.197 418.75,315.175 425.716,312.266 432.8,309.472 440,306.795 447.309,304.237 454.723,301.799 462.236,299.483 469.844,297.291 477.541,295.224 485.322,293.284 493.182,291.472 501.115,289.789 509.115,288.236 517.178,286.815 525.297,285.526 533.468,284.37 541.685,283.349 549.941,282.462 558.232,281.711 566.551,281.096 574.893,280.617 583.252,280.274 591.623,280.069 600,280 608.377,280.069 616.748,280.274 625.107,280.617 633.449,281.096 641.768,281.711 650.059,282.462 658.315,283.349 666.532,284.37 674.703,285.526 682.822,286.815 690.885,288.236 698.885,289.789 706.818,291.472 714.678,293.284 722.459,295.224 730.156,297.291 737.764,299.483 745.277,301.799 752.691,304.237 760,306.795 767.2,309.472 774.284,312.266 781.25,315.175 788.091,318.197" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="future-3-contour-0">
+    <title>future-3-contour-0</title>
+    <polyline points="788.091,641.803 781.25,644.825 774.284,647.734 767.2,650.528 760,653.205 752.691,655.763 745.277,658.201 737.764,660.517 730.156,662.709 722.459,664.776 714.678,666.716 706.818,668.528 698.885,670.211 690.885,671.764 682.822,673.185 674.703,674.474 666.532,675.63 658.315,676.651 650.059,677.538 641.768,678.289 633.449,678.904 625.107,679.383 616.748,679.726 608.377,679.931 600,680 591.623,679.931 583.252,679.726 574.893,679.383 566.551,678.904 558.232,678.289 549.941,677.538 541.685,676.651 533.468,675.63 525.297,674.474 517.178,673.185 509.115,671.764 501.115,670.211 493.182,668.528 485.322,666.716 477.541,664.776 469.844,662.709 462.236,660.517 454.723,658.201 447.309,655.763 440,653.205 432.8,650.528 425.716,647.734 418.75,644.825 411.909,641.803" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="past-4-contour-0">
+    <title>past-4-contour-0</title>
+    <polyline points="356.495,277.695 364.886,273.701 373.438,269.848 382.144,266.139 391.001,262.577 400,259.164 409.136,255.902 418.404,252.793 427.796,249.841 437.305,247.046 446.927,244.411 456.653,241.937 466.477,239.626 476.393,237.481 486.394,235.501 496.472,233.689 506.622,232.046 516.835,230.572 527.106,229.27 537.426,228.139 547.79,227.182 558.189,226.397 568.616,225.786 579.066,225.349 589.529,225.087 600,225 610.471,225.087 620.934,225.349 631.384,225.786 641.811,226.397 652.21,227.182 662.574,228.139 672.894,229.27 683.165,230.572 693.378,232.046 703.528,233.689 713.606,235.501 723.607,237.481 733.523,239.626 743.347,241.937 753.073,244.411 762.695,247.046 772.204,249.841 781.596,252.793 790.864,255.902 800,259.164 808.999,262.577 817.856,266.139 826.562,269.848 835.114,273.701 843.505,277.695" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="future-4-contour-0">
+    <title>future-4-contour-0</title>
+    <polyline points="843.505,682.305 835.114,686.299 826.562,690.152 817.856,693.861 808.999,697.423 800,700.836 790.864,704.098 781.596,707.207 772.204,710.159 762.695,712.954 753.073,715.589 743.347,718.063 733.523,720.374 723.607,722.519 713.606,724.499 703.528,726.311 693.378,727.954 683.165,729.428 672.894,730.73 662.574,731.861 652.21,732.818 641.811,733.603 631.384,734.214 620.934,734.651 610.471,734.913 600,735 589.529,734.913 579.066,734.651 568.616,734.214 558.189,733.603 547.79,732.818 537.426,731.861 527.106,730.73 516.835,729.428 506.622,727.954 496.472,726.311 486.394,724.499 476.393,722.519 466.477,720.374 456.653,718.063 446.927,715.589 437.305,712.954 427.796,710.159 418.404,707.207 409.136,704.098 400,700.836 391.001,697.423 382.144,693.861 373.438,690.152 364.886,686.299 356.495,682.305" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="title">
+    <title>title</title>
+    <text x="419.91" y="105.0" font-family="sans-serif" font-size="27.0" fill="#ffffff">ZOE / ARTLINE HOURGLASS</text>
+  </g>
+  <g data-object-id="subtitle">
+    <title>subtitle</title>
+    <text x="382.5" y="135.0" font-family="sans-serif" font-size="15.0" fill="#d3d3d3">ACCESSIBLE Q-VOLUME · CAUSE -&gt; PRESENT -&gt; FORECAST</text>
+  </g>
+  <g data-object-id="operator">
+    <title>operator</title>
+    <text x="440.21000000000004" y="166.0" font-family="sans-serif" font-size="19.0" fill="#ffffff">A(tau)[p] = #{z : p(z) &gt; tau}</text>
+  </g>
+  <g data-object-id="past-title">
+    <title>past-title</title>
+    <text x="451.52" y="218.0" font-family="sans-serif" font-size="16.0" fill="#00ffff">CAUSAL PASTS / Q-SPACE / N = 2^n</text>
+  </g>
+  <g data-object-id="past-repertoire-back">
+    <title>past-repertoire-back</title>
+    <rect x="425.0" y="315.0" width="350.0" height="33.0" fill="#000000" stroke="#000000" stroke-width="0.0" />
+  </g>
+  <g data-object-id="past-repertoire">
+    <title>past-repertoire</title>
+    <text x="447.17" y="339.0" font-family="sans-serif" font-size="17.0" fill="#00ffff">rho_T = ( 1/3   1/3   1/3   0 )</text>
+  </g>
+  <g data-object-id="past-count-frame">
+    <title>past-count-frame</title>
+    <rect x="455.0" y="360.0" width="290.0" height="42.0" fill="#000000" stroke="#00ffff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="past-count">
+    <title>past-count</title>
+    <text x="521.7" y="389.0" font-family="sans-serif" font-size="18.0" fill="#00ffff">QA(tau=.20) = 3</text>
+  </g>
+  <g data-object-id="past-caption-back">
+    <title>past-caption-back</title>
+    <rect x="435.0" y="405.0" width="330.0" height="27.0" fill="#000000" stroke="#000000" stroke-width="0.0" />
+  </g>
+  <g data-object-id="past-caption">
+    <title>past-caption</title>
+    <text x="460.51" y="424.0" font-family="sans-serif" font-size="13.0" fill="#00ffff">causes converge / alternatives narrow</text>
+  </g>
+  <g data-object-id="present-frame">
+    <title>present-frame</title>
+    <rect x="440.0" y="447.0" width="320.0" height="66.0" fill="#ffff00" stroke="#ffffff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="present-title">
+    <title>present-title</title>
+    <text x="513.0" y="473.0" font-family="sans-serif" font-size="12.0" fill="#000000">PRESENT / EXPLICIT BRIDGE</text>
+  </g>
+  <g data-object-id="present-equation">
+    <title>present-equation</title>
+    <text x="511.84000000000003" y="500.0" font-family="sans-serif" font-size="19.0" fill="#000000">x1 --iota--&gt; C_t</text>
+  </g>
+  <g data-object-id="future-caption-back">
+    <title>future-caption-back</title>
+    <rect x="440.0" y="526.0" width="320.0" height="27.0" fill="#000000" stroke="#000000" stroke-width="0.0" />
+  </g>
+  <g data-object-id="future-caption">
+    <title>future-caption</title>
+    <text x="460.51" y="545.0" font-family="sans-serif" font-size="13.0" fill="#ff00ff">forecasts diverge / alternatives open</text>
+  </g>
+  <g data-object-id="future-count-frame">
+    <title>future-count-frame</title>
+    <rect x="455.0" y="562.0" width="290.0" height="42.0" fill="#000000" stroke="#ff00ff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="future-count">
+    <title>future-count</title>
+    <text x="526.92" y="591.0" font-family="sans-serif" font-size="18.0" fill="#ff00ff">A(tau=.05) = 3</text>
+  </g>
+  <g data-object-id="future-repertoire-back">
+    <title>future-repertoire-back</title>
+    <rect x="425.0" y="610.0" width="350.0" height="34.0" fill="#000000" stroke="#000000" stroke-width="0.0" />
+  </g>
+  <g data-object-id="future-repertoire">
+    <title>future-repertoire</title>
+    <text x="447.17" y="634.0" font-family="sans-serif" font-size="17.0" fill="#ff00ff">P_h = ( .70   .20   .08   .02 )</text>
+  </g>
+  <g data-object-id="future-title-back">
+    <title>future-title-back</title>
+    <rect x="370.0" y="730.0" width="460.0" height="30.0" fill="#000000" stroke="#000000" stroke-width="0.0" />
+  </g>
+  <g data-object-id="future-title">
+    <title>future-title</title>
+    <text x="432.96000000000004" y="752.0" font-family="sans-serif" font-size="16.0" fill="#ff00ff">FORECAST FUTURES / O^h / |O|^h PATHS</text>
+  </g>
+  <g data-object-id="tau-note">
+    <title>tau-note</title>
+    <text x="90.0" y="525.0" font-family="sans-serif" font-size="12.0" fill="#d3d3d3">tau increases inward</text>
+  </g>
+  <g data-object-id="filtration-note">
+    <title>filtration-note</title>
+    <text x="875.0" y="525.0" font-family="sans-serif" font-size="12.0" fill="#d3d3d3">B(tau3) subset B(tau2) subset B(tau1)</text>
+  </g>
+  <g data-object-id="past-node-00">
+    <title>past-node-00</title>
+    <ellipse cx="390.0" cy="257.0" rx="9.0" ry="9.0" fill="#000000" stroke="#00ffff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="past-state-00">
+    <title>past-state-00</title>
+    <text x="381.88" y="287.0" font-family="sans-serif" font-size="14.0" fill="#00ffff">00</text>
+  </g>
+  <g data-object-id="past-node-01">
+    <title>past-node-01</title>
+    <ellipse cx="530.0" cy="257.0" rx="9.0" ry="9.0" fill="#000000" stroke="#00ffff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="past-state-01">
+    <title>past-state-01</title>
+    <text x="521.88" y="287.0" font-family="sans-serif" font-size="14.0" fill="#00ffff">01</text>
+  </g>
+  <g data-object-id="past-node-10">
+    <title>past-node-10</title>
+    <ellipse cx="670.0" cy="257.0" rx="9.0" ry="9.0" fill="#000000" stroke="#00ffff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="past-state-10">
+    <title>past-state-10</title>
+    <text x="661.88" y="287.0" font-family="sans-serif" font-size="14.0" fill="#00ffff">10</text>
+  </g>
+  <g data-object-id="past-node-11">
+    <title>past-node-11</title>
+    <ellipse cx="810.0" cy="257.0" rx="9.0" ry="9.0" fill="#ff0000" stroke="#ff0000" stroke-width="2.0" />
+  </g>
+  <g data-object-id="past-state-11">
+    <title>past-state-11</title>
+    <text x="805.94" y="287.0" font-family="sans-serif" font-size="14.0" fill="#ff0000">x</text>
+  </g>
+  <g data-object-id="past-label-11">
+    <title>past-label-11</title>
+    <text x="803.04" y="305.0" font-family="sans-serif" font-size="12.0" fill="#ff0000">11</text>
+  </g>
+  <g data-object-id="future-node-A">
+    <title>future-node-A</title>
+    <ellipse cx="390.0" cy="697.0" rx="9.0" ry="9.0" fill="#000000" stroke="#ff00ff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="future-state-A">
+    <title>future-state-A</title>
+    <text x="385.94" y="727.0" font-family="sans-serif" font-size="14.0" fill="#ff00ff">A</text>
+  </g>
+  <g data-object-id="future-node-B">
+    <title>future-node-B</title>
+    <ellipse cx="530.0" cy="697.0" rx="9.0" ry="9.0" fill="#000000" stroke="#ff00ff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="future-state-B">
+    <title>future-state-B</title>
+    <text x="525.94" y="727.0" font-family="sans-serif" font-size="14.0" fill="#ff00ff">B</text>
+  </g>
+  <g data-object-id="future-node-C">
+    <title>future-node-C</title>
+    <ellipse cx="670.0" cy="697.0" rx="9.0" ry="9.0" fill="#000000" stroke="#ff00ff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="future-state-C">
+    <title>future-state-C</title>
+    <text x="665.94" y="727.0" font-family="sans-serif" font-size="14.0" fill="#ff00ff">C</text>
+  </g>
+  <g data-object-id="future-node-D">
+    <title>future-node-D</title>
+    <ellipse cx="810.0" cy="697.0" rx="9.0" ry="9.0" fill="#000000" stroke="#d3d3d3" stroke-width="2.0" />
+  </g>
+  <g data-object-id="future-state-D">
+    <title>future-state-D</title>
+    <text x="805.94" y="727.0" font-family="sans-serif" font-size="14.0" fill="#d3d3d3">D</text>
+  </g>
+  <g data-object-id="evidence-panel">
+    <title>evidence-panel</title>
+    <rect x="110.0" y="810.0" width="980.0" height="92.0" fill="#000000" stroke="#d3d3d3" stroke-width="1.0" />
+  </g>
+  <g data-object-id="evidence-exact">
+    <title>evidence-exact</title>
+    <text x="377.28000000000003" y="840.0" font-family="sans-serif" font-size="16.0" fill="#ffffff">FULL LABELED THRESHOLD SWEEP =&gt; EXACT REPERTOIRE</text>
+  </g>
+  <g data-object-id="evidence-contours">
+    <title>evidence-contours</title>
+    <text x="328.56" y="866.0" font-family="sans-serif" font-size="13.0" fill="#d3d3d3">frames = nested accessible sets / clipped ellipses = repertoire contours</text>
+  </g>
+  <g data-object-id="evidence-finite">
+    <title>evidence-finite</title>
+    <text x="317.25" y="890.0" font-family="sans-serif" font-size="13.0" fill="#d3d3d3">finite grid = approximate contour map / counts without labels lose identity</text>
+  </g>
+  <g data-object-id="boundary">
+    <title>boundary</title>
+    <text x="378.15" y="934.0" font-family="sans-serif" font-size="17.0" fill="#ff0000">VOLUME != Phi != CORRECTNESS != CONSCIOUSNESS</text>
+  </g>
+  <g data-object-id="zoe-rule">
+    <title>zoe-rule</title>
+    <text x="340.16" y="961.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">ZOE: measure + preserve evidence + human review / executed=False</text>
+  </g>
+  <g data-object-id="figure-caption">
+    <title>figure-caption</title>
+    <text x="401.64" y="1003.0" font-family="sans-serif" font-size="12.0" fill="#ffffff">Figure Z.01: ZOE_QVOLUME.C Output — The Two-Way Hourglass</text>
+  </g>
+</svg>

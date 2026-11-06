@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "instrument": "accessible volume of a full-vocabulary token distribution",
+  "model": "nlpaueb/legal-bert-base-uncased",
+  "model_revision": "15b570cbf88259610b082a167dacc190124f60f6",
+  "requested_revision": "15b570cbf88259610b082a167dacc190124f60f6",
+  "runtime": {
+    "torch": "2.14.1+cu130",
+    "transformers": "4.56.2"
+  },
+  "prediction_style": "masked",
+  "text": "The parties signed the agreement",
+  "sequence_length": 7,
+  "target_position": 5,
+  "target_token_id": 232,
+  "target_token": "agreement",
+  "vocabulary_size": 30522,
+  "probability_sum": 1.0,
+  "threshold_sweep": [
+    {
+      "tau": 0.02,
+      "accessible_volume": 7,
+      "normalized_accessible_volume": 0.00022934276915012123
+    },
+    {
+      "tau": 0.05,
+      "accessible_volume": 2,
+      "normalized_accessible_volume": 6.552650547146321e-05
+    },
+    {
+      "tau": 0.1,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.2763252735731606e-05
+    },
+    {
+      "tau": 0.15,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.2763252735731606e-05
+    },
+    {
+      "tau": 0.3,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.2763252735731606e-05
+    },
+    {
+      "tau": 0.5,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    }
+  ],
+  "entropy_bits": 5.080231368754015,
+  "top_10_probability_mass": 0.6486007023175913,
+  "target_probability": 0.3638567203414802,
+  "target_rank": 1,
+  "top_tokens": [
+    {
+      "token_id": 232,
+      "token": "agreement",
+      "probability": 0.3638567203414802
+    },
+    {
+      "token_id": 1813,
+      "token": "appendix",
+      "probability": 0.062461345177825894
+    },
+    {
+      "token_id": 651,
+      "token": "document",
+      "probability": 0.042567383744712306
+    },
+    {
+      "token_id": 209,
+      "token": "newline",
+      "probability": 0.042165791922362535
+    },
+    {
+      "token_id": 438,
+      "token": "contract",
+      "probability": 0.04022985344490868
+    },
+    {
+      "token_id": 379,
+      "token": "annex",
+      "probability": 0.024867440280381205
+    },
+    {
+      "token_id": 3827,
+      "token": "seal",
+      "probability": 0.024678768163114
+    },
+    {
+      "token_id": 513,
+      "token": "statement",
+      "probability": 0.018993453342939403
+    },
+    {
+      "token_id": 1349,
+      "token": "protocol",
+      "probability": 0.01550961298598723
+    },
+    {
+      "token_id": 2219,
+      "token": "deed",
+      "probability": 0.013270332913879931
+    }
+  ],
+  "checks": {
+    "repeated_probabilities_identical": true,
+    "target_replaced_with_mask": true,
+    "mask_count": 1
+  },
+  "probability_values_sha256": "7334404f1ce267046b19fd5bba4446b36bdf8c9e41fb9081ada136a51efe40bb",
+  "input_ids_sha256": "641caaf61de658c5c32177054ae633dde3a40e680dafece4c3b1813c076a3cc6",
+  "original_input_ids_sha256": "a0ad5ad8dd432d6a60e41d67ff9de33e7ef6291a5a88851706d5bcde6bb8215f",
+  "scope": [
+    "One nlpaueb/legal-bert-base-uncased distribution for the final non-special token of the recorded text.",
+    "The target is replaced by a mask token.",
+    "This is a token-level measurement, not a model-quality, security, or action-level benchmark."
+  ]
+}

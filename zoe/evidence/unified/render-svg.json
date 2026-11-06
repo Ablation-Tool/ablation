@@ -1,0 +1,1225 @@
+{
+  "bytes": 42005,
+  "measurement": {
+    "boundaries": "One source distribution and identity; separate processes, dependencies, evidence, and authorization remain distinct.",
+    "components": [
+      {
+        "anchor": "guiai/gem/cognitive.py",
+        "checkout": "guiai-lab",
+        "default_args": [
+          "zoe",
+          "--module",
+          "unified"
+        ],
+        "identifier": "zoe",
+        "inspect_only": false,
+        "module": "guiai.gem",
+        "python_paths": [
+          ""
+        ],
+        "repository": "https://github.com/Ablation-Tool/zoe",
+        "revision": null,
+        "runtime_checkout": null,
+        "source": {
+          "mode": "zoe",
+          "path": "/home/cowboy/_projects/ablation/zoe/guiai-lab",
+          "runtime_verified": false,
+          "source_present": true
+        },
+        "summary": "Cognitive Field, Bayesian memory, geometry, and unified hub",
+        "title": "Zoe native shell"
+      },
+      {
+        "anchor": "ablation/analyzers/entropy_mapper.py",
+        "checkout": "ablation",
+        "default_args": [
+          "--help"
+        ],
+        "identifier": "ablation",
+        "inspect_only": false,
+        "module": "ablation.cli",
+        "python_paths": [
+          ""
+        ],
+        "repository": "https://github.com/Ablation-Tool/ablation",
+        "revision": "b56f91e4c54cfd996bceea63a38d8136dc1e689f",
+        "runtime_checkout": null,
+        "source": {
+          "mode": "host",
+          "path": "/home/cowboy/_projects/ablation",
+          "runtime_verified": false,
+          "source_present": true
+        },
+        "summary": "Complete AIARE framework, analyzers, parsers, modules, and core CLI",
+        "title": "Ablation core engine"
+      },
+      {
+        "anchor": "gem-lab/gem/gtk_app.py",
+        "checkout": "ablation",
+        "default_args": [
+          "launch",
+          "--no-agent"
+        ],
+        "identifier": "gem-lab",
+        "inspect_only": false,
+        "module": "gem",
+        "python_paths": [
+          "gem-lab"
+        ],
+        "repository": "https://github.com/Ablation-Tool/ablation",
+        "revision": "b56f91e4c54cfd996bceea63a38d8136dc1e689f",
+        "runtime_checkout": null,
+        "source": {
+          "mode": "host",
+          "path": "/home/cowboy/_projects/ablation",
+          "runtime_verified": false,
+          "source_present": true
+        },
+        "summary": "Default native investigation GUI and shared Lab evidence protocol",
+        "title": "Ablation GEM Lab"
+      },
+      {
+        "anchor": "gem/cli.py",
+        "checkout": "graphics-environment-manager",
+        "default_args": [
+          "os"
+        ],
+        "identifier": "gem",
+        "inspect_only": false,
+        "module": "gem",
+        "python_paths": [
+          ""
+        ],
+        "repository": "https://github.com/Ablation-Tool/graphics-environment-manager",
+        "revision": "e63f6a7b84c2e8fffc0fcf01001986ae928f66b5",
+        "runtime_checkout": null,
+        "source": {
+          "mode": "bundled",
+          "path": "/home/cowboy/_projects/ablation/zoe/components/graphics-environment-manager",
+          "runtime_verified": false,
+          "source_present": true
+        },
+        "summary": "Native workbench, mirrored brain, geometry, Spatial IR, and VDI",
+        "title": "Canonical GEM"
+      },
+      {
+        "anchor": "helen_gem/core.py",
+        "checkout": "gem-helen",
+        "default_args": [],
+        "identifier": "helen",
+        "inspect_only": false,
+        "module": "helen_gem",
+        "python_paths": [
+          ""
+        ],
+        "repository": "https://github.com/Ablation-Tool/gem-helen",
+        "revision": "55fb1e494662e9b69e964ac2f9df41724cffeb0c",
+        "runtime_checkout": null,
+        "source": {
+          "mode": "bundled",
+          "path": "/home/cowboy/_projects/ablation/zoe/components/gem-helen",
+          "runtime_verified": false,
+          "source_present": true
+        },
+        "summary": "Optimized geometry, rhythm, and forecast laboratory",
+        "title": "GEM HELEN"
+      },
+      {
+        "anchor": "brain_gem/field.py",
+        "checkout": "brain-gem",
+        "default_args": [
+          "field"
+        ],
+        "identifier": "brain",
+        "inspect_only": false,
+        "module": "brain_gem",
+        "python_paths": [
+          ""
+        ],
+        "repository": "https://github.com/Ablation-Tool/brain-gem",
+        "revision": "ed819c2824a55b019a532f4fa2cb440532030127",
+        "runtime_checkout": null,
+        "source": {
+          "mode": "bundled",
+          "path": "/home/cowboy/_projects/ablation/zoe/components/brain-gem",
+          "runtime_verified": false,
+          "source_present": true
+        },
+        "summary": "Standalone Bayesian field notebook and chambered memory",
+        "title": "BRAIN GEM"
+      },
+      {
+        "anchor": "cerotto_gem/cli.py",
+        "checkout": "cerotto",
+        "default_args": [],
+        "identifier": "cerotto",
+        "inspect_only": false,
+        "module": "cerotto_gem",
+        "python_paths": [
+          ""
+        ],
+        "repository": "https://github.com/Ablation-Tool/cerotto",
+        "revision": "5e2f0c06f1c9b6f6fe7d2489175ce89e7abb6ec4",
+        "runtime_checkout": null,
+        "source": {
+          "mode": "bundled",
+          "path": "/home/cowboy/_projects/ablation/zoe/components/cerotto",
+          "runtime_verified": false,
+          "source_present": true
+        },
+        "summary": "Guarded forensic cases, native C engine, timelines, and vault evidence",
+        "title": "Cerotto GEM"
+      },
+      {
+        "anchor": "evidence/master-gem/conformance.json",
+        "checkout": "next-token-predictability",
+        "default_args": [
+          "os"
+        ],
+        "identifier": "research",
+        "inspect_only": false,
+        "module": "gem",
+        "python_paths": [
+          ""
+        ],
+        "repository": "https://github.com/Ablation-Tool/next-token-predictability",
+        "revision": "83b89a385aa4e67fb0c1b60ba30a21efcc0e50f9",
+        "runtime_checkout": "graphics-environment-manager",
+        "source": {
+          "mode": "bundled",
+          "path": "/home/cowboy/_projects/ablation/zoe/components/next-token-predictability",
+          "runtime_verified": false,
+          "source_present": true
+        },
+        "summary": "Accessible-volume research, evidence packs, and mirrored workbench",
+        "title": "Research GEM"
+      },
+      {
+        "anchor": "kevlar.py",
+        "checkout": "kevlar",
+        "default_args": [
+          "--help"
+        ],
+        "identifier": "kevlar",
+        "inspect_only": false,
+        "module": "kevlar",
+        "python_paths": [
+          ""
+        ],
+        "repository": "https://github.com/Ablation-Tool/kevlar",
+        "revision": "8ac3e0181e98572d6c41f964385393aa441a5f2a",
+        "runtime_checkout": null,
+        "source": {
+          "mode": "bundled",
+          "path": "/home/cowboy/_projects/ablation/zoe/components/kevlar",
+          "runtime_verified": false,
+          "source_present": true
+        },
+        "summary": "MCP proxy firewall, content disarm, policy enforcement, and audit evidence",
+        "title": "Kevlar MCP firewall"
+      },
+      {
+        "anchor": "pdf_signature_toolkit/verify.py",
+        "checkout": "pdf-signature-toolkit",
+        "default_args": [
+          "--help"
+        ],
+        "identifier": "pdf",
+        "inspect_only": false,
+        "module": "pdf_signature_toolkit.verify",
+        "python_paths": [
+          ""
+        ],
+        "repository": "https://github.com/Ablation-Tool/pdf-signature-toolkit",
+        "revision": "1198165962958c5132130f3854626ff39c333941",
+        "runtime_checkout": null,
+        "source": {
+          "mode": "bundled",
+          "path": "/home/cowboy/_projects/ablation/zoe/components/pdf-signature-toolkit",
+          "runtime_verified": false,
+          "source_present": true
+        },
+        "summary": "Reproducible source integrity records and detached PDF signatures",
+        "title": "PDF Signature Toolkit"
+      },
+      {
+        "anchor": "README.md",
+        "checkout": "Chalkboard",
+        "default_args": [],
+        "identifier": "chalkboard",
+        "inspect_only": true,
+        "module": "",
+        "python_paths": [
+          ""
+        ],
+        "repository": "https://github.com/Ablation-Tool/Chalkboard",
+        "revision": "63646eb15737d822316073ba1f2114c608571c72",
+        "runtime_checkout": null,
+        "source": {
+          "mode": "bundled",
+          "path": "/home/cowboy/_projects/ablation/zoe/components/Chalkboard",
+          "runtime_verified": false,
+          "source_present": true
+        },
+        "summary": "Reusable ideas, templates, and prompts for knowledge engineering",
+        "title": "Chalkboard library"
+      }
+    ],
+    "entrypoint_count": 11,
+    "executed": false,
+    "execution": "explicit component launch only; no process is started by inspecting this manifest",
+    "identity": "ZOE is allgems",
+    "knowledge": {
+      "executed": false,
+      "link_count": 10,
+      "links": [
+        {
+          "belief_updated": false,
+          "evidence_transfer": false,
+          "executed": false,
+          "id": "l-1",
+          "kind": "declared_context_link",
+          "permission_transfer": false,
+          "relation": "Shared source and trust context; no evidence or permission transfer.",
+          "source_observation_id": "k-2",
+          "target_component": "zoe"
+        },
+        {
+          "belief_updated": false,
+          "evidence_transfer": false,
+          "executed": false,
+          "id": "l-2",
+          "kind": "declared_context_link",
+          "permission_transfer": false,
+          "relation": "Shared source and trust context; no evidence or permission transfer.",
+          "source_observation_id": "k-3",
+          "target_component": "zoe"
+        },
+        {
+          "belief_updated": false,
+          "evidence_transfer": false,
+          "executed": false,
+          "id": "l-3",
+          "kind": "declared_context_link",
+          "permission_transfer": false,
+          "relation": "Shared source and trust context; no evidence or permission transfer.",
+          "source_observation_id": "k-4",
+          "target_component": "zoe"
+        },
+        {
+          "belief_updated": false,
+          "evidence_transfer": false,
+          "executed": false,
+          "id": "l-4",
+          "kind": "declared_context_link",
+          "permission_transfer": false,
+          "relation": "Shared source and trust context; no evidence or permission transfer.",
+          "source_observation_id": "k-5",
+          "target_component": "zoe"
+        },
+        {
+          "belief_updated": false,
+          "evidence_transfer": false,
+          "executed": false,
+          "id": "l-5",
+          "kind": "declared_context_link",
+          "permission_transfer": false,
+          "relation": "Shared source and trust context; no evidence or permission transfer.",
+          "source_observation_id": "k-6",
+          "target_component": "zoe"
+        },
+        {
+          "belief_updated": false,
+          "evidence_transfer": false,
+          "executed": false,
+          "id": "l-6",
+          "kind": "declared_context_link",
+          "permission_transfer": false,
+          "relation": "Shared source and trust context; no evidence or permission transfer.",
+          "source_observation_id": "k-7",
+          "target_component": "zoe"
+        },
+        {
+          "belief_updated": false,
+          "evidence_transfer": false,
+          "executed": false,
+          "id": "l-7",
+          "kind": "declared_context_link",
+          "permission_transfer": false,
+          "relation": "Shared source and trust context; no evidence or permission transfer.",
+          "source_observation_id": "k-8",
+          "target_component": "zoe"
+        },
+        {
+          "belief_updated": false,
+          "evidence_transfer": false,
+          "executed": false,
+          "id": "l-8",
+          "kind": "declared_context_link",
+          "permission_transfer": false,
+          "relation": "Shared source and trust context; no evidence or permission transfer.",
+          "source_observation_id": "k-9",
+          "target_component": "zoe"
+        },
+        {
+          "belief_updated": false,
+          "evidence_transfer": false,
+          "executed": false,
+          "id": "l-9",
+          "kind": "declared_context_link",
+          "permission_transfer": false,
+          "relation": "Shared source and trust context; no evidence or permission transfer.",
+          "source_observation_id": "k-10",
+          "target_component": "zoe"
+        },
+        {
+          "belief_updated": false,
+          "evidence_transfer": false,
+          "executed": false,
+          "id": "l-10",
+          "kind": "declared_context_link",
+          "permission_transfer": false,
+          "relation": "Shared source and trust context; no evidence or permission transfer.",
+          "source_observation_id": "k-11",
+          "target_component": "zoe"
+        }
+      ],
+      "observation_count": 11,
+      "observations": [
+        {
+          "belief_updated": false,
+          "component": "zoe",
+          "executed": false,
+          "id": "k-1",
+          "observation": {
+            "anchor": "guiai/gem/cognitive.py",
+            "source_mode": "zoe",
+            "source_present": true,
+            "summary": "Cognitive Field, Bayesian memory, geometry, and unified hub"
+          },
+          "stability_context": {
+            "process": "component-specific",
+            "replay": "canonical SHA-256 event chain",
+            "runtime_verified": false,
+            "state": "recorded, not inferred"
+          },
+          "trust_context": {
+            "repository": "https://github.com/Ablation-Tool/zoe",
+            "revision": null,
+            "scope": "Source registration only; runtime behavior is not inferred or verified.",
+            "source": "component registry source inventory"
+          }
+        },
+        {
+          "belief_updated": false,
+          "component": "ablation",
+          "executed": false,
+          "id": "k-2",
+          "observation": {
+            "anchor": "ablation/analyzers/entropy_mapper.py",
+            "source_mode": "host",
+            "source_present": true,
+            "summary": "Complete AIARE framework, analyzers, parsers, modules, and core CLI"
+          },
+          "stability_context": {
+            "process": "component-specific",
+            "replay": "canonical SHA-256 event chain",
+            "runtime_verified": false,
+            "state": "recorded, not inferred"
+          },
+          "trust_context": {
+            "repository": "https://github.com/Ablation-Tool/ablation",
+            "revision": "b56f91e4c54cfd996bceea63a38d8136dc1e689f",
+            "scope": "Source registration only; runtime behavior is not inferred or verified.",
+            "source": "component registry source inventory"
+          }
+        },
+        {
+          "belief_updated": false,
+          "component": "gem-lab",
+          "executed": false,
+          "id": "k-3",
+          "observation": {
+            "anchor": "gem-lab/gem/gtk_app.py",
+            "source_mode": "host",
+            "source_present": true,
+            "summary": "Default native investigation GUI and shared Lab evidence protocol"
+          },
+          "stability_context": {
+            "process": "component-specific",
+            "replay": "canonical SHA-256 event chain",
+            "runtime_verified": false,
+            "state": "recorded, not inferred"
+          },
+          "trust_context": {
+            "repository": "https://github.com/Ablation-Tool/ablation",
+            "revision": "b56f91e4c54cfd996bceea63a38d8136dc1e689f",
+            "scope": "Source registration only; runtime behavior is not inferred or verified.",
+            "source": "component registry source inventory"
+          }
+        },
+        {
+          "belief_updated": false,
+          "component": "gem",
+          "executed": false,
+          "id": "k-4",
+          "observation": {
+            "anchor": "gem/cli.py",
+            "source_mode": "bundled",
+            "source_present": true,
+            "summary": "Native workbench, mirrored brain, geometry, Spatial IR, and VDI"
+          },
+          "stability_context": {
+            "process": "component-specific",
+            "replay": "canonical SHA-256 event chain",
+            "runtime_verified": false,
+            "state": "recorded, not inferred"
+          },
+          "trust_context": {
+            "repository": "https://github.com/Ablation-Tool/graphics-environment-manager",
+            "revision": "e63f6a7b84c2e8fffc0fcf01001986ae928f66b5",
+            "scope": "Source registration only; runtime behavior is not inferred or verified.",
+            "source": "component registry source inventory"
+          }
+        },
+        {
+          "belief_updated": false,
+          "component": "helen",
+          "executed": false,
+          "id": "k-5",
+          "observation": {
+            "anchor": "helen_gem/core.py",
+            "source_mode": "bundled",
+            "source_present": true,
+            "summary": "Optimized geometry, rhythm, and forecast laboratory"
+          },
+          "stability_context": {
+            "process": "component-specific",
+            "replay": "canonical SHA-256 event chain",
+            "runtime_verified": false,
+            "state": "recorded, not inferred"
+          },
+          "trust_context": {
+            "repository": "https://github.com/Ablation-Tool/gem-helen",
+            "revision": "55fb1e494662e9b69e964ac2f9df41724cffeb0c",
+            "scope": "Source registration only; runtime behavior is not inferred or verified.",
+            "source": "component registry source inventory"
+          }
+        },
+        {
+          "belief_updated": false,
+          "component": "brain",
+          "executed": false,
+          "id": "k-6",
+          "observation": {
+            "anchor": "brain_gem/field.py",
+            "source_mode": "bundled",
+            "source_present": true,
+            "summary": "Standalone Bayesian field notebook and chambered memory"
+          },
+          "stability_context": {
+            "process": "component-specific",
+            "replay": "canonical SHA-256 event chain",
+            "runtime_verified": false,
+            "state": "recorded, not inferred"
+          },
+          "trust_context": {
+            "repository": "https://github.com/Ablation-Tool/brain-gem",
+            "revision": "ed819c2824a55b019a532f4fa2cb440532030127",
+            "scope": "Source registration only; runtime behavior is not inferred or verified.",
+            "source": "component registry source inventory"
+          }
+        },
+        {
+          "belief_updated": false,
+          "component": "cerotto",
+          "executed": false,
+          "id": "k-7",
+          "observation": {
+            "anchor": "cerotto_gem/cli.py",
+            "source_mode": "bundled",
+            "source_present": true,
+            "summary": "Guarded forensic cases, native C engine, timelines, and vault evidence"
+          },
+          "stability_context": {
+            "process": "component-specific",
+            "replay": "canonical SHA-256 event chain",
+            "runtime_verified": false,
+            "state": "recorded, not inferred"
+          },
+          "trust_context": {
+            "repository": "https://github.com/Ablation-Tool/cerotto",
+            "revision": "5e2f0c06f1c9b6f6fe7d2489175ce89e7abb6ec4",
+            "scope": "Source registration only; runtime behavior is not inferred or verified.",
+            "source": "component registry source inventory"
+          }
+        },
+        {
+          "belief_updated": false,
+          "component": "research",
+          "executed": false,
+          "id": "k-8",
+          "observation": {
+            "anchor": "evidence/master-gem/conformance.json",
+            "source_mode": "bundled",
+            "source_present": true,
+            "summary": "Accessible-volume research, evidence packs, and mirrored workbench"
+          },
+          "stability_context": {
+            "process": "component-specific",
+            "replay": "canonical SHA-256 event chain",
+            "runtime_verified": false,
+            "state": "recorded, not inferred"
+          },
+          "trust_context": {
+            "repository": "https://github.com/Ablation-Tool/next-token-predictability",
+            "revision": "83b89a385aa4e67fb0c1b60ba30a21efcc0e50f9",
+            "scope": "Source registration only; runtime behavior is not inferred or verified.",
+            "source": "component registry source inventory"
+          }
+        },
+        {
+          "belief_updated": false,
+          "component": "kevlar",
+          "executed": false,
+          "id": "k-9",
+          "observation": {
+            "anchor": "kevlar.py",
+            "source_mode": "bundled",
+            "source_present": true,
+            "summary": "MCP proxy firewall, content disarm, policy enforcement, and audit evidence"
+          },
+          "stability_context": {
+            "process": "component-specific",
+            "replay": "canonical SHA-256 event chain",
+            "runtime_verified": false,
+            "state": "recorded, not inferred"
+          },
+          "trust_context": {
+            "repository": "https://github.com/Ablation-Tool/kevlar",
+            "revision": "8ac3e0181e98572d6c41f964385393aa441a5f2a",
+            "scope": "Source registration only; runtime behavior is not inferred or verified.",
+            "source": "component registry source inventory"
+          }
+        },
+        {
+          "belief_updated": false,
+          "component": "pdf",
+          "executed": false,
+          "id": "k-10",
+          "observation": {
+            "anchor": "pdf_signature_toolkit/verify.py",
+            "source_mode": "bundled",
+            "source_present": true,
+            "summary": "Reproducible source integrity records and detached PDF signatures"
+          },
+          "stability_context": {
+            "process": "component-specific",
+            "replay": "canonical SHA-256 event chain",
+            "runtime_verified": false,
+            "state": "recorded, not inferred"
+          },
+          "trust_context": {
+            "repository": "https://github.com/Ablation-Tool/pdf-signature-toolkit",
+            "revision": "1198165962958c5132130f3854626ff39c333941",
+            "scope": "Source registration only; runtime behavior is not inferred or verified.",
+            "source": "component registry source inventory"
+          }
+        },
+        {
+          "belief_updated": false,
+          "component": "chalkboard",
+          "executed": false,
+          "id": "k-11",
+          "observation": {
+            "anchor": "README.md",
+            "source_mode": "bundled",
+            "source_present": true,
+            "summary": "Reusable ideas, templates, and prompts for knowledge engineering"
+          },
+          "stability_context": {
+            "process": "component-specific",
+            "replay": "canonical SHA-256 event chain",
+            "runtime_verified": false,
+            "state": "recorded, not inferred"
+          },
+          "trust_context": {
+            "repository": "https://github.com/Ablation-Tool/Chalkboard",
+            "revision": "63646eb15737d822316073ba1f2114c608571c72",
+            "scope": "Source registration only; runtime behavior is not inferred or verified.",
+            "source": "component registry source inventory"
+          }
+        }
+      ],
+      "stability_context": "component-specific processes, replayable memory, and separately tested behavior",
+      "trust_context": "source, repository, revision, and explicit scope"
+    },
+    "knowledge_engineering": {
+      "stability_context": "component-specific processes, version locks, replayable memory, and separately tested behavior; not an uptime guarantee",
+      "trust_context": "source, repository, revision, evidence scope, and authorization boundary"
+    },
+    "memory": {
+      "events": [
+        {
+          "hash": "f236a099effac061a7c5c47a805289a8c2d6f596ef6a0ff4f86201e05849ac1c",
+          "kind": "knowledge_observation_recorded",
+          "payload": {
+            "observation": {
+              "belief_updated": false,
+              "component": "zoe",
+              "executed": false,
+              "id": "k-1",
+              "observation": {
+                "anchor": "guiai/gem/cognitive.py",
+                "source_mode": "zoe",
+                "source_present": true,
+                "summary": "Cognitive Field, Bayesian memory, geometry, and unified hub"
+              },
+              "stability_context": {
+                "process": "component-specific",
+                "replay": "canonical SHA-256 event chain",
+                "runtime_verified": false,
+                "state": "recorded, not inferred"
+              },
+              "trust_context": {
+                "repository": "https://github.com/Ablation-Tool/zoe",
+                "revision": null,
+                "scope": "Source registration only; runtime behavior is not inferred or verified.",
+                "source": "component registry source inventory"
+              }
+            }
+          },
+          "previous_hash": null,
+          "sequence": 1
+        },
+        {
+          "hash": "7a50e1684e9d8c87308ba14d4b32e37436a6a8c3bbe8e52d8a2785c8652e8b7f",
+          "kind": "knowledge_observation_recorded",
+          "payload": {
+            "observation": {
+              "belief_updated": false,
+              "component": "ablation",
+              "executed": false,
+              "id": "k-2",
+              "observation": {
+                "anchor": "ablation/analyzers/entropy_mapper.py",
+                "source_mode": "host",
+                "source_present": true,
+                "summary": "Complete AIARE framework, analyzers, parsers, modules, and core CLI"
+              },
+              "stability_context": {
+                "process": "component-specific",
+                "replay": "canonical SHA-256 event chain",
+                "runtime_verified": false,
+                "state": "recorded, not inferred"
+              },
+              "trust_context": {
+                "repository": "https://github.com/Ablation-Tool/ablation",
+                "revision": "b56f91e4c54cfd996bceea63a38d8136dc1e689f",
+                "scope": "Source registration only; runtime behavior is not inferred or verified.",
+                "source": "component registry source inventory"
+              }
+            }
+          },
+          "previous_hash": "f236a099effac061a7c5c47a805289a8c2d6f596ef6a0ff4f86201e05849ac1c",
+          "sequence": 2
+        },
+        {
+          "hash": "681211fb6eea8da50c6a27717575812abe052a909acf32759b1043353597ea58",
+          "kind": "knowledge_link_recorded",
+          "payload": {
+            "link": {
+              "belief_updated": false,
+              "evidence_transfer": false,
+              "executed": false,
+              "id": "l-1",
+              "kind": "declared_context_link",
+              "permission_transfer": false,
+              "relation": "Shared source and trust context; no evidence or permission transfer.",
+              "source_observation_id": "k-2",
+              "target_component": "zoe"
+            }
+          },
+          "previous_hash": "7a50e1684e9d8c87308ba14d4b32e37436a6a8c3bbe8e52d8a2785c8652e8b7f",
+          "sequence": 3
+        },
+        {
+          "hash": "c420f0b47dc56e6459e8dd62a56dcde5dd776e32f1b93ed21eb4e715e45b50ea",
+          "kind": "knowledge_observation_recorded",
+          "payload": {
+            "observation": {
+              "belief_updated": false,
+              "component": "gem-lab",
+              "executed": false,
+              "id": "k-3",
+              "observation": {
+                "anchor": "gem-lab/gem/gtk_app.py",
+                "source_mode": "host",
+                "source_present": true,
+                "summary": "Default native investigation GUI and shared Lab evidence protocol"
+              },
+              "stability_context": {
+                "process": "component-specific",
+                "replay": "canonical SHA-256 event chain",
+                "runtime_verified": false,
+                "state": "recorded, not inferred"
+              },
+              "trust_context": {
+                "repository": "https://github.com/Ablation-Tool/ablation",
+                "revision": "b56f91e4c54cfd996bceea63a38d8136dc1e689f",
+                "scope": "Source registration only; runtime behavior is not inferred or verified.",
+                "source": "component registry source inventory"
+              }
+            }
+          },
+          "previous_hash": "681211fb6eea8da50c6a27717575812abe052a909acf32759b1043353597ea58",
+          "sequence": 4
+        },
+        {
+          "hash": "6473b580bf04cb657d2eb454c918c56d0642fbff9b42ddbe925e6557ec8c0904",
+          "kind": "knowledge_link_recorded",
+          "payload": {
+            "link": {
+              "belief_updated": false,
+              "evidence_transfer": false,
+              "executed": false,
+              "id": "l-2",
+              "kind": "declared_context_link",
+              "permission_transfer": false,
+              "relation": "Shared source and trust context; no evidence or permission transfer.",
+              "source_observation_id": "k-3",
+              "target_component": "zoe"
+            }
+          },
+          "previous_hash": "c420f0b47dc56e6459e8dd62a56dcde5dd776e32f1b93ed21eb4e715e45b50ea",
+          "sequence": 5
+        },
+        {
+          "hash": "595fb54702df61d00225962fb84e70536c3aa120f0949309382f917ada8ea2a0",
+          "kind": "knowledge_observation_recorded",
+          "payload": {
+            "observation": {
+              "belief_updated": false,
+              "component": "gem",
+              "executed": false,
+              "id": "k-4",
+              "observation": {
+                "anchor": "gem/cli.py",
+                "source_mode": "bundled",
+                "source_present": true,
+                "summary": "Native workbench, mirrored brain, geometry, Spatial IR, and VDI"
+              },
+              "stability_context": {
+                "process": "component-specific",
+                "replay": "canonical SHA-256 event chain",
+                "runtime_verified": false,
+                "state": "recorded, not inferred"
+              },
+              "trust_context": {
+                "repository": "https://github.com/Ablation-Tool/graphics-environment-manager",
+                "revision": "e63f6a7b84c2e8fffc0fcf01001986ae928f66b5",
+                "scope": "Source registration only; runtime behavior is not inferred or verified.",
+                "source": "component registry source inventory"
+              }
+            }
+          },
+          "previous_hash": "6473b580bf04cb657d2eb454c918c56d0642fbff9b42ddbe925e6557ec8c0904",
+          "sequence": 6
+        },
+        {
+          "hash": "7d65ec6ff4a6272c057f1ccdce96ee601d6617d26cb1961051f3d7dbe2adff86",
+          "kind": "knowledge_link_recorded",
+          "payload": {
+            "link": {
+              "belief_updated": false,
+              "evidence_transfer": false,
+              "executed": false,
+              "id": "l-3",
+              "kind": "declared_context_link",
+              "permission_transfer": false,
+              "relation": "Shared source and trust context; no evidence or permission transfer.",
+              "source_observation_id": "k-4",
+              "target_component": "zoe"
+            }
+          },
+          "previous_hash": "595fb54702df61d00225962fb84e70536c3aa120f0949309382f917ada8ea2a0",
+          "sequence": 7
+        },
+        {
+          "hash": "212ac81663299b9406bbf4f4fb9cf2b8346b702cc8086a662677634c4c09bd33",
+          "kind": "knowledge_observation_recorded",
+          "payload": {
+            "observation": {
+              "belief_updated": false,
+              "component": "helen",
+              "executed": false,
+              "id": "k-5",
+              "observation": {
+                "anchor": "helen_gem/core.py",
+                "source_mode": "bundled",
+                "source_present": true,
+                "summary": "Optimized geometry, rhythm, and forecast laboratory"
+              },
+              "stability_context": {
+                "process": "component-specific",
+                "replay": "canonical SHA-256 event chain",
+                "runtime_verified": false,
+                "state": "recorded, not inferred"
+              },
+              "trust_context": {
+                "repository": "https://github.com/Ablation-Tool/gem-helen",
+                "revision": "55fb1e494662e9b69e964ac2f9df41724cffeb0c",
+                "scope": "Source registration only; runtime behavior is not inferred or verified.",
+                "source": "component registry source inventory"
+              }
+            }
+          },
+          "previous_hash": "7d65ec6ff4a6272c057f1ccdce96ee601d6617d26cb1961051f3d7dbe2adff86",
+          "sequence": 8
+        },
+        {
+          "hash": "37d63967dd038c1b3381f2c4b7cd1c3679f180b5869a0c553ba2e1e4e0ba45ed",
+          "kind": "knowledge_link_recorded",
+          "payload": {
+            "link": {
+              "belief_updated": false,
+              "evidence_transfer": false,
+              "executed": false,
+              "id": "l-4",
+              "kind": "declared_context_link",
+              "permission_transfer": false,
+              "relation": "Shared source and trust context; no evidence or permission transfer.",
+              "source_observation_id": "k-5",
+              "target_component": "zoe"
+            }
+          },
+          "previous_hash": "212ac81663299b9406bbf4f4fb9cf2b8346b702cc8086a662677634c4c09bd33",
+          "sequence": 9
+        },
+        {
+          "hash": "6064a59b11bfacdf416bec9f621be0bd7cc9a4bf6befa730c262317a48ab7b0e",
+          "kind": "knowledge_observation_recorded",
+          "payload": {
+            "observation": {
+              "belief_updated": false,
+              "component": "brain",
+              "executed": false,
+              "id": "k-6",
+              "observation": {
+                "anchor": "brain_gem/field.py",
+                "source_mode": "bundled",
+                "source_present": true,
+                "summary": "Standalone Bayesian field notebook and chambered memory"
+              },
+              "stability_context": {
+                "process": "component-specific",
+                "replay": "canonical SHA-256 event chain",
+                "runtime_verified": false,
+                "state": "recorded, not inferred"
+              },
+              "trust_context": {
+                "repository": "https://github.com/Ablation-Tool/brain-gem",
+                "revision": "ed819c2824a55b019a532f4fa2cb440532030127",
+                "scope": "Source registration only; runtime behavior is not inferred or verified.",
+                "source": "component registry source inventory"
+              }
+            }
+          },
+          "previous_hash": "37d63967dd038c1b3381f2c4b7cd1c3679f180b5869a0c553ba2e1e4e0ba45ed",
+          "sequence": 10
+        },
+        {
+          "hash": "d628773eab08c1378fa5e500dae0534457efa54f8b7275f8486c42187d9d857f",
+          "kind": "knowledge_link_recorded",
+          "payload": {
+            "link": {
+              "belief_updated": false,
+              "evidence_transfer": false,
+              "executed": false,
+              "id": "l-5",
+              "kind": "declared_context_link",
+              "permission_transfer": false,
+              "relation": "Shared source and trust context; no evidence or permission transfer.",
+              "source_observation_id": "k-6",
+              "target_component": "zoe"
+            }
+          },
+          "previous_hash": "6064a59b11bfacdf416bec9f621be0bd7cc9a4bf6befa730c262317a48ab7b0e",
+          "sequence": 11
+        },
+        {
+          "hash": "17f867e9a99039f461585e75112fcf1822bd8ae85ce8e6b97b246e73d8bd2a91",
+          "kind": "knowledge_observation_recorded",
+          "payload": {
+            "observation": {
+              "belief_updated": false,
+              "component": "cerotto",
+              "executed": false,
+              "id": "k-7",
+              "observation": {
+                "anchor": "cerotto_gem/cli.py",
+                "source_mode": "bundled",
+                "source_present": true,
+                "summary": "Guarded forensic cases, native C engine, timelines, and vault evidence"
+              },
+              "stability_context": {
+                "process": "component-specific",
+                "replay": "canonical SHA-256 event chain",
+                "runtime_verified": false,
+                "state": "recorded, not inferred"
+              },
+              "trust_context": {
+                "repository": "https://github.com/Ablation-Tool/cerotto",
+                "revision": "5e2f0c06f1c9b6f6fe7d2489175ce89e7abb6ec4",
+                "scope": "Source registration only; runtime behavior is not inferred or verified.",
+                "source": "component registry source inventory"
+              }
+            }
+          },
+          "previous_hash": "d628773eab08c1378fa5e500dae0534457efa54f8b7275f8486c42187d9d857f",
+          "sequence": 12
+        },
+        {
+          "hash": "521496e01375553fbf684b7d243d5730b48d8cd80d71878bba99ed3dee014403",
+          "kind": "knowledge_link_recorded",
+          "payload": {
+            "link": {
+              "belief_updated": false,
+              "evidence_transfer": false,
+              "executed": false,
+              "id": "l-6",
+              "kind": "declared_context_link",
+              "permission_transfer": false,
+              "relation": "Shared source and trust context; no evidence or permission transfer.",
+              "source_observation_id": "k-7",
+              "target_component": "zoe"
+            }
+          },
+          "previous_hash": "17f867e9a99039f461585e75112fcf1822bd8ae85ce8e6b97b246e73d8bd2a91",
+          "sequence": 13
+        },
+        {
+          "hash": "050f7a45fd8a07de641a4850a1f14d704764e6274040a86be418f63af709fd71",
+          "kind": "knowledge_observation_recorded",
+          "payload": {
+            "observation": {
+              "belief_updated": false,
+              "component": "research",
+              "executed": false,
+              "id": "k-8",
+              "observation": {
+                "anchor": "evidence/master-gem/conformance.json",
+                "source_mode": "bundled",
+                "source_present": true,
+                "summary": "Accessible-volume research, evidence packs, and mirrored workbench"
+              },
+              "stability_context": {
+                "process": "component-specific",
+                "replay": "canonical SHA-256 event chain",
+                "runtime_verified": false,
+                "state": "recorded, not inferred"
+              },
+              "trust_context": {
+                "repository": "https://github.com/Ablation-Tool/next-token-predictability",
+                "revision": "83b89a385aa4e67fb0c1b60ba30a21efcc0e50f9",
+                "scope": "Source registration only; runtime behavior is not inferred or verified.",
+                "source": "component registry source inventory"
+              }
+            }
+          },
+          "previous_hash": "521496e01375553fbf684b7d243d5730b48d8cd80d71878bba99ed3dee014403",
+          "sequence": 14
+        },
+        {
+          "hash": "742c94250b27dc1dbd5bf0cc878cf620fa4b12ce5ac2f13a14f1aa77db9e7e9e",
+          "kind": "knowledge_link_recorded",
+          "payload": {
+            "link": {
+              "belief_updated": false,
+              "evidence_transfer": false,
+              "executed": false,
+              "id": "l-7",
+              "kind": "declared_context_link",
+              "permission_transfer": false,
+              "relation": "Shared source and trust context; no evidence or permission transfer.",
+              "source_observation_id": "k-8",
+              "target_component": "zoe"
+            }
+          },
+          "previous_hash": "050f7a45fd8a07de641a4850a1f14d704764e6274040a86be418f63af709fd71",
+          "sequence": 15
+        },
+        {
+          "hash": "639134fac16ac893d4abcb14f01bee33c53c7dfce5960deadc5a61aa8df7a523",
+          "kind": "knowledge_observation_recorded",
+          "payload": {
+            "observation": {
+              "belief_updated": false,
+              "component": "kevlar",
+              "executed": false,
+              "id": "k-9",
+              "observation": {
+                "anchor": "kevlar.py",
+                "source_mode": "bundled",
+                "source_present": true,
+                "summary": "MCP proxy firewall, content disarm, policy enforcement, and audit evidence"
+              },
+              "stability_context": {
+                "process": "component-specific",
+                "replay": "canonical SHA-256 event chain",
+                "runtime_verified": false,
+                "state": "recorded, not inferred"
+              },
+              "trust_context": {
+                "repository": "https://github.com/Ablation-Tool/kevlar",
+                "revision": "8ac3e0181e98572d6c41f964385393aa441a5f2a",
+                "scope": "Source registration only; runtime behavior is not inferred or verified.",
+                "source": "component registry source inventory"
+              }
+            }
+          },
+          "previous_hash": "742c94250b27dc1dbd5bf0cc878cf620fa4b12ce5ac2f13a14f1aa77db9e7e9e",
+          "sequence": 16
+        },
+        {
+          "hash": "3f8add9a83265fe4a3092ee61296f049584a5462f34f0b5c59595ab0ef60481f",
+          "kind": "knowledge_link_recorded",
+          "payload": {
+            "link": {
+              "belief_updated": false,
+              "evidence_transfer": false,
+              "executed": false,
+              "id": "l-8",
+              "kind": "declared_context_link",
+              "permission_transfer": false,
+              "relation": "Shared source and trust context; no evidence or permission transfer.",
+              "source_observation_id": "k-9",
+              "target_component": "zoe"
+            }
+          },
+          "previous_hash": "639134fac16ac893d4abcb14f01bee33c53c7dfce5960deadc5a61aa8df7a523",
+          "sequence": 17
+        },
+        {
+          "hash": "279b1d811a162152c8380b50b31439b699441332d5886397b733abceee63bfce",
+          "kind": "knowledge_observation_recorded",
+          "payload": {
+            "observation": {
+              "belief_updated": false,
+              "component": "pdf",
+              "executed": false,
+              "id": "k-10",
+              "observation": {
+                "anchor": "pdf_signature_toolkit/verify.py",
+                "source_mode": "bundled",
+                "source_present": true,
+                "summary": "Reproducible source integrity records and detached PDF signatures"
+              },
+              "stability_context": {
+                "process": "component-specific",
+                "replay": "canonical SHA-256 event chain",
+                "runtime_verified": false,
+                "state": "recorded, not inferred"
+              },
+              "trust_context": {
+                "repository": "https://github.com/Ablation-Tool/pdf-signature-toolkit",
+                "revision": "1198165962958c5132130f3854626ff39c333941",
+                "scope": "Source registration only; runtime behavior is not inferred or verified.",
+                "source": "component registry source inventory"
+              }
+            }
+          },
+          "previous_hash": "3f8add9a83265fe4a3092ee61296f049584a5462f34f0b5c59595ab0ef60481f",
+          "sequence": 18
+        },
+        {
+          "hash": "fd510f63344f8182e3b1720fb820c6548edde171b858eddad1fdf8ba49c7720d",
+          "kind": "knowledge_link_recorded",
+          "payload": {
+            "link": {
+              "belief_updated": false,
+              "evidence_transfer": false,
+              "executed": false,
+              "id": "l-9",
+              "kind": "declared_context_link",
+              "permission_transfer": false,
+              "relation": "Shared source and trust context; no evidence or permission transfer.",
+              "source_observation_id": "k-10",
+              "target_component": "zoe"
+            }
+          },
+          "previous_hash": "279b1d811a162152c8380b50b31439b699441332d5886397b733abceee63bfce",
+          "sequence": 19
+        },
+        {
+          "hash": "77dabfaa9a43ce105b4253807cb9c6e426b99881084d3e481b244605eac2177f",
+          "kind": "knowledge_observation_recorded",
+          "payload": {
+            "observation": {
+              "belief_updated": false,
+              "component": "chalkboard",
+              "executed": false,
+              "id": "k-11",
+              "observation": {
+                "anchor": "README.md",
+                "source_mode": "bundled",
+                "source_present": true,
+                "summary": "Reusable ideas, templates, and prompts for knowledge engineering"
+              },
+              "stability_context": {
+                "process": "component-specific",
+                "replay": "canonical SHA-256 event chain",
+                "runtime_verified": false,
+                "state": "recorded, not inferred"
+              },
+              "trust_context": {
+                "repository": "https://github.com/Ablation-Tool/Chalkboard",
+                "revision": "63646eb15737d822316073ba1f2114c608571c72",
+                "scope": "Source registration only; runtime behavior is not inferred or verified.",
+                "source": "component registry source inventory"
+              }
+            }
+          },
+          "previous_hash": "fd510f63344f8182e3b1720fb820c6548edde171b858eddad1fdf8ba49c7720d",
+          "sequence": 20
+        },
+        {
+          "hash": "31491af3d23a59a2b0770f6d94e8257c2156795b7860c710b1d5edc23858c150",
+          "kind": "knowledge_link_recorded",
+          "payload": {
+            "link": {
+              "belief_updated": false,
+              "evidence_transfer": false,
+              "executed": false,
+              "id": "l-10",
+              "kind": "declared_context_link",
+              "permission_transfer": false,
+              "relation": "Shared source and trust context; no evidence or permission transfer.",
+              "source_observation_id": "k-11",
+              "target_component": "zoe"
+            }
+          },
+          "previous_hash": "77dabfaa9a43ce105b4253807cb9c6e426b99881084d3e481b244605eac2177f",
+          "sequence": 21
+        }
+      ],
+      "instrument": "gem-knowledge-field",
+      "integrity": "canonical-json-sha256-chain; tamper evidence, not authentication",
+      "knowledge_engineering": {
+        "stability_context": "component-specific processes, replayable memory, and separately tested behavior",
+        "trust_context": "source, repository, revision, and explicit scope"
+      },
+      "schema_version": 1
+    },
+    "product": "ZOE allgems knowledge-engineering distribution",
+    "recommended_module": "unified",
+    "repository_count": 10,
+    "root": "/home/cowboy/_projects/ablation/zoe",
+    "scene_only": true,
+    "schema_version": 1,
+    "summary": "11/11 entrypoint sources present · 11 observations · 10 context links · no process launched by this scene",
+    "upstream_repository_count": 9
+  },
+  "module": "unified",
+  "output": "zoe/guiai-lab/docs/images/gem-unified.svg"
+}

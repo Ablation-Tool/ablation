@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "instrument": "accessible volume of a full-vocabulary token distribution",
+  "model": "FacebookAI/xlm-roberta-base",
+  "model_revision": "e73636d4f797dec63c3081bb6ed5c7b0bb3f2089",
+  "requested_revision": "e73636d4f797dec63c3081bb6ed5c7b0bb3f2089",
+  "runtime": {
+    "torch": "2.14.1+cu130",
+    "transformers": "4.56.2"
+  },
+  "prediction_style": "masked",
+  "text": "La casa es grande",
+  "sequence_length": 6,
+  "target_position": 4,
+  "target_token_id": 3189,
+  "target_token": "grande",
+  "vocabulary_size": 250002,
+  "probability_sum": 1.0,
+  "threshold_sweep": [
+    {
+      "tau": 0.02,
+      "accessible_volume": 6,
+      "normalized_accessible_volume": 2.3999808001535988e-05
+    },
+    {
+      "tau": 0.05,
+      "accessible_volume": 3,
+      "normalized_accessible_volume": 1.1999904000767994e-05
+    },
+    {
+      "tau": 0.1,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.999968000255998e-06
+    },
+    {
+      "tau": 0.15,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.3,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.5,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    }
+  ],
+  "entropy_bits": 7.720807139336259,
+  "top_10_probability_mass": 0.42656784842362183,
+  "target_probability": 0.06992051532096344,
+  "target_rank": 3,
+  "top_tokens": [
+    {
+      "token_id": 27,
+      "token": "...",
+      "probability": 0.1086931571279397
+    },
+    {
+      "token_id": 153,
+      "token": "...",
+      "probability": 0.0973657809652566
+    },
+    {
+      "token_id": 3189,
+      "token": "grande",
+      "probability": 0.06992051532096344
+    },
+    {
+      "token_id": 36509,
+      "token": "bella",
+      "probability": 0.03527377398156254
+    },
+    {
+      "token_id": 59838,
+      "token": "perfecta",
+      "probability": 0.030511772125550132
+    },
+    {
+      "token_id": 220,
+      "token": "una",
+      "probability": 0.022164131452547524
+    },
+    {
+      "token_id": 2,
+      "token": "</s>",
+      "probability": 0.017971327272008494
+    },
+    {
+      "token_id": 1005,
+      "token": "más",
+      "probability": 0.017802655416284095
+    },
+    {
+      "token_id": 12,
+      "token": ":",
+      "probability": 0.014554346093024752
+    },
+    {
+      "token_id": 96394,
+      "token": "rara",
+      "probability": 0.012310388668484575
+    }
+  ],
+  "checks": {
+    "repeated_probabilities_identical": true,
+    "target_replaced_with_mask": true,
+    "mask_count": 1
+  },
+  "probability_values_sha256": "5df64f5c7ee6628098f59e236f016eef0b467b843506bf0e0788de96760c7e3e",
+  "input_ids_sha256": "8d9666f78d9f9d9c5d33b09c932256e6eeff73fa0d4870853c5c4ae8dcf180e0",
+  "original_input_ids_sha256": "2cdd8ae591cc804471aaa04e7dc1f00f72295ca6929e74b5ebb2eb5ec5849fba",
+  "scope": [
+    "One FacebookAI/xlm-roberta-base distribution for the final non-special token of the recorded text.",
+    "The target is replaced by a mask token.",
+    "This is a token-level measurement, not a model-quality, security, or action-level benchmark."
+  ]
+}

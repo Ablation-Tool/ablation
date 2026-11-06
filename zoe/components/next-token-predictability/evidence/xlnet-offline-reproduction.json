@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "base_offline_reproduction": {
+    "input_ids_identical": true,
+    "max_absolute_probability_difference": 2.3443287986563144e-07,
+    "threshold_counts_identical": true,
+    "target_rank_identical": true,
+    "note": "Numerically close, not bit-for-bit identical across runtimes; threshold counts and token ordering match."
+  },
+  "large": {
+    "probability_values_sha256": "a304a47ccd7d55bc3e5dbb2d616715e084446415529372789e2158da1ff72014",
+    "input_ids_sha256": "2b84113e5c3b6006c097f5bea0966a972833d7a43de8e745c22a15c7b10c60ac",
+    "threshold_sweep": [
+      {
+        "tau": 0.02,
+        "accessible_volume": 5,
+        "normalized_accessible_volume": 0.00015625
+      },
+      {
+        "tau": 0.05,
+        "accessible_volume": 4,
+        "normalized_accessible_volume": 0.000125
+      },
+      {
+        "tau": 0.1,
+        "accessible_volume": 2,
+        "normalized_accessible_volume": 6.25e-05
+      },
+      {
+        "tau": 0.15,
+        "accessible_volume": 1,
+        "normalized_accessible_volume": 3.125e-05
+      },
+      {
+        "tau": 0.3,
+        "accessible_volume": 0,
+        "normalized_accessible_volume": 0.0
+      },
+      {
+        "tau": 0.5,
+        "accessible_volume": 0,
+        "normalized_accessible_volume": 0.0
+      }
+    ],
+    "leakage_checks": [
+      {
+        "replacement_token_id": 0,
+        "probabilities_identical": true
+      },
+      {
+        "replacement_token_id": 1,
+        "probabilities_identical": true
+      },
+      {
+        "replacement_token_id": 2,
+        "probabilities_identical": true
+      }
+    ],
+    "verified": true
+  }
+}

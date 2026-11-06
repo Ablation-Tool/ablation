@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "instrument": "next-token accessible volume",
+  "formula": "A_tau(S) = sum over tokens a in O of 1[P(a | h_T(S)) > tau]",
+  "model": {
+    "id": "onnx-community/distilgpt2-ONNX",
+    "runtime": "onnxruntime 1.31.1",
+    "model_sha256": "0f79f192f3137e9a90213f1b5d4a52b6d896b735f9cb82160e5de7cc6e539c41",
+    "tokenizer_sha256": "a6aa29bf8416d74ad795a73262b1aa3f985564ee338adbee7ffbc5861f78b6b8",
+    "config_sha256": "dffb0253be590126da5dc43b75475f6f6ef4576439dec46e8ec83bf0408fcf83",
+    "inference_ms": 1248.109
+  },
+  "gem_context": {
+    "target": "/usr/bin/gnutrue",
+    "selected_id": "artifact:913a39cd38f353497086bcf317b12f91f93c23b51869cea763b8340b4f84cfd3",
+    "revision": 2,
+    "evidence_event_id": "observation:system-true-entropy",
+    "evidence_sha256": "fd551e583e54753744900d66acee85b99a6c07bdcef123f4fd92186a0cc8880d",
+    "context_tokens": 963,
+    "prompt": "You are the AI Agent in an Ablation + GEM reverse-engineering Lab.\nTarget: /usr/bin/gnutrue\nSelected event: artifact:913a39cd38f353497086bcf317b12f91f93c23b51869cea763b8340b4f84cfd3\nRecorded observation: System binary entropy inspection (complete_scoped)\nActual Ablation evidence follows:\nBinaryContext: true\n  sha256     : 913a39cd38f35349...\n  arch       : x86_64\n  base_va    : 0x0\n  func_starts: 20\n  exports    : 2\n  plt entries: 33\n  strings    : 65\n  call_edges : 136\n  str_xrefs  : 89 pairs indexed\n  named funcs: 0 (overlay)\n\n  exports (first 2):\n    0x257f  error\n    0x26c8  error_at_line\n\n  imports via PLT (first 20):\n    0x2250  __vfprintf_chk\n    0x2260  abort\n    0x2270  __errno_location\n    0x2280  strncmp\n    0x2290  _exit\n    0x22a0  __fpending\n    0x22b0  fcntl\n    0x22c0  textdomain\n    0x22d0  fclose\n    0x22e0  bindtextdomain\n    0x22f0  dcgettext\n    0x2300  __ctype_get_mb_cur_max\n    0x2310  strlen\n    0x2320  __stack_chk_fail\n    0x2330  __overflow\n    0x2340  strrchr\n    0x2350  mbrtoc32\n    0x2360  memcmp\n    0x2370  fputs_unlocked\n    0x2380  strcmp\n\nEntropy regions (26 found):\n  0x00000000 - 0x00000400  (     1,024 B)  H=2.291  SPARSE\n  0x00000400 - 0x00000700  (       768 B)  H=0.801  PADDING\n  0x00000700 - 0x00000a00  (       768 B)  H=3.128  SPARSE\n  0x00000a00 - 0x00000b00  (       256 B)  H=4.586  CODE\n  0x00000b00 - 0x00000d00  (       512 B)  H=2.972  SPARSE\n  0x00000d00 - 0x00002000  (     4,864 B)  H=0.271  PADDING\n  0x00002000 - 0x00002400  (     1,024 B)  H=3.973  SPARSE\n  0x00002400 - 0x00005300  (    12,032 B)  H=5.184  CODE\n  0x00005300 - 0x00005400  (       256 B)  H=4.333  SPARSE\n  0x00005400 - 0x00006000  (     3,072 B)  H=0.000  PADDING\n  0x00006000 - 0x00006300  (       768 B)  H=4.865  CODE\n  0x00006300 - 0x00006400  (       256 B)  H=3.591  SPARSE\n  0x00006400 - 0x00006500  (       256 B)  H=4.503  CODE\n  0x0000650\nSuggest the next investigation action."
+  },
+  "vocabulary_size": 50257,
+  "probability_sum": 0.9999999999999999,
+  "threshold_sweep": [
+    {
+      "tau": 0.02,
+      "accessible_volume": 4,
+      "normalized_accessible_volume": 7.959090275981455e-05
+    },
+    {
+      "tau": 0.05,
+      "accessible_volume": 2,
+      "normalized_accessible_volume": 3.9795451379907275e-05
+    },
+    {
+      "tau": 0.1,
+      "accessible_volume": 2,
+      "normalized_accessible_volume": 3.9795451379907275e-05
+    },
+    {
+      "tau": 0.15,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 1.9897725689953638e-05
+    },
+    {
+      "tau": 0.3,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 1.9897725689953638e-05
+    },
+    {
+      "tau": 0.5,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 1.9897725689953638e-05
+    }
+  ],
+  "entropy_bits": 4.299759845093285,
+  "max_probability": 0.5355873399683305,
+  "top_10_probability_mass": 0.754504689034669,
+  "top_tokens": [
+    {
+      "token_id": 198,
+      "token": "\n",
+      "probability": 0.5355873399683305
+    },
+    {
+      "token_id": 50256,
+      "token": "<|endoftext|>",
+      "probability": 0.10989281552631765
+    },
+    {
+      "token_id": 383,
+      "token": " The",
+      "probability": 0.02956416486825269
+    },
+    {
+      "token_id": 1002,
+      "token": " If",
+      "probability": 0.02187254976345826
+    },
+    {
+      "token_id": 632,
+      "token": " It",
+      "probability": 0.011847163765596417
+    },
+    {
+      "token_id": 770,
+      "token": " This",
+      "probability": 0.01127157203465283
+    },
+    {
+      "token_id": 921,
+      "token": " You",
+      "probability": 0.01049348321539942
+    },
+    {
+      "token_id": 4222,
+      "token": " Please",
+      "probability": 0.009542332370293427
+    },
+    {
+      "token_id": 775,
+      "token": " We",
+      "probability": 0.007337462212850117
+    },
+    {
+      "token_id": 4091,
+      "token": " See",
+      "probability": 0.007095805309517697
+    }
+  ],
+  "scope": [
+    "One real forward pass by distilgpt2-ONNX using actual Ablation + GEM session evidence.",
+    "This is not a measurement of Kimi, Claude, Ablation semantic encoders, or human judgment.",
+    "This is a next-token distribution, not a distribution over complete GEM actions.",
+    "Accessible volume measures breadth only; it is not autonomy, safety, compliance, or cascade evidence.",
+    "No empirical predictive or cross-model claim is made."
+  ],
+  "elapsed_ms": 4958.624,
+  "probability_artifact": "ablation-gem-next-token-probabilities.npz",
+  "probability_sha256": "041979018ea4f1a881dc80432a2c889309dd9a31e22b66c767edea1304afb23a",
+  "probability_values_sha256": "5f6313599e77e72947435e52b273054fabda1e97006d0636658350ac253ed638",
+  "input_ids_sha256": "970665aaaafdd2964012f3759b993e53dfe43e6d1793edc68a6b3896089fdbf8",
+  "measurement_event_id": "observation:accessible-volume:distilgpt2"
+}

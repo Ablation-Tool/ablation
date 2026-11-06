@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "instrument": "master-gem-conformance",
+  "product": "Zoe",
+  "equation_credit": "Accessible volume created solely by Nicholas Michael Kloster on March 6, 2026",
+  "strict_volume": {
+    "probabilities": [0.70, 0.20, 0.08, 0.02],
+    "tau": 0.05,
+    "accessible_volume": 3,
+    "complement_volume": 1
+  },
+  "helen_seed7": {
+    "artifact": "helen_gem/data/onset-seed7.json.gz",
+    "sha256": "e94671b50c4063900ee248559677402af602839edc1349bda70eb16514de8da9",
+    "observations_per_condition": 1920,
+    "forward": {
+      "correct": 1620,
+      "top1": 0.84375,
+      "log_loss": 0.33885633598124937,
+      "mean_max_probability": 0.8416658216360187,
+      "mean_accessible_volume": 1.3096875,
+      "sweep_area": 0.6474739583333332
+    },
+    "retrograde": {
+      "correct": 1132,
+      "top1": 0.5895833333333333,
+      "log_loss": 2.898662373434196,
+      "mean_max_probability": 0.8388349308263715,
+      "mean_accessible_volume": 1.3138802083333334,
+      "sweep_area": 0.6491796875
+    }
+  },
+  "groove": {
+    "report": "evidence/rhythm-midi/report.json",
+    "report_sha256": "5414ba3b729f38410ae83ab8fa047008fa0cf10223617cc79892cfa412ea8e2b",
+    "predictions": "evidence/rhythm-midi/predictions.npz",
+    "predictions_sha256": "61e2be13296cd306cf9552840b1f0f51eb9ba02fe6a7777d0f5b216a8d4c51c1",
+    "performances": 514,
+    "predictions_per_condition": 121392,
+    "conditions": {
+      "forward": {"top_1_accuracy": 0.17327336233030183, "top_5_accuracy": 0.5611901937524714, "log_loss_nats": 3.194485105331553, "expected_calibration_error": 0.05973990581404548, "mean_accessible_volume_over_sweep": 1.8856218696454465},
+      "reversal_transfer": {"top_1_accuracy": 0.1601423487544484, "top_5_accuracy": 0.529870172663767, "log_loss_nats": 3.33339580697935, "expected_calibration_error": 0.0715511736268659, "mean_accessible_volume_over_sweep": 1.8847912547779098},
+      "backward_matched": {"top_1_accuracy": 0.1705713720838276, "top_5_accuracy": 0.5552095689996046, "log_loss_nats": 3.183202906563205, "expected_calibration_error": 0.05978986663522655, "mean_accessible_volume_over_sweep": 1.8856544088572555}
+    }
+  },
+  "nightingale": {
+    "results": "evidence/rhythm-lab/results.json",
+    "results_sha256": "86b5559106aa3de8cf46a3c843f49960df1dcfcf2d030ecc9d1ab508aaed2fb6",
+    "predictions_per_direction": 57113,
+    "genres": {
+      "classical": {"forward": {"n": 17276, "top1": 0.6832021301227136, "logloss": 0.9761852737818679, "a_0.1": 1.9086015281315118}, "retrograde": {"n": 17276, "top1": 0.6786293123408196, "logloss": 1.0243631847542678, "a_0.1": 1.9072702014355174}},
+      "jazz": {"forward": {"n": 20075, "top1": 0.4954420921544209, "logloss": 1.4744741092120042, "a_0.1": 2.6857783312577834}, "retrograde": {"n": 20075, "top1": 0.4706351183063512, "logloss": 1.5277424860459363, "a_0.1": 2.644632627646326}},
+      "folk": {"forward": {"n": 19762, "top1": 0.6191174982289241, "logloss": 1.1245726033193657, "a_0.1": 2.20691225584455}, "retrograde": {"n": 19762, "top1": 0.6142090881489728, "logloss": 1.1431725837173015, "a_0.1": 2.216425463009817}}
+    }
+  },
+  "procrustes": {
+    "source": [[101.0, 114.0], [285.0, 159.0]],
+    "target": [[345.0, 35.0], [500.0, 205.0]],
+    "scale": 1.214501803909417,
+    "matrix": [[1.0080544020512248, -0.6773779994983418], [0.6773779994983418, 1.0080544020512248]],
+    "translation": [320.40759733563726, -148.33337978317212],
+    "rmse_per_landmark_tolerance": 1e-12
+  },
+  "bayesian_field": {
+    "equation_sections": 13,
+    "worked_update": {"prior": 0.5, "likelihood_true": 0.8, "likelihood_false": 0.2, "posterior": 0.8},
+    "required_properties": [
+      "Belief diffs preserve prior, posterior, likelihood ratio, log likelihood ratio, log-odds, and source",
+      "Repeated evidence families require explicit dependence acknowledgment and adjusted likelihoods",
+      "Chamber measurements and sampled outcomes never update posteriors automatically",
+      "Quarantined chambers are inspectable but cannot run",
+      "Append-only canonical-JSON SHA-256 chains provide tamper evidence, not authentication"
+    ]
+  },
+  "toy_markov_chain": {
+    "initial": {"A": 0.6, "B": 0.4},
+    "transitions": {"A": {"A": 0.7, "B": 0.3}, "B": {"A": 0.4, "B": 0.6}},
+    "cases": [
+      {"horizon": 1, "tau": 0.5, "accessible_volume": 1, "complement_volume": 1},
+      {"horizon": 2, "tau": 0.2, "accessible_volume": 2, "complement_volume": 2},
+      {"horizon": 3, "tau": 0.1, "accessible_volume": 5, "complement_volume": 3}
+    ],
+    "scope": "Exact enumeration over a defined toy Markov chain, not a real language-model benchmark"
+  },
+  "scope": [
+    "Accessible volume measures forecast breadth, not correctness or human surprise.",
+    "Research metrics belong to their model, context, quantization, and held-out split.",
+    "HOP and deterministic extrapolation supply no categorical accessible-volume measurement.",
+    "BRAIN GEM recommendations are experimental and never automatic execution.",
+    "Multi-horizon toy enumeration does not validate a real language-model multi-horizon benchmark."
+  ]
+}

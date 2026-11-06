@@ -1,0 +1,278 @@
+{
+  "boundaries": "One source distribution and identity; separate processes, dependencies, evidence, and authorization remain distinct.",
+  "components": [
+    {
+      "anchor": "guiai/gem/cognitive.py",
+      "checkout": "guiai-lab",
+      "default_args": [
+        "zoe",
+        "--module",
+        "unified"
+      ],
+      "identifier": "zoe",
+      "inspect_only": false,
+      "module": "guiai.gem",
+      "python_paths": [
+        ""
+      ],
+      "repository": "https://github.com/Ablation-Tool/zoe",
+      "revision": null,
+      "runtime_checkout": null,
+      "source": {
+        "mode": "zoe",
+        "path": "/home/cowboy/_projects/ablation/zoe/guiai-lab",
+        "runtime_verified": false,
+        "source_present": true
+      },
+      "summary": "Cognitive Field, Bayesian memory, geometry, and unified hub",
+      "title": "Zoe native shell"
+    },
+    {
+      "anchor": "ablation/analyzers/entropy_mapper.py",
+      "checkout": "ablation",
+      "default_args": [
+        "--help"
+      ],
+      "identifier": "ablation",
+      "inspect_only": false,
+      "module": "ablation.cli",
+      "python_paths": [
+        ""
+      ],
+      "repository": "https://github.com/Ablation-Tool/ablation",
+      "revision": "b56f91e4c54cfd996bceea63a38d8136dc1e689f",
+      "runtime_checkout": null,
+      "source": {
+        "mode": "host",
+        "path": "/home/cowboy/_projects/ablation",
+        "runtime_verified": false,
+        "source_present": true
+      },
+      "summary": "Complete AIARE framework, analyzers, parsers, modules, and core CLI",
+      "title": "Ablation core engine"
+    },
+    {
+      "anchor": "gem-lab/gem/gtk_app.py",
+      "checkout": "ablation",
+      "default_args": [
+        "launch",
+        "--no-agent"
+      ],
+      "identifier": "gem-lab",
+      "inspect_only": false,
+      "module": "gem",
+      "python_paths": [
+        "gem-lab"
+      ],
+      "repository": "https://github.com/Ablation-Tool/ablation",
+      "revision": "b56f91e4c54cfd996bceea63a38d8136dc1e689f",
+      "runtime_checkout": null,
+      "source": {
+        "mode": "host",
+        "path": "/home/cowboy/_projects/ablation",
+        "runtime_verified": false,
+        "source_present": true
+      },
+      "summary": "Default native investigation GUI and shared Lab evidence protocol",
+      "title": "Ablation GEM Lab"
+    },
+    {
+      "anchor": "gem/cli.py",
+      "checkout": "graphics-environment-manager",
+      "default_args": [
+        "os"
+      ],
+      "identifier": "gem",
+      "inspect_only": false,
+      "module": "gem",
+      "python_paths": [
+        ""
+      ],
+      "repository": "https://github.com/Ablation-Tool/graphics-environment-manager",
+      "revision": "e63f6a7b84c2e8fffc0fcf01001986ae928f66b5",
+      "runtime_checkout": null,
+      "source": {
+        "mode": "bundled",
+        "path": "/home/cowboy/_projects/ablation/zoe/components/graphics-environment-manager",
+        "runtime_verified": false,
+        "source_present": true
+      },
+      "summary": "Native workbench, mirrored brain, geometry, Spatial IR, and VDI",
+      "title": "Canonical GEM"
+    },
+    {
+      "anchor": "helen_gem/core.py",
+      "checkout": "gem-helen",
+      "default_args": [],
+      "identifier": "helen",
+      "inspect_only": false,
+      "module": "helen_gem",
+      "python_paths": [
+        ""
+      ],
+      "repository": "https://github.com/Ablation-Tool/gem-helen",
+      "revision": "55fb1e494662e9b69e964ac2f9df41724cffeb0c",
+      "runtime_checkout": null,
+      "source": {
+        "mode": "bundled",
+        "path": "/home/cowboy/_projects/ablation/zoe/components/gem-helen",
+        "runtime_verified": false,
+        "source_present": true
+      },
+      "summary": "Optimized geometry, rhythm, and forecast laboratory",
+      "title": "GEM HELEN"
+    },
+    {
+      "anchor": "brain_gem/field.py",
+      "checkout": "brain-gem",
+      "default_args": [
+        "field"
+      ],
+      "identifier": "brain",
+      "inspect_only": false,
+      "module": "brain_gem",
+      "python_paths": [
+        ""
+      ],
+      "repository": "https://github.com/Ablation-Tool/brain-gem",
+      "revision": "ed819c2824a55b019a532f4fa2cb440532030127",
+      "runtime_checkout": null,
+      "source": {
+        "mode": "bundled",
+        "path": "/home/cowboy/_projects/ablation/zoe/components/brain-gem",
+        "runtime_verified": false,
+        "source_present": true
+      },
+      "summary": "Standalone Bayesian field notebook and chambered memory",
+      "title": "BRAIN GEM"
+    },
+    {
+      "anchor": "cerotto_gem/cli.py",
+      "checkout": "cerotto",
+      "default_args": [],
+      "identifier": "cerotto",
+      "inspect_only": false,
+      "module": "cerotto_gem",
+      "python_paths": [
+        ""
+      ],
+      "repository": "https://github.com/Ablation-Tool/cerotto",
+      "revision": "5e2f0c06f1c9b6f6fe7d2489175ce89e7abb6ec4",
+      "runtime_checkout": null,
+      "source": {
+        "mode": "bundled",
+        "path": "/home/cowboy/_projects/ablation/zoe/components/cerotto",
+        "runtime_verified": false,
+        "source_present": true
+      },
+      "summary": "Guarded forensic cases, native C engine, timelines, and vault evidence",
+      "title": "Cerotto GEM"
+    },
+    {
+      "anchor": "evidence/master-gem/conformance.json",
+      "checkout": "next-token-predictability",
+      "default_args": [
+        "os"
+      ],
+      "identifier": "research",
+      "inspect_only": false,
+      "module": "gem",
+      "python_paths": [
+        ""
+      ],
+      "repository": "https://github.com/Ablation-Tool/next-token-predictability",
+      "revision": "83b89a385aa4e67fb0c1b60ba30a21efcc0e50f9",
+      "runtime_checkout": "graphics-environment-manager",
+      "source": {
+        "mode": "bundled",
+        "path": "/home/cowboy/_projects/ablation/zoe/components/next-token-predictability",
+        "runtime_verified": false,
+        "source_present": true
+      },
+      "summary": "Accessible-volume research, evidence packs, and mirrored workbench",
+      "title": "Research GEM"
+    },
+    {
+      "anchor": "kevlar.py",
+      "checkout": "kevlar",
+      "default_args": [
+        "--help"
+      ],
+      "identifier": "kevlar",
+      "inspect_only": false,
+      "module": "kevlar",
+      "python_paths": [
+        ""
+      ],
+      "repository": "https://github.com/Ablation-Tool/kevlar",
+      "revision": "8ac3e0181e98572d6c41f964385393aa441a5f2a",
+      "runtime_checkout": null,
+      "source": {
+        "mode": "bundled",
+        "path": "/home/cowboy/_projects/ablation/zoe/components/kevlar",
+        "runtime_verified": false,
+        "source_present": true
+      },
+      "summary": "MCP proxy firewall, content disarm, policy enforcement, and audit evidence",
+      "title": "Kevlar MCP firewall"
+    },
+    {
+      "anchor": "pdf_signature_toolkit/verify.py",
+      "checkout": "pdf-signature-toolkit",
+      "default_args": [
+        "--help"
+      ],
+      "identifier": "pdf",
+      "inspect_only": false,
+      "module": "pdf_signature_toolkit.verify",
+      "python_paths": [
+        ""
+      ],
+      "repository": "https://github.com/Ablation-Tool/pdf-signature-toolkit",
+      "revision": "1198165962958c5132130f3854626ff39c333941",
+      "runtime_checkout": null,
+      "source": {
+        "mode": "bundled",
+        "path": "/home/cowboy/_projects/ablation/zoe/components/pdf-signature-toolkit",
+        "runtime_verified": false,
+        "source_present": true
+      },
+      "summary": "Reproducible source integrity records and detached PDF signatures",
+      "title": "PDF Signature Toolkit"
+    },
+    {
+      "anchor": "README.md",
+      "checkout": "Chalkboard",
+      "default_args": [],
+      "identifier": "chalkboard",
+      "inspect_only": true,
+      "module": "",
+      "python_paths": [
+        ""
+      ],
+      "repository": "https://github.com/Ablation-Tool/Chalkboard",
+      "revision": "63646eb15737d822316073ba1f2114c608571c72",
+      "runtime_checkout": null,
+      "source": {
+        "mode": "bundled",
+        "path": "/home/cowboy/_projects/ablation/zoe/components/Chalkboard",
+        "runtime_verified": false,
+        "source_present": true
+      },
+      "summary": "Reusable ideas, templates, and prompts for knowledge engineering",
+      "title": "Chalkboard library"
+    }
+  ],
+  "entrypoint_count": 11,
+  "execution": "explicit component launch only; no process is started by inspecting this manifest",
+  "identity": "ZOE is allgems",
+  "knowledge_engineering": {
+    "stability_context": "component-specific processes, version locks, replayable memory, and separately tested behavior; not an uptime guarantee",
+    "trust_context": "source, repository, revision, evidence scope, and authorization boundary"
+  },
+  "product": "ZOE allgems knowledge-engineering distribution",
+  "repository_count": 10,
+  "root": "/home/cowboy/_projects/ablation/zoe",
+  "schema_version": 1,
+  "upstream_repository_count": 9
+}

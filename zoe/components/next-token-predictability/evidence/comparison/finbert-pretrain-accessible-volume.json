@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "instrument": "accessible volume of a full-vocabulary token distribution",
+  "model": "yiyanghkust/finbert-pretrain",
+  "model_revision": "88ab954a39ea6d3ce2b62cff086dd5ad1172c664",
+  "requested_revision": "88ab954a39ea6d3ce2b62cff086dd5ad1172c664",
+  "runtime": {
+    "torch": "2.14.1+cu130",
+    "transformers": "4.56.2"
+  },
+  "prediction_style": "masked",
+  "text": "The company reported earnings",
+  "sequence_length": 6,
+  "target_position": 4,
+  "target_token_id": 149,
+  "target_token": "earnings",
+  "vocabulary_size": 30873,
+  "probability_sum": 1.0000000000000004,
+  "threshold_sweep": [
+    {
+      "tau": 0.02,
+      "accessible_volume": 5,
+      "normalized_accessible_volume": 0.0001619538107731675
+    },
+    {
+      "tau": 0.05,
+      "accessible_volume": 3,
+      "normalized_accessible_volume": 9.717228646390049e-05
+    },
+    {
+      "tau": 0.1,
+      "accessible_volume": 2,
+      "normalized_accessible_volume": 6.4781524309267e-05
+    },
+    {
+      "tau": 0.15,
+      "accessible_volume": 2,
+      "normalized_accessible_volume": 6.4781524309267e-05
+    },
+    {
+      "tau": 0.3,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.5,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    }
+  ],
+  "entropy_bits": 6.57924452906204,
+  "top_10_probability_mass": 0.5855895349498187,
+  "target_probability": 0.014250847429907778,
+  "target_rank": 7,
+  "top_tokens": [
+    {
+      "token_id": 15,
+      "token": "that",
+      "probability": 0.21932430040506593
+    },
+    {
+      "token_id": 48,
+      "token": ".",
+      "probability": 0.1534398868966509
+    },
+    {
+      "token_id": 11,
+      "token": "a",
+      "probability": 0.055396833975205596
+    },
+    {
+      "token_id": 38,
+      "token": "its",
+      "probability": 0.04623231860297336
+    },
+    {
+      "token_id": 3108,
+      "token": ":",
+      "probability": 0.04526155195999354
+    },
+    {
+      "token_id": 41,
+      "token": "it",
+      "probability": 0.01445802004224734
+    },
+    {
+      "token_id": 149,
+      "token": "earnings",
+      "probability": 0.014250847429907778
+    },
+    {
+      "token_id": 6,
+      "token": "the",
+      "probability": 0.013705180511358436
+    },
+    {
+      "token_id": 3699,
+      "token": "\"",
+      "probability": 0.013015624969335286
+    },
+    {
+      "token_id": 33,
+      "token": "an",
+      "probability": 0.010504970157080521
+    }
+  ],
+  "checks": {
+    "repeated_probabilities_identical": true,
+    "target_replaced_with_mask": true,
+    "mask_count": 1
+  },
+  "probability_values_sha256": "0693cad31d71459af6d5198dee845d86a176d93e809757184df9160508dc2aec",
+  "input_ids_sha256": "9423e68bf7715dace4f2df600bd9e3fb7f8afc0735e0ab5715d7122be088b42b",
+  "original_input_ids_sha256": "152b1fad00dcdfbe5ed4e1f8f754d8b089cb847a3ce057f9b13614b2bc0be562",
+  "scope": [
+    "One yiyanghkust/finbert-pretrain distribution for the final non-special token of the recorded text.",
+    "The target is replaced by a mask token.",
+    "This is a token-level measurement, not a model-quality, security, or action-level benchmark."
+  ]
+}

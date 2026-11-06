@@ -1,0 +1,937 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-label="Bounded Tetris: exact probabilities over a finite game space">
+  <title>Bounded Tetris: exact probabilities over a finite game space</title>
+  <rect x="0" y="0" width="1920.0" height="1080.0" fill="#ffffff" />
+  <g data-object-id="background">
+    <title>background</title>
+    <rect x="0.0" y="0.0" width="1920.0" height="1080.0" fill="#000000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="title">
+    <title>title</title>
+    <text x="70.0" y="72.0" font-family="sans-serif" font-size="28.0" fill="#00ffff">BOUNDED TETRIS / PROBABILITY FIELD</text>
+  </g>
+  <g data-object-id="headline">
+    <title>headline</title>
+    <text x="70.0" y="124.0" font-family="sans-serif" font-size="36.0" fill="#ffffff">Seven pieces. A finite board. Exact uncertainty.</text>
+  </g>
+  <g data-object-id="subtitle">
+    <title>subtitle</title>
+    <text x="70.0" y="165.0" font-family="sans-serif" font-size="18.0" fill="#d3d3d3">Declared randomizer · deterministic replay · no hidden model or autonomous play</text>
+  </g>
+  <g data-object-id="board-label">
+    <title>board-label</title>
+    <text x="120.0" y="218.0" font-family="sans-serif" font-size="18.0" fill="#00ffff">10 x 20 FUNCTIONAL SPACE</text>
+  </g>
+  <g data-object-id="randomizer">
+    <title>randomizer</title>
+    <text x="650.0" y="218.0" font-family="sans-serif" font-size="18.0" fill="#00ffff">RANDOMIZER / BAG</text>
+  </g>
+  <g data-object-id="score">
+    <title>score</title>
+    <text x="650.0" y="264.0" font-family="sans-serif" font-size="20.0" fill="#ffffff">score=0  lines=0  level=1</text>
+  </g>
+  <g data-object-id="next">
+    <title>next</title>
+    <text x="650.0" y="310.0" font-family="sans-serif" font-size="22.0" fill="#ffff00">current=J  next=L</text>
+  </g>
+  <g data-object-id="seed">
+    <title>seed</title>
+    <text x="650.0" y="350.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">seed=7  tick=0  gravity=30</text>
+  </g>
+  <g data-object-id="access-title">
+    <title>access-title</title>
+    <text x="650.0" y="414.0" font-family="sans-serif" font-size="18.0" fill="#00ffff">ACCESSIBLE NEXT OUTCOMES / exact support</text>
+  </g>
+  <g data-object-id="access-header">
+    <title>access-header</title>
+    <text x="650.0" y="452.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">tau       accessible    complement    support</text>
+  </g>
+  <g data-object-id="model-note">
+    <title>model-note</title>
+    <text x="1130.0" y="414.0" font-family="sans-serif" font-size="18.0" fill="#00ffff">BAYESIAN MODEL COMPARISON</text>
+  </g>
+  <g data-object-id="posterior-label">
+    <title>posterior-label</title>
+    <text x="1130.0" y="452.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">after seeing all seven types</text>
+  </g>
+  <g data-object-id="vr-label">
+    <title>vr-label</title>
+    <text x="1130.0" y="694.0" font-family="sans-serif" font-size="18.0" fill="#00ffff">TETRIS + VR / OPTIONAL ADAPTER</text>
+  </g>
+  <g data-object-id="vr-essential">
+    <title>vr-essential</title>
+    <text x="1130.0" y="738.0" font-family="sans-serif" font-size="16.0" fill="#ffffff">Only if hands or spatial audio add something essential.</text>
+  </g>
+  <g data-object-id="vr-comfort">
+    <title>vr-comfort</title>
+    <text x="1130.0" y="774.0" font-family="sans-serif" font-size="15.0" fill="#d3d3d3">The 2D board stays readable; no camera motion is required.</text>
+  </g>
+  <g data-object-id="vr-inactive">
+    <title>vr-inactive</title>
+    <text x="1130.0" y="810.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">VR active: False</text>
+  </g>
+  <g data-object-id="scope">
+    <title>scope</title>
+    <text x="70.0" y="1032.0" font-family="sans-serif" font-size="14.0" fill="#808080">Exact probabilities under the declared randomizer, not a prediction of winning or TikTok's algorithm</text>
+  </g>
+  <g data-object-id="board-0-0">
+    <title>board-0-0</title>
+    <rect x="120.0" y="248.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-0-1">
+    <title>board-0-1</title>
+    <rect x="150.0" y="248.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-0-2">
+    <title>board-0-2</title>
+    <rect x="180.0" y="248.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-0-3">
+    <title>board-0-3</title>
+    <rect x="210.0" y="248.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-0-4">
+    <title>board-0-4</title>
+    <rect x="240.0" y="248.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-0-5">
+    <title>board-0-5</title>
+    <rect x="270.0" y="248.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-0-6">
+    <title>board-0-6</title>
+    <rect x="300.0" y="248.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-0-7">
+    <title>board-0-7</title>
+    <rect x="330.0" y="248.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-0-8">
+    <title>board-0-8</title>
+    <rect x="360.0" y="248.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-0-9">
+    <title>board-0-9</title>
+    <rect x="390.0" y="248.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-1-0">
+    <title>board-1-0</title>
+    <rect x="120.0" y="278.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-1-1">
+    <title>board-1-1</title>
+    <rect x="150.0" y="278.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-1-2">
+    <title>board-1-2</title>
+    <rect x="180.0" y="278.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-1-3">
+    <title>board-1-3</title>
+    <rect x="210.0" y="278.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-1-4">
+    <title>board-1-4</title>
+    <rect x="240.0" y="278.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-1-5">
+    <title>board-1-5</title>
+    <rect x="270.0" y="278.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-1-6">
+    <title>board-1-6</title>
+    <rect x="300.0" y="278.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-1-7">
+    <title>board-1-7</title>
+    <rect x="330.0" y="278.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-1-8">
+    <title>board-1-8</title>
+    <rect x="360.0" y="278.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-1-9">
+    <title>board-1-9</title>
+    <rect x="390.0" y="278.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-2-0">
+    <title>board-2-0</title>
+    <rect x="120.0" y="308.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-2-1">
+    <title>board-2-1</title>
+    <rect x="150.0" y="308.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-2-2">
+    <title>board-2-2</title>
+    <rect x="180.0" y="308.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-2-3">
+    <title>board-2-3</title>
+    <rect x="210.0" y="308.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-2-4">
+    <title>board-2-4</title>
+    <rect x="240.0" y="308.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-2-5">
+    <title>board-2-5</title>
+    <rect x="270.0" y="308.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-2-6">
+    <title>board-2-6</title>
+    <rect x="300.0" y="308.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-2-7">
+    <title>board-2-7</title>
+    <rect x="330.0" y="308.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-2-8">
+    <title>board-2-8</title>
+    <rect x="360.0" y="308.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-2-9">
+    <title>board-2-9</title>
+    <rect x="390.0" y="308.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-3-0">
+    <title>board-3-0</title>
+    <rect x="120.0" y="338.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-3-1">
+    <title>board-3-1</title>
+    <rect x="150.0" y="338.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-3-2">
+    <title>board-3-2</title>
+    <rect x="180.0" y="338.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-3-3">
+    <title>board-3-3</title>
+    <rect x="210.0" y="338.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-3-4">
+    <title>board-3-4</title>
+    <rect x="240.0" y="338.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-3-5">
+    <title>board-3-5</title>
+    <rect x="270.0" y="338.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-3-6">
+    <title>board-3-6</title>
+    <rect x="300.0" y="338.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-3-7">
+    <title>board-3-7</title>
+    <rect x="330.0" y="338.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-3-8">
+    <title>board-3-8</title>
+    <rect x="360.0" y="338.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-3-9">
+    <title>board-3-9</title>
+    <rect x="390.0" y="338.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-4-0">
+    <title>board-4-0</title>
+    <rect x="120.0" y="368.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-4-1">
+    <title>board-4-1</title>
+    <rect x="150.0" y="368.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-4-2">
+    <title>board-4-2</title>
+    <rect x="180.0" y="368.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-4-3">
+    <title>board-4-3</title>
+    <rect x="210.0" y="368.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-4-4">
+    <title>board-4-4</title>
+    <rect x="240.0" y="368.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-4-5">
+    <title>board-4-5</title>
+    <rect x="270.0" y="368.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-4-6">
+    <title>board-4-6</title>
+    <rect x="300.0" y="368.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-4-7">
+    <title>board-4-7</title>
+    <rect x="330.0" y="368.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-4-8">
+    <title>board-4-8</title>
+    <rect x="360.0" y="368.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-4-9">
+    <title>board-4-9</title>
+    <rect x="390.0" y="368.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-5-0">
+    <title>board-5-0</title>
+    <rect x="120.0" y="398.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-5-1">
+    <title>board-5-1</title>
+    <rect x="150.0" y="398.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-5-2">
+    <title>board-5-2</title>
+    <rect x="180.0" y="398.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-5-3">
+    <title>board-5-3</title>
+    <rect x="210.0" y="398.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-5-4">
+    <title>board-5-4</title>
+    <rect x="240.0" y="398.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-5-5">
+    <title>board-5-5</title>
+    <rect x="270.0" y="398.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-5-6">
+    <title>board-5-6</title>
+    <rect x="300.0" y="398.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-5-7">
+    <title>board-5-7</title>
+    <rect x="330.0" y="398.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-5-8">
+    <title>board-5-8</title>
+    <rect x="360.0" y="398.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-5-9">
+    <title>board-5-9</title>
+    <rect x="390.0" y="398.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-6-0">
+    <title>board-6-0</title>
+    <rect x="120.0" y="428.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-6-1">
+    <title>board-6-1</title>
+    <rect x="150.0" y="428.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-6-2">
+    <title>board-6-2</title>
+    <rect x="180.0" y="428.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-6-3">
+    <title>board-6-3</title>
+    <rect x="210.0" y="428.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-6-4">
+    <title>board-6-4</title>
+    <rect x="240.0" y="428.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-6-5">
+    <title>board-6-5</title>
+    <rect x="270.0" y="428.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-6-6">
+    <title>board-6-6</title>
+    <rect x="300.0" y="428.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-6-7">
+    <title>board-6-7</title>
+    <rect x="330.0" y="428.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-6-8">
+    <title>board-6-8</title>
+    <rect x="360.0" y="428.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-6-9">
+    <title>board-6-9</title>
+    <rect x="390.0" y="428.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-7-0">
+    <title>board-7-0</title>
+    <rect x="120.0" y="458.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-7-1">
+    <title>board-7-1</title>
+    <rect x="150.0" y="458.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-7-2">
+    <title>board-7-2</title>
+    <rect x="180.0" y="458.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-7-3">
+    <title>board-7-3</title>
+    <rect x="210.0" y="458.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-7-4">
+    <title>board-7-4</title>
+    <rect x="240.0" y="458.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-7-5">
+    <title>board-7-5</title>
+    <rect x="270.0" y="458.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-7-6">
+    <title>board-7-6</title>
+    <rect x="300.0" y="458.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-7-7">
+    <title>board-7-7</title>
+    <rect x="330.0" y="458.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-7-8">
+    <title>board-7-8</title>
+    <rect x="360.0" y="458.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-7-9">
+    <title>board-7-9</title>
+    <rect x="390.0" y="458.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-8-0">
+    <title>board-8-0</title>
+    <rect x="120.0" y="488.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-8-1">
+    <title>board-8-1</title>
+    <rect x="150.0" y="488.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-8-2">
+    <title>board-8-2</title>
+    <rect x="180.0" y="488.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-8-3">
+    <title>board-8-3</title>
+    <rect x="210.0" y="488.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-8-4">
+    <title>board-8-4</title>
+    <rect x="240.0" y="488.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-8-5">
+    <title>board-8-5</title>
+    <rect x="270.0" y="488.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-8-6">
+    <title>board-8-6</title>
+    <rect x="300.0" y="488.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-8-7">
+    <title>board-8-7</title>
+    <rect x="330.0" y="488.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-8-8">
+    <title>board-8-8</title>
+    <rect x="360.0" y="488.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-8-9">
+    <title>board-8-9</title>
+    <rect x="390.0" y="488.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-9-0">
+    <title>board-9-0</title>
+    <rect x="120.0" y="518.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-9-1">
+    <title>board-9-1</title>
+    <rect x="150.0" y="518.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-9-2">
+    <title>board-9-2</title>
+    <rect x="180.0" y="518.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-9-3">
+    <title>board-9-3</title>
+    <rect x="210.0" y="518.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-9-4">
+    <title>board-9-4</title>
+    <rect x="240.0" y="518.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-9-5">
+    <title>board-9-5</title>
+    <rect x="270.0" y="518.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-9-6">
+    <title>board-9-6</title>
+    <rect x="300.0" y="518.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-9-7">
+    <title>board-9-7</title>
+    <rect x="330.0" y="518.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-9-8">
+    <title>board-9-8</title>
+    <rect x="360.0" y="518.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-9-9">
+    <title>board-9-9</title>
+    <rect x="390.0" y="518.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-10-0">
+    <title>board-10-0</title>
+    <rect x="120.0" y="548.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-10-1">
+    <title>board-10-1</title>
+    <rect x="150.0" y="548.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-10-2">
+    <title>board-10-2</title>
+    <rect x="180.0" y="548.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-10-3">
+    <title>board-10-3</title>
+    <rect x="210.0" y="548.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-10-4">
+    <title>board-10-4</title>
+    <rect x="240.0" y="548.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-10-5">
+    <title>board-10-5</title>
+    <rect x="270.0" y="548.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-10-6">
+    <title>board-10-6</title>
+    <rect x="300.0" y="548.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-10-7">
+    <title>board-10-7</title>
+    <rect x="330.0" y="548.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-10-8">
+    <title>board-10-8</title>
+    <rect x="360.0" y="548.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-10-9">
+    <title>board-10-9</title>
+    <rect x="390.0" y="548.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-11-0">
+    <title>board-11-0</title>
+    <rect x="120.0" y="578.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-11-1">
+    <title>board-11-1</title>
+    <rect x="150.0" y="578.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-11-2">
+    <title>board-11-2</title>
+    <rect x="180.0" y="578.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-11-3">
+    <title>board-11-3</title>
+    <rect x="210.0" y="578.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-11-4">
+    <title>board-11-4</title>
+    <rect x="240.0" y="578.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-11-5">
+    <title>board-11-5</title>
+    <rect x="270.0" y="578.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-11-6">
+    <title>board-11-6</title>
+    <rect x="300.0" y="578.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-11-7">
+    <title>board-11-7</title>
+    <rect x="330.0" y="578.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-11-8">
+    <title>board-11-8</title>
+    <rect x="360.0" y="578.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-11-9">
+    <title>board-11-9</title>
+    <rect x="390.0" y="578.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-12-0">
+    <title>board-12-0</title>
+    <rect x="120.0" y="608.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-12-1">
+    <title>board-12-1</title>
+    <rect x="150.0" y="608.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-12-2">
+    <title>board-12-2</title>
+    <rect x="180.0" y="608.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-12-3">
+    <title>board-12-3</title>
+    <rect x="210.0" y="608.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-12-4">
+    <title>board-12-4</title>
+    <rect x="240.0" y="608.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-12-5">
+    <title>board-12-5</title>
+    <rect x="270.0" y="608.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-12-6">
+    <title>board-12-6</title>
+    <rect x="300.0" y="608.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-12-7">
+    <title>board-12-7</title>
+    <rect x="330.0" y="608.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-12-8">
+    <title>board-12-8</title>
+    <rect x="360.0" y="608.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-12-9">
+    <title>board-12-9</title>
+    <rect x="390.0" y="608.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-13-0">
+    <title>board-13-0</title>
+    <rect x="120.0" y="638.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-13-1">
+    <title>board-13-1</title>
+    <rect x="150.0" y="638.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-13-2">
+    <title>board-13-2</title>
+    <rect x="180.0" y="638.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-13-3">
+    <title>board-13-3</title>
+    <rect x="210.0" y="638.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-13-4">
+    <title>board-13-4</title>
+    <rect x="240.0" y="638.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-13-5">
+    <title>board-13-5</title>
+    <rect x="270.0" y="638.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-13-6">
+    <title>board-13-6</title>
+    <rect x="300.0" y="638.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-13-7">
+    <title>board-13-7</title>
+    <rect x="330.0" y="638.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-13-8">
+    <title>board-13-8</title>
+    <rect x="360.0" y="638.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-13-9">
+    <title>board-13-9</title>
+    <rect x="390.0" y="638.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-14-0">
+    <title>board-14-0</title>
+    <rect x="120.0" y="668.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-14-1">
+    <title>board-14-1</title>
+    <rect x="150.0" y="668.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-14-2">
+    <title>board-14-2</title>
+    <rect x="180.0" y="668.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-14-3">
+    <title>board-14-3</title>
+    <rect x="210.0" y="668.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-14-4">
+    <title>board-14-4</title>
+    <rect x="240.0" y="668.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-14-5">
+    <title>board-14-5</title>
+    <rect x="270.0" y="668.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-14-6">
+    <title>board-14-6</title>
+    <rect x="300.0" y="668.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-14-7">
+    <title>board-14-7</title>
+    <rect x="330.0" y="668.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-14-8">
+    <title>board-14-8</title>
+    <rect x="360.0" y="668.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-14-9">
+    <title>board-14-9</title>
+    <rect x="390.0" y="668.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-15-0">
+    <title>board-15-0</title>
+    <rect x="120.0" y="698.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-15-1">
+    <title>board-15-1</title>
+    <rect x="150.0" y="698.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-15-2">
+    <title>board-15-2</title>
+    <rect x="180.0" y="698.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-15-3">
+    <title>board-15-3</title>
+    <rect x="210.0" y="698.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-15-4">
+    <title>board-15-4</title>
+    <rect x="240.0" y="698.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-15-5">
+    <title>board-15-5</title>
+    <rect x="270.0" y="698.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-15-6">
+    <title>board-15-6</title>
+    <rect x="300.0" y="698.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-15-7">
+    <title>board-15-7</title>
+    <rect x="330.0" y="698.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-15-8">
+    <title>board-15-8</title>
+    <rect x="360.0" y="698.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-15-9">
+    <title>board-15-9</title>
+    <rect x="390.0" y="698.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-16-0">
+    <title>board-16-0</title>
+    <rect x="120.0" y="728.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-16-1">
+    <title>board-16-1</title>
+    <rect x="150.0" y="728.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-16-2">
+    <title>board-16-2</title>
+    <rect x="180.0" y="728.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-16-3">
+    <title>board-16-3</title>
+    <rect x="210.0" y="728.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-16-4">
+    <title>board-16-4</title>
+    <rect x="240.0" y="728.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-16-5">
+    <title>board-16-5</title>
+    <rect x="270.0" y="728.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-16-6">
+    <title>board-16-6</title>
+    <rect x="300.0" y="728.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-16-7">
+    <title>board-16-7</title>
+    <rect x="330.0" y="728.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-16-8">
+    <title>board-16-8</title>
+    <rect x="360.0" y="728.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-16-9">
+    <title>board-16-9</title>
+    <rect x="390.0" y="728.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-17-0">
+    <title>board-17-0</title>
+    <rect x="120.0" y="758.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-17-1">
+    <title>board-17-1</title>
+    <rect x="150.0" y="758.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-17-2">
+    <title>board-17-2</title>
+    <rect x="180.0" y="758.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-17-3">
+    <title>board-17-3</title>
+    <rect x="210.0" y="758.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-17-4">
+    <title>board-17-4</title>
+    <rect x="240.0" y="758.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-17-5">
+    <title>board-17-5</title>
+    <rect x="270.0" y="758.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-17-6">
+    <title>board-17-6</title>
+    <rect x="300.0" y="758.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-17-7">
+    <title>board-17-7</title>
+    <rect x="330.0" y="758.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-17-8">
+    <title>board-17-8</title>
+    <rect x="360.0" y="758.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-17-9">
+    <title>board-17-9</title>
+    <rect x="390.0" y="758.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-18-0">
+    <title>board-18-0</title>
+    <rect x="120.0" y="788.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-18-1">
+    <title>board-18-1</title>
+    <rect x="150.0" y="788.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-18-2">
+    <title>board-18-2</title>
+    <rect x="180.0" y="788.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-18-3">
+    <title>board-18-3</title>
+    <rect x="210.0" y="788.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-18-4">
+    <title>board-18-4</title>
+    <rect x="240.0" y="788.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-18-5">
+    <title>board-18-5</title>
+    <rect x="270.0" y="788.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-18-6">
+    <title>board-18-6</title>
+    <rect x="300.0" y="788.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-18-7">
+    <title>board-18-7</title>
+    <rect x="330.0" y="788.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-18-8">
+    <title>board-18-8</title>
+    <rect x="360.0" y="788.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-18-9">
+    <title>board-18-9</title>
+    <rect x="390.0" y="788.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-19-0">
+    <title>board-19-0</title>
+    <rect x="120.0" y="818.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-19-1">
+    <title>board-19-1</title>
+    <rect x="150.0" y="818.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-19-2">
+    <title>board-19-2</title>
+    <rect x="180.0" y="818.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-19-3">
+    <title>board-19-3</title>
+    <rect x="210.0" y="818.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-19-4">
+    <title>board-19-4</title>
+    <rect x="240.0" y="818.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-19-5">
+    <title>board-19-5</title>
+    <rect x="270.0" y="818.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-19-6">
+    <title>board-19-6</title>
+    <rect x="300.0" y="818.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-19-7">
+    <title>board-19-7</title>
+    <rect x="330.0" y="818.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-19-8">
+    <title>board-19-8</title>
+    <rect x="360.0" y="818.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="board-19-9">
+    <title>board-19-9</title>
+    <rect x="390.0" y="818.0" width="30.0" height="30.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="current-3-0">
+    <title>current-3-0</title>
+    <rect x="210.0" y="248.0" width="30.0" height="30.0" fill="#0000ff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="current-3-1">
+    <title>current-3-1</title>
+    <rect x="210.0" y="278.0" width="30.0" height="30.0" fill="#0000ff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="current-4-1">
+    <title>current-4-1</title>
+    <rect x="240.0" y="278.0" width="30.0" height="30.0" fill="#0000ff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="current-5-1">
+    <title>current-5-1</title>
+    <rect x="270.0" y="278.0" width="30.0" height="30.0" fill="#0000ff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="access-0">
+    <title>access-0</title>
+    <text x="650.0" y="490.0" font-family="sans-serif" font-size="17.0" fill="#ffffff">0.02     20            0           20</text>
+  </g>
+  <g data-object-id="access-1">
+    <title>access-1</title>
+    <text x="650.0" y="526.0" font-family="sans-serif" font-size="17.0" fill="#ffffff">0.05      0           20           20</text>
+  </g>
+  <g data-object-id="access-2">
+    <title>access-2</title>
+    <text x="650.0" y="562.0" font-family="sans-serif" font-size="17.0" fill="#ffffff">0.10      0           20           20</text>
+  </g>
+  <g data-object-id="access-3">
+    <title>access-3</title>
+    <text x="650.0" y="598.0" font-family="sans-serif" font-size="17.0" fill="#ffffff">0.15      0           20           20</text>
+  </g>
+  <g data-object-id="access-4">
+    <title>access-4</title>
+    <text x="650.0" y="634.0" font-family="sans-serif" font-size="17.0" fill="#ffffff">0.30      0           20           20</text>
+  </g>
+  <g data-object-id="access-5">
+    <title>access-5</title>
+    <text x="650.0" y="670.0" font-family="sans-serif" font-size="17.0" fill="#ffffff">0.50      0           20           20</text>
+  </g>
+  <g data-object-id="posterior-bag">
+    <title>posterior-bag</title>
+    <text x="1130.0" y="490.0" font-family="sans-serif" font-size="19.0" fill="#ffff00">P(7-bag)=0.993917</text>
+  </g>
+  <g data-object-id="posterior-uniform">
+    <title>posterior-uniform</title>
+    <text x="1130.0" y="526.0" font-family="sans-serif" font-size="17.0" fill="#d3d3d3">P(uniform)=0.006083</text>
+  </g>
+  <g data-object-id="posterior-scope">
+    <title>posterior-scope</title>
+    <text x="1130.0" y="566.0" font-family="sans-serif" font-size="15.0" fill="#d3d3d3">Evidence updates a candidate model;</text>
+  </g>
+  <g data-object-id="posterior-scope-2">
+    <title>posterior-scope-2</title>
+    <text x="1130.0" y="592.0" font-family="sans-serif" font-size="15.0" fill="#d3d3d3">it does not identify an unknown RNG.</text>
+  </g>
+  <g data-object-id="summary">
+    <title>summary</title>
+    <text x="650.0" y="990.0" font-family="sans-serif" font-size="16.0" fill="#00ffff">bag: A(0.02)=20 of 20 · horizon=2 · exact joint distribution · seed=7</text>
+  </g>
+</svg>

@@ -1,0 +1,32 @@
+{
+  "available": true,
+  "bytes": 47427584,
+  "database": "/home/cowboy/_temp/zoe-os-library/gem-manuals-canonical.sqlite",
+  "documents": 358,
+  "groups": [
+    "Additional_Archive_Scans",
+    "Atari",
+    "Books",
+    "GSX",
+    "Official_Digital_Research",
+    "Online_Manuals",
+    "Third_Party"
+  ],
+  "index_file_sha256": "8b8018aabe03eadaa8a862e46bc897c63ebe96a037cca4f116af79116edde2b1",
+  "indexed_utc": "2026-11-05T16:24:42.821781Z",
+  "pages": 13023,
+  "pages_total": 16720,
+  "per_document_hashes": "SHA-256 recorded for every source document in the local index",
+  "queries_checked": [
+    "VDI",
+    "Artline"
+  ],
+  "read_only": true,
+  "schema_version": 1,
+  "source_document_bytes": 1324753127,
+  "statuses": {
+    "indexed": 340,
+    "no_text": 18
+  },
+  "unsupported_files": 755
+}

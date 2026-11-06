@@ -1,0 +1,59 @@
+BinaryContext: true
+  sha256     : 913a39cd38f35349...
+  arch       : x86_64
+  base_va    : 0x0
+  func_starts: 20
+  exports    : 2
+  plt entries: 33
+  strings    : 65
+  call_edges : 136
+  str_xrefs  : 89 pairs indexed
+  named funcs: 0 (overlay)
+
+  exports (first 2):
+    0x257f  error
+    0x26c8  error_at_line
+
+  imports via PLT (first 20):
+    0x2250  __vfprintf_chk
+    0x2260  abort
+    0x2270  __errno_location
+    0x2280  strncmp
+    0x2290  _exit
+    0x22a0  __fpending
+    0x22b0  fcntl
+    0x22c0  textdomain
+    0x22d0  fclose
+    0x22e0  bindtextdomain
+    0x22f0  dcgettext
+    0x2300  __ctype_get_mb_cur_max
+    0x2310  strlen
+    0x2320  __stack_chk_fail
+    0x2330  __overflow
+    0x2340  strrchr
+    0x2350  mbrtoc32
+    0x2360  memcmp
+    0x2370  fputs_unlocked
+    0x2380  strcmp
+
+Entropy regions (26 found):
+  0x00000000 - 0x00000400  (     1,024 B)  H=2.291  SPARSE
+  0x00000400 - 0x00000700  (       768 B)  H=0.801  PADDING
+  0x00000700 - 0x00000a00  (       768 B)  H=3.128  SPARSE
+  0x00000a00 - 0x00000b00  (       256 B)  H=4.586  CODE
+  0x00000b00 - 0x00000d00  (       512 B)  H=2.972  SPARSE
+  0x00000d00 - 0x00002000  (     4,864 B)  H=0.271  PADDING
+  0x00002000 - 0x00002400  (     1,024 B)  H=3.973  SPARSE
+  0x00002400 - 0x00005300  (    12,032 B)  H=5.184  CODE
+  0x00005300 - 0x00005400  (       256 B)  H=4.333  SPARSE
+  0x00005400 - 0x00006000  (     3,072 B)  H=0.000  PADDING
+  0x00006000 - 0x00006300  (       768 B)  H=4.865  CODE
+  0x00006300 - 0x00006400  (       256 B)  H=3.591  SPARSE
+  0x00006400 - 0x00006500  (       256 B)  H=4.503  CODE
+  0x00006500 - 0x00006600  (       256 B)  H=4.477  SPARSE
+  0x00006600 - 0x00006700  (       256 B)  H=4.980  CODE
+  0x00006700 - 0x00006c00  (     1,280 B)  H=3.535  SPARSE
+  0x00006c00 - 0x00006d00  (       256 B)  H=4.970  CODE
+  0x00006d00 - 0x00006f00  (       512 B)  H=3.247  SPARSE
+  0x00006f00 - 0x00007d00  (     3,584 B)  H=0.060  PADDING
+  0x00007d00 - 0x00007e00  (       256 B)  H=1.535  SPARSE

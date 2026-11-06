@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "instrument": "accessible volume of a full-vocabulary token distribution",
+  "model": "allenai/scibert_scivocab_cased",
+  "model_revision": "ddf0be025f8e432a1870e34811997ba6725bf04a",
+  "requested_revision": "ddf0be025f8e432a1870e34811997ba6725bf04a",
+  "runtime": {
+    "torch": "2.14.1+cu130",
+    "transformers": "4.56.2"
+  },
+  "prediction_style": "masked",
+  "text": "The experiment supported the hypothesis",
+  "sequence_length": 7,
+  "target_position": 5,
+  "target_token_id": 3665,
+  "target_token": "hypothesis",
+  "vocabulary_size": 31116,
+  "probability_sum": 1.0000000000000002,
+  "threshold_sweep": [
+    {
+      "tau": 0.02,
+      "accessible_volume": 6,
+      "normalized_accessible_volume": 0.0001928268414963363
+    },
+    {
+      "tau": 0.05,
+      "accessible_volume": 3,
+      "normalized_accessible_volume": 9.641342074816814e-05
+    },
+    {
+      "tau": 0.1,
+      "accessible_volume": 2,
+      "normalized_accessible_volume": 6.42756138321121e-05
+    },
+    {
+      "tau": 0.15,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.3,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.5,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    }
+  ],
+  "entropy_bits": 8.357980807525271,
+  "top_10_probability_mass": 0.42929429818524556,
+  "target_probability": 0.11193765939961747,
+  "target_rank": 2,
+  "top_tokens": [
+    {
+      "token_id": 211,
+      "token": ".",
+      "probability": 0.14495400044811751
+    },
+    {
+      "token_id": 3665,
+      "token": "hypothesis",
+      "probability": 0.11193765939961747
+    },
+    {
+      "token_id": 628,
+      "token": "results",
+      "probability": 0.05344521505677979
+    },
+    {
+      "token_id": 2262,
+      "token": "experiment",
+      "probability": 0.02652916882946765
+    },
+    {
+      "token_id": 501,
+      "token": "data",
+      "probability": 0.022684319770462383
+    },
+    {
+      "token_id": 1189,
+      "token": "result",
+      "probability": 0.02165404596195811
+    },
+    {
+      "token_id": 4308,
+      "token": "assumption",
+      "probability": 0.013892775820565475
+    },
+    {
+      "token_id": 5117,
+      "token": "conclusion",
+      "probability": 0.012798557697383582
+    },
+    {
+      "token_id": 476,
+      "token": "model",
+      "probability": 0.010801698472095424
+    },
+    {
+      "token_id": 2219,
+      "token": "findings",
+      "probability": 0.01059685672879811
+    }
+  ],
+  "checks": {
+    "repeated_probabilities_identical": true,
+    "target_replaced_with_mask": true,
+    "mask_count": 1
+  },
+  "probability_values_sha256": "b9e940ffe2b6653210cf8d2258e132103cfe4606c60ab374cad014beba5300e6",
+  "input_ids_sha256": "971f35ddec5c08e6b7420bc3348c2bb53aa478a025762186da0b2ebd032fc121",
+  "original_input_ids_sha256": "8be199843e8f95df934bfff1b5351b311be3c28816dbdd77b77b12bd48fb7fc6",
+  "scope": [
+    "One allenai/scibert_scivocab_cased distribution for the final non-special token of the recorded text.",
+    "The target is replaced by a mask token.",
+    "This is a token-level measurement, not a model-quality, security, or action-level benchmark."
+  ]
+}

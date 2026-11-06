@@ -1,0 +1,1853 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-label="Zoe second eye · synthetic stereo depth and defocus">
+  <title>Zoe second eye · synthetic stereo depth and defocus</title>
+  <rect x="0" y="0" width="1920.0" height="1080.0" fill="#ffffff" />
+  <g data-object-id="background">
+    <title>background</title>
+    <rect x="0.0" y="0.0" width="1920.0" height="1080.0" fill="#000000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="title">
+    <title>title</title>
+    <text x="88.0" y="91.0" font-family="sans-serif" font-size="28.0" fill="#00ffff">ZOE · SECOND EYE</text>
+  </g>
+  <g data-object-id="headline">
+    <title>headline</title>
+    <text x="88.0" y="151.0" font-family="sans-serif" font-size="39.0" fill="#ffffff">Parallax, not a second opinion.</text>
+  </g>
+  <g data-object-id="subtitle">
+    <title>subtitle</title>
+    <text x="91.0" y="192.0" font-family="sans-serif" font-size="18.0" fill="#d3d3d3">Synthetic stereo · two projections · one depth estimate · explicit uncertainty</text>
+  </g>
+  <g data-object-id="settings">
+    <title>settings</title>
+    <text x="1270.0" y="91.0" font-family="sans-serif" font-size="16.0" fill="#00ffff">f/4  ·  focus 1.60m  ·  baseline 65mm</text>
+  </g>
+  <g data-object-id="optics">
+    <title>optics</title>
+    <text x="1370.0" y="123.0" font-family="sans-serif" font-size="14.0" fill="#d3d3d3">50mm virtual lens · 36mm sensor · no physical camera</text>
+  </g>
+  <g data-object-id="panel-left">
+    <title>panel-left</title>
+    <rect x="140.0" y="295.0" width="680.0" height="455.0" fill="#000000" stroke="#0000ff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="panel-title-left">
+    <title>panel-title-left</title>
+    <text x="164.0" y="270.0" font-family="sans-serif" font-size="20.0" fill="#00ffff">LEFT / PROJECTION</text>
+  </g>
+  <g data-object-id="panel-subtitle-left">
+    <title>panel-subtitle-left</title>
+    <text x="795.0" y="270.0" font-family="sans-serif" font-size="13.0" fill="#d3d3d3">reference view</text>
+  </g>
+  <g data-object-id="focus-line-left">
+    <title>focus-line-left</title>
+    <polyline points="150,520 810,520" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="0.6" />
+  </g>
+  <g data-object-id="focus-line-v-left">
+    <title>focus-line-v-left</title>
+    <polyline points="480,308 480,736" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="0.6" />
+  </g>
+  <g data-object-id="panel-right">
+    <title>panel-right</title>
+    <rect x="1100.0" y="295.0" width="680.0" height="455.0" fill="#000000" stroke="#0000ff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="panel-title-right">
+    <title>panel-title-right</title>
+    <text x="1124.0" y="270.0" font-family="sans-serif" font-size="20.0" fill="#00ffff">RIGHT / PARALLAX</text>
+  </g>
+  <g data-object-id="panel-subtitle-right">
+    <title>panel-subtitle-right</title>
+    <text x="1755.0" y="270.0" font-family="sans-serif" font-size="13.0" fill="#d3d3d3">shifted view</text>
+  </g>
+  <g data-object-id="focus-line-right">
+    <title>focus-line-right</title>
+    <polyline points="1110,520 1770,520" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="0.6" />
+  </g>
+  <g data-object-id="focus-line-v-right">
+    <title>focus-line-v-right</title>
+    <polyline points="1440,308 1440,736" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="0.6" />
+  </g>
+  <g data-object-id="left-blur-0-0">
+    <title>left-blur-0-0</title>
+    <ellipse cx="547.0555555555555" cy="520.0" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-0-1">
+    <title>left-blur-0-1</title>
+    <ellipse cx="547.0555555555555" cy="520.0" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-0-2">
+    <title>left-blur-0-2</title>
+    <ellipse cx="547.0555555555555" cy="520.0" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-0">
+    <title>left-node-0</title>
+    <ellipse cx="547.0555555555555" cy="520.0" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-0-0">
+    <title>right-blur-0-0</title>
+    <ellipse cx="1470.9444444444443" cy="520.0" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-0-1">
+    <title>right-blur-0-1</title>
+    <ellipse cx="1470.9444444444443" cy="520.0" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-0-2">
+    <title>right-blur-0-2</title>
+    <ellipse cx="1470.9444444444443" cy="520.0" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-0">
+    <title>right-node-0</title>
+    <ellipse cx="1470.9444444444443" cy="520.0" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-1-0">
+    <title>left-blur-1-0</title>
+    <ellipse cx="541.8260079889369" cy="541.2603032167603" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-1-1">
+    <title>left-blur-1-1</title>
+    <ellipse cx="541.8260079889369" cy="541.2603032167603" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-1-2">
+    <title>left-blur-1-2</title>
+    <ellipse cx="541.8260079889369" cy="541.2603032167603" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-1">
+    <title>left-node-1</title>
+    <ellipse cx="541.8260079889369" cy="541.2603032167603" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-1-0">
+    <title>right-blur-1-0</title>
+    <ellipse cx="1466.4689410655" cy="541.2603032167603" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-1-1">
+    <title>right-blur-1-1</title>
+    <ellipse cx="1466.4689410655" cy="541.2603032167603" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-1-2">
+    <title>right-blur-1-2</title>
+    <ellipse cx="1466.4689410655" cy="541.2603032167603" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-1">
+    <title>right-node-1</title>
+    <ellipse cx="1466.4689410655" cy="541.2603032167603" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-2-0">
+    <title>left-blur-2-0</title>
+    <ellipse cx="528.4367980415227" cy="558.3097426409335" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-2-1">
+    <title>left-blur-2-1</title>
+    <ellipse cx="528.4367980415227" cy="558.3097426409335" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-2-2">
+    <title>left-blur-2-2</title>
+    <ellipse cx="528.4367980415227" cy="558.3097426409335" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-2">
+    <title>left-node-2</title>
+    <ellipse cx="528.4367980415227" cy="558.3097426409335" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-2-0">
+    <title>right-blur-2-0</title>
+    <ellipse cx="1452.6652025406333" cy="558.3097426409335" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-2-1">
+    <title>right-blur-2-1</title>
+    <ellipse cx="1452.6652025406333" cy="558.3097426409335" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-2-2">
+    <title>right-blur-2-2</title>
+    <ellipse cx="1452.6652025406333" cy="558.3097426409335" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-2">
+    <title>right-node-2</title>
+    <ellipse cx="1452.6652025406333" cy="558.3097426409335" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-3-0">
+    <title>left-blur-3-0</title>
+    <ellipse cx="509.2732507100731" cy="567.7714676969093" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-3-1">
+    <title>left-blur-3-1</title>
+    <ellipse cx="509.2732507100731" cy="567.7714676969093" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-3-2">
+    <title>left-blur-3-2</title>
+    <ellipse cx="509.2732507100731" cy="567.7714676969093" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-3">
+    <title>left-node-3</title>
+    <ellipse cx="509.2732507100731" cy="567.7714676969093" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-3-0">
+    <title>right-blur-3-0</title>
+    <ellipse cx="1432.5338008176457" cy="567.7714676969093" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-3-1">
+    <title>right-blur-3-1</title>
+    <ellipse cx="1432.5338008176457" cy="567.7714676969093" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-3-2">
+    <title>right-blur-3-2</title>
+    <ellipse cx="1432.5338008176457" cy="567.7714676969093" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-3">
+    <title>right-node-3</title>
+    <ellipse cx="1432.5338008176457" cy="567.7714676969093" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-4-0">
+    <title>left-blur-4-0</title>
+    <ellipse cx="487.4661991823543" cy="567.7714676969093" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-4-1">
+    <title>left-blur-4-1</title>
+    <ellipse cx="487.4661991823543" cy="567.7714676969093" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-4-2">
+    <title>left-blur-4-2</title>
+    <ellipse cx="487.4661991823543" cy="567.7714676969093" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-4">
+    <title>left-node-4</title>
+    <ellipse cx="487.4661991823543" cy="567.7714676969093" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-4-0">
+    <title>right-blur-4-0</title>
+    <ellipse cx="1410.726749289927" cy="567.7714676969093" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-4-1">
+    <title>right-blur-4-1</title>
+    <ellipse cx="1410.726749289927" cy="567.7714676969093" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-4-2">
+    <title>right-blur-4-2</title>
+    <ellipse cx="1410.726749289927" cy="567.7714676969093" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-4">
+    <title>right-node-4</title>
+    <ellipse cx="1410.726749289927" cy="567.7714676969093" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-5-0">
+    <title>left-blur-5-0</title>
+    <ellipse cx="467.3347974593669" cy="558.3097426409335" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-5-1">
+    <title>left-blur-5-1</title>
+    <ellipse cx="467.3347974593669" cy="558.3097426409335" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-5-2">
+    <title>left-blur-5-2</title>
+    <ellipse cx="467.3347974593669" cy="558.3097426409335" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-5">
+    <title>left-node-5</title>
+    <ellipse cx="467.3347974593669" cy="558.3097426409335" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-5-0">
+    <title>right-blur-5-0</title>
+    <ellipse cx="1391.5632019584773" cy="558.3097426409335" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-5-1">
+    <title>right-blur-5-1</title>
+    <ellipse cx="1391.5632019584773" cy="558.3097426409335" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-5-2">
+    <title>right-blur-5-2</title>
+    <ellipse cx="1391.5632019584773" cy="558.3097426409335" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-5">
+    <title>right-node-5</title>
+    <ellipse cx="1391.5632019584773" cy="558.3097426409335" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-6-0">
+    <title>left-blur-6-0</title>
+    <ellipse cx="453.53105893449987" cy="541.2603032167603" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-6-1">
+    <title>left-blur-6-1</title>
+    <ellipse cx="453.53105893449987" cy="541.2603032167603" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-6-2">
+    <title>left-blur-6-2</title>
+    <ellipse cx="453.53105893449987" cy="541.2603032167603" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-6">
+    <title>left-node-6</title>
+    <ellipse cx="453.53105893449987" cy="541.2603032167603" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-6-0">
+    <title>right-blur-6-0</title>
+    <ellipse cx="1378.173992011063" cy="541.2603032167603" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-6-1">
+    <title>right-blur-6-1</title>
+    <ellipse cx="1378.173992011063" cy="541.2603032167603" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-6-2">
+    <title>right-blur-6-2</title>
+    <ellipse cx="1378.173992011063" cy="541.2603032167603" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-6">
+    <title>right-node-6</title>
+    <ellipse cx="1378.173992011063" cy="541.2603032167603" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-7-0">
+    <title>left-blur-7-0</title>
+    <ellipse cx="449.05555555555554" cy="520.0" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-7-1">
+    <title>left-blur-7-1</title>
+    <ellipse cx="449.05555555555554" cy="520.0" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-7-2">
+    <title>left-blur-7-2</title>
+    <ellipse cx="449.05555555555554" cy="520.0" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-7">
+    <title>left-node-7</title>
+    <ellipse cx="449.05555555555554" cy="520.0" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-7-0">
+    <title>right-blur-7-0</title>
+    <ellipse cx="1372.9444444444443" cy="520.0" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-7-1">
+    <title>right-blur-7-1</title>
+    <ellipse cx="1372.9444444444443" cy="520.0" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-7-2">
+    <title>right-blur-7-2</title>
+    <ellipse cx="1372.9444444444443" cy="520.0" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-7">
+    <title>right-node-7</title>
+    <ellipse cx="1372.9444444444443" cy="520.0" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-8-0">
+    <title>left-blur-8-0</title>
+    <ellipse cx="454.3015347108624" cy="498.73969678323965" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-8-1">
+    <title>left-blur-8-1</title>
+    <ellipse cx="454.3015347108624" cy="498.73969678323965" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-8-2">
+    <title>left-blur-8-2</title>
+    <ellipse cx="454.3015347108624" cy="498.73969678323965" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-8">
+    <title>left-node-8</title>
+    <ellipse cx="454.3015347108624" cy="498.73969678323965" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-8-0">
+    <title>right-blur-8-0</title>
+    <ellipse cx="1377.4035162347004" cy="498.73969678323965" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-8-1">
+    <title>right-blur-8-1</title>
+    <ellipse cx="1377.4035162347004" cy="498.73969678323965" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-8-2">
+    <title>right-blur-8-2</title>
+    <ellipse cx="1377.4035162347004" cy="498.73969678323965" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-8">
+    <title>right-node-8</title>
+    <ellipse cx="1377.4035162347004" cy="498.73969678323965" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-9-0">
+    <title>left-blur-9-0</title>
+    <ellipse cx="467.67756636010756" cy="481.69025735906655" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-9-1">
+    <title>left-blur-9-1</title>
+    <ellipse cx="467.67756636010756" cy="481.69025735906655" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-9-2">
+    <title>left-blur-9-2</title>
+    <ellipse cx="467.67756636010756" cy="481.69025735906655" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-9">
+    <title>left-node-9</title>
+    <ellipse cx="467.67756636010756" cy="481.69025735906655" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-9-0">
+    <title>right-blur-9-0</title>
+    <ellipse cx="1391.2204330577365" cy="481.69025735906655" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-9-1">
+    <title>right-blur-9-1</title>
+    <ellipse cx="1391.2204330577365" cy="481.69025735906655" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-9-2">
+    <title>right-blur-9-2</title>
+    <ellipse cx="1391.2204330577365" cy="481.69025735906655" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-9">
+    <title>right-node-9</title>
+    <ellipse cx="1391.2204330577365" cy="481.69025735906655" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-10-0">
+    <title>left-blur-10-0</title>
+    <ellipse cx="486.84842590780517" cy="472.2285323030907" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-10-1">
+    <title>left-blur-10-1</title>
+    <ellipse cx="486.84842590780517" cy="472.2285323030907" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-10-2">
+    <title>left-blur-10-2</title>
+    <ellipse cx="486.84842590780517" cy="472.2285323030907" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-10">
+    <title>left-node-10</title>
+    <ellipse cx="486.84842590780517" cy="472.2285323030907" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-10-0">
+    <title>right-blur-10-0</title>
+    <ellipse cx="1411.3445225644762" cy="472.2285323030907" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-10-1">
+    <title>right-blur-10-1</title>
+    <ellipse cx="1411.3445225644762" cy="472.2285323030907" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-10-2">
+    <title>right-blur-10-2</title>
+    <ellipse cx="1411.3445225644762" cy="472.2285323030907" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-10">
+    <title>right-node-10</title>
+    <ellipse cx="1411.3445225644762" cy="472.2285323030907" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-11-0">
+    <title>left-blur-11-0</title>
+    <ellipse cx="508.65547743552395" cy="472.2285323030906" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-11-1">
+    <title>left-blur-11-1</title>
+    <ellipse cx="508.65547743552395" cy="472.2285323030906" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-11-2">
+    <title>left-blur-11-2</title>
+    <ellipse cx="508.65547743552395" cy="472.2285323030906" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-11">
+    <title>left-node-11</title>
+    <ellipse cx="508.65547743552395" cy="472.2285323030906" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-11-0">
+    <title>right-blur-11-0</title>
+    <ellipse cx="1433.1515740921948" cy="472.2285323030906" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-11-1">
+    <title>right-blur-11-1</title>
+    <ellipse cx="1433.1515740921948" cy="472.2285323030906" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-11-2">
+    <title>right-blur-11-2</title>
+    <ellipse cx="1433.1515740921948" cy="472.2285323030906" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-11">
+    <title>right-node-11</title>
+    <ellipse cx="1433.1515740921948" cy="472.2285323030906" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-12-0">
+    <title>left-blur-12-0</title>
+    <ellipse cx="528.7795669422634" cy="481.69025735906655" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-12-1">
+    <title>left-blur-12-1</title>
+    <ellipse cx="528.7795669422634" cy="481.69025735906655" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-12-2">
+    <title>left-blur-12-2</title>
+    <ellipse cx="528.7795669422634" cy="481.69025735906655" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-12">
+    <title>left-node-12</title>
+    <ellipse cx="528.7795669422634" cy="481.69025735906655" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-12-0">
+    <title>right-blur-12-0</title>
+    <ellipse cx="1452.3224336398926" cy="481.69025735906655" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-12-1">
+    <title>right-blur-12-1</title>
+    <ellipse cx="1452.3224336398926" cy="481.69025735906655" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-12-2">
+    <title>right-blur-12-2</title>
+    <ellipse cx="1452.3224336398926" cy="481.69025735906655" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-12">
+    <title>right-node-12</title>
+    <ellipse cx="1452.3224336398926" cy="481.69025735906655" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-13-0">
+    <title>left-blur-13-0</title>
+    <ellipse cx="542.5964837652995" cy="498.7396967832397" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-13-1">
+    <title>left-blur-13-1</title>
+    <ellipse cx="542.5964837652995" cy="498.7396967832397" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-13-2">
+    <title>left-blur-13-2</title>
+    <ellipse cx="542.5964837652995" cy="498.7396967832397" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-13">
+    <title>left-node-13</title>
+    <ellipse cx="542.5964837652995" cy="498.7396967832397" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-13-0">
+    <title>right-blur-13-0</title>
+    <ellipse cx="1465.6984652891374" cy="498.7396967832397" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-13-1">
+    <title>right-blur-13-1</title>
+    <ellipse cx="1465.6984652891374" cy="498.7396967832397" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-13-2">
+    <title>right-blur-13-2</title>
+    <ellipse cx="1465.6984652891374" cy="498.7396967832397" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-13">
+    <title>right-node-13</title>
+    <ellipse cx="1465.6984652891374" cy="498.7396967832397" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-14-0">
+    <title>left-blur-14-0</title>
+    <ellipse cx="498.05555555555554" cy="520.0" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-14-1">
+    <title>left-blur-14-1</title>
+    <ellipse cx="498.05555555555554" cy="520.0" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-14-2">
+    <title>left-blur-14-2</title>
+    <ellipse cx="498.05555555555554" cy="520.0" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-14">
+    <title>left-node-14</title>
+    <ellipse cx="498.05555555555554" cy="520.0" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-14-0">
+    <title>right-blur-14-0</title>
+    <ellipse cx="1421.9444444444443" cy="520.0" rx="1.55" ry="1.55" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-14-1">
+    <title>right-blur-14-1</title>
+    <ellipse cx="1421.9444444444443" cy="520.0" rx="2.125" ry="2.125" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-14-2">
+    <title>right-blur-14-2</title>
+    <ellipse cx="1421.9444444444443" cy="520.0" rx="2.7" ry="2.7" fill="none" stroke="#ffffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-14">
+    <title>right-node-14</title>
+    <ellipse cx="1421.9444444444443" cy="520.0" rx="3.2" ry="3.2" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-15-0">
+    <title>left-blur-15-0</title>
+    <ellipse cx="348.5132275132275" cy="448.0" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-15-1">
+    <title>left-blur-15-1</title>
+    <ellipse cx="348.5132275132275" cy="448.0" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-15-2">
+    <title>left-blur-15-2</title>
+    <ellipse cx="348.5132275132275" cy="448.0" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-15">
+    <title>left-node-15</title>
+    <ellipse cx="348.5132275132275" cy="448.0" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-15-0">
+    <title>right-blur-15-0</title>
+    <ellipse cx="1253.4867724867725" cy="448.0" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-15-1">
+    <title>right-blur-15-1</title>
+    <ellipse cx="1253.4867724867725" cy="448.0" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-15-2">
+    <title>right-blur-15-2</title>
+    <ellipse cx="1253.4867724867725" cy="448.0" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-15">
+    <title>right-node-15</title>
+    <ellipse cx="1253.4867724867725" cy="448.0" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-16-0">
+    <title>left-blur-16-0</title>
+    <ellipse cx="396.5132275132275" cy="448.0" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-16-1">
+    <title>left-blur-16-1</title>
+    <ellipse cx="396.5132275132275" cy="448.0" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-16-2">
+    <title>left-blur-16-2</title>
+    <ellipse cx="396.5132275132275" cy="448.0" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-16">
+    <title>left-node-16</title>
+    <ellipse cx="396.5132275132275" cy="448.0" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-16-0">
+    <title>right-blur-16-0</title>
+    <ellipse cx="1301.4867724867725" cy="448.0" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-16-1">
+    <title>right-blur-16-1</title>
+    <ellipse cx="1301.4867724867725" cy="448.0" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-16-2">
+    <title>right-blur-16-2</title>
+    <ellipse cx="1301.4867724867725" cy="448.0" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-16">
+    <title>right-node-16</title>
+    <ellipse cx="1301.4867724867725" cy="448.0" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-17-0">
+    <title>left-blur-17-0</title>
+    <ellipse cx="385.7056105681834" cy="473.27476584857635" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-17-1">
+    <title>left-blur-17-1</title>
+    <ellipse cx="385.7056105681834" cy="473.27476584857635" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-17-2">
+    <title>left-blur-17-2</title>
+    <ellipse cx="385.7056105681834" cy="473.27476584857635" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-17">
+    <title>left-node-17</title>
+    <ellipse cx="385.7056105681834" cy="473.27476584857635" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-17-0">
+    <title>right-blur-17-0</title>
+    <ellipse cx="1293.9600208918116" cy="473.27476584857635" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-17-1">
+    <title>right-blur-17-1</title>
+    <ellipse cx="1293.9600208918116" cy="473.27476584857635" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-17-2">
+    <title>right-blur-17-2</title>
+    <ellipse cx="1293.9600208918116" cy="473.27476584857635" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-17">
+    <title>right-node-17</title>
+    <ellipse cx="1293.9600208918116" cy="473.27476584857635" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-18-0">
+    <title>left-blur-18-0</title>
+    <ellipse cx="362.30857261391515" cy="488.8954302006916" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-18-1">
+    <title>left-blur-18-1</title>
+    <ellipse cx="362.30857261391515" cy="488.8954302006916" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-18-2">
+    <title>left-blur-18-2</title>
+    <ellipse cx="362.30857261391515" cy="488.8954302006916" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-18">
+    <title>left-node-18</title>
+    <ellipse cx="362.30857261391515" cy="488.8954302006916" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-18-0">
+    <title>right-blur-18-0</title>
+    <ellipse cx="1269.3570588460798" cy="488.8954302006916" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-18-1">
+    <title>right-blur-18-1</title>
+    <ellipse cx="1269.3570588460798" cy="488.8954302006916" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-18-2">
+    <title>right-blur-18-2</title>
+    <ellipse cx="1269.3570588460798" cy="488.8954302006916" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-18">
+    <title>right-node-18</title>
+    <ellipse cx="1269.3570588460798" cy="488.8954302006916" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-19-0">
+    <title>left-blur-19-0</title>
+    <ellipse cx="334.80250645489144" cy="488.89543020069164" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-19-1">
+    <title>left-blur-19-1</title>
+    <ellipse cx="334.80250645489144" cy="488.89543020069164" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-19-2">
+    <title>left-blur-19-2</title>
+    <ellipse cx="334.80250645489144" cy="488.89543020069164" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-19">
+    <title>left-node-19</title>
+    <ellipse cx="334.80250645489144" cy="488.89543020069164" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-19-0">
+    <title>right-blur-19-0</title>
+    <ellipse cx="1237.5318620851135" cy="488.89543020069164" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-19-1">
+    <title>right-blur-19-1</title>
+    <ellipse cx="1237.5318620851135" cy="488.89543020069164" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-19-2">
+    <title>right-blur-19-2</title>
+    <ellipse cx="1237.5318620851135" cy="488.89543020069164" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-19">
+    <title>right-node-19</title>
+    <ellipse cx="1237.5318620851135" cy="488.89543020069164" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-20-0">
+    <title>left-blur-20-0</title>
+    <ellipse cx="311.5429457411121" cy="473.27476584857635" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-20-1">
+    <title>left-blur-20-1</title>
+    <ellipse cx="311.5429457411121" cy="473.27476584857635" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-20-2">
+    <title>left-blur-20-2</title>
+    <ellipse cx="311.5429457411121" cy="473.27476584857635" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-20">
+    <title>left-node-20</title>
+    <ellipse cx="311.5429457411121" cy="473.27476584857635" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-20-0">
+    <title>right-blur-20-0</title>
+    <ellipse cx="1212.7914227988929" cy="473.27476584857635" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-20-1">
+    <title>right-blur-20-1</title>
+    <ellipse cx="1212.7914227988929" cy="473.27476584857635" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-20-2">
+    <title>right-blur-20-2</title>
+    <ellipse cx="1212.7914227988929" cy="473.27476584857635" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-20">
+    <title>right-node-20</title>
+    <ellipse cx="1212.7914227988929" cy="473.27476584857635" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-21-0">
+    <title>left-blur-21-0</title>
+    <ellipse cx="300.5132275132275" cy="448.0" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-21-1">
+    <title>left-blur-21-1</title>
+    <ellipse cx="300.5132275132275" cy="448.0" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-21-2">
+    <title>left-blur-21-2</title>
+    <ellipse cx="300.5132275132275" cy="448.0" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-21">
+    <title>left-node-21</title>
+    <ellipse cx="300.5132275132275" cy="448.0" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-21-0">
+    <title>right-blur-21-0</title>
+    <ellipse cx="1205.4867724867725" cy="448.0" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-21-1">
+    <title>right-blur-21-1</title>
+    <ellipse cx="1205.4867724867725" cy="448.0" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-21-2">
+    <title>right-blur-21-2</title>
+    <ellipse cx="1205.4867724867725" cy="448.0" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-21">
+    <title>right-node-21</title>
+    <ellipse cx="1205.4867724867725" cy="448.0" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-22-0">
+    <title>left-blur-22-0</title>
+    <ellipse cx="308.0399791081884" cy="422.72523415142365" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-22-1">
+    <title>left-blur-22-1</title>
+    <ellipse cx="308.0399791081884" cy="422.72523415142365" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-22-2">
+    <title>left-blur-22-2</title>
+    <ellipse cx="308.0399791081884" cy="422.72523415142365" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-22">
+    <title>left-node-22</title>
+    <ellipse cx="308.0399791081884" cy="422.72523415142365" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-22-0">
+    <title>right-blur-22-0</title>
+    <ellipse cx="1216.2943894318166" cy="422.72523415142365" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-22-1">
+    <title>right-blur-22-1</title>
+    <ellipse cx="1216.2943894318166" cy="422.72523415142365" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-22-2">
+    <title>right-blur-22-2</title>
+    <ellipse cx="1216.2943894318166" cy="422.72523415142365" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-22">
+    <title>right-node-22</title>
+    <ellipse cx="1216.2943894318166" cy="422.72523415142365" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-23-0">
+    <title>left-blur-23-0</title>
+    <ellipse cx="332.64294115392016" cy="407.10456979930836" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-23-1">
+    <title>left-blur-23-1</title>
+    <ellipse cx="332.64294115392016" cy="407.10456979930836" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-23-2">
+    <title>left-blur-23-2</title>
+    <ellipse cx="332.64294115392016" cy="407.10456979930836" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-23">
+    <title>left-node-23</title>
+    <ellipse cx="332.64294115392016" cy="407.10456979930836" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-23-0">
+    <title>right-blur-23-0</title>
+    <ellipse cx="1239.6914273860848" cy="407.10456979930836" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-23-1">
+    <title>right-blur-23-1</title>
+    <ellipse cx="1239.6914273860848" cy="407.10456979930836" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-23-2">
+    <title>right-blur-23-2</title>
+    <ellipse cx="1239.6914273860848" cy="407.10456979930836" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-23">
+    <title>right-node-23</title>
+    <ellipse cx="1239.6914273860848" cy="407.10456979930836" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-24-0">
+    <title>left-blur-24-0</title>
+    <ellipse cx="364.4681379148864" cy="407.10456979930836" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-24-1">
+    <title>left-blur-24-1</title>
+    <ellipse cx="364.4681379148864" cy="407.10456979930836" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-24-2">
+    <title>left-blur-24-2</title>
+    <ellipse cx="364.4681379148864" cy="407.10456979930836" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-24">
+    <title>left-node-24</title>
+    <ellipse cx="364.4681379148864" cy="407.10456979930836" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-24-0">
+    <title>right-blur-24-0</title>
+    <ellipse cx="1267.1974935451085" cy="407.10456979930836" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-24-1">
+    <title>right-blur-24-1</title>
+    <ellipse cx="1267.1974935451085" cy="407.10456979930836" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-24-2">
+    <title>right-blur-24-2</title>
+    <ellipse cx="1267.1974935451085" cy="407.10456979930836" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-24">
+    <title>right-node-24</title>
+    <ellipse cx="1267.1974935451085" cy="407.10456979930836" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-25-0">
+    <title>left-blur-25-0</title>
+    <ellipse cx="389.20857720110706" cy="422.72523415142365" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-25-1">
+    <title>left-blur-25-1</title>
+    <ellipse cx="389.20857720110706" cy="422.72523415142365" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-25-2">
+    <title>left-blur-25-2</title>
+    <ellipse cx="389.20857720110706" cy="422.72523415142365" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-25">
+    <title>left-node-25</title>
+    <ellipse cx="389.20857720110706" cy="422.72523415142365" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-25-0">
+    <title>right-blur-25-0</title>
+    <ellipse cx="1290.4570542588879" cy="422.72523415142365" rx="1.55" ry="1.55" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-25-1">
+    <title>right-blur-25-1</title>
+    <ellipse cx="1290.4570542588879" cy="422.72523415142365" rx="2.125" ry="2.125" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-25-2">
+    <title>right-blur-25-2</title>
+    <ellipse cx="1290.4570542588879" cy="422.72523415142365" rx="2.7" ry="2.7" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-25">
+    <title>right-node-25</title>
+    <ellipse cx="1290.4570542588879" cy="422.72523415142365" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-26-0">
+    <title>left-blur-26-0</title>
+    <ellipse cx="645.7913832199547" cy="453.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-26-1">
+    <title>left-blur-26-1</title>
+    <ellipse cx="645.7913832199547" cy="453.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-26-2">
+    <title>left-blur-26-2</title>
+    <ellipse cx="645.7913832199547" cy="453.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-26">
+    <title>left-node-26</title>
+    <ellipse cx="645.7913832199547" cy="453.0" rx="3.2" ry="3.2" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-26-0">
+    <title>right-blur-26-0</title>
+    <ellipse cx="1582.2086167800453" cy="453.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-26-1">
+    <title>right-blur-26-1</title>
+    <ellipse cx="1582.2086167800453" cy="453.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-26-2">
+    <title>right-blur-26-2</title>
+    <ellipse cx="1582.2086167800453" cy="453.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-26">
+    <title>right-node-26</title>
+    <ellipse cx="1582.2086167800453" cy="453.0" rx="3.2" ry="3.2" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-27-0">
+    <title>left-blur-27-0</title>
+    <ellipse cx="621.7913832199547" cy="409.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-27-1">
+    <title>left-blur-27-1</title>
+    <ellipse cx="621.7913832199547" cy="409.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-27-2">
+    <title>left-blur-27-2</title>
+    <ellipse cx="621.7913832199547" cy="409.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-27">
+    <title>left-node-27</title>
+    <ellipse cx="621.7913832199547" cy="409.0" rx="3.2" ry="3.2" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-27-0">
+    <title>right-blur-27-0</title>
+    <ellipse cx="1558.2086167800453" cy="409.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-27-1">
+    <title>right-blur-27-1</title>
+    <ellipse cx="1558.2086167800453" cy="409.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-27-2">
+    <title>right-blur-27-2</title>
+    <ellipse cx="1558.2086167800453" cy="409.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-27">
+    <title>right-node-27</title>
+    <ellipse cx="1558.2086167800453" cy="409.0" rx="3.2" ry="3.2" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-28-0">
+    <title>left-blur-28-0</title>
+    <ellipse cx="593.1972437553833" cy="435.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-28-1">
+    <title>left-blur-28-1</title>
+    <ellipse cx="593.1972437553833" cy="435.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-28-2">
+    <title>left-blur-28-2</title>
+    <ellipse cx="593.1972437553833" cy="435.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-28">
+    <title>left-node-28</title>
+    <ellipse cx="593.1972437553833" cy="435.0" rx="3.2" ry="3.2" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-28-0">
+    <title>right-blur-28-0</title>
+    <ellipse cx="1530.8027562446166" cy="435.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-28-1">
+    <title>right-blur-28-1</title>
+    <ellipse cx="1530.8027562446166" cy="435.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-28-2">
+    <title>right-blur-28-2</title>
+    <ellipse cx="1530.8027562446166" cy="435.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-28">
+    <title>right-node-28</title>
+    <ellipse cx="1530.8027562446166" cy="435.0" rx="3.2" ry="3.2" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-29-0">
+    <title>left-blur-29-0</title>
+    <ellipse cx="585.660106601066" cy="469.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-29-1">
+    <title>left-blur-29-1</title>
+    <ellipse cx="585.660106601066" cy="469.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-29-2">
+    <title>left-blur-29-2</title>
+    <ellipse cx="585.660106601066" cy="469.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-29">
+    <title>left-node-29</title>
+    <ellipse cx="585.660106601066" cy="469.0" rx="3.2" ry="3.2" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-29-0">
+    <title>right-blur-29-0</title>
+    <ellipse cx="1524.339893398934" cy="469.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-29-1">
+    <title>right-blur-29-1</title>
+    <ellipse cx="1524.339893398934" cy="469.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-29-2">
+    <title>right-blur-29-2</title>
+    <ellipse cx="1524.339893398934" cy="469.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-29">
+    <title>right-node-29</title>
+    <ellipse cx="1524.339893398934" cy="469.0" rx="3.2" ry="3.2" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-30-0">
+    <title>left-blur-30-0</title>
+    <ellipse cx="614.1721439749609" cy="492.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-30-1">
+    <title>left-blur-30-1</title>
+    <ellipse cx="614.1721439749609" cy="492.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-30-2">
+    <title>left-blur-30-2</title>
+    <ellipse cx="614.1721439749609" cy="492.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-30">
+    <title>left-node-30</title>
+    <ellipse cx="614.1721439749609" cy="492.0" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-30-0">
+    <title>right-blur-30-0</title>
+    <ellipse cx="1553.8278560250392" cy="492.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-30-1">
+    <title>right-blur-30-1</title>
+    <ellipse cx="1553.8278560250392" cy="492.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-30-2">
+    <title>right-blur-30-2</title>
+    <ellipse cx="1553.8278560250392" cy="492.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-30">
+    <title>right-node-30</title>
+    <ellipse cx="1553.8278560250392" cy="492.0" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-31-0">
+    <title>left-blur-31-0</title>
+    <ellipse cx="633.7268986157875" cy="456.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-31-1">
+    <title>left-blur-31-1</title>
+    <ellipse cx="633.7268986157875" cy="456.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-31-2">
+    <title>left-blur-31-2</title>
+    <ellipse cx="633.7268986157875" cy="456.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-31">
+    <title>left-node-31</title>
+    <ellipse cx="633.7268986157875" cy="456.0" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-31-0">
+    <title>right-blur-31-0</title>
+    <ellipse cx="1574.2731013842124" cy="456.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-31-1">
+    <title>right-blur-31-1</title>
+    <ellipse cx="1574.2731013842124" cy="456.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-31-2">
+    <title>right-blur-31-2</title>
+    <ellipse cx="1574.2731013842124" cy="456.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-31">
+    <title>right-node-31</title>
+    <ellipse cx="1574.2731013842124" cy="456.0" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-32-0">
+    <title>left-blur-32-0</title>
+    <ellipse cx="669.7913832199547" cy="409.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-32-1">
+    <title>left-blur-32-1</title>
+    <ellipse cx="669.7913832199547" cy="409.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-32-2">
+    <title>left-blur-32-2</title>
+    <ellipse cx="669.7913832199547" cy="409.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-32">
+    <title>left-node-32</title>
+    <ellipse cx="669.7913832199547" cy="409.0" rx="3.2" ry="3.2" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-32-0">
+    <title>right-blur-32-0</title>
+    <ellipse cx="1606.2086167800453" cy="409.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-32-1">
+    <title>right-blur-32-1</title>
+    <ellipse cx="1606.2086167800453" cy="409.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-32-2">
+    <title>right-blur-32-2</title>
+    <ellipse cx="1606.2086167800453" cy="409.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-32">
+    <title>right-node-32</title>
+    <ellipse cx="1606.2086167800453" cy="409.0" rx="3.2" ry="3.2" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-33-0">
+    <title>left-blur-33-0</title>
+    <ellipse cx="697.1972437553833" cy="435.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-33-1">
+    <title>left-blur-33-1</title>
+    <ellipse cx="697.1972437553833" cy="435.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-33-2">
+    <title>left-blur-33-2</title>
+    <ellipse cx="697.1972437553833" cy="435.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-33">
+    <title>left-node-33</title>
+    <ellipse cx="697.1972437553833" cy="435.0" rx="3.2" ry="3.2" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-33-0">
+    <title>right-blur-33-0</title>
+    <ellipse cx="1634.8027562446166" cy="435.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-33-1">
+    <title>right-blur-33-1</title>
+    <ellipse cx="1634.8027562446166" cy="435.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-33-2">
+    <title>right-blur-33-2</title>
+    <ellipse cx="1634.8027562446166" cy="435.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-33">
+    <title>right-node-33</title>
+    <ellipse cx="1634.8027562446166" cy="435.0" rx="3.2" ry="3.2" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-34-0">
+    <title>left-blur-34-0</title>
+    <ellipse cx="703.660106601066" cy="469.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-34-1">
+    <title>left-blur-34-1</title>
+    <ellipse cx="703.660106601066" cy="469.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-34-2">
+    <title>left-blur-34-2</title>
+    <ellipse cx="703.660106601066" cy="469.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-34">
+    <title>left-node-34</title>
+    <ellipse cx="703.660106601066" cy="469.0" rx="3.2" ry="3.2" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-34-0">
+    <title>right-blur-34-0</title>
+    <ellipse cx="1642.339893398934" cy="469.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-34-1">
+    <title>right-blur-34-1</title>
+    <ellipse cx="1642.339893398934" cy="469.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-34-2">
+    <title>right-blur-34-2</title>
+    <ellipse cx="1642.339893398934" cy="469.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-34">
+    <title>right-node-34</title>
+    <ellipse cx="1642.339893398934" cy="469.0" rx="3.2" ry="3.2" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-35-0">
+    <title>left-blur-35-0</title>
+    <ellipse cx="674.1721439749609" cy="492.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-35-1">
+    <title>left-blur-35-1</title>
+    <ellipse cx="674.1721439749609" cy="492.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-35-2">
+    <title>left-blur-35-2</title>
+    <ellipse cx="674.1721439749609" cy="492.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-35">
+    <title>left-node-35</title>
+    <ellipse cx="674.1721439749609" cy="492.0" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-35-0">
+    <title>right-blur-35-0</title>
+    <ellipse cx="1613.8278560250392" cy="492.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-35-1">
+    <title>right-blur-35-1</title>
+    <ellipse cx="1613.8278560250392" cy="492.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-35-2">
+    <title>right-blur-35-2</title>
+    <ellipse cx="1613.8278560250392" cy="492.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-35">
+    <title>right-node-35</title>
+    <ellipse cx="1613.8278560250392" cy="492.0" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-36-0">
+    <title>left-blur-36-0</title>
+    <ellipse cx="653.7268986157875" cy="456.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-36-1">
+    <title>left-blur-36-1</title>
+    <ellipse cx="653.7268986157875" cy="456.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-36-2">
+    <title>left-blur-36-2</title>
+    <ellipse cx="653.7268986157875" cy="456.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-36">
+    <title>left-node-36</title>
+    <ellipse cx="653.7268986157875" cy="456.0" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-36-0">
+    <title>right-blur-36-0</title>
+    <ellipse cx="1594.2731013842124" cy="456.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-36-1">
+    <title>right-blur-36-1</title>
+    <ellipse cx="1594.2731013842124" cy="456.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-36-2">
+    <title>right-blur-36-2</title>
+    <ellipse cx="1594.2731013842124" cy="456.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-36">
+    <title>right-node-36</title>
+    <ellipse cx="1594.2731013842124" cy="456.0" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-37-0">
+    <title>left-blur-37-0</title>
+    <ellipse cx="337.0246913580247" cy="650.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-37-1">
+    <title>left-blur-37-1</title>
+    <ellipse cx="337.0246913580247" cy="650.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-37-2">
+    <title>left-blur-37-2</title>
+    <ellipse cx="337.0246913580247" cy="650.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-37">
+    <title>left-node-37</title>
+    <ellipse cx="337.0246913580247" cy="650.0" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-37-0">
+    <title>right-blur-37-0</title>
+    <ellipse cx="1280.9753086419753" cy="650.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-37-1">
+    <title>right-blur-37-1</title>
+    <ellipse cx="1280.9753086419753" cy="650.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-37-2">
+    <title>right-blur-37-2</title>
+    <ellipse cx="1280.9753086419753" cy="650.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-37">
+    <title>right-node-37</title>
+    <ellipse cx="1280.9753086419753" cy="650.0" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-38-0">
+    <title>left-blur-38-0</title>
+    <ellipse cx="286.8888888888889" cy="650.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-38-1">
+    <title>left-blur-38-1</title>
+    <ellipse cx="286.8888888888889" cy="650.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-38-2">
+    <title>left-blur-38-2</title>
+    <ellipse cx="286.8888888888889" cy="650.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-38">
+    <title>left-node-38</title>
+    <ellipse cx="286.8888888888889" cy="650.0" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-38-0">
+    <title>right-blur-38-0</title>
+    <ellipse cx="1229.111111111111" cy="650.0" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-38-1">
+    <title>right-blur-38-1</title>
+    <ellipse cx="1229.111111111111" cy="650.0" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-38-2">
+    <title>right-blur-38-2</title>
+    <ellipse cx="1229.111111111111" cy="650.0" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-38">
+    <title>right-node-38</title>
+    <ellipse cx="1229.111111111111" cy="650.0" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-39-0">
+    <title>left-blur-39-0</title>
+    <ellipse cx="305.5723705901747" cy="673.3723431410767" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-39-1">
+    <title>left-blur-39-1</title>
+    <ellipse cx="305.5723705901747" cy="673.3723431410767" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-39-2">
+    <title>left-blur-39-2</title>
+    <ellipse cx="305.5723705901747" cy="673.3723431410767" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-39">
+    <title>left-node-39</title>
+    <ellipse cx="305.5723705901747" cy="673.3723431410767" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-39-0">
+    <title>right-blur-39-0</title>
+    <ellipse cx="1248.4276294098252" cy="673.3723431410767" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-39-1">
+    <title>right-blur-39-1</title>
+    <ellipse cx="1248.4276294098252" cy="673.3723431410767" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-39-2">
+    <title>right-blur-39-2</title>
+    <ellipse cx="1248.4276294098252" cy="673.3723431410767" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-39">
+    <title>right-node-39</title>
+    <ellipse cx="1248.4276294098252" cy="673.3723431410767" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-40-0">
+    <title>left-blur-40-0</title>
+    <ellipse cx="324.27761859280486" cy="639.3795093609235" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-40-1">
+    <title>left-blur-40-1</title>
+    <ellipse cx="324.27761859280486" cy="639.3795093609235" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-40-2">
+    <title>left-blur-40-2</title>
+    <ellipse cx="324.27761859280486" cy="639.3795093609235" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-40">
+    <title>left-node-40</title>
+    <ellipse cx="324.27761859280486" cy="639.3795093609235" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-40-0">
+    <title>right-blur-40-0</title>
+    <ellipse cx="1267.7223814071951" cy="639.3795093609235" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-40-1">
+    <title>right-blur-40-1</title>
+    <ellipse cx="1267.7223814071951" cy="639.3795093609235" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-40-2">
+    <title>right-blur-40-2</title>
+    <ellipse cx="1267.7223814071951" cy="639.3795093609235" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-40">
+    <title>right-node-40</title>
+    <ellipse cx="1267.7223814071951" cy="639.3795093609235" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-41-0">
+    <title>left-blur-41-0</title>
+    <ellipse cx="343.0024622960911" cy="631.4536522986563" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-41-1">
+    <title>left-blur-41-1</title>
+    <ellipse cx="343.0024622960911" cy="631.4536522986563" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-41-2">
+    <title>left-blur-41-2</title>
+    <ellipse cx="343.0024622960911" cy="631.4536522986563" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-41">
+    <title>left-node-41</title>
+    <ellipse cx="343.0024622960911" cy="631.4536522986563" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-41-0">
+    <title>right-blur-41-0</title>
+    <ellipse cx="1286.9975377039088" cy="631.4536522986563" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-41-1">
+    <title>right-blur-41-1</title>
+    <ellipse cx="1286.9975377039088" cy="631.4536522986563" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-41-2">
+    <title>right-blur-41-2</title>
+    <ellipse cx="1286.9975377039088" cy="631.4536522986563" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-41">
+    <title>right-node-41</title>
+    <ellipse cx="1286.9975377039088" cy="631.4536522986563" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-42-0">
+    <title>left-blur-42-0</title>
+    <ellipse cx="361.7450104259756" cy="669.0480287323796" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-42-1">
+    <title>left-blur-42-1</title>
+    <ellipse cx="361.7450104259756" cy="669.0480287323796" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-42-2">
+    <title>left-blur-42-2</title>
+    <ellipse cx="361.7450104259756" cy="669.0480287323796" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-42">
+    <title>left-node-42</title>
+    <ellipse cx="361.7450104259756" cy="669.0480287323796" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-42-0">
+    <title>right-blur-42-0</title>
+    <ellipse cx="1306.2549895740244" cy="669.0480287323796" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-42-1">
+    <title>right-blur-42-1</title>
+    <ellipse cx="1306.2549895740244" cy="669.0480287323796" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-42-2">
+    <title>right-blur-42-2</title>
+    <ellipse cx="1306.2549895740244" cy="669.0480287323796" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-42">
+    <title>right-node-42</title>
+    <ellipse cx="1306.2549895740244" cy="669.0480287323796" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-43-0">
+    <title>left-blur-43-0</title>
+    <ellipse cx="380.5036075036075" cy="659.8908436458022" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-43-1">
+    <title>left-blur-43-1</title>
+    <ellipse cx="380.5036075036075" cy="659.8908436458022" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-43-2">
+    <title>left-blur-43-2</title>
+    <ellipse cx="380.5036075036075" cy="659.8908436458022" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-43">
+    <title>left-node-43</title>
+    <ellipse cx="380.5036075036075" cy="659.8908436458022" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-43-0">
+    <title>right-blur-43-0</title>
+    <ellipse cx="1325.4963924963924" cy="659.8908436458022" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-43-1">
+    <title>right-blur-43-1</title>
+    <ellipse cx="1325.4963924963924" cy="659.8908436458022" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-43-2">
+    <title>right-blur-43-2</title>
+    <ellipse cx="1325.4963924963924" cy="659.8908436458022" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-43">
+    <title>right-node-43</title>
+    <ellipse cx="1325.4963924963924" cy="659.8908436458022" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-44-0">
+    <title>left-blur-44-0</title>
+    <ellipse cx="399.27679820878814" cy="626.4575304784042" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-44-1">
+    <title>left-blur-44-1</title>
+    <ellipse cx="399.27679820878814" cy="626.4575304784042" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-44-2">
+    <title>left-blur-44-2</title>
+    <ellipse cx="399.27679820878814" cy="626.4575304784042" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-44">
+    <title>left-node-44</title>
+    <ellipse cx="399.27679820878814" cy="626.4575304784042" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-44-0">
+    <title>right-blur-44-0</title>
+    <ellipse cx="1344.723201791212" cy="626.4575304784042" rx="1.55" ry="1.55" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-44-1">
+    <title>right-blur-44-1</title>
+    <ellipse cx="1344.723201791212" cy="626.4575304784042" rx="2.125" ry="2.125" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-44-2">
+    <title>right-blur-44-2</title>
+    <ellipse cx="1344.723201791212" cy="626.4575304784042" rx="2.7" ry="2.7" fill="none" stroke="#00ffff" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-44">
+    <title>right-node-44</title>
+    <ellipse cx="1344.723201791212" cy="626.4575304784042" rx="1.6" ry="1.6" fill="#00ffff" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-45-0">
+    <title>left-blur-45-0</title>
+    <ellipse cx="642.5738203957383" cy="652.0" rx="2.6484018264840192" ry="2.6484018264840192" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-45-1">
+    <title>left-blur-45-1</title>
+    <ellipse cx="642.5738203957383" cy="652.0" rx="3.630873471792607" ry="3.630873471792607" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-45-2">
+    <title>left-blur-45-2</title>
+    <ellipse cx="642.5738203957383" cy="652.0" rx="4.613345117101195" ry="4.613345117101195" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-45">
+    <title>left-node-45</title>
+    <ellipse cx="642.5738203957383" cy="652.0" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-45-0">
+    <title>right-blur-45-0</title>
+    <ellipse cx="1523.4261796042617" cy="652.0" rx="2.6484018264840192" ry="2.6484018264840192" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-45-1">
+    <title>right-blur-45-1</title>
+    <ellipse cx="1523.4261796042617" cy="652.0" rx="3.630873471792607" ry="3.630873471792607" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-45-2">
+    <title>right-blur-45-2</title>
+    <ellipse cx="1523.4261796042617" cy="652.0" rx="4.613345117101195" ry="4.613345117101195" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-45">
+    <title>right-node-45</title>
+    <ellipse cx="1523.4261796042617" cy="652.0" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-46-0">
+    <title>left-blur-46-0</title>
+    <ellipse cx="605.5738203957383" cy="652.0" rx="2.6484018264840192" ry="2.6484018264840192" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-46-1">
+    <title>left-blur-46-1</title>
+    <ellipse cx="605.5738203957383" cy="652.0" rx="3.630873471792607" ry="3.630873471792607" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-46-2">
+    <title>left-blur-46-2</title>
+    <ellipse cx="605.5738203957383" cy="652.0" rx="4.613345117101195" ry="4.613345117101195" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-46">
+    <title>left-node-46</title>
+    <ellipse cx="605.5738203957383" cy="652.0" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-46-0">
+    <title>right-blur-46-0</title>
+    <ellipse cx="1486.4261796042617" cy="652.0" rx="2.6484018264840192" ry="2.6484018264840192" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-46-1">
+    <title>right-blur-46-1</title>
+    <ellipse cx="1486.4261796042617" cy="652.0" rx="3.630873471792607" ry="3.630873471792607" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-46-2">
+    <title>right-blur-46-2</title>
+    <ellipse cx="1486.4261796042617" cy="652.0" rx="4.613345117101195" ry="4.613345117101195" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-46">
+    <title>right-node-46</title>
+    <ellipse cx="1486.4261796042617" cy="652.0" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-47-0">
+    <title>left-blur-47-0</title>
+    <ellipse cx="621.2759856630825" cy="662.0976518176948" rx="2.3655913978494625" ry="2.3655913978494625" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-47-1">
+    <title>left-blur-47-1</title>
+    <ellipse cx="621.2759856630825" cy="662.0976518176948" rx="3.2431494970516828" ry="3.2431494970516828" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-47-2">
+    <title>left-blur-47-2</title>
+    <ellipse cx="621.2759856630825" cy="662.0976518176948" rx="4.120707596253903" ry="4.120707596253903" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-47">
+    <title>left-node-47</title>
+    <ellipse cx="621.2759856630825" cy="662.0976518176948" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-47-0">
+    <title>right-blur-47-0</title>
+    <ellipse cx="1506.7240143369177" cy="662.0976518176948" rx="2.3655913978494625" ry="2.3655913978494625" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-47-1">
+    <title>right-blur-47-1</title>
+    <ellipse cx="1506.7240143369177" cy="662.0976518176948" rx="3.2431494970516828" ry="3.2431494970516828" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-47-2">
+    <title>right-blur-47-2</title>
+    <ellipse cx="1506.7240143369177" cy="662.0976518176948" rx="4.120707596253903" ry="4.120707596253903" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-47">
+    <title>right-node-47</title>
+    <ellipse cx="1506.7240143369177" cy="662.0976518176948" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-48-0">
+    <title>left-blur-48-0</title>
+    <ellipse cx="637.2303523035231" cy="662.9115691219082" rx="2.113821138211383" ry="2.113821138211383" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-48-1">
+    <title>left-blur-48-1</title>
+    <ellipse cx="637.2303523035231" cy="662.9115691219082" rx="2.897980592709154" ry="2.897980592709154" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-48-2">
+    <title>left-blur-48-2</title>
+    <ellipse cx="637.2303523035231" cy="662.9115691219082" rx="3.6821400472069254" ry="3.6821400472069254" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-48">
+    <title>left-node-48</title>
+    <ellipse cx="637.2303523035231" cy="662.9115691219082" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-48-0">
+    <title>right-blur-48-0</title>
+    <ellipse cx="1526.769647696477" cy="662.9115691219082" rx="2.113821138211383" ry="2.113821138211383" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-48-1">
+    <title>right-blur-48-1</title>
+    <ellipse cx="1526.769647696477" cy="662.9115691219082" rx="2.897980592709154" ry="2.897980592709154" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-48-2">
+    <title>right-blur-48-2</title>
+    <ellipse cx="1526.769647696477" cy="662.9115691219082" rx="3.6821400472069254" ry="3.6821400472069254" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-48">
+    <title>right-node-48</title>
+    <ellipse cx="1526.769647696477" cy="662.9115691219082" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-49-0">
+    <title>left-blur-49-0</title>
+    <ellipse cx="653.39755940912" cy="653.6934400967184" rx="1.888246628131022" ry="1.888246628131022" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-49-1">
+    <title>left-blur-49-1</title>
+    <ellipse cx="653.39755940912" cy="653.6934400967184" rx="2.5887252159860785" ry="2.5887252159860785" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-49-2">
+    <title>left-blur-49-2</title>
+    <ellipse cx="653.39755940912" cy="653.6934400967184" rx="3.289203803841135" ry="3.289203803841135" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-49">
+    <title>left-node-49</title>
+    <ellipse cx="653.39755940912" cy="653.6934400967184" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-49-0">
+    <title>right-blur-49-0</title>
+    <ellipse cx="1546.60244059088" cy="653.6934400967184" rx="1.888246628131022" ry="1.888246628131022" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-49-1">
+    <title>right-blur-49-1</title>
+    <ellipse cx="1546.60244059088" cy="653.6934400967184" rx="2.5887252159860785" ry="2.5887252159860785" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-49-2">
+    <title>right-blur-49-2</title>
+    <ellipse cx="1546.60244059088" cy="653.6934400967184" rx="3.289203803841135" ry="3.289203803841135" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-49">
+    <title>right-node-49</title>
+    <ellipse cx="1546.60244059088" cy="653.6934400967184" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="left-blur-50-0">
+    <title>left-blur-50-0</title>
+    <ellipse cx="669.7460317460318" cy="642.9183700563049" rx="1.684981684981686" ry="1.684981684981686" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-50-1">
+    <title>left-blur-50-1</title>
+    <ellipse cx="669.7460317460318" cy="642.9183700563049" rx="2.310055535861989" ry="2.310055535861989" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-blur-50-2">
+    <title>left-blur-50-2</title>
+    <ellipse cx="669.7460317460318" cy="642.9183700563049" rx="2.9351293867422923" ry="2.9351293867422923" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="left-node-50">
+    <title>left-node-50</title>
+    <ellipse cx="669.7460317460318" cy="642.9183700563049" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="right-blur-50-0">
+    <title>right-blur-50-0</title>
+    <ellipse cx="1566.2539682539682" cy="642.9183700563049" rx="1.684981684981686" ry="1.684981684981686" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-50-1">
+    <title>right-blur-50-1</title>
+    <ellipse cx="1566.2539682539682" cy="642.9183700563049" rx="2.310055535861989" ry="2.310055535861989" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-blur-50-2">
+    <title>right-blur-50-2</title>
+    <ellipse cx="1566.2539682539682" cy="642.9183700563049" rx="2.9351293867422923" ry="2.9351293867422923" fill="none" stroke="#ffff00" stroke-width="0.65" />
+  </g>
+  <g data-object-id="right-node-50">
+    <title>right-node-50</title>
+    <ellipse cx="1566.2539682539682" cy="642.9183700563049" rx="1.6" ry="1.6" fill="#ffff00" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="bridge-left">
+    <title>bridge-left</title>
+    <polyline points="820,520 894,520" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.5" />
+  </g>
+  <g data-object-id="bridge-right">
+    <title>bridge-right</title>
+    <polyline points="1026,520 1100,520" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="depth-core">
+    <title>depth-core</title>
+    <ellipse cx="960.0" cy="520.0" rx="65.0" ry="65.0" fill="#000000" stroke="#ff00ff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="depth-iris">
+    <title>depth-iris</title>
+    <ellipse cx="960.0" cy="520.0" rx="41.0" ry="23.0" fill="none" stroke="#00ffff" stroke-width="1.3" />
+  </g>
+  <g data-object-id="depth-label">
+    <title>depth-label</title>
+    <text x="960.0" y="526.0" font-family="sans-serif" font-size="15.0" fill="#ffffff">DEPTH</text>
+  </g>
+  <g data-object-id="depth-equation">
+    <title>depth-equation</title>
+    <text x="960.0" y="613.0" font-family="sans-serif" font-size="20.0" fill="#00ffff">Z = f · B / d</text>
+  </g>
+  <g data-object-id="depth-recovered">
+    <title>depth-recovered</title>
+    <text x="960.0" y="648.0" font-family="sans-serif" font-size="18.0" fill="#ffffff">1.605m</text>
+  </g>
+  <g data-object-id="depth-uncertainty">
+    <title>depth-uncertainty</title>
+    <text x="960.0" y="680.0" font-family="sans-serif" font-size="14.0" fill="#ffff00">±0.011m</text>
+  </g>
+  <g data-object-id="depth-scope">
+    <title>depth-scope</title>
+    <text x="960.0" y="711.0" font-family="sans-serif" font-size="11.0" fill="#d3d3d3">quantization sensitivity</text>
+  </g>
+  <g data-object-id="depth-caption">
+    <title>depth-caption</title>
+    <text x="140.0" y="802.0" font-family="sans-serif" font-size="16.0" fill="#00ffff">SYNTHETIC DEPTH / measured disparity -&gt; recovered distance</text>
+  </g>
+  <g data-object-id="focus-caption">
+    <title>focus-caption</title>
+    <text x="1460.0" y="802.0" font-family="sans-serif" font-size="14.0" fill="#d3d3d3">yellow=near · white=focus · cyan=far</text>
+  </g>
+  <g data-object-id="anchor-card-stem">
+    <title>anchor-card-stem</title>
+    <rect x="140.0" y="833.0" width="304.0" height="126.0" fill="#000000" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="anchor-name-stem">
+    <title>anchor-name-stem</title>
+    <text x="155.0" y="862.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">STEM</text>
+  </g>
+  <g data-object-id="anchor-depth-stem">
+    <title>anchor-depth-stem</title>
+    <text x="155.0" y="891.0" font-family="sans-serif" font-size="15.0" fill="#ffffff">Z 0.73 -&gt; 0.729m</text>
+  </g>
+  <g data-object-id="anchor-error-stem">
+    <title>anchor-error-stem</title>
+    <text x="155.0" y="918.0" font-family="sans-serif" font-size="12.0" fill="#ffff00">±0.002m sensitivity</text>
+  </g>
+  <g data-object-id="anchor-coc-stem">
+    <title>anchor-coc-stem</title>
+    <text x="155.0" y="944.0" font-family="sans-serif" font-size="12.0" fill="#d3d3d3">CoC 0.481mm · d=79.25px</text>
+  </g>
+  <g data-object-id="anchor-card-lichen">
+    <title>anchor-card-lichen</title>
+    <rect x="476.0" y="833.0" width="304.0" height="126.0" fill="#000000" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="anchor-name-lichen">
+    <title>anchor-name-lichen</title>
+    <text x="491.0" y="862.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">LICHEN</text>
+  </g>
+  <g data-object-id="anchor-depth-lichen">
+    <title>anchor-depth-lichen</title>
+    <text x="491.0" y="891.0" font-family="sans-serif" font-size="15.0" fill="#ffffff">Z 1.05 -&gt; 1.051m</text>
+  </g>
+  <g data-object-id="anchor-error-lichen">
+    <title>anchor-error-lichen</title>
+    <text x="491.0" y="918.0" font-family="sans-serif" font-size="12.0" fill="#ffff00">±0.005m sensitivity</text>
+  </g>
+  <g data-object-id="anchor-coc-lichen">
+    <title>anchor-coc-lichen</title>
+    <text x="491.0" y="944.0" font-family="sans-serif" font-size="12.0" fill="#d3d3d3">CoC 0.211mm · d=55.00px</text>
+  </g>
+  <g data-object-id="anchor-card-core">
+    <title>anchor-card-core</title>
+    <rect x="812.0" y="833.0" width="304.0" height="126.0" fill="#000000" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="anchor-name-core">
+    <title>anchor-name-core</title>
+    <text x="827.0" y="862.0" font-family="sans-serif" font-size="15.0" fill="#ffffff">CORE</text>
+  </g>
+  <g data-object-id="anchor-depth-core">
+    <title>anchor-depth-core</title>
+    <text x="827.0" y="891.0" font-family="sans-serif" font-size="15.0" fill="#ffffff">Z 1.60 -&gt; 1.605m</text>
+  </g>
+  <g data-object-id="anchor-error-core">
+    <title>anchor-error-core</title>
+    <text x="827.0" y="918.0" font-family="sans-serif" font-size="12.0" fill="#ffff00">±0.011m sensitivity</text>
+  </g>
+  <g data-object-id="anchor-coc-core">
+    <title>anchor-coc-core</title>
+    <text x="827.0" y="944.0" font-family="sans-serif" font-size="12.0" fill="#d3d3d3">CoC 0.000mm · d=36.00px</text>
+  </g>
+  <g data-object-id="anchor-card-butterfly">
+    <title>anchor-card-butterfly</title>
+    <rect x="1148.0" y="833.0" width="304.0" height="126.0" fill="#000000" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="anchor-name-butterfly">
+    <title>anchor-name-butterfly</title>
+    <text x="1163.0" y="862.0" font-family="sans-serif" font-size="15.0" fill="#00ffff">BUTTERFLY</text>
+  </g>
+  <g data-object-id="anchor-depth-butterfly">
+    <title>anchor-depth-butterfly</title>
+    <text x="1163.0" y="891.0" font-family="sans-serif" font-size="15.0" fill="#ffffff">Z 2.45 -&gt; 2.459m</text>
+  </g>
+  <g data-object-id="anchor-error-butterfly">
+    <title>anchor-error-butterfly</title>
+    <text x="1163.0" y="918.0" font-family="sans-serif" font-size="12.0" fill="#ffff00">±0.026m sensitivity</text>
+  </g>
+  <g data-object-id="anchor-coc-butterfly">
+    <title>anchor-coc-butterfly</title>
+    <text x="1163.0" y="944.0" font-family="sans-serif" font-size="12.0" fill="#d3d3d3">CoC 0.140mm · d=23.50px</text>
+  </g>
+  <g data-object-id="anchor-card-dew">
+    <title>anchor-card-dew</title>
+    <rect x="1484.0" y="833.0" width="304.0" height="126.0" fill="#000000" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="anchor-name-dew">
+    <title>anchor-name-dew</title>
+    <text x="1499.0" y="862.0" font-family="sans-serif" font-size="15.0" fill="#00ffff">DEW</text>
+  </g>
+  <g data-object-id="anchor-depth-dew">
+    <title>anchor-depth-dew</title>
+    <text x="1499.0" y="891.0" font-family="sans-serif" font-size="15.0" fill="#ffffff">Z 3.60 -&gt; 3.611m</text>
+  </g>
+  <g data-object-id="anchor-error-dew">
+    <title>anchor-error-dew</title>
+    <text x="1499.0" y="918.0" font-family="sans-serif" font-size="12.0" fill="#ffff00">±0.056m sensitivity</text>
+  </g>
+  <g data-object-id="anchor-coc-dew">
+    <title>anchor-coc-dew</title>
+    <text x="1499.0" y="944.0" font-family="sans-serif" font-size="12.0" fill="#d3d3d3">CoC 0.224mm · d=16.00px</text>
+  </g>
+  <g data-object-id="uncertainty-note">
+    <title>uncertainty-note</title>
+    <text x="90.0" y="1006.0" font-family="sans-serif" font-size="15.0" fill="#d3d3d3">Depth is triangulated from known synthetic geometry; uncertainty is first-order disparity sensitivity, not a belief score.</text>
+  </g>
+  <g data-object-id="optics-note">
+    <title>optics-note</title>
+    <text x="90.0" y="1038.0" font-family="sans-serif" font-size="14.0" fill="#808080">Defocus rings show approximate circle-of-confusion radius, not a physical blur kernel. No macro optics, camera capture, or subjective sight.</text>
+  </g>
+</svg>

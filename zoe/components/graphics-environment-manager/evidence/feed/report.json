@@ -1,0 +1,118 @@
+{
+  "alpha": 0.5,
+  "autonomous_action": false,
+  "best_by_held_out_log_loss": "order_1",
+  "instrument": "binary feed transition experiment",
+  "likes": 24,
+  "model_scope": "black-box candidate models only; not recovery of TikTok's proprietary algorithm or proof of causation",
+  "not_likes": 24,
+  "observations": 48,
+  "previous_observation_helps": true,
+  "schema_version": 1,
+  "second_order_helps_beyond_first": false,
+  "smoothing": "symmetric Dirichlet prior",
+  "summary": {
+    "order_0": {
+      "accuracy": 0.5,
+      "brier_score": 0.25,
+      "log_loss": 0.6931471805599453
+    },
+    "order_1": {
+      "accuracy": 0.875,
+      "brier_score": 0.03215241507938537,
+      "log_loss": 0.11462520064003856
+    },
+    "order_2": {
+      "accuracy": 0.875,
+      "brier_score": 0.06333441840277779,
+      "log_loss": 0.19819332531940284
+    }
+  },
+  "transition_probabilities": {
+    "False": {
+      "False": 0.02,
+      "True": 0.98
+    },
+    "True": {
+      "False": 0.9791666666666666,
+      "True": 0.020833333333333332
+    }
+  },
+  "trial_test": 8,
+  "trial_train": 24,
+  "trials": [
+    {
+      "models": {
+        "order_0": {
+          "accuracy": 0.5,
+          "brier_score": 0.25,
+          "log_loss": 0.6931471805599453,
+          "observations": 8
+        },
+        "order_1": {
+          "accuracy": 0.875,
+          "brier_score": 0.03264068663708087,
+          "log_loss": 0.12221360955368223,
+          "observations": 8
+        },
+        "order_2": {
+          "accuracy": 0.875,
+          "brier_score": 0.06380208333333337,
+          "log_loss": 0.2052065059540832,
+          "observations": 8
+        }
+      },
+      "test_observations": 8,
+      "train_observations": 24
+    },
+    {
+      "models": {
+        "order_0": {
+          "accuracy": 0.5,
+          "brier_score": 0.25,
+          "log_loss": 0.6931471805599453,
+          "observations": 8
+        },
+        "order_1": {
+          "accuracy": 0.875,
+          "brier_score": 0.0320487368890571,
+          "log_loss": 0.11347564101280132,
+          "observations": 8
+        },
+        "order_2": {
+          "accuracy": 0.875,
+          "brier_score": 0.063232421875,
+          "log_loss": 0.19709831887592152,
+          "observations": 8
+        }
+      },
+      "test_observations": 8,
+      "train_observations": 32
+    },
+    {
+      "models": {
+        "order_0": {
+          "accuracy": 0.5,
+          "brier_score": 0.25,
+          "log_loss": 0.6931471805599453,
+          "observations": 8
+        },
+        "order_1": {
+          "accuracy": 0.875,
+          "brier_score": 0.03176782171201813,
+          "log_loss": 0.10818635135363215,
+          "observations": 8
+        },
+        "order_2": {
+          "accuracy": 0.875,
+          "brier_score": 0.06296874999999999,
+          "log_loss": 0.1922751511282038,
+          "observations": 8
+        }
+      },
+      "test_observations": 8,
+      "train_observations": 40
+    }
+  ],
+  "validation": "expanding chronological train windows with disjoint later test windows; no future observations in fitting"
+}

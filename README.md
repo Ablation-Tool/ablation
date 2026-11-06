@@ -18,6 +18,24 @@ Ablation can operate CLI-only. GEM's complete investigation workflows require Ab
 
 The Lab and AI Agent share the same workspace. The agent reads `gem state`, begins exact selected work with `gem begin`, performs real analysis through Ablation, and records evidence-backed results with `gem emit` or `gem emit-many`. It does not need to infer the Lab from screenshots. Investigation events remain authoritative; Spatial IR, Cairo scenes, VDI commands, and layouts are derived views. Geometric passes are tool evidence, not human confirmation or proof of reverse-engineering coverage. See the [GEM guide](gem-lab/GEM.md) for implementation details and the visual demonstrations below.
 
+## ZOE · allgems
+
+<img src="zoe/assets/branding/zoe-eye.png" width="480" alt="ZOE allgems orbital eye emblem">
+
+**ZOE is the GEM, but the GEM is not ZOE. ZOE is allgems.** The complete ZOE component is included in `zoe/`: its native Cognitive Field, Bayesian memory, geometry, replayable knowledge graph, unified hub, and the other GEM source trees. This repository supplies Ablation's core engine and native Lab as the host component; they are not duplicated inside `zoe/components/`. The imported ZOE revision is recorded in [`zoe/ZOE-SOURCE.json`](zoe/ZOE-SOURCE.json).
+
+Install ZOE's native hub alongside Ablation and GEM:
+
+```bash
+python -m pip install ./zoe/guiai-lab
+export ZOE_ROOT="$PWD/zoe"
+zoe
+zoe list
+zoe launch ablation -- --help
+```
+
+`zoe` opens the unified hub without starting another engine or an AI agent. Component launches are explicit. The `ablation` and `gem-lab` entries resolve to this host checkout; the other upstream sources remain under `zoe/components/`. `ZOE_ABLATION_ROOT` can override host detection when ZOE is used from another layout. Source presence does not imply runtime verification or permission to act. See [ZOE's architecture and verification guide](zoe/guiai-lab/docs/UNIFIED.md) and its [historical recognition and attribution](zoe/NOTICE).
+
 ## Capabilities
 
 <details>

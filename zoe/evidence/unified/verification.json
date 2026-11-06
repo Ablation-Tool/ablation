@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "identity": "ZOE is allgems",
+  "zoe_revision": "8ac90bb7364d27eb4814498c93a2b7c00ef109f6",
+  "host": {
+    "repository": "https://github.com/Ablation-Tool/ablation",
+    "baseline_revision": "b56f91e4c54cfd996bceea63a38d8136dc1e689f",
+    "source_mode": "host",
+    "components": ["ablation", "gem-lab"],
+    "duplicate_ablation_imported": false
+  },
+  "verification": {
+    "ablation_core_and_host_integration": {
+      "passed": 2805,
+      "skipped": 93,
+      "subtests_passed": 49,
+      "duration_seconds": 213.24
+    },
+    "ablation_lab": {
+      "core_stress_passed": 69,
+      "gtk_passed": 36,
+      "real_desktop_input_passed": 1,
+      "native_tk_passed": 30,
+      "gem_stress_passed": 35,
+      "tab_churn_iterations": 40,
+      "all_children_reaped": true
+    },
+    "zoe_unified": {
+      "headless_passed": 8,
+      "native_passed": 8,
+      "host_mapping_verified": true,
+      "real_host_ablation_launch_passed": true,
+      "source_observations": 11,
+      "declared_links": 10,
+      "chain_events": 21
+    },
+    "package": {
+      "sdist_built": true,
+      "wheel_built": true,
+      "installed_wheel_native_hub_passed": true,
+      "actual_vdi_file_verified": true
+    }
+  },
+  "upstream_component_results": {
+    "canonical_gem_integration_passed": 65,
+    "canonical_gem_discovery_per_environment_passed": 30,
+    "canonical_workbench_operations_verified": 17,
+    "cerotto_normal_passed": 65,
+    "cerotto_sanitizer_passed": 65,
+    "kevlar_passed": 149,
+    "brain_passed": 16,
+    "research_comparison_cases_verified": 16,
+    "research_biobert_cases_verified": 120,
+    "pdf_synthetic_seal_verify_and_no_overwrite_passed": true,
+    "chalkboard_template_and_prompt_paths_verified": true
+  },
+  "forge": {
+    "gate_passed": true,
+    "reviewed_files": [
+      "gem-lab/gem/gtk_app.py",
+      "zoe/guiai-lab/guiai/gem/unified.py",
+      "zoe/guiai-lab/stress/unified_stress.py",
+      "tests/test_zoe_integration.py"
+    ],
+    "scope": "New and modified integration files. Unchanged upstream modules retain their recorded revisions and component verification."
+  },
+  "scope": {
+    "host_source_is_present": true,
+    "source_registration_is_runtime_verification": false,
+    "every_optional_backend_model_or_driver_verified": false,
+    "external_vdi_consumer_verified": false,
+    "permission_transfer": false,
+    "evidence_transfer": false
+  }
+}

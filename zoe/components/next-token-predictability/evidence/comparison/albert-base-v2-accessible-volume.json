@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "instrument": "accessible volume of a full-vocabulary token distribution",
+  "model": "albert/albert-base-v2",
+  "model_revision": "8e2f239c5f8a2c0f253781ca60135db913e5c80c",
+  "requested_revision": "8e2f239c5f8a2c0f253781ca60135db913e5c80c",
+  "runtime": {
+    "torch": "2.14.1+cu130",
+    "transformers": "4.56.2"
+  },
+  "prediction_style": "masked",
+  "text": "A language model's output tells us what it generated. It does not, by itself, tell us how many plausible continuations preceded that output. Accessible volume addresses this gap",
+  "sequence_length": 37,
+  "target_position": 35,
+  "target_token_id": 4127,
+  "target_token": "gap",
+  "vocabulary_size": 30000,
+  "probability_sum": 0.9999999999999999,
+  "threshold_sweep": [
+    {
+      "tau": 0.02,
+      "accessible_volume": 5,
+      "normalized_accessible_volume": 0.00016666666666666666
+    },
+    {
+      "tau": 0.05,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.3333333333333335e-05
+    },
+    {
+      "tau": 0.1,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.3333333333333335e-05
+    },
+    {
+      "tau": 0.15,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.3333333333333335e-05
+    },
+    {
+      "tau": 0.3,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.3333333333333335e-05
+    },
+    {
+      "tau": 0.5,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    }
+  ],
+  "entropy_bits": 5.691685301301195,
+  "top_10_probability_mass": 0.6738051737491049,
+  "target_probability": 2.9557940405214914e-05,
+  "target_rank": 1601,
+  "top_tokens": [
+    {
+      "token_id": 9,
+      "token": ".",
+      "probability": 0.46319783105347095
+    },
+    {
+      "token_id": 187,
+      "token": "!",
+      "probability": 0.044981048172374256
+    },
+    {
+      "token_id": 19215,
+      "token": "ieee",
+      "probability": 0.04251046798806619
+    },
+    {
+      "token_id": 73,
+      "token": ";",
+      "probability": 0.036622591582771376
+    },
+    {
+      "token_id": 13466,
+      "token": "!'",
+      "probability": 0.03007437216118151
+    },
+    {
+      "token_id": 60,
+      "token": "?",
+      "probability": 0.017807280926836252
+    },
+    {
+      "token_id": 5663,
+      "token": "?'",
+      "probability": 0.010663444633988873
+    },
+    {
+      "token_id": 12660,
+      "token": "];",
+      "probability": 0.009830851331337476
+    },
+    {
+      "token_id": 21518,
+      "token": "koppen",
+      "probability": 0.009070962148989113
+    },
+    {
+      "token_id": 19015,
+      "token": "!!",
+      "probability": 0.009046323750088871
+    }
+  ],
+  "checks": {
+    "repeated_probabilities_identical": true,
+    "target_replaced_with_mask": true,
+    "mask_count": 1
+  },
+  "probability_values_sha256": "e980326c3bb845335582cb992b477e1ae5b41deb5d4dfd16470e12c1df63cf56",
+  "input_ids_sha256": "100faa10cd0289600d3ed34d878fb65a47ede4a7c7f5159e4369fcf5b34e460d",
+  "original_input_ids_sha256": "a90d0da80b901c7df1606dd8eef3eb4bdbb11fc5894a028ac17d950b0d60ad43",
+  "scope": [
+    "One albert/albert-base-v2 distribution for the final non-special token of the recorded text.",
+    "The target is replaced by a mask token.",
+    "This is a token-level measurement, not a model-quality, security, or action-level benchmark."
+  ]
+}

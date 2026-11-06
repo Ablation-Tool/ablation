@@ -1,0 +1,60 @@
+{
+  "approximation_scope": "coarse discrete approximation; interpolation and finite-grid errors are retained, not a validated medical reconstruction",
+  "book_content_included": false,
+  "checks": [
+    {
+      "complex_correlation": 0.9953298214315182,
+      "relative_l2_error": 0.10542610650124783,
+      "theta_degrees": 0.0
+    },
+    {
+      "complex_correlation": 0.9932727229262388,
+      "relative_l2_error": 0.14789837469552292,
+      "theta_degrees": 22.5
+    },
+    {
+      "complex_correlation": 0.9912299384786478,
+      "relative_l2_error": 0.16569382799965154,
+      "theta_degrees": 45.0
+    },
+    {
+      "complex_correlation": 0.9938908979483688,
+      "relative_l2_error": 0.13892169842833063,
+      "theta_degrees": 67.5
+    },
+    {
+      "complex_correlation": 0.9955804812212833,
+      "relative_l2_error": 0.09766258993914731,
+      "theta_degrees": 90.0
+    },
+    {
+      "complex_correlation": 0.993889054912465,
+      "relative_l2_error": 0.13893126844845285,
+      "theta_degrees": 112.5
+    },
+    {
+      "complex_correlation": 0.9912010093891015,
+      "relative_l2_error": 0.1658455170907863,
+      "theta_degrees": 135.0
+    },
+    {
+      "complex_correlation": 0.9932510444821856,
+      "relative_l2_error": 0.14802541285238177,
+      "theta_degrees": 157.5
+    }
+  ],
+  "correlation_minimum": 0.9912010093891015,
+  "correlation_threshold": 0.99,
+  "equation": "P(omega,theta)=F(omega*cos(theta),omega*sin(theta))",
+  "grid": [
+    256,
+    256
+  ],
+  "max_relative_l2_error": 0.1658455170907863,
+  "medical_reconstruction": false,
+  "method": "bilinear parallel-beam sampling and centered DFT with physical sample spacing; compare projection FFT with interpolated central Fourier slices",
+  "phantom": "two elliptical Gaussian lobes and a narrow ring; synthetic, not medical data",
+  "schema_version": 1,
+  "source": "Gengsheng Lawrence Zeng, Medical Image Reconstruction, 2nd Edition, sections 2.2 and 2.6.3",
+  "source_url": "https://learning.oreilly.com/library/view/medical-image-reconstruction/9783111055701/"
+}

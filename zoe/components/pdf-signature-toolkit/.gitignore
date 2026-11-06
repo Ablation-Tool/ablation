@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+dist/
+*.key
+*.p12
+*.pfx
+*-key.pem
+*-private.pem

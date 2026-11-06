@@ -1,0 +1,12 @@
+build/
+__pycache__/
+*.pyc
+*.db
+*.db-shm
+*.db-wal
+*.E01
+*.AFF
+*.raw
+*.img
+cases/
+.DS_Store

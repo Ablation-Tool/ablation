@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zoe — Interactive Architecture</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #070b14;
+  --panel: #0d1525;
+  --panel-strong: #111c30;
+  --line: #263750;
+  --text: #e5eefb;
+  --muted: #93a6bf;
+  --cyan: #67e8f9;
+  --magenta: #f0abfc;
+  --green: #86efac;
+  --blue: #93c5fd;
+  --purple: #c4b5fd;
+  --orange: #fdba74;
+  --amber: #fde68a;
+  --red: #fca5a5;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 48% 30%, rgba(103,232,249,.08), transparent 32rem),
+    radial-gradient(circle at 5% 80%, rgba(240,171,252,.06), transparent 28rem),
+    var(--bg);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+button, input { font: inherit; }
+button, .button {
+  min-height: 38px;
+  padding: .55rem .8rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  background: #111c30;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+}
+button:hover, .button:hover { border-color: var(--cyan); background: #162640; }
+button:focus-visible, .button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+button[aria-pressed="true"] { border-color: var(--cyan); color: var(--cyan); }
+.shell { width: min(1760px, 100%); margin: 0 auto; padding: 28px; }
+.masthead { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
+.eyebrow { color: var(--cyan); font: 700 11px/1.2 ui-monospace, monospace; letter-spacing: .22em; text-transform: uppercase; }
+h1 { margin: .35rem 0 .45rem; font: 750 clamp(30px, 4vw, 54px)/1 ui-monospace, monospace; letter-spacing: .08em; }
+.subtitle { max-width: 760px; margin: 0; color: var(--muted); line-height: 1.55; }
+.mast-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(13,21,37,.9);
+}
+.speed-control { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.speed-control input { width: 110px; accent-color: var(--cyan); }
+.speed-value { min-width: 34px; color: var(--cyan); font-family: ui-monospace, monospace; }
+.toggle { display: inline-flex; align-items: center; gap: 7px; padding: 0 6px; color: var(--muted); font-size: 13px; cursor: pointer; }
+.toggle input { width: 16px; height: 16px; accent-color: var(--cyan); }
+.control-spacer { flex: 1; }
+.zoom-label { color: var(--muted); font: 12px ui-monospace, monospace; min-width: 44px; text-align: center; }
+.workspace { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start; }
+.visual-card, .detail-card, .guardrails {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(13,21,37,.92);
+  box-shadow: 0 22px 70px rgba(0,0,0,.22);
+}
+.visual-card { overflow: hidden; }
+.legend {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+.legend-item { display: inline-flex; align-items: center; gap: 7px; }
+.legend-line { width: 30px; border-top: 2px solid var(--cyan); }
+.legend-line.dashed { border-top-style: dashed; border-color: var(--amber); }
+.legend-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--magenta); box-shadow: 0 0 10px var(--magenta); }
+.legend-note { margin-left: auto; color: var(--amber); }
+.svg-scroll { overflow: auto; overscroll-behavior: contain; }
+#architecture { display: block; width: 100%; min-width: 780px; height: auto; transition: width .2s ease; }
+#architecture text { user-select: none; }
+.node { cursor: pointer; outline: none; }
+.node .card { fill: #101b2e; stroke: var(--node-color); stroke-width: 1.5; transition: stroke-width .15s, filter .15s, fill .15s; }
+.node:hover .card, .node:focus-visible .card { fill: #152640; stroke-width: 3; }
+.node.selected .card { fill: #172943; stroke: #f4f8ff; stroke-width: 3; filter: url(#softGlow); }
+.node-title { fill: var(--text); font: 700 18px ui-monospace, monospace; }
+.node-subtitle { fill: var(--muted); font: 12px ui-sans-serif, system-ui, sans-serif; }
+.node-tag { fill: var(--node-color); font: 700 10px ui-monospace, monospace; letter-spacing: .13em; }
+.node-metric { fill: var(--node-color); font: 700 12px ui-monospace, monospace; }
+.node.core .node-title { font-size: 27px; letter-spacing: .12em; }
+.flow, .feedback {
+  fill: none;
+  stroke: var(--path-color);
+  stroke-width: 2;
+  opacity: .5;
+  vector-effect: non-scaling-stroke;
+  transition: opacity .15s, stroke-width .15s;
+}
+.feedback { stroke-dasharray: 8 9; opacity: .65; }
+.flow.highlighted, .feedback.highlighted { opacity: 1; stroke-width: 4; filter: url(#lineGlow); }
+.particle { pointer-events: none; filter: url(#particleGlow); }
+.hide-feedback .feedback, .hide-feedback .feedback-particle { display: none; }
+.ambient { pointer-events: none; transform-origin: 670px 405px; animation: orbit 36s linear infinite; }
+.paused .ambient { animation-play-state: paused; }
+.hide-ambient .ambient { display: none; }
+@keyframes orbit { to { transform: rotate(360deg); } }
+.detail-card { padding: 22px; position: sticky; top: 14px; }
+.detail-kicker { color: var(--cyan); font: 700 10px ui-monospace, monospace; letter-spacing: .18em; text-transform: uppercase; }
+.detail-card h2 { margin: .5rem 0 .8rem; font: 700 25px/1.15 ui-monospace, monospace; }
+.detail-description { min-height: 84px; color: var(--muted); line-height: 1.6; font-size: 14px; }
+.detail-card dl { margin: 20px 0; }
+.detail-card dt { margin-top: 15px; color: var(--text); font: 700 11px ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
+.detail-card dd { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.boundary { padding: 12px; border: 1px solid #5f4b4b; border-radius: 10px; background: rgba(252,165,165,.05); }
+.boundary dd { color: #fbcaca !important; }
+.chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 18px; }
+.chip { padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--blue); background: #0a1322; font: 11px ui-monospace, monospace; }
+.guardrails { margin-top: 14px; padding: 16px 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.guardrails strong { color: var(--amber); font: 700 11px ui-monospace, monospace; letter-spacing: .12em; }
+.guardrails span { color: var(--muted); font-size: 12px; }
+.guardrails .warning { color: var(--red); }
+.footer-note { margin: 14px 4px 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+@media (max-width: 1180px) {
+  .workspace { grid-template-columns: 1fr; }
+  .detail-card { position: static; }
+  .detail-description { min-height: 0; }
+}
+@media (max-width: 680px) {
+  .shell { padding: 16px; }
+  .masthead { align-items: flex-start; flex-direction: column; }
+  .mast-actions { justify-content: flex-start; }
+  .control-spacer { display: none; }
+  .legend-note { margin-left: 0; width: 100%; }
+  h1 { font-size: 32px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; }
+  .ambient { animation: none; display: none; }
+  #architecture { transition: none; }
+}
+</style>
+</head>
+<body>
+<main class="shell">
+  <header class="masthead">
+    <div>
+      <div class="eyebrow">Native geometry · measurable forecasts · inspectable evidence</div>
+      <h1>Zoe</h1>
+      <p class="subtitle">HELEN’s creative workspace and next-token-predictability’s research pack, flowing through Ablation’s native GEM host. Select any module to inspect its role.</p>
+    </div>
+    <nav class="mast-actions" aria-label="Visual resources">
+      <a class="button" href="master-gem-architecture.svg" download>Download SVG</a>
+      <a class="button" href="master-gem-architecture.txt">ASCII source</a>
+    </nav>
+  </header>
+
+  <section class="controls" aria-label="Animation and view controls">
+    <button id="playToggle" type="button" aria-pressed="true">Pause flow</button>
+    <label class="speed-control" for="speed">Flow speed
+      <input id="speed" type="range" min="0.4" max="2.4" step="0.2" value="1">
+      <span class="speed-value" id="speedValue">1.0×</span>
+    </label>
+    <label class="toggle"><input id="feedbackToggle" type="checkbox" checked> Feedback loop</label>
+    <label class="toggle"><input id="ambientToggle" type="checkbox" checked> Ambient geometry</label>
+    <span class="control-spacer"></span>
+    <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
+    <span class="zoom-label" id="zoomValue">100%</span>
+    <button id="zoomIn" type="button" aria-label="Zoom in">+</button>
+    <button id="resetView" type="button">Reset view</button>
+  </section>
+
+  <div class="workspace">
+    <section class="visual-card" aria-label="Interactive Zoe architecture">
+      <div class="legend">
+        <span class="legend-item"><i class="legend-line"></i> Forecast / artifact flow</span>
+        <span class="legend-item"><i class="legend-line dashed"></i> Observation / human feedback</span>
+        <span class="legend-item"><i class="legend-dot"></i> Illustrative particles</span>
+        <span class="legend-note">Not live inference or probability mass</span>
+      </div>
+      <div class="svg-scroll" id="svgScroll">
+        <svg id="architecture" viewBox="0 0 1400 900" role="img" aria-labelledby="svgTitle svgDescription">
+          <title id="svgTitle">Zoe system and feedback architecture</title>
+          <desc id="svgDescription">GEM HELEN and the research pack feed the Ablation host. Solid paths lead through shared mathematics to five studios and exports. Dashed paths connect evaluation, evidence, and human decisions. Every node is clickable and keyboard accessible.</desc>
+          <defs>
+            <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <filter id="lineGlow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <filter id="particleGlow" x="-300%" y="-300%" width="600%" height="600%"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <radialGradient id="coreFill"><stop offset="0" stop-color="#17364a"/><stop offset="1" stop-color="#101b2e"/></radialGradient>
+            <marker id="arrow-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#67e8f9"/></marker>
+            <marker id="arrow-magenta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#f0abfc"/></marker>
+            <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#86efac"/></marker>
+            <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#93c5fd"/></marker>
+            <marker id="arrow-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#c4b5fd"/></marker>
+            <marker id="arrow-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#fdba74"/></marker>
+            <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#fde68a"/></marker>
+          </defs>
+
+          <g class="ambient" opacity="0.55">
+            <ellipse cx="670" cy="405" rx="275" ry="145" fill="none" stroke="#67e8f9" stroke-opacity=".18"/>
+            <ellipse cx="670" cy="405" rx="245" ry="195" fill="none" stroke="#c4b5fd" stroke-opacity=".15" transform="rotate(32 670 405)"/>
+            <ellipse cx="670" cy="405" rx="250" ry="180" fill="none" stroke="#f0abfc" stroke-opacity=".12" transform="rotate(-34 670 405)"/>
+            <circle cx="945" cy="405" r="4" fill="#67e8f9"/>
+            <circle cx="500" cy="285" r="4" fill="#c4b5fd"/>
+            <circle cx="555" cy="555" r="4" fill="#f0abfc"/>
+          </g>
+
+          <g id="paths">
+            <path id="path-helen" class="flow" data-modules="helen core" data-color="#f0abfc" style="--path-color:#f0abfc" marker-end="url(#arrow-magenta)" d="M300 230 C370 230 380 350 460 365"/>
+            <path id="path-research" class="flow" data-modules="research core" data-color="#86efac" style="--path-color:#86efac" marker-end="url(#arrow-green)" d="M300 510 C375 510 385 455 460 445"/>
+            <path id="path-metrics" class="flow" data-modules="core metrics" data-color="#67e8f9" style="--path-color:#67e8f9" marker-end="url(#arrow-cyan)" d="M670 300 C670 250 670 220 670 172"/>
+            <path id="path-geometry" class="flow" data-modules="core geometry" data-color="#c4b5fd" style="--path-color:#c4b5fd" marker-end="url(#arrow-purple)" d="M880 350 C950 330 945 130 1000 108"/>
+            <path id="path-forecast" class="flow" data-modules="core forecast" data-color="#67e8f9" style="--path-color:#67e8f9" marker-end="url(#arrow-cyan)" d="M880 385 C940 370 945 265 1000 248"/>
+            <path id="path-rhythm" class="flow" data-modules="core rhythm" data-color="#86efac" style="--path-color:#86efac" marker-end="url(#arrow-green)" d="M880 415 C940 415 945 405 1000 388"/>
+            <path id="path-horizon" class="flow" data-modules="core horizon" data-color="#fdba74" style="--path-color:#fdba74" marker-end="url(#arrow-orange)" d="M880 445 C945 465 945 545 1000 528"/>
+            <path id="path-field" class="flow" data-modules="core field" data-color="#f0abfc" style="--path-color:#f0abfc" marker-end="url(#arrow-magenta)" d="M880 470 C945 500 945 615 1000 608"/>
+            <path id="path-evidence" class="flow" data-modules="core evidence" data-color="#fde68a" style="--path-color:#fde68a" marker-end="url(#arrow-amber)" d="M880 495 C950 550 945 820 1000 808"/>
+            <path id="path-exports" class="flow" data-modules="core exports" data-color="#93c5fd" style="--path-color:#93c5fd" marker-end="url(#arrow-blue)" d="M670 510 C670 555 670 590 670 635"/>
+            <path id="path-metrics-user" class="feedback" data-modules="metrics user" data-color="#fde68a" style="--path-color:#fde68a" marker-end="url(#arrow-amber)" d="M460 110 H350 V850 H175 V820"/>
+            <path id="path-evidence-user" class="feedback" data-modules="evidence user" data-color="#fde68a" style="--path-color:#fde68a" marker-end="url(#arrow-amber)" d="M1170 865 V880 H300 V795"/>
+            <path id="path-user-core" class="feedback" data-modules="user core" data-color="#fde68a" style="--path-color:#fde68a" marker-end="url(#arrow-amber)" d="M300 745 C375 745 385 475 460 465"/>
+          </g>
+          <g id="particles" aria-hidden="true"></g>
+
+          <g class="node" data-module="helen" style="--node-color:#f0abfc" tabindex="0" role="button" aria-label="Inspect GEM HELEN">
+            <rect class="card" x="50" y="150" width="250" height="160" rx="18"/>
+            <text class="node-tag" x="72" y="178">CREATE · NATIVE UI</text>
+            <text class="node-title" x="72" y="210">GEM HELEN</text>
+            <text class="node-subtitle" x="72" y="237">Creative native workspace</text>
+            <text class="node-subtitle" x="72" y="260">Geometry · volume · onset</text>
+            <text class="node-metric" x="72" y="290">lazy scenes + direct input</text>
+          </g>
+
+          <g class="node" data-module="research" style="--node-color:#86efac" tabindex="0" role="button" aria-label="Inspect the research pack">
+            <rect class="card" x="50" y="430" width="250" height="160" rx="18"/>
+            <text class="node-tag" x="72" y="458">VERIFY · RESEARCH PACK</text>
+            <text class="node-title" x="72" y="490">NEXT TOKEN</text>
+            <text class="node-subtitle" x="72" y="517">Predictability + evidence</text>
+            <text class="node-subtitle" x="72" y="540">Equations · MIDI · reports</text>
+            <text class="node-metric" x="72" y="570">golden numerical vectors</text>
+          </g>
+
+          <g class="node" data-module="metrics" style="--node-color:#67e8f9" tabindex="0" role="button" aria-label="Inspect evaluation metrics">
+            <rect class="card" x="460" y="55" width="420" height="117" rx="18"/>
+            <text class="node-tag" x="484" y="82">EVALUATION · SEPARATE MEASUREMENTS</text>
+            <text class="node-title" x="484" y="113">Correctness × breadth</text>
+            <text class="node-subtitle" x="484" y="139">top-k · log-loss · calibration · Aτ · momentum</text>
+            <text class="node-metric" x="484" y="159">breadth ≠ correctness</text>
+          </g>
+
+          <g class="node core selected" data-module="core" style="--node-color:#67e8f9" tabindex="0" role="button" aria-label="Inspect Zoe core">
+            <rect class="card" x="460" y="300" width="420" height="210" rx="24" fill="url(#coreFill)"/>
+            <text class="node-tag" x="670" y="335" text-anchor="middle">ABLATION · NATIVE HOST</text>
+            <text class="node-title" x="670" y="382" text-anchor="middle">Zoe</text>
+            <text class="node-subtitle" x="670" y="415" text-anchor="middle">Shared math + conformance + artifact API</text>
+            <text class="node-subtitle" x="670" y="441" text-anchor="middle">GTK · Lab · sessions · VDI replay · provenance</text>
+            <text class="node-metric" x="670" y="480" text-anchor="middle">strict p &gt; τ · immutable hashes</text>
+          </g>
+
+          <g class="node" data-module="geometry" style="--node-color:#c4b5fd" tabindex="0" role="button" aria-label="Inspect Geometry Studio">
+            <rect class="card" x="1000" y="45" width="340" height="120" rx="18"/>
+            <text class="node-tag" x="1022" y="72">STUDIO 01 · EXPLORE</text>
+            <text class="node-title" x="1022" y="103">Geometry</text>
+            <text class="node-subtitle" x="1022" y="129">Landmarks · similarity · rigid · affine</text>
+            <text class="node-metric" x="1022" y="151">q ≈ Ap + t</text>
+          </g>
+
+          <g class="node" data-module="forecast" style="--node-color:#67e8f9" tabindex="0" role="button" aria-label="Inspect Forecast Studio">
+            <rect class="card" x="1000" y="185" width="340" height="120" rx="18"/>
+            <text class="node-tag" x="1022" y="212">STUDIO 02 · MEASURE</text>
+            <text class="node-title" x="1022" y="243">Forecast</text>
+            <text class="node-subtitle" x="1022" y="269">Volume · complement · momentum · temperature</text>
+            <text class="node-metric" x="1022" y="291">Aτ = Σ 1[pₖ &gt; τ]</text>
+          </g>
+
+          <g class="node" data-module="rhythm" style="--node-color:#86efac" tabindex="0" role="button" aria-label="Inspect Rhythm Studio">
+            <rect class="card" x="1000" y="325" width="340" height="120" rx="18"/>
+            <text class="node-tag" x="1022" y="352">STUDIO 03 · COMPARE</text>
+            <text class="node-title" x="1022" y="383">Rhythm</text>
+            <text class="node-subtitle" x="1022" y="409">Synthetic + real MIDI · forward / reverse</text>
+            <text class="node-metric" x="1022" y="431">84.375% · 58.958% synthetic</text>
+          </g>
+
+          <g class="node" data-module="horizon" style="--node-color:#fdba74" tabindex="0" role="button" aria-label="Inspect Multi-Horizon Lab">
+            <rect class="card" x="1000" y="465" width="340" height="120" rx="18"/>
+            <text class="node-tag" x="1022" y="492">LAB 04 · CONTINUATIONS</text>
+            <text class="node-title" x="1022" y="523">Multi-Horizon</text>
+            <text class="node-subtitle" x="1022" y="549">h = 1, 2, 3 · exact / bounded / sampled</text>
+            <text class="node-metric" x="1022" y="571">|O|ʰ enumeration cost</text>
+          </g>
+
+          <g class="node" data-module="field" style="--node-color:#f0abfc" tabindex="0" role="button" aria-label="Inspect Bayesian Field Notebook">
+            <rect class="card" x="1000" y="605" width="340" height="120" rx="18"/>
+            <text class="node-tag" x="1022" y="632">STUDIO 05 · BAYESIAN FIELD</text>
+            <text class="node-title" x="1022" y="663">Field Notebook</text>
+            <text class="node-subtitle" x="1022" y="689">Questions · claims · belief diffs · unified memory</text>
+            <text class="node-metric" x="1022" y="711">posteriors ≠ objective truth</text>
+          </g>
+
+          <g class="node" data-module="evidence" style="--node-color:#fde68a" tabindex="0" role="button" aria-label="Inspect Evidence Studio">
+            <rect class="card" x="1000" y="745" width="340" height="120" rx="18"/>
+            <text class="node-tag" x="1022" y="772">STUDIO 06 · PRESERVE</text>
+            <text class="node-title" x="1022" y="803">Evidence</text>
+            <text class="node-subtitle" x="1022" y="829">Lab · replay · hashes · papers · scope</text>
+            <text class="node-metric" x="1022" y="851">no-overwrite · executed=False</text>
+          </g>
+
+          <g class="node" data-module="exports" style="--node-color:#93c5fd" tabindex="0" role="button" aria-label="Inspect export formats">
+            <rect class="card" x="460" y="635" width="420" height="120" rx="18"/>
+            <text class="node-tag" x="484" y="663">EXPORT · SAME SCENE · SAME EVIDENCE</text>
+            <text class="node-title" x="484" y="696">SVG · PNG · GEM VDI · JSON</text>
+            <text class="node-subtitle" x="484" y="723">Versioned artifacts · independent conditions</text>
+            <text class="node-metric" x="484" y="744">no hidden rewrites</text>
+          </g>
+
+          <g class="node" data-module="user" style="--node-color:#fde68a" tabindex="0" role="button" aria-label="Inspect human-controlled feedback">
+            <rect class="card" x="50" y="710" width="250" height="130" rx="18"/>
+            <text class="node-tag" x="72" y="738">CONTROL · HUMAN DIRECTION</text>
+            <text class="node-title" x="72" y="770">You decide</text>
+            <text class="node-subtitle" x="72" y="797">Observe → review → direct</text>
+            <text class="node-metric" x="72" y="822">recommend ≠ execute</text>
+          </g>
+        </svg>
+      </div>
+    </section>
+
+    <aside class="detail-card" id="detailPanel" aria-live="polite">
+      <div class="detail-kicker" id="detailKicker">ABLATION · NATIVE HOST</div>
+      <h2 id="detailTitle">Zoe</h2>
+      <p class="detail-description" id="detailDescription">One native workspace joining creative geometry, reproducible research, and inspectable evidence without forcing every repository into one process.</p>
+      <dl>
+        <dt>Input</dt>
+        <dd id="detailInput">Scenes, interactions, probability artifacts, experiment definitions, and human direction.</dd>
+        <dt>Output</dt>
+        <dd id="detailOutput">Shared mathematical measurements, native scenes, evidence records, and exports.</dd>
+        <div class="boundary">
+          <dt>Boundary</dt>
+          <dd id="detailBoundary">This visualization is illustrative. It runs no model, parses no MIDI, and executes no action.</dd>
+        </div>
+      </dl>
+      <div class="chips" id="detailChips">
+        <span class="chip">native GTK</span><span class="chip">shared evidence</span><span class="chip">artifact API</span>
+      </div>
+    </aside>
+  </div>
+
+  <section class="guardrails" aria-label="Research boundaries">
+    <strong>GUARDRAILS</strong>
+    <span>strict p &gt; τ</span>
+    <span class="warning">breadth ≠ correctness</span>
+    <span>executed=False</span>
+    <span>HOP rejected</span>
+    <span>human ratings pending</span>
+    <span class="warning">no universal future predictor</span>
+  </section>
+  <p class="footer-note">Visual vocabulary inspired by state-transition diagrams, probability trees, geometric orbits, and control feedback loops. The motion shows architecture, not a live stochastic process. No external assets, network requests, cookies, or tracking.</p>
+</main>
+
+<script>
+(() => {
+  const root = document.documentElement;
+  const svg = document.getElementById('architecture');
+  const playToggle = document.getElementById('playToggle');
+  const speed = document.getElementById('speed');
+  const speedValue = document.getElementById('speedValue');
+  const feedbackToggle = document.getElementById('feedbackToggle');
+  const ambientToggle = document.getElementById('ambientToggle');
+  const zoomIn = document.getElementById('zoomIn');
+  const zoomOut = document.getElementById('zoomOut');
+  const zoomValue = document.getElementById('zoomValue');
+  const resetView = document.getElementById('resetView');
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const details = {
+    core: {
+      kicker: 'ABLATION · NATIVE HOST', title: 'Zoe',
+      description: 'One native workspace joining creative geometry, reproducible research, and inspectable evidence without forcing every repository into one process.',
+      input: 'Scenes, interactions, probability artifacts, experiment definitions, and human direction.',
+      output: 'Shared mathematical measurements, native scenes, evidence records, and exports.',
+      boundary: 'This visualization is illustrative. It runs no model, parses no MIDI, and executes no action.',
+      chips: ['native GTK', 'shared evidence', 'artifact API']
+    },
+    helen: {
+      kicker: 'CREATE · GEM HELEN', title: 'Creative workspace',
+      description: 'A lightweight native interface for direct geometric and forecast exploration. Its standalone mode remains independent of the full investigation workbench.',
+      input: 'Pointer dragging, keyboard movement, module controls, and explicit artifact regeneration.',
+      output: 'Bounded scenes, geometry interactions, volume observations, and lazy Onset views.',
+      boundary: 'No automatic retraining, live transformer, or hidden background agent. HELEN’s current packaged rhythm artifact is synthetic.',
+      chips: ['lazy loading', 'direct input', 'standalone mode']
+    },
+    research: {
+      kicker: 'VERIFY · NEXT-TOKEN-PREDICTABILITY', title: 'Research pack',
+      description: 'Canonical equations, experiment scripts, real evidence, and golden numerical results provide the reference implementation for every host.',
+      input: 'Probability distributions, synthetic motifs, MIDI-derived onsets, fixed splits, thresholds, and source manifests.',
+      output: 'Metrics, figures, papers, conformance vectors, NPZ arrays, reports, and source hashes.',
+      boundary: 'The research repository does not need its own graphics engine. It verifies the host rather than becoming another GTK application.',
+      chips: ['Groove', 'Nightingale', 'golden metrics']
+    },
+    metrics: {
+      kicker: 'EVALUATION · NOT A SINGLE SCORE', title: 'Correctness × breadth',
+      description: 'Evaluation keeps top-k accuracy, log-loss, calibration, and accessible volume visible together so confidence cannot be mistaken for correctness.',
+      input: 'Predicted distributions and actual observed targets.',
+      output: 'Correctness, confidence calibration, forecast breadth, and changes in breadth over time.',
+      boundary: 'The cost-functional analogy is visual only. No control-theoretic estimator or reward function is claimed.',
+      chips: ['top-k', 'log-loss', 'calibration', 'Aτ']
+    },
+    geometry: {
+      kicker: 'STUDIO 01 · GEOMETRY', title: 'Align before comparing',
+      description: 'Interactive landmarks and geometric constructions turn static equations into inspectable scenes with immediate numerical feedback.',
+      input: 'Source and target landmarks, alignment mode, and scene parameters.',
+      output: 'Matrices, scale, rotation, translation, determinant, residuals, and exportable Spatial IR.',
+      boundary: 'Two pairs determine similarity, not general affine structure. Exact landmark alignment does not imply whole-shape or semantic correctness.',
+      chips: ['similarity', 'rigid', 'affine', 'rank checks']
+    },
+    forecast: {
+      kicker: 'STUDIO 02 · FORECAST', title: 'Breadth and momentum',
+      description: 'Accessible volume counts alternatives strictly above a threshold. Complements and momentum show how that count changes across observations.',
+      input: 'Complete categorical probability distributions, thresholds, target bands, and temperature.',
+      output: 'Aτ, complement, threshold sweeps, momentum, and experimental recommendations.',
+      boundary: 'Temperature is an explicit probability transform, not retraining or generation. Forecast breadth is not correctness or human surprise.',
+      chips: ['strict p > τ', 'momentum', 'experimental control']
+    },
+    rhythm: {
+      kicker: 'STUDIO 03 · RHYTHM', title: 'Forward and reverse',
+      description: 'Synthetic motifs and real MIDI onsets can be compared without collapsing correctness and forecast breadth into one number.',
+      input: 'Quantized onset intervals, context clusters, forward/reversed sequences, and held-out splits.',
+      output: 'Top-k accuracy, log-loss, calibration, volume sweeps, and predictability maps.',
+      boundary: 'Native Atlas MIDI ingestion is future work. Separate Groove and Nightingale experiments are complete; synthetic results are not human-performance evidence.',
+      chips: ['84.375% forward', '58.958% retrograde', 'real MIDI evidence']
+    },
+    horizon: {
+      kicker: 'LAB 04 · MULTI-HORIZON', title: 'Continuations, not certainty',
+      description: 'Multi-horizon accessible volume counts complete candidate continuations whose learned joint probabilities exceed a threshold.',
+      input: 'A conditional joint distribution, candidate continuations, horizon h, and threshold τ.',
+      output: 'Exact counts on bounded toy sets or explicitly labeled approximate counts and error measurements.',
+      boundary: 'Exact enumeration grows as |O|ʰ. A restricted count is a lower bound, not automatically an unbiased total. The real-model benchmark remains proposed.',
+      chips: ['h = 1, 2, 3', 'exact / approximate', '|O|ʰ']
+    },
+    field: {
+      kicker: 'STUDIO 05 · BAYESIAN FIELD', title: 'Questions into evidence',
+      description: 'A Bayesian field notebook for competing claims, explicit evidence updates, chamber measurements, and next useful tests. It preserves every belief change in an append-only hash-chained memory.',
+      input: 'Questions, priors, falsifiers, user-supplied likelihoods, evidence families, chamber definitions, and explicit decisions.',
+      output: 'Posteriors, belief diffs, dependent-evidence barriers, deterministic and stochastic measurements, next-test priorities, and review-required decisions.',
+      boundary: 'Posteriors are conditional on the supplied likelihood model. Measurements and sampled outcomes never update claims automatically. Quarantined chambers cannot run. The hash chain provides tamper evidence, not authentication.',
+      chips: ['13 equation sections', 'belief diffs', 'append-only memory']
+    },
+    evidence: {
+      kicker: 'STUDIO 06 · EVIDENCE', title: 'Preserve what happened',
+      description: 'The evidence layer ties scenes and measurements to source artifacts, scope, replay, and independent condition keys.',
+      input: 'Measurements, source manifests, independent NPZ arrays, geometry, observations, and experiment metadata.',
+      output: 'Hash-addressed reports, replayable scenes, scoped evidence, papers, and comparison artifacts.',
+      boundary: 'No-overwrite handling preserves prior evidence. executed=False keeps a proposal or measurement distinct from an executed action.',
+      chips: ['no-overwrite', 'executed=False', 'source hashes']
+    },
+    exports: {
+      kicker: 'EXPORT · PORTABLE SCENES', title: 'One scene, many forms',
+      description: 'Native scenes and their evidence can leave the application without depending on a browser renderer or losing provenance.',
+      input: 'The current Spatial IR scene, measurements, source identity, and export parameters.',
+      output: 'SVG, PNG, real GEM VDI, versioned JSON, reports, and paper-ready figures.',
+      boundary: 'Export writes an artifact; it does not authorize an action. Existing outputs are not silently overwritten.',
+      chips: ['SVG', 'PNG', 'VDI', 'JSON']
+    },
+    user: {
+      kicker: 'CONTROL · HUMAN DIRECTION', title: 'You decide',
+      description: 'The dashed loop returns observations and evaluation to a human controller. A recommendation can inform the next experiment without becoming an action.',
+      input: 'Forecast breadth, correctness, calibration, observed outcomes, evidence, and project goals.',
+      output: 'Review, direction, candidate selection, and the next explicit experiment.',
+      boundary: 'No automatic execution. The human supplies judgment; accessible volume supplies neither a reward nor a direction by itself.',
+      chips: ['observe', 'review', 'direct', 'repeat']
+    }
+  };
+
+  const particles = [];
+  const particleGroup = document.getElementById('particles');
+  document.querySelectorAll('.flow, .feedback').forEach((path, pathIndex) => {
+    const count = path.classList.contains('feedback') ? 1 : 2;
+    for (let index = 0; index < count; index += 1) {
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('r', path.classList.contains('feedback') ? '3.5' : '4');
+      circle.setAttribute('fill', path.dataset.color);
+      circle.setAttribute('class', path.classList.contains('feedback') ? 'particle feedback-particle' : 'particle');
+      particleGroup.appendChild(circle);
+      particles.push({ circle, path, offset: (index / count + pathIndex * 0.071) % 1 });
+    }
+  });
+
+  let playing = !reducedMotion.matches;
+  let travel = 0;
+  let previousTime = performance.now();
+  let zoom = 100;
+  let selected = 'core';
+
+  function renderParticles(now) {
+    const elapsed = Math.min(60, now - previousTime);
+    previousTime = now;
+    if (playing) travel = (travel + elapsed * 0.000075 * Number(speed.value)) % 1;
+    particles.forEach(({ circle, path, offset }) => {
+      const length = path.getTotalLength();
+      const point = path.getPointAtLength(((travel + offset) % 1) * length);
+      circle.setAttribute('transform', `translate(${point.x.toFixed(2)} ${point.y.toFixed(2)})`);
+    });
+    requestAnimationFrame(renderParticles);
+  }
+
+  function updatePlayback() {
+    root.classList.toggle('paused', !playing);
+    playToggle.textContent = playing ? 'Pause flow' : 'Resume flow';
+    playToggle.setAttribute('aria-pressed', String(playing));
+  }
+
+  function selectModule(name, focus = false) {
+    const detail = details[name];
+    if (!detail) return;
+    selected = name;
+    document.querySelectorAll('.node').forEach(node => {
+      const active = node.dataset.module === name;
+      node.classList.toggle('selected', active);
+      node.setAttribute('aria-pressed', String(active));
+      if (active && focus) node.focus();
+    });
+    document.querySelectorAll('.flow, .feedback').forEach(path => {
+      path.classList.toggle('highlighted', path.dataset.modules.split(' ').includes(name));
+    });
+    document.getElementById('detailKicker').textContent = detail.kicker;
+    document.getElementById('detailTitle').textContent = detail.title;
+    document.getElementById('detailDescription').textContent = detail.description;
+    document.getElementById('detailInput').textContent = detail.input;
+    document.getElementById('detailOutput').textContent = detail.output;
+    document.getElementById('detailBoundary').textContent = detail.boundary;
+    document.getElementById('detailChips').replaceChildren(...detail.chips.map(chip => {
+      const span = document.createElement('span');
+      span.className = 'chip';
+      span.textContent = chip;
+      return span;
+    }));
+  }
+
+  function updateZoom() {
+    svg.style.width = `${zoom}%`;
+    zoomValue.textContent = `${zoom}%`;
+  }
+
+  document.querySelectorAll('.node').forEach(node => {
+    node.addEventListener('click', () => selectModule(node.dataset.module));
+    node.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        selectModule(node.dataset.module);
+      }
+    });
+  });
+  playToggle.addEventListener('click', () => { playing = !playing; updatePlayback(); });
+  speed.addEventListener('input', () => { speedValue.textContent = `${Number(speed.value).toFixed(1)}×`; });
+  feedbackToggle.addEventListener('change', () => { root.classList.toggle('hide-feedback', !feedbackToggle.checked); });
+  ambientToggle.addEventListener('change', () => { root.classList.toggle('hide-ambient', !ambientToggle.checked); });
+  zoomIn.addEventListener('click', () => { zoom = Math.min(180, zoom + 10); updateZoom(); });
+  zoomOut.addEventListener('click', () => { zoom = Math.max(80, zoom - 10); updateZoom(); });
+  resetView.addEventListener('click', () => {
+    zoom = 100;
+    speed.value = '1';
+    speedValue.textContent = '1.0×';
+    feedbackToggle.checked = true;
+    ambientToggle.checked = true;
+    root.classList.remove('hide-feedback', 'hide-ambient');
+    playing = !reducedMotion.matches;
+    updatePlayback();
+    updateZoom();
+    selectModule('core');
+    document.getElementById('svgScroll').scrollTo({ left: 0, top: 0, behavior: 'auto' });
+  });
+  reducedMotion.addEventListener('change', event => {
+    if (event.matches) { playing = false; updatePlayback(); }
+  });
+
+  selectModule(selected);
+  updatePlayback();
+  updateZoom();
+  requestAnimationFrame(renderParticles);
+})();
+</script>
+</body>
+</html>

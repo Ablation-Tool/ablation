@@ -1,0 +1,11 @@
+zoe        present  zoe       Cognitive Field, Bayesian memory, geometry, and unified hub
+ablation   present  host      Complete AIARE framework, analyzers, parsers, modules, and core CLI
+gem-lab    present  host      Default native investigation GUI and shared Lab evidence protocol
+gem        present  bundled   Native workbench, mirrored brain, geometry, Spatial IR, and VDI
+helen      present  bundled   Optimized geometry, rhythm, and forecast laboratory
+brain      present  bundled   Standalone Bayesian field notebook and chambered memory
+cerotto    present  bundled   Guarded forensic cases, native C engine, timelines, and vault evidence
+research   present  bundled   Accessible-volume research, evidence packs, and mirrored workbench
+kevlar     present  bundled   MCP proxy firewall, content disarm, policy enforcement, and audit evidence
+pdf        present  bundled   Reproducible source integrity records and detached PDF signatures
+chalkboard present  bundled   Reusable ideas, templates, and prompts for knowledge engineering

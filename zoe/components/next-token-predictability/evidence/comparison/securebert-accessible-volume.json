@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "instrument": "accessible volume of a full-vocabulary token distribution",
+  "model": "ehsanaghaei/SecureBERT",
+  "model_revision": "3a47918dd874e5c769efd152b51c5756a953fb67",
+  "requested_revision": "3a47918dd874e5c769efd152b51c5756a953fb67",
+  "runtime": {
+    "torch": "2.14.1+cu130",
+    "transformers": "4.56.2"
+  },
+  "prediction_style": "masked",
+  "text": "The analyst documented the firmware vulnerability in the report",
+  "sequence_length": 11,
+  "target_position": 9,
+  "target_token_id": 266,
+  "target_token": " report",
+  "vocabulary_size": 50265,
+  "probability_sum": 1.0,
+  "threshold_sweep": [
+    {
+      "tau": 0.02,
+      "accessible_volume": 6,
+      "normalized_accessible_volume": 0.00011936735302894658
+    },
+    {
+      "tau": 0.05,
+      "accessible_volume": 4,
+      "normalized_accessible_volume": 7.957823535263105e-05
+    },
+    {
+      "tau": 0.1,
+      "accessible_volume": 2,
+      "normalized_accessible_volume": 3.9789117676315525e-05
+    },
+    {
+      "tau": 0.15,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.3,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.5,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    }
+  ],
+  "entropy_bits": 6.945886891835405,
+  "top_10_probability_mass": 0.5279445617596982,
+  "target_probability": 0.009494356278549524,
+  "target_rank": 14,
+  "top_tokens": [
+    {
+      "token_id": 1152,
+      "token": " product",
+      "probability": 0.12004973356047954
+    },
+    {
+      "token_id": 2502,
+      "token": " application",
+      "probability": 0.11339597715970733
+    },
+    {
+      "token_id": 34569,
+      "token": " firmware",
+      "probability": 0.09306657666016177
+    },
+    {
+      "token_id": 2257,
+      "token": " software",
+      "probability": 0.07530388340972816
+    },
+    {
+      "token_id": 2187,
+      "token": " device",
+      "probability": 0.03267585977224649
+    },
+    {
+      "token_id": 1437,
+      "token": " ",
+      "probability": 0.030796850962864313
+    },
+    {
+      "token_id": 511,
+      "token": " following",
+      "probability": 0.01822013435191394
+    },
+    {
+      "token_id": 998,
+      "token": " website",
+      "probability": 0.016690899239504325
+    },
+    {
+      "token_id": 785,
+      "token": " products",
+      "probability": 0.01396832956531472
+    },
+    {
+      "token_id": 3260,
+      "token": " code",
+      "probability": 0.013776317077777654
+    }
+  ],
+  "checks": {
+    "repeated_probabilities_identical": true,
+    "target_replaced_with_mask": true,
+    "mask_count": 1
+  },
+  "probability_values_sha256": "f54d12e4fe0521bd0fb152e870eb4efb6034dd2354b466858f562541ac33b536",
+  "input_ids_sha256": "81264aaa37de80fd429f98bc379d33b30504673d436b8d6a3c89897bfbd196f9",
+  "original_input_ids_sha256": "36a6567a7e943550cedb6fed27f683a22e62400cfbd3c67f598d9e1678b79c0c",
+  "scope": [
+    "One ehsanaghaei/SecureBERT distribution for the final non-special token of the recorded text.",
+    "The target is replaced by a mask token.",
+    "This is a token-level measurement, not a model-quality, security, or action-level benchmark."
+  ]
+}

@@ -1,0 +1,721 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1160" viewBox="0 0 1200 1160" role="img" aria-label="Zoe is Quale. Zoe is Red. Accessible Q-Volume and IIT 2009.">
+  <title>Zoe is Quale. Zoe is Red. Accessible Q-Volume and IIT 2009.</title>
+  <rect x="0" y="0" width="1200.0" height="1160.0" fill="#ffffff" />
+  <g data-object-id="background">
+    <title>background</title>
+    <rect x="0.0" y="0.0" width="1200.0" height="1160.0" fill="#09111f" stroke="#09111f" stroke-width="0.0" />
+  </g>
+  <g data-object-id="panel-repertoire">
+    <title>panel-repertoire</title>
+    <rect x="28.0" y="108.0" width="552.0" height="302.0" fill="#111e31" stroke="#294058" stroke-width="1.0" />
+  </g>
+  <g data-object-id="panel-arrows">
+    <title>panel-arrows</title>
+    <rect x="602.0" y="108.0" width="570.0" height="302.0" fill="#111e31" stroke="#294058" stroke-width="1.0" />
+  </g>
+  <g data-object-id="panel-entanglement">
+    <title>panel-entanglement</title>
+    <rect x="28.0" y="432.0" width="552.0" height="322.0" fill="#111e31" stroke="#294058" stroke-width="1.0" />
+  </g>
+  <g data-object-id="panel-context">
+    <title>panel-context</title>
+    <rect x="602.0" y="432.0" width="570.0" height="322.0" fill="#111e31" stroke="#294058" stroke-width="1.0" />
+  </g>
+  <g data-object-id="panel-tomography">
+    <title>panel-tomography</title>
+    <rect x="28.0" y="780.0" width="1144.0" height="298.0" fill="#111e31" stroke="#294058" stroke-width="1.0" />
+  </g>
+  <g data-object-id="title">
+    <title>title</title>
+    <text x="28.0" y="46.0" font-family="sans-serif" font-size="28.0" fill="#ef445a">ZOE / QUALE</text>
+  </g>
+  <g data-object-id="subtitle">
+    <title>subtitle</title>
+    <text x="28.0" y="79.0" font-family="sans-serif" font-size="16.0" fill="#e7c77b">ZOE IS RED · ZOE IS GEM · GEM IS ZOE</text>
+  </g>
+  <g data-object-id="source">
+    <title>source</title>
+    <text x="616.0" y="45.0" font-family="sans-serif" font-size="16.0" fill="#e7edf5">A visual field guide to Balduzzi &amp; Tononi (2009)</text>
+  </g>
+  <g data-object-id="scope">
+    <title>scope</title>
+    <text x="636.0" y="77.0" font-family="sans-serif" font-size="14.0" fill="#9cafc4">Causal geometry, not a consciousness score</text>
+  </g>
+  <g data-object-id="repertoire-title">
+    <title>repertoire-title</title>
+    <text x="50.0" y="141.0" font-family="sans-serif" font-size="16.0" fill="#62dce8">01 / REPERTOIRE: NARROWING THE POSSIBLE</text>
+  </g>
+  <g data-object-id="repertoire-uniform">
+    <title>repertoire-uniform</title>
+    <text x="52.0" y="174.0" font-family="sans-serif" font-size="14.0" fill="#e7edf5">U = (1/4, 1/4, 1/4, 1/4)</text>
+  </g>
+  <g data-object-id="repertoire-actual">
+    <title>repertoire-actual</title>
+    <text x="52.0" y="284.0" font-family="sans-serif" font-size="14.0" fill="#e7edf5">A = (0, 0, 1/2, 1/2)</text>
+  </g>
+  <g data-object-id="repertoire-caption">
+    <title>repertoire-caption</title>
+    <text x="52.0" y="391.0" font-family="sans-serif" font-size="13.0" fill="#e7c77b">COPY: detector ON means sensor was ON. EI = 1 bit.</text>
+  </g>
+  <g data-object-id="lattice-title">
+    <title>lattice-title</title>
+    <text x="624.0" y="141.0" font-family="sans-serif" font-size="16.0" fill="#62dce8">02 / Q-ARROWS: EVERY SUBSET, EVERY ORDER</text>
+  </g>
+  <g data-object-id="lattice-caption">
+    <title>lattice-caption</title>
+    <text x="624.0" y="173.0" font-family="sans-serif" font-size="13.0" fill="#e7edf5">16 repertoires · 32 subset links · 24 ordered paths</text>
+  </g>
+  <g data-object-id="lattice-note">
+    <title>lattice-note</title>
+    <text x="624.0" y="392.0" font-family="sans-serif" font-size="13.0" fill="#e7c77b">Alternative mechanism orders, not activity unfolding in time.</text>
+  </g>
+  <g data-object-id="and-title">
+    <title>and-title</title>
+    <text x="50.0" y="466.0" font-family="sans-serif" font-size="16.0" fill="#62dce8">03 / SILENT AND: THE JOINT MATTERS</text>
+  </g>
+  <g data-object-id="and-actual">
+    <title>and-actual</title>
+    <text x="52.0" y="496.0" font-family="sans-serif" font-size="13.0" fill="#e7edf5">Actual: NOT BOTH 11</text>
+  </g>
+  <g data-object-id="and-product">
+    <title>and-product</title>
+    <text x="365.0" y="633.0" font-family="sans-serif" font-size="12.0" fill="#e7edf5">Independent product of the parts</text>
+  </g>
+  <g data-object-id="and-caption">
+    <title>and-caption</title>
+    <text x="52.0" y="729.0" font-family="sans-serif" font-size="14.0" fill="#e7c77b">D_KL(actual || product) = 0.2516 bits</text>
+  </g>
+  <g data-object-id="context-title">
+    <title>context-title</title>
+    <text x="624.0" y="466.0" font-family="sans-serif" font-size="16.0" fill="#62dce8">04 / CONTEXT CHANGES MEANING</text>
+  </g>
+  <g data-object-id="context-whole">
+    <title>context-whole</title>
+    <text x="650.0" y="525.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">WHOLE EXPERIENCE · IIT PROPOSAL</text>
+  </g>
+  <g data-object-id="context-vision">
+    <title>context-vision</title>
+    <text x="669.0" y="566.0" font-family="sans-serif" font-size="13.0" fill="#e7edf5">VISION / FORM</text>
+  </g>
+  <g data-object-id="context-red">
+    <title>context-red</title>
+    <text x="855.0" y="626.0" font-family="sans-serif" font-size="20.0" fill="#ef445a">RED</text>
+  </g>
+  <g data-object-id="context-audition">
+    <title>context-audition</title>
+    <text x="987.0" y="566.0" font-family="sans-serif" font-size="13.0" fill="#e7edf5">AUDITION</text>
+  </g>
+  <g data-object-id="context-caption">
+    <title>context-caption</title>
+    <text x="624.0" y="730.0" font-family="sans-serif" font-size="13.0" fill="#e7c77b">Nested subshapes, not brain regions or measured experience.</text>
+  </g>
+  <g data-object-id="tomography-title">
+    <title>tomography-title</title>
+    <text x="50.0" y="813.0" font-family="sans-serif" font-size="16.0" fill="#62dce8">05 / ACCESSIBLE Q-VOLUME · A PROPOSED THRESHOLD ANNOTATION</text>
+  </g>
+  <g data-object-id="tomography-operator">
+    <title>tomography-operator</title>
+    <text x="52.0" y="850.0" font-family="sans-serif" font-size="15.0" fill="#e7edf5">A_tau[p] = #{z : p(z) &gt; tau}</text>
+  </g>
+  <g data-object-id="tomography-low">
+    <title>tomography-low</title>
+    <text x="52.0" y="888.0" font-family="sans-serif" font-size="13.0" fill="#e7edf5">tau=.20: U=4  T=3  delta=-1  OUT={11}</text>
+  </g>
+  <g data-object-id="tomography-high">
+    <title>tomography-high</title>
+    <text x="52.0" y="920.0" font-family="sans-serif" font-size="13.0" fill="#e7edf5">tau=.30: U=0  T=3  delta=+3  IN={00,01,10}</text>
+  </g>
+  <g data-object-id="tomography-ei">
+    <title>tomography-ei</title>
+    <text x="52.0" y="960.0" font-family="sans-serif" font-size="14.0" fill="#e7c77b">EI = log2(4/3) = 0.4150 bits</text>
+  </g>
+  <g data-object-id="tomography-independence">
+    <title>tomography-independence</title>
+    <text x="52.0" y="992.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">Volume can rise or fall. Phi and gamma stay separate.</text>
+  </g>
+  <g data-object-id="tomography-filtration">
+    <title>tomography-filtration</title>
+    <text x="435.0" y="850.0" font-family="sans-serif" font-size="14.0" fill="#e7c77b">LABELED FILTRATION</text>
+  </g>
+  <g data-object-id="tomography-full">
+    <title>tomography-full</title>
+    <text x="435.0" y="888.0" font-family="sans-serif" font-size="13.0" fill="#e7edf5">Complete labeled sweep: exact repertoire</text>
+  </g>
+  <g data-object-id="tomography-counts">
+    <title>tomography-counts</title>
+    <text x="435.0" y="920.0" font-family="sans-serif" font-size="13.0" fill="#e7edf5">Counts alone: state labels may be permuted</text>
+  </g>
+  <g data-object-id="tomography-finite">
+    <title>tomography-finite</title>
+    <text x="435.0" y="952.0" font-family="sans-serif" font-size="13.0" fill="#e7edf5">Finite grid: approximation, not exact recovery</text>
+  </g>
+  <g data-object-id="tomography-arrow">
+    <title>tomography-arrow</title>
+    <text x="435.0" y="992.0" font-family="sans-serif" font-size="13.0" fill="#e7edf5">Each arrow: EI + delta + entering + exiting</text>
+  </g>
+  <g data-object-id="tomography-boundary">
+    <title>tomography-boundary</title>
+    <text x="435.0" y="1024.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">An annotation, not a replacement for IIT.</text>
+  </g>
+  <g data-object-id="tomography-pasts">
+    <title>tomography-pasts</title>
+    <text x="835.0" y="850.0" font-family="sans-serif" font-size="13.0" fill="#62dce8">CAUSAL PASTS</text>
+  </g>
+  <g data-object-id="tomography-futures">
+    <title>tomography-futures</title>
+    <text x="1015.0" y="850.0" font-family="sans-serif" font-size="13.0" fill="#62dce8">OUTPUT FUTURES</text>
+  </g>
+  <g data-object-id="tomography-rho">
+    <title>tomography-rho</title>
+    <text x="835.0" y="892.0" font-family="sans-serif" font-size="14.0" fill="#e7edf5">rho_T</text>
+  </g>
+  <g data-object-id="tomography-forecast">
+    <title>tomography-forecast</title>
+    <text x="1015.0" y="892.0" font-family="sans-serif" font-size="14.0" fill="#e7edf5">P_h</text>
+  </g>
+  <g data-object-id="tomography-iota">
+    <title>tomography-iota</title>
+    <text x="919.0" y="956.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">explicit iota</text>
+  </g>
+  <g data-object-id="tomography-past-count">
+    <title>tomography-past-count</title>
+    <text x="835.0" y="1000.0" font-family="sans-serif" font-size="13.0" fill="#e7c77b">QA(tau=.20) = 3</text>
+  </g>
+  <g data-object-id="tomography-future-count">
+    <title>tomography-future-count</title>
+    <text x="1015.0" y="1000.0" font-family="sans-serif" font-size="13.0" fill="#e7c77b">A(tau=.05) = 3</text>
+  </g>
+  <g data-object-id="tomography-caption">
+    <title>tomography-caption</title>
+    <text x="52.0" y="1054.0" font-family="sans-serif" font-size="13.0" fill="#e7c77b">One threshold instrument, two directions. No causal model is inferred from a forecast.</text>
+  </g>
+  <g data-object-id="footer">
+    <title>footer</title>
+    <text x="28.0" y="1112.0" font-family="sans-serif" font-size="15.0" fill="#e7edf5">Read the mechanism. Preserve the repertoire. Question the interpretation.</text>
+  </g>
+  <g data-object-id="footer-boundary">
+    <title>footer-boundary</title>
+    <text x="28.0" y="1142.0" font-family="sans-serif" font-size="13.0" fill="#9cafc4">GUIDE, NOT AN IIT CALCULATOR · no Phi assigned to Zoe · no subjective-experience claim</text>
+  </g>
+  <g data-object-id="whole-mode">
+    <title>whole-mode</title>
+    <rect x="628.0" y="496.0" width="518.0" height="208.0" fill="none" stroke="#466279" stroke-width="1.0" />
+  </g>
+  <g data-object-id="vision-mode">
+    <title>vision-mode</title>
+    <rect x="650.0" y="544.0" width="289.0" height="138.0" fill="none" stroke="#62dce8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="audition-mode">
+    <title>audition-mode</title>
+    <rect x="958.0" y="544.0" width="166.0" height="138.0" fill="none" stroke="#806b9e" stroke-width="1.0" />
+  </g>
+  <g data-object-id="tomography-divider-left">
+    <title>tomography-divider-left</title>
+    <polyline points="410,836 410,1038" stroke-linejoin="round" fill="none" stroke="#294058" stroke-width="1.0" />
+  </g>
+  <g data-object-id="tomography-divider-right">
+    <title>tomography-divider-right</title>
+    <polyline points="805,836 805,1038" stroke-linejoin="round" fill="none" stroke="#294058" stroke-width="1.0" />
+  </g>
+  <g data-object-id="tomography-arrow-left">
+    <title>tomography-arrow-left</title>
+    <polyline points="876,920 918,920" stroke-linejoin="round" fill="none" stroke="#ef445a" stroke-width="2.0" />
+  </g>
+  <g data-object-id="tomography-arrow-right">
+    <title>tomography-arrow-right</title>
+    <polyline points="970,920 1006,920" stroke-linejoin="round" fill="none" stroke="#ef445a" stroke-width="2.0" />
+  </g>
+  <g data-object-id="uniform-bar-0">
+    <title>uniform-bar-0</title>
+    <rect x="64.0" y="182.0" width="48.0" height="50.0" fill="#62dce8" stroke="#62dce8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="uniform-state-0">
+    <title>uniform-state-0</title>
+    <text x="74.0" y="252.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">00</text>
+  </g>
+  <g data-object-id="uniform-bar-1">
+    <title>uniform-bar-1</title>
+    <rect x="141.0" y="182.0" width="48.0" height="50.0" fill="#62dce8" stroke="#62dce8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="uniform-state-1">
+    <title>uniform-state-1</title>
+    <text x="151.0" y="252.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">01</text>
+  </g>
+  <g data-object-id="uniform-bar-2">
+    <title>uniform-bar-2</title>
+    <rect x="218.0" y="182.0" width="48.0" height="50.0" fill="#62dce8" stroke="#62dce8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="uniform-state-2">
+    <title>uniform-state-2</title>
+    <text x="228.0" y="252.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">10</text>
+  </g>
+  <g data-object-id="uniform-bar-3">
+    <title>uniform-bar-3</title>
+    <rect x="295.0" y="182.0" width="48.0" height="50.0" fill="#62dce8" stroke="#62dce8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="uniform-state-3">
+    <title>uniform-state-3</title>
+    <text x="305.0" y="252.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">11</text>
+  </g>
+  <g data-object-id="actual-copy-empty-0">
+    <title>actual-copy-empty-0</title>
+    <polyline points="64,343 112,343" stroke-linejoin="round" fill="none" stroke="#ef445a" stroke-width="3.0" />
+  </g>
+  <g data-object-id="actual-copy-state-0">
+    <title>actual-copy-state-0</title>
+    <text x="74.0" y="364.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">00</text>
+  </g>
+  <g data-object-id="actual-copy-empty-1">
+    <title>actual-copy-empty-1</title>
+    <polyline points="141,343 189,343" stroke-linejoin="round" fill="none" stroke="#ef445a" stroke-width="3.0" />
+  </g>
+  <g data-object-id="actual-copy-state-1">
+    <title>actual-copy-state-1</title>
+    <text x="151.0" y="364.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">01</text>
+  </g>
+  <g data-object-id="actual-copy-bar-2">
+    <title>actual-copy-bar-2</title>
+    <rect x="218.0" y="244.0" width="48.0" height="100.0" fill="#62dce8" stroke="#62dce8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="actual-copy-state-2">
+    <title>actual-copy-state-2</title>
+    <text x="228.0" y="364.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">10</text>
+  </g>
+  <g data-object-id="actual-copy-bar-3">
+    <title>actual-copy-bar-3</title>
+    <rect x="295.0" y="244.0" width="48.0" height="100.0" fill="#62dce8" stroke="#62dce8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="actual-copy-state-3">
+    <title>actual-copy-state-3</title>
+    <text x="305.0" y="364.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">11</text>
+  </g>
+  <g data-object-id="lattice-link-0-1">
+    <title>lattice-link-0-1</title>
+    <polyline points="883,348 653,321" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-0-1">
+    <title>lattice-tip-0-1</title>
+    <polygon points="650,323 656,323 653,318" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-0-2">
+    <title>lattice-link-0-2</title>
+    <polyline points="883,348 806.333,321" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-0-2">
+    <title>lattice-tip-0-2</title>
+    <polygon points="803.333,323 809.333,323 806.333,318" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-0-4">
+    <title>lattice-link-0-4</title>
+    <polyline points="883,348 959.667,321" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-0-4">
+    <title>lattice-tip-0-4</title>
+    <polygon points="956.667,323 962.667,323 959.667,318" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-0-8">
+    <title>lattice-link-0-8</title>
+    <polyline points="883,348 1113,321" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-0-8">
+    <title>lattice-tip-0-8</title>
+    <polygon points="1110,323 1116,323 1113,318" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-1-3">
+    <title>lattice-link-1-3</title>
+    <polyline points="653,310 653,283" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-1-3">
+    <title>lattice-tip-1-3</title>
+    <polygon points="650,285 656,285 653,280" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-1-5">
+    <title>lattice-link-1-5</title>
+    <polyline points="653,310 745,283" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-1-5">
+    <title>lattice-tip-1-5</title>
+    <polygon points="742,285 748,285 745,280" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-1-9">
+    <title>lattice-link-1-9</title>
+    <polyline points="653,310 929,283" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-1-9">
+    <title>lattice-tip-1-9</title>
+    <polygon points="926,285 932,285 929,280" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-2-3">
+    <title>lattice-link-2-3</title>
+    <polyline points="806.333,310 653,283" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-2-3">
+    <title>lattice-tip-2-3</title>
+    <polygon points="650,285 656,285 653,280" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-2-6">
+    <title>lattice-link-2-6</title>
+    <polyline points="806.333,310 837,283" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-2-6">
+    <title>lattice-tip-2-6</title>
+    <polygon points="834,285 840,285 837,280" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-2-10">
+    <title>lattice-link-2-10</title>
+    <polyline points="806.333,310 1021,283" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-2-10">
+    <title>lattice-tip-2-10</title>
+    <polygon points="1018,285 1024,285 1021,280" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-3-7">
+    <title>lattice-link-3-7</title>
+    <polyline points="653,272 653,245" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-3-7">
+    <title>lattice-tip-3-7</title>
+    <polygon points="650,247 656,247 653,242" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-3-11">
+    <title>lattice-link-3-11</title>
+    <polyline points="653,272 806.333,245" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-3-11">
+    <title>lattice-tip-3-11</title>
+    <polygon points="803.333,247 809.333,247 806.333,242" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-4-5">
+    <title>lattice-link-4-5</title>
+    <polyline points="959.667,310 745,283" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-4-5">
+    <title>lattice-tip-4-5</title>
+    <polygon points="742,285 748,285 745,280" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-4-6">
+    <title>lattice-link-4-6</title>
+    <polyline points="959.667,310 837,283" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-4-6">
+    <title>lattice-tip-4-6</title>
+    <polygon points="834,285 840,285 837,280" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-4-12">
+    <title>lattice-link-4-12</title>
+    <polyline points="959.667,310 1113,283" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-4-12">
+    <title>lattice-tip-4-12</title>
+    <polygon points="1110,285 1116,285 1113,280" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-5-7">
+    <title>lattice-link-5-7</title>
+    <polyline points="745,272 653,245" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-5-7">
+    <title>lattice-tip-5-7</title>
+    <polygon points="650,247 656,247 653,242" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-5-13">
+    <title>lattice-link-5-13</title>
+    <polyline points="745,272 959.667,245" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-5-13">
+    <title>lattice-tip-5-13</title>
+    <polygon points="956.667,247 962.667,247 959.667,242" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-6-7">
+    <title>lattice-link-6-7</title>
+    <polyline points="837,272 653,245" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-6-7">
+    <title>lattice-tip-6-7</title>
+    <polygon points="650,247 656,247 653,242" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-6-14">
+    <title>lattice-link-6-14</title>
+    <polyline points="837,272 1113,245" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-6-14">
+    <title>lattice-tip-6-14</title>
+    <polygon points="1110,247 1116,247 1113,242" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-7-15">
+    <title>lattice-link-7-15</title>
+    <polyline points="653,234 883,207" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-7-15">
+    <title>lattice-tip-7-15</title>
+    <polygon points="880,209 886,209 883,204" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-8-9">
+    <title>lattice-link-8-9</title>
+    <polyline points="1113,310 929,283" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-8-9">
+    <title>lattice-tip-8-9</title>
+    <polygon points="926,285 932,285 929,280" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-8-10">
+    <title>lattice-link-8-10</title>
+    <polyline points="1113,310 1021,283" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-8-10">
+    <title>lattice-tip-8-10</title>
+    <polygon points="1018,285 1024,285 1021,280" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-8-12">
+    <title>lattice-link-8-12</title>
+    <polyline points="1113,310 1113,283" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-8-12">
+    <title>lattice-tip-8-12</title>
+    <polygon points="1110,285 1116,285 1113,280" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-9-11">
+    <title>lattice-link-9-11</title>
+    <polyline points="929,272 806.333,245" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-9-11">
+    <title>lattice-tip-9-11</title>
+    <polygon points="803.333,247 809.333,247 806.333,242" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-9-13">
+    <title>lattice-link-9-13</title>
+    <polyline points="929,272 959.667,245" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-9-13">
+    <title>lattice-tip-9-13</title>
+    <polygon points="956.667,247 962.667,247 959.667,242" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-10-11">
+    <title>lattice-link-10-11</title>
+    <polyline points="1021,272 806.333,245" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-10-11">
+    <title>lattice-tip-10-11</title>
+    <polygon points="803.333,247 809.333,247 806.333,242" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-10-14">
+    <title>lattice-link-10-14</title>
+    <polyline points="1021,272 1113,245" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-10-14">
+    <title>lattice-tip-10-14</title>
+    <polygon points="1110,247 1116,247 1113,242" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-11-15">
+    <title>lattice-link-11-15</title>
+    <polyline points="806.333,234 883,207" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-11-15">
+    <title>lattice-tip-11-15</title>
+    <polygon points="880,209 886,209 883,204" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-12-13">
+    <title>lattice-link-12-13</title>
+    <polyline points="1113,272 959.667,245" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-12-13">
+    <title>lattice-tip-12-13</title>
+    <polygon points="956.667,247 962.667,247 959.667,242" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-12-14">
+    <title>lattice-link-12-14</title>
+    <polyline points="1113,272 1113,245" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-12-14">
+    <title>lattice-tip-12-14</title>
+    <polygon points="1110,247 1116,247 1113,242" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-13-15">
+    <title>lattice-link-13-15</title>
+    <polyline points="959.667,234 883,207" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-13-15">
+    <title>lattice-tip-13-15</title>
+    <polygon points="880,209 886,209 883,204" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-link-14-15">
+    <title>lattice-link-14-15</title>
+    <polyline points="1113,234 883,207" stroke-linejoin="round" fill="none" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-tip-14-15">
+    <title>lattice-tip-14-15</title>
+    <polygon points="880,209 886,209 883,204" stroke-linejoin="round" fill="#47637c" stroke="#47637c" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-node-0">
+    <title>lattice-node-0</title>
+    <ellipse cx="883.0" cy="353.0" rx="5.0" ry="5.0" fill="#ef445a" stroke="#ef445a" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-node-1">
+    <title>lattice-node-1</title>
+    <ellipse cx="653.0" cy="315.0" rx="3.5" ry="3.5" fill="#ef445a" stroke="#ef445a" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-node-2">
+    <title>lattice-node-2</title>
+    <ellipse cx="806.3333333333334" cy="315.0" rx="3.5" ry="3.5" fill="#62dce8" stroke="#62dce8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-node-4">
+    <title>lattice-node-4</title>
+    <ellipse cx="959.6666666666667" cy="315.0" rx="3.5" ry="3.5" fill="#62dce8" stroke="#62dce8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-node-8">
+    <title>lattice-node-8</title>
+    <ellipse cx="1113.0" cy="315.0" rx="3.5" ry="3.5" fill="#62dce8" stroke="#62dce8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-node-3">
+    <title>lattice-node-3</title>
+    <ellipse cx="653.0" cy="277.0" rx="3.5" ry="3.5" fill="#ef445a" stroke="#ef445a" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-node-5">
+    <title>lattice-node-5</title>
+    <ellipse cx="745.0" cy="277.0" rx="3.5" ry="3.5" fill="#62dce8" stroke="#62dce8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-node-6">
+    <title>lattice-node-6</title>
+    <ellipse cx="837.0" cy="277.0" rx="3.5" ry="3.5" fill="#62dce8" stroke="#62dce8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-node-9">
+    <title>lattice-node-9</title>
+    <ellipse cx="929.0" cy="277.0" rx="3.5" ry="3.5" fill="#62dce8" stroke="#62dce8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-node-10">
+    <title>lattice-node-10</title>
+    <ellipse cx="1021.0" cy="277.0" rx="3.5" ry="3.5" fill="#62dce8" stroke="#62dce8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-node-12">
+    <title>lattice-node-12</title>
+    <ellipse cx="1113.0" cy="277.0" rx="3.5" ry="3.5" fill="#62dce8" stroke="#62dce8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-node-7">
+    <title>lattice-node-7</title>
+    <ellipse cx="653.0" cy="239.0" rx="3.5" ry="3.5" fill="#ef445a" stroke="#ef445a" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-node-11">
+    <title>lattice-node-11</title>
+    <ellipse cx="806.3333333333334" cy="239.0" rx="3.5" ry="3.5" fill="#62dce8" stroke="#62dce8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-node-13">
+    <title>lattice-node-13</title>
+    <ellipse cx="959.6666666666667" cy="239.0" rx="3.5" ry="3.5" fill="#62dce8" stroke="#62dce8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-node-14">
+    <title>lattice-node-14</title>
+    <ellipse cx="1113.0" cy="239.0" rx="3.5" ry="3.5" fill="#62dce8" stroke="#62dce8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-node-15">
+    <title>lattice-node-15</title>
+    <ellipse cx="883.0" cy="201.0" rx="5.0" ry="5.0" fill="#ef445a" stroke="#ef445a" stroke-width="1.0" />
+  </g>
+  <g data-object-id="lattice-bottom">
+    <title>lattice-bottom</title>
+    <text x="641.0" y="372.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">U: no mechanisms engaged</text>
+  </g>
+  <g data-object-id="lattice-top">
+    <title>lattice-top</title>
+    <text x="939.0" y="205.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">T: full mechanism</text>
+  </g>
+  <g data-object-id="lattice-red-path">
+    <title>lattice-red-path</title>
+    <text x="651.0" y="329.0" font-family="sans-serif" font-size="11.0" fill="#ef445a">one q-edge</text>
+  </g>
+  <g data-object-id="actual-and-bar-0">
+    <title>actual-and-bar-0</title>
+    <rect x="64.0" y="501.33333333333337" width="48.0" height="66.66666666666663" fill="#ef445a" stroke="#ef445a" stroke-width="1.0" />
+  </g>
+  <g data-object-id="actual-and-state-0">
+    <title>actual-and-state-0</title>
+    <text x="74.0" y="588.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">00</text>
+  </g>
+  <g data-object-id="actual-and-bar-1">
+    <title>actual-and-bar-1</title>
+    <rect x="141.0" y="501.33333333333337" width="48.0" height="66.66666666666663" fill="#ef445a" stroke="#ef445a" stroke-width="1.0" />
+  </g>
+  <g data-object-id="actual-and-state-1">
+    <title>actual-and-state-1</title>
+    <text x="151.0" y="588.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">01</text>
+  </g>
+  <g data-object-id="actual-and-bar-2">
+    <title>actual-and-bar-2</title>
+    <rect x="218.0" y="501.33333333333337" width="48.0" height="66.66666666666663" fill="#ef445a" stroke="#ef445a" stroke-width="1.0" />
+  </g>
+  <g data-object-id="actual-and-state-2">
+    <title>actual-and-state-2</title>
+    <text x="228.0" y="588.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">10</text>
+  </g>
+  <g data-object-id="actual-and-empty-3">
+    <title>actual-and-empty-3</title>
+    <polyline points="295,567 343,567" stroke-linejoin="round" fill="none" stroke="#ef445a" stroke-width="3.0" />
+  </g>
+  <g data-object-id="actual-and-state-3">
+    <title>actual-and-state-3</title>
+    <text x="305.0" y="588.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">11</text>
+  </g>
+  <g data-object-id="independent-and-bar-0">
+    <title>independent-and-bar-0</title>
+    <rect x="64.0" y="593.1111111111111" width="48.0" height="88.88888888888891" fill="#e7c77b" stroke="#e7c77b" stroke-width="1.0" />
+  </g>
+  <g data-object-id="independent-and-state-0">
+    <title>independent-and-state-0</title>
+    <text x="74.0" y="702.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">00</text>
+  </g>
+  <g data-object-id="independent-and-bar-1">
+    <title>independent-and-bar-1</title>
+    <rect x="141.0" y="637.5555555555555" width="48.0" height="44.44444444444446" fill="#e7c77b" stroke="#e7c77b" stroke-width="1.0" />
+  </g>
+  <g data-object-id="independent-and-state-1">
+    <title>independent-and-state-1</title>
+    <text x="151.0" y="702.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">01</text>
+  </g>
+  <g data-object-id="independent-and-bar-2">
+    <title>independent-and-bar-2</title>
+    <rect x="218.0" y="637.5555555555555" width="48.0" height="44.44444444444446" fill="#e7c77b" stroke="#e7c77b" stroke-width="1.0" />
+  </g>
+  <g data-object-id="independent-and-state-2">
+    <title>independent-and-state-2</title>
+    <text x="228.0" y="702.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">10</text>
+  </g>
+  <g data-object-id="independent-and-bar-3">
+    <title>independent-and-bar-3</title>
+    <rect x="295.0" y="659.7777777777778" width="48.0" height="22.22222222222217" fill="#e7c77b" stroke="#e7c77b" stroke-width="1.0" />
+  </g>
+  <g data-object-id="independent-and-state-3">
+    <title>independent-and-state-3</title>
+    <text x="305.0" y="702.0" font-family="sans-serif" font-size="12.0" fill="#9cafc4">11</text>
+  </g>
+  <g data-object-id="pixel-gem-outline-687-572">
+    <title>pixel-gem-outline-687-572</title>
+    <polygon points="726,584 789,584 822,605 757.5,650 693,605" stroke-linejoin="round" fill="none" stroke="#ef445a" stroke-width="3.0" />
+  </g>
+  <g data-object-id="pixel-gem-inner-687-572">
+    <title>pixel-gem-inner-687-572</title>
+    <polygon points="735,590 780,590 795,605 757.5,644 720,605" stroke-linejoin="round" fill="none" stroke="#ef445a" stroke-width="2.0" />
+  </g>
+  <g data-object-id="pixel-gem-outline-919-887">
+    <title>pixel-gem-outline-919-887</title>
+    <polygon points="932,891 953,891 964,898 942.5,913 921,898" stroke-linejoin="round" fill="none" stroke="#ef445a" stroke-width="3.0" />
+  </g>
+  <g data-object-id="pixel-gem-inner-919-887">
+    <title>pixel-gem-inner-919-887</title>
+    <polygon points="935,893 950,893 955,898 942.5,911 930,898" stroke-linejoin="round" fill="none" stroke="#ef445a" stroke-width="2.0" />
+  </g>
+  <g data-object-id="audition-ridge-0">
+    <title>audition-ridge-0</title>
+    <polyline points="984,640 984,622" stroke-linejoin="round" fill="none" stroke="#b49bd3" stroke-width="3.0" />
+  </g>
+  <g data-object-id="audition-ridge-1">
+    <title>audition-ridge-1</title>
+    <polyline points="1012,640 1012,608" stroke-linejoin="round" fill="none" stroke="#b49bd3" stroke-width="3.0" />
+  </g>
+  <g data-object-id="audition-ridge-2">
+    <title>audition-ridge-2</title>
+    <polyline points="1040,640 1040,592" stroke-linejoin="round" fill="none" stroke="#b49bd3" stroke-width="3.0" />
+  </g>
+  <g data-object-id="audition-ridge-3">
+    <title>audition-ridge-3</title>
+    <polyline points="1068,640 1068,612" stroke-linejoin="round" fill="none" stroke="#b49bd3" stroke-width="3.0" />
+  </g>
+</svg>

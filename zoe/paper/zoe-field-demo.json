@@ -1,0 +1,247 @@
+{
+  "events": [
+    {
+      "hash": "58d827938e12191ba3f31888ba2c1441d092f4dca0b18efb143195299533bb04",
+      "kind": "question_added",
+      "payload": {
+        "question": {
+          "context": "A worked example showing primary-source claims, counterevidence, deterministic measurement, and stochastic sampling.",
+          "id": "q-1",
+          "status": "open",
+          "text": "What is DEMOMENU in the 1986 Programmer's Guide to GEM?"
+        }
+      },
+      "previous_hash": null,
+      "sequence": 1
+    },
+    {
+      "hash": "4103fb5410b4d84dd306c674b677d0b1416b07d2df3af6f15c843faab69a0b9b",
+      "kind": "claim_added",
+      "payload": {
+        "claim": {
+          "falsifier": "A primary-source definition assigning DEMOMENU to a different resource kind or tree index.",
+          "id": "c-1",
+          "model": "independent binary claim; claims in a question are not automatically mutually exclusive",
+          "posterior": 0.62,
+          "prior": 0.62,
+          "question_id": "q-1",
+          "statement": "DEMOMENU names the DEMO application's main menu object tree: resource tree 0.",
+          "status": "supported",
+          "updates": []
+        }
+      },
+      "previous_hash": "58d827938e12191ba3f31888ba2c1441d092f4dca0b18efb143195299533bb04",
+      "sequence": 2
+    },
+    {
+      "hash": "40f4d0cfa348c45f13bc7e20b283d03750f5fe47d86bb2320e6eb9a46a7c65da",
+      "kind": "chamber_added",
+      "payload": {
+        "chamber": {
+          "disposition": "active",
+          "equation": "volume/strict@v1",
+          "executed": false,
+          "id": "ch-1",
+          "mode": "deterministic",
+          "name": "Strict threshold observatory",
+          "parameters": {},
+          "provenance": "Nicholas Michael Kloster's accessible-volume equation"
+        }
+      },
+      "previous_hash": "4103fb5410b4d84dd306c674b677d0b1416b07d2df3af6f15c843faab69a0b9b",
+      "sequence": 3
+    },
+    {
+      "hash": "cfc47c8b1dc4223c01652f03da0903197932de8e625cc123debdc4cddb43e76f",
+      "kind": "chamber_added",
+      "payload": {
+        "chamber": {
+          "disposition": "experimental",
+          "equation": "sample/categorical@v1",
+          "executed": false,
+          "id": "ch-2",
+          "mode": "stochastic",
+          "name": "Seeded categorical futures",
+          "parameters": {
+            "seed": 7
+          },
+          "provenance": "Stochastic Simulation: preserve generator, seed, and experiment scope"
+        }
+      },
+      "previous_hash": "40f4d0cfa348c45f13bc7e20b283d03750f5fe47d86bb2320e6eb9a46a7c65da",
+      "sequence": 4
+    },
+    {
+      "hash": "cfb81d4a96b971e355370c6a7b8fe6f6ce6f90797296e473a400766e8181402d",
+      "kind": "chamber_added",
+      "payload": {
+        "chamber": {
+          "disposition": "rejected",
+          "equation": "volume/adaptive@v1",
+          "executed": false,
+          "id": "ch-3",
+          "mode": "deterministic",
+          "name": "Adaptive threshold comparison",
+          "parameters": {
+            "alpha": 0.001,
+            "beta": 0
+          },
+          "provenance": "Held-out BioBERT negative-transfer result"
+        }
+      },
+      "previous_hash": "cfc47c8b1dc4223c01652f03da0903197932de8e625cc123debdc4cddb43e76f",
+      "sequence": 5
+    },
+    {
+      "hash": "890c09cfd96ee14067368c19bd7d0d421d60205361ef48d363d23c6128a5527a",
+      "kind": "evidence_added",
+      "payload": {
+        "evidence": {
+          "chamber_id": null,
+          "claim_id": "c-1",
+          "dependence_acknowledged": false,
+          "direction": "supports",
+          "family": "gem-guide-listing-5.18",
+          "id": "e-1",
+          "source": "Programmer's Guide to GEM, Listing 5.18, PDF p.324",
+          "text": "DEMO.H defines DEMOMENU as 0 with the TREE annotation in Listing 5.18.",
+          "verification": "user-supplied likelihood assessment; not an automatic truth judgment"
+        },
+        "update": {
+          "evidence_id": "e-1",
+          "likelihood_false": 0.03,
+          "likelihood_ratio": 32.0,
+          "likelihood_true": 0.96,
+          "log_likelihood_ratio": 3.4657359027997265,
+          "model": "independent binary claim; posterior is conditional on the supplied likelihood model",
+          "posterior": 0.9812067260138477,
+          "posterior_log_odds": 3.955284128118432,
+          "prior": 0.62,
+          "prior_log_odds": 0.4895482253187058
+        }
+      },
+      "previous_hash": "cfb81d4a96b971e355370c6a7b8fe6f6ce6f90797296e473a400766e8181402d",
+      "sequence": 6
+    },
+    {
+      "hash": "a0e45a0cfd9bee842363085ac8535af4fbcd2dfcdaae4f57ff37390afabe870d",
+      "kind": "evidence_added",
+      "payload": {
+        "evidence": {
+          "chamber_id": null,
+          "claim_id": "c-1",
+          "dependence_acknowledged": false,
+          "direction": "challenges",
+          "family": "gem-guide-version-appearance",
+          "id": "e-2",
+          "source": "Programmer's Guide to GEM, GEM 1/2 comparison, PDF p.294",
+          "text": "GEM versions change menu placement, so appearance alone cannot establish the resource identity.",
+          "verification": "user-supplied likelihood assessment; not an automatic truth judgment"
+        },
+        "update": {
+          "evidence_id": "e-2",
+          "likelihood_false": 0.6,
+          "likelihood_ratio": 0.6666666666666667,
+          "likelihood_true": 0.4,
+          "log_likelihood_ratio": -0.4054651081081643,
+          "model": "independent binary claim; posterior is conditional on the supplied likelihood model",
+          "posterior": 0.9720725134737875,
+          "posterior_log_odds": 3.549819020010271,
+          "prior": 0.9812067260138477,
+          "prior_log_odds": 3.955284128118435
+        }
+      },
+      "previous_hash": "890c09cfd96ee14067368c19bd7d0d421d60205361ef48d363d23c6128a5527a",
+      "sequence": 7
+    },
+    {
+      "hash": "7c7af61313f35ae8d547f4fdd33928019d7afb359925c0b4ff08b10d6131d9ed",
+      "kind": "evidence_added",
+      "payload": {
+        "evidence": {
+          "chamber_id": null,
+          "claim_id": "c-1",
+          "dependence_acknowledged": false,
+          "direction": "supports",
+          "family": "gem-guide-initialization-p301",
+          "id": "e-3",
+          "source": "Programmer's Guide to GEM, initialization code, PDF p.301",
+          "text": "rsrc_gaddr(R_TREE, DEMOMENU, &addr_menu) is followed by menu_bar(addr_menu, TRUE).",
+          "verification": "user-supplied likelihood assessment; not an automatic truth judgment"
+        },
+        "update": {
+          "evidence_id": "e-3",
+          "likelihood_false": 0.08,
+          "likelihood_ratio": 11.875,
+          "likelihood_true": 0.95,
+          "log_likelihood_ratio": 2.474435349920705,
+          "model": "independent binary claim; posterior is conditional on the supplied likelihood model",
+          "posterior": 0.997586484312148,
+          "posterior_log_odds": 6.024254369930979,
+          "prior": 0.9720725134737875,
+          "prior_log_odds": 3.549819020010274
+        }
+      },
+      "previous_hash": "a0e45a0cfd9bee842363085ac8535af4fbcd2dfcdaae4f57ff37390afabe870d",
+      "sequence": 8
+    },
+    {
+      "hash": "b1b0f79c792e2232a9996d86c701d1b1943dc93181b3438db783ee9c88800942",
+      "kind": "measurement_recorded",
+      "payload": {
+        "measurement": {
+          "belief_updated": false,
+          "chamber_id": "ch-1",
+          "disposition": "active",
+          "equation": "volume/strict@v1",
+          "executed": false,
+          "id": "m-1",
+          "input_storage": "complete",
+          "inputs": {
+            "probabilities": [
+              0.7,
+              0.2,
+              0.08,
+              0.02
+            ],
+            "tau": 0.05
+          },
+          "mode": "deterministic",
+          "result": {
+            "accessible_volume": 3,
+            "complement_volume": 1,
+            "normalized_accessible_volume": 0.75,
+            "normalized_complement_volume": 0.25,
+            "strict_comparison": true,
+            "tau": 0.05,
+            "vocabulary_size": 4
+          }
+        }
+      },
+      "previous_hash": "7c7af61313f35ae8d547f4fdd33928019d7afb359925c0b4ff08b10d6131d9ed",
+      "sequence": 9
+    },
+    {
+      "hash": "152805bcaa85a40516e1adf4a76d82bfb986e6ae5e7a0a21f5f8fe1a1a54dfce",
+      "kind": "test_added",
+      "payload": {
+        "test": {
+          "completed": false,
+          "decision_value": 0.8,
+          "effort": 0.3,
+          "expected_information_gain": 0.7,
+          "id": "t-1",
+          "priority": 1.8666666666666665,
+          "question_id": "q-1",
+          "statement": "Inspect an independently generated RCS resource header and compare its tree identifiers.",
+          "status": "heuristic_not_a_probability_or_validated_control_policy"
+        }
+      },
+      "previous_hash": "b1b0f79c792e2232a9996d86c701d1b1943dc93181b3438db783ee9c88800942",
+      "sequence": 10
+    }
+  ],
+  "instrument": "zoe-field-notebook",
+  "integrity": "canonical-json-sha256-chain; tamper evidence, not authentication",
+  "schema_version": 1
+}

@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.build-*/
+.eggs/
+.venv/
+venv/
+env/
+.coverage
+htmlcov/
+
+# Ablation runtime
+checkpoints/
+reports/
+*.db
+
+# Binary / firmware artifacts
+*.bin
+*.img
+*.qcow2
+*.deb
+*.rpm
+*.extracted/
+*.tar.gz
+*.zip
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Target RE findings and session state — never committed
+re/
+targets/
+drone-firmware/
+re_session.py
+re_session/
+
+# Internal
+SESSION.md
+SESSION_*.md
+AUDIT.md
+PLAN.md
+test/
+models/
+*.bff
+
+# Local Claude commands — never in public repo
+.claude/commands/

@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gem-helen"
+version = "0.1.0"
+description = "Optimized native geometry and forecast laboratory"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+gem-helen = "helen_gem.cli:main"
+
+[tool.setuptools.package-data]
+helen_gem = ["data/*.json.gz"]
+
+[tool.setuptools.packages.find]
+include = ["helen_gem*"]

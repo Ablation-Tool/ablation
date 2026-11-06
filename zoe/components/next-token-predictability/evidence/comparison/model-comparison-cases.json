@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "description": "Sixteen planned single-case model comparisons; not a general model-quality benchmark.",
+  "thresholds": [0.02, 0.05, 0.10, 0.15, 0.30, 0.50],
+  "comparison": "strict_probability_greater_than_threshold",
+  "cases": [
+    {
+      "category": "baseline",
+      "model": "google-bert/bert-base-cased",
+      "revision": "cd5ef92a9fb2f889e972770a36d4ed042daf221e",
+      "style": "masked",
+      "text": "A language model's output tells us what it generated. It does not, by itself, tell us how many plausible continuations preceded that output. Accessible volume addresses this gap",
+      "target": "gap"
+    },
+    {
+      "category": "baseline",
+      "model": "FacebookAI/roberta-base",
+      "revision": "e2da8e2f811d1448a5b465c236feacd80ffbac7b",
+      "style": "masked",
+      "text": "A language model's output tells us what it generated. It does not, by itself, tell us how many plausible continuations preceded that output. Accessible volume addresses this gap",
+      "target": "gap"
+    },
+    {
+      "category": "baseline",
+      "model": "albert/albert-base-v2",
+      "revision": "8e2f239c5f8a2c0f253781ca60135db913e5c80c",
+      "style": "masked",
+      "text": "A language model's output tells us what it generated. It does not, by itself, tell us how many plausible continuations preceded that output. Accessible volume addresses this gap",
+      "target": "gap"
+    },
+    {
+      "category": "baseline",
+      "model": "openai-community/gpt2",
+      "revision": "607a30d783dfa663caf39e06633721c8d4cfcd7e",
+      "style": "causal",
+      "text": "A language model's output tells us what it generated. It does not, by itself, tell us how many plausible continuations preceded that output. Accessible volume addresses this gap",
+      "target": "gap"
+    },
+    {
+      "category": "security",
+      "model": "ehsanaghaei/SecureBERT",
+      "revision": "3a47918dd874e5c769efd152b51c5756a953fb67",
+      "style": "masked",
+      "text": "The analyst documented the firmware vulnerability in the report",
+      "target": "report"
+    },
+    {
+      "category": "security",
+      "model": "markusbayer/CySecBERT",
+      "revision": "c9e04e355a2bc0690b6e55833a9895d7591afcd0",
+      "style": "masked",
+      "text": "The analyst documented the firmware vulnerability in the report",
+      "target": "report"
+    },
+    {
+      "category": "biomedical",
+      "model": "dmis-lab/biobert-base-cased-v1.2",
+      "revision": "67c9c25b46986521ca33df05d8540da1210b3256",
+      "style": "masked",
+      "text": "The study measured the protein",
+      "target": "protein"
+    },
+    {
+      "category": "clinical",
+      "model": "emilyalsentzer/Bio_ClinicalBERT",
+      "revision": "d5892b39a4adaed74b92212a44081509db72f87b",
+      "style": "masked",
+      "text": "The clinician documented the diagnosis",
+      "target": "diagnosis"
+    },
+    {
+      "category": "scientific",
+      "model": "allenai/scibert_scivocab_cased",
+      "revision": "ddf0be025f8e432a1870e34811997ba6725bf04a",
+      "style": "masked",
+      "text": "The experiment supported the hypothesis",
+      "target": "hypothesis"
+    },
+    {
+      "category": "legal",
+      "model": "nlpaueb/legal-bert-base-uncased",
+      "revision": "15b570cbf88259610b082a167dacc190124f60f6",
+      "style": "masked",
+      "text": "The parties signed the agreement",
+      "target": "agreement"
+    },
+    {
+      "category": "financial",
+      "model": "yiyanghkust/finbert-pretrain",
+      "revision": "88ab954a39ea6d3ce2b62cff086dd5ad1172c664",
+      "style": "masked",
+      "text": "The company reported earnings",
+      "target": "earnings"
+    },
+    {
+      "category": "programming",
+      "model": "microsoft/codebert-base",
+      "revision": "3b0952feddeffad0063f274080e3c23d75e7eb39",
+      "style": "masked",
+      "text": "def get_value():\n    return",
+      "target": "return"
+    },
+    {
+      "category": "multilingual",
+      "model": "FacebookAI/xlm-roberta-base",
+      "revision": "e73636d4f797dec63c3081bb6ed5c7b0bb3f2089",
+      "style": "masked",
+      "text": "La casa es grande",
+      "target": "grande"
+    },
+    {
+      "category": "chemistry",
+      "model": "seyonec/ChemBERTa-zinc-base-v1",
+      "revision": "761d6a18cf99db371e0b43baf3e2d21b3e865a20",
+      "style": "masked",
+      "text": "CC(=O)O",
+      "target": "O"
+    },
+    {
+      "category": "protein",
+      "model": "Rostlab/prot_bert",
+      "revision": "7a894481acdc12202f0a415dd567f6cfdb698908",
+      "style": "masked",
+      "text": "M K T A",
+      "target": "A"
+    },
+    {
+      "category": "mathematics",
+      "model": "Qwen/Qwen2.5-Math-1.5B",
+      "revision": "4a83ca6e4526a4f2da3aa259ec36c259f66b2ab2",
+      "style": "causal",
+      "text": "2 + 2 = 4",
+      "target": "4"
+    }
+  ]
+}

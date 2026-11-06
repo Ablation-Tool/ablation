@@ -1,0 +1,363 @@
+{
+  "accessibility": [
+    {
+      "accessible_volume": 20,
+      "approximate": false,
+      "complement_volume": 0,
+      "horizon": 2,
+      "outcome_space": 20,
+      "tau": 0.02
+    },
+    {
+      "accessible_volume": 0,
+      "approximate": false,
+      "complement_volume": 20,
+      "horizon": 2,
+      "outcome_space": 20,
+      "tau": 0.05
+    },
+    {
+      "accessible_volume": 0,
+      "approximate": false,
+      "complement_volume": 20,
+      "horizon": 2,
+      "outcome_space": 20,
+      "tau": 0.1
+    },
+    {
+      "accessible_volume": 0,
+      "approximate": false,
+      "complement_volume": 20,
+      "horizon": 2,
+      "outcome_space": 20,
+      "tau": 0.15
+    },
+    {
+      "accessible_volume": 0,
+      "approximate": false,
+      "complement_volume": 20,
+      "horizon": 2,
+      "outcome_space": 20,
+      "tau": 0.3
+    },
+    {
+      "accessible_volume": 0,
+      "approximate": false,
+      "complement_volume": 20,
+      "horizon": 2,
+      "outcome_space": 20,
+      "tau": 0.5
+    }
+  ],
+  "autonomous_action": false,
+  "bayesian_example": {
+    "posterior": {
+      "bag": 0.9939173263269944,
+      "uniform": 0.006082673673005597
+    },
+    "scope": "candidate-model comparison, not evidence about the original implementation's unknown RNG",
+    "sequence": [
+      "I",
+      "O",
+      "T",
+      "S",
+      "Z",
+      "J",
+      "L"
+    ]
+  },
+  "game": {
+    "current": {
+      "kind": "J",
+      "rotation": 0,
+      "x": 3,
+      "y": 0
+    },
+    "game_over": false,
+    "gravity_interval": 30,
+    "grid": [
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    ],
+    "height": 20,
+    "level": 1,
+    "lines": 0,
+    "next_kind": "L",
+    "randomizer": "bag",
+    "remaining": [
+      "Z",
+      "S",
+      "O",
+      "I",
+      "T"
+    ],
+    "rng_state": 13064056694810536069,
+    "schema_version": 1,
+    "score": 0,
+    "seed": 7,
+    "tick_count": 0,
+    "width": 10
+  },
+  "horizon": 2,
+  "instrument": "Bounded Tetris probability field",
+  "joint_model": "sampling without replacement within each shuffled seven-piece bag",
+  "next_piece_probabilities": {
+    "I": 0.2,
+    "J": 0.0,
+    "L": 0.0,
+    "O": 0.2,
+    "S": 0.2,
+    "T": 0.2,
+    "Z": 0.2
+  },
+  "official_tetris_implementation": false,
+  "randomizer": "bag",
+  "schema_version": 1,
+  "source": "original deterministic Tetris model with explicit bag and uniform randomizers",
+  "state_sha256": "b9fa8b431c082732c9b163362c90b59d7b2c488387f511d21d08cd881ba9611d",
+  "summary": "bag: A(0.02)=20 of 20 · horizon=2 · exact joint distribution · seed=7",
+  "uncertainty_scope": "exact probabilities under the declared randomizer, not posterior beliefs about an unknown implementation or probabilities of winning",
+  "vr": {
+    "active": false,
+    "comfort": "the two-dimensional board remains readable; no virtual camera motion is required",
+    "essential_interaction": "manual piece placement and spatial audio must justify a headset"
+  }
+}
