@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "guiai-lab"
+version = "0.1.0"
+description = "Agent-grown investigation workspace for reverse-engineering sessions"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["pyte>=0.8.1,<1"]
+
+[project.scripts]
+gem = "guiai.gem.cli:main"
+guiai = "guiai.cli:main"
+metrix = "metrix.cli:main"
+zoe = "guiai.gem.unified_cli:main"
+
+[tool.setuptools]
+license-files = ["NOTICE", "licenses/*.txt"]
+
+[tool.setuptools.package-data]
+guiai = ["icons/*.svg", "gem/data/*.json.gz"]
+metrix = ["templates/*.html", "gui/*.html", "gui/*.css", "gui/*.js"]
+
+[tool.setuptools.packages.find]
+include = ["guiai*", "metrix*"]

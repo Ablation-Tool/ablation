@@ -1,0 +1,1 @@
+# Kevlar has no runtime dependencies — stdlib only.

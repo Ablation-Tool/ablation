@@ -1,0 +1,153 @@
+{
+  "checks": {
+    "arithmetic": "passed",
+    "strict_threshold_equality": "passed",
+    "two_way_record": "passed"
+  },
+  "complete_filtration_identity": "rho(z) = sup{tau : z is in QB_tau}, with sup(empty) = 0; this is the continuous labeled-filtration identity",
+  "consciousness_measured": false,
+  "extension_status": "proposed formal construction; toy arithmetic verified, not an empirically validated IIT implementation",
+  "finite_sweep_is_approximate": true,
+  "gamma_calculator": false,
+  "instrument": "Accessible Q-Volume toy demonstration",
+  "original_equation_credit": "Nicholas Michael Kloster, March 6, 2026",
+  "phi_computed": false,
+  "sampled_reconstruction": {
+    "after": {
+      "00": 0.3,
+      "01": 0.3,
+      "10": 0.3
+    },
+    "before": {
+      "00": 0.2,
+      "01": 0.2,
+      "10": 0.2,
+      "11": 0.2
+    }
+  },
+  "schema_version": 1,
+  "source": "Balduzzi & Tononi (2009), Qualia: The Geometry of Integrated Information",
+  "toy": {
+    "after": {
+      "00": 0.3333333333333333,
+      "01": 0.3333333333333333,
+      "10": 0.3333333333333333,
+      "11": 0.0
+    },
+    "after_sweep": [
+      {
+        "states": [
+          "00",
+          "01",
+          "10"
+        ],
+        "tau": 0.0,
+        "volume": 3
+      },
+      {
+        "states": [
+          "00",
+          "01",
+          "10"
+        ],
+        "tau": 0.2,
+        "volume": 3
+      },
+      {
+        "states": [
+          "00",
+          "01",
+          "10"
+        ],
+        "tau": 0.3,
+        "volume": 3
+      },
+      {
+        "states": [],
+        "tau": 0.3333333333333333,
+        "volume": 0
+      }
+    ],
+    "arrows": [
+      {
+        "delta_accessible_q_volume": -1,
+        "ei_bits": 0.4150374992788437,
+        "entered": [],
+        "exited": [
+          "11"
+        ],
+        "tau": 0.2
+      },
+      {
+        "delta_accessible_q_volume": 3,
+        "ei_bits": 0.4150374992788437,
+        "entered": [
+          "00",
+          "01",
+          "10"
+        ],
+        "exited": [],
+        "tau": 0.3
+      }
+    ],
+    "before": {
+      "00": 0.25,
+      "01": 0.25,
+      "10": 0.25,
+      "11": 0.25
+    },
+    "before_sweep": [
+      {
+        "states": [
+          "00",
+          "01",
+          "10",
+          "11"
+        ],
+        "tau": 0.0,
+        "volume": 4
+      },
+      {
+        "states": [
+          "00",
+          "01",
+          "10",
+          "11"
+        ],
+        "tau": 0.2,
+        "volume": 4
+      },
+      {
+        "states": [],
+        "tau": 0.25,
+        "volume": 0
+      },
+      {
+        "states": [],
+        "tau": 0.3,
+        "volume": 0
+      }
+    ],
+    "two_way": {
+      "context_link": "explicitly supplied forecast and context; no internal-state mapping is inferred",
+      "future": {
+        "accessible_states": [
+          "a",
+          "b",
+          "c"
+        ],
+        "accessible_volume": 3,
+        "horizon": 1
+      },
+      "past": {
+        "accessible_q_volume": 3,
+        "accessible_states": [
+          "00",
+          "01",
+          "10"
+        ]
+      },
+      "tau": 0.05
+    }
+  }
+}

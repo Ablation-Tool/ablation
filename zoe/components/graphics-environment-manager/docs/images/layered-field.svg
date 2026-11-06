@@ -1,0 +1,417 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1200" viewBox="0 0 1920 1200" role="img" aria-label="Layered Field: exploded blocks and cubic volume">
+  <title>Layered Field: exploded blocks and cubic volume</title>
+  <rect x="0" y="0" width="1920.0" height="1200.0" fill="#ffffff" />
+  <g data-object-id="background">
+    <title>background</title>
+    <rect x="0.0" y="0.0" width="1920.0" height="1200.0" fill="#ffffff" stroke="#ffffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="title">
+    <title>title</title>
+    <text x="70.0" y="70.0" font-family="sans-serif" font-size="30.0" fill="#000000">LAYERED FIELD</text>
+  </g>
+  <g data-object-id="subtitle">
+    <title>subtitle</title>
+    <text x="70.0" y="108.0" font-family="sans-serif" font-size="20.0" fill="#0000ff">exploded · every layer visible · cubic volume</text>
+  </g>
+  <g data-object-id="geometry-note">
+    <title>geometry-note</title>
+    <text x="70.0" y="141.0" font-family="sans-serif" font-size="15.0" fill="#000000">illustrative geometry · not an anatomical model</text>
+  </g>
+  <g data-object-id="layer-1-front">
+    <title>layer-1-front</title>
+    <rect x="200.0" y="180.0" width="620.0" height="50.0" fill="#008000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-1-top">
+    <title>layer-1-top</title>
+    <polygon points="200,180 224,156 844,156 820,180" stroke-linejoin="round" fill="#008000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-1-side">
+    <title>layer-1-side</title>
+    <polygon points="820,180 844,156 844,206 820,230" stroke-linejoin="round" fill="#008000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-1-division-0.3333333333333333">
+    <title>layer-1-division-0.3333333333333333</title>
+    <polyline points="406.667,180 406.667,230" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="layer-1-division-0.6666666666666666">
+    <title>layer-1-division-0.6666666666666666</title>
+    <polyline points="613.333,180 613.333,230" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="swatch-0">
+    <title>swatch-0</title>
+    <rect x="1120.0" y="180.0" width="34.0" height="34.0" fill="#008000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-label-0">
+    <title>layer-label-0</title>
+    <text x="1172.0" y="203.0" font-family="sans-serif" font-size="18.0" fill="#000000">12 / side=1.000</text>
+  </g>
+  <g data-object-id="layer-volume-0">
+    <title>layer-volume-0</title>
+    <text x="1172.0" y="229.0" font-family="sans-serif" font-size="15.0" fill="#000000">relative volume=1.000</text>
+  </g>
+  <g data-object-id="layer-2-front">
+    <title>layer-2-front</title>
+    <rect x="213.95" y="262.0" width="592.0999999999999" height="48.110000000000014" fill="#0000ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-2-top">
+    <title>layer-2-top</title>
+    <polygon points="213.95,262 236.87,239.08 828.97,239.08 806.05,262" stroke-linejoin="round" fill="#0000ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-2-side">
+    <title>layer-2-side</title>
+    <polygon points="806.05,262 828.97,239.08 828.97,287.19 806.05,310.11" stroke-linejoin="round" fill="#0000ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-2-division-0.3333333333333333">
+    <title>layer-2-division-0.3333333333333333</title>
+    <polyline points="411.317,262 411.317,310.11" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="layer-2-division-0.6666666666666666">
+    <title>layer-2-division-0.6666666666666666</title>
+    <polyline points="608.683,262 608.683,310.11" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="swatch-1">
+    <title>swatch-1</title>
+    <rect x="1120.0" y="262.0" width="34.0" height="34.0" fill="#0000ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-label-1">
+    <title>layer-label-1</title>
+    <text x="1172.0" y="285.0" font-family="sans-serif" font-size="18.0" fill="#000000">11 / side=0.955</text>
+  </g>
+  <g data-object-id="layer-volume-1">
+    <title>layer-volume-1</title>
+    <text x="1172.0" y="311.0" font-family="sans-serif" font-size="15.0" fill="#000000">relative volume=0.871</text>
+  </g>
+  <g data-object-id="layer-3-front">
+    <title>layer-3-front</title>
+    <rect x="227.89999999999998" y="344.0" width="564.2" height="46.22000000000003" fill="#ff0000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-3-top">
+    <title>layer-3-top</title>
+    <polygon points="227.9,344 249.74,322.16 813.94,322.16 792.1,344" stroke-linejoin="round" fill="#ff0000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-3-side">
+    <title>layer-3-side</title>
+    <polygon points="792.1,344 813.94,322.16 813.94,368.38 792.1,390.22" stroke-linejoin="round" fill="#ff0000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-3-division-0.3333333333333333">
+    <title>layer-3-division-0.3333333333333333</title>
+    <polyline points="415.967,344 415.967,390.22" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="layer-3-division-0.6666666666666666">
+    <title>layer-3-division-0.6666666666666666</title>
+    <polyline points="604.033,344 604.033,390.22" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="swatch-2">
+    <title>swatch-2</title>
+    <rect x="1120.0" y="344.0" width="34.0" height="34.0" fill="#ff0000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-label-2">
+    <title>layer-label-2</title>
+    <text x="1172.0" y="367.0" font-family="sans-serif" font-size="18.0" fill="#000000">10 / side=0.910</text>
+  </g>
+  <g data-object-id="layer-volume-2">
+    <title>layer-volume-2</title>
+    <text x="1172.0" y="393.0" font-family="sans-serif" font-size="15.0" fill="#000000">relative volume=0.754</text>
+  </g>
+  <g data-object-id="layer-4-front">
+    <title>layer-4-front</title>
+    <rect x="241.85000000000002" y="426.0" width="536.3" height="44.329999999999984" fill="#ff00ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-4-top">
+    <title>layer-4-top</title>
+    <polygon points="241.85,426 262.61,405.24 798.91,405.24 778.15,426" stroke-linejoin="round" fill="#ff00ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-4-side">
+    <title>layer-4-side</title>
+    <polygon points="778.15,426 798.91,405.24 798.91,449.57 778.15,470.33" stroke-linejoin="round" fill="#ff00ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-4-division-0.3333333333333333">
+    <title>layer-4-division-0.3333333333333333</title>
+    <polyline points="420.617,426 420.617,470.33" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="layer-4-division-0.6666666666666666">
+    <title>layer-4-division-0.6666666666666666</title>
+    <polyline points="599.383,426 599.383,470.33" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="swatch-3">
+    <title>swatch-3</title>
+    <rect x="1120.0" y="426.0" width="34.0" height="34.0" fill="#ff00ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-label-3">
+    <title>layer-label-3</title>
+    <text x="1172.0" y="449.0" font-family="sans-serif" font-size="18.0" fill="#000000"> 9 / side=0.865</text>
+  </g>
+  <g data-object-id="layer-volume-3">
+    <title>layer-volume-3</title>
+    <text x="1172.0" y="475.0" font-family="sans-serif" font-size="15.0" fill="#000000">relative volume=0.647</text>
+  </g>
+  <g data-object-id="layer-5-front">
+    <title>layer-5-front</title>
+    <rect x="255.79999999999998" y="508.0" width="508.4000000000001" height="42.440000000000055" fill="#00ffff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-5-top">
+    <title>layer-5-top</title>
+    <polygon points="255.8,508 275.48,488.32 783.88,488.32 764.2,508" stroke-linejoin="round" fill="#00ffff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-5-side">
+    <title>layer-5-side</title>
+    <polygon points="764.2,508 783.88,488.32 783.88,530.76 764.2,550.44" stroke-linejoin="round" fill="#00ffff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-5-division-0.3333333333333333">
+    <title>layer-5-division-0.3333333333333333</title>
+    <polyline points="425.267,508 425.267,550.44" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="layer-5-division-0.6666666666666666">
+    <title>layer-5-division-0.6666666666666666</title>
+    <polyline points="594.733,508 594.733,550.44" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="swatch-4">
+    <title>swatch-4</title>
+    <rect x="1120.0" y="508.0" width="34.0" height="34.0" fill="#00ffff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-label-4">
+    <title>layer-label-4</title>
+    <text x="1172.0" y="531.0" font-family="sans-serif" font-size="18.0" fill="#000000"> 8 / side=0.820</text>
+  </g>
+  <g data-object-id="layer-volume-4">
+    <title>layer-volume-4</title>
+    <text x="1172.0" y="557.0" font-family="sans-serif" font-size="15.0" fill="#000000">relative volume=0.551</text>
+  </g>
+  <g data-object-id="layer-6-front">
+    <title>layer-6-front</title>
+    <rect x="269.75" y="590.0" width="480.5" height="40.549999999999955" fill="#ffff00" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-6-top">
+    <title>layer-6-top</title>
+    <polygon points="269.75,590 288.35,571.4 768.85,571.4 750.25,590" stroke-linejoin="round" fill="#ffff00" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-6-side">
+    <title>layer-6-side</title>
+    <polygon points="750.25,590 768.85,571.4 768.85,611.95 750.25,630.55" stroke-linejoin="round" fill="#ffff00" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-6-division-0.3333333333333333">
+    <title>layer-6-division-0.3333333333333333</title>
+    <polyline points="429.917,590 429.917,630.55" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="layer-6-division-0.6666666666666666">
+    <title>layer-6-division-0.6666666666666666</title>
+    <polyline points="590.083,590 590.083,630.55" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="swatch-5">
+    <title>swatch-5</title>
+    <rect x="1120.0" y="590.0" width="34.0" height="34.0" fill="#ffff00" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-label-5">
+    <title>layer-label-5</title>
+    <text x="1172.0" y="613.0" font-family="sans-serif" font-size="18.0" fill="#000000"> 7 / side=0.775</text>
+  </g>
+  <g data-object-id="layer-volume-5">
+    <title>layer-volume-5</title>
+    <text x="1172.0" y="639.0" font-family="sans-serif" font-size="15.0" fill="#000000">relative volume=0.465</text>
+  </g>
+  <g data-object-id="layer-7-front">
+    <title>layer-7-front</title>
+    <rect x="283.70000000000005" y="672.0" width="452.5999999999999" height="38.65999999999997" fill="#008000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-7-top">
+    <title>layer-7-top</title>
+    <polygon points="283.7,672 301.22,654.48 753.82,654.48 736.3,672" stroke-linejoin="round" fill="#008000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-7-side">
+    <title>layer-7-side</title>
+    <polygon points="736.3,672 753.82,654.48 753.82,693.14 736.3,710.66" stroke-linejoin="round" fill="#008000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-7-division-0.3333333333333333">
+    <title>layer-7-division-0.3333333333333333</title>
+    <polyline points="434.567,672 434.567,710.66" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="layer-7-division-0.6666666666666666">
+    <title>layer-7-division-0.6666666666666666</title>
+    <polyline points="585.433,672 585.433,710.66" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="swatch-6">
+    <title>swatch-6</title>
+    <rect x="1120.0" y="672.0" width="34.0" height="34.0" fill="#008000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-label-6">
+    <title>layer-label-6</title>
+    <text x="1172.0" y="695.0" font-family="sans-serif" font-size="18.0" fill="#000000"> 6 / side=0.730</text>
+  </g>
+  <g data-object-id="layer-volume-6">
+    <title>layer-volume-6</title>
+    <text x="1172.0" y="721.0" font-family="sans-serif" font-size="15.0" fill="#000000">relative volume=0.389</text>
+  </g>
+  <g data-object-id="layer-8-front">
+    <title>layer-8-front</title>
+    <rect x="297.65" y="754.0" width="424.70000000000005" height="36.76999999999998" fill="#0000ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-8-top">
+    <title>layer-8-top</title>
+    <polygon points="297.65,754 314.09,737.56 738.79,737.56 722.35,754" stroke-linejoin="round" fill="#0000ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-8-side">
+    <title>layer-8-side</title>
+    <polygon points="722.35,754 738.79,737.56 738.79,774.33 722.35,790.77" stroke-linejoin="round" fill="#0000ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-8-division-0.3333333333333333">
+    <title>layer-8-division-0.3333333333333333</title>
+    <polyline points="439.217,754 439.217,790.77" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="layer-8-division-0.6666666666666666">
+    <title>layer-8-division-0.6666666666666666</title>
+    <polyline points="580.783,754 580.783,790.77" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="swatch-7">
+    <title>swatch-7</title>
+    <rect x="1120.0" y="754.0" width="34.0" height="34.0" fill="#0000ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-label-7">
+    <title>layer-label-7</title>
+    <text x="1172.0" y="777.0" font-family="sans-serif" font-size="18.0" fill="#000000"> 5 / side=0.685</text>
+  </g>
+  <g data-object-id="layer-volume-7">
+    <title>layer-volume-7</title>
+    <text x="1172.0" y="803.0" font-family="sans-serif" font-size="15.0" fill="#000000">relative volume=0.321</text>
+  </g>
+  <g data-object-id="layer-9-front">
+    <title>layer-9-front</title>
+    <rect x="311.6" y="836.0" width="396.80000000000007" height="34.879999999999995" fill="#ff0000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-9-top">
+    <title>layer-9-top</title>
+    <polygon points="311.6,836 326.96,820.64 723.76,820.64 708.4,836" stroke-linejoin="round" fill="#ff0000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-9-side">
+    <title>layer-9-side</title>
+    <polygon points="708.4,836 723.76,820.64 723.76,855.52 708.4,870.88" stroke-linejoin="round" fill="#ff0000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-9-division-0.3333333333333333">
+    <title>layer-9-division-0.3333333333333333</title>
+    <polyline points="443.867,836 443.867,870.88" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="layer-9-division-0.6666666666666666">
+    <title>layer-9-division-0.6666666666666666</title>
+    <polyline points="576.133,836 576.133,870.88" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="swatch-8">
+    <title>swatch-8</title>
+    <rect x="1120.0" y="836.0" width="34.0" height="34.0" fill="#ff0000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-label-8">
+    <title>layer-label-8</title>
+    <text x="1172.0" y="859.0" font-family="sans-serif" font-size="18.0" fill="#000000"> 4 / side=0.640</text>
+  </g>
+  <g data-object-id="layer-volume-8">
+    <title>layer-volume-8</title>
+    <text x="1172.0" y="885.0" font-family="sans-serif" font-size="15.0" fill="#000000">relative volume=0.262</text>
+  </g>
+  <g data-object-id="layer-10-front">
+    <title>layer-10-front</title>
+    <rect x="325.55" y="918.0" width="368.90000000000003" height="32.99000000000001" fill="#ff00ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-10-top">
+    <title>layer-10-top</title>
+    <polygon points="325.55,918 339.83,903.72 708.73,903.72 694.45,918" stroke-linejoin="round" fill="#ff00ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-10-side">
+    <title>layer-10-side</title>
+    <polygon points="694.45,918 708.73,903.72 708.73,936.71 694.45,950.99" stroke-linejoin="round" fill="#ff00ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-10-division-0.3333333333333333">
+    <title>layer-10-division-0.3333333333333333</title>
+    <polyline points="448.517,918 448.517,950.99" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="layer-10-division-0.6666666666666666">
+    <title>layer-10-division-0.6666666666666666</title>
+    <polyline points="571.483,918 571.483,950.99" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="swatch-9">
+    <title>swatch-9</title>
+    <rect x="1120.0" y="918.0" width="34.0" height="34.0" fill="#ff00ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-label-9">
+    <title>layer-label-9</title>
+    <text x="1172.0" y="941.0" font-family="sans-serif" font-size="18.0" fill="#000000"> 3 / side=0.595</text>
+  </g>
+  <g data-object-id="layer-volume-9">
+    <title>layer-volume-9</title>
+    <text x="1172.0" y="967.0" font-family="sans-serif" font-size="15.0" fill="#000000">relative volume=0.211</text>
+  </g>
+  <g data-object-id="layer-11-front">
+    <title>layer-11-front</title>
+    <rect x="339.5" y="1000.0" width="341.0" height="31.09999999999991" fill="#00ffff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-11-top">
+    <title>layer-11-top</title>
+    <polygon points="339.5,1000 352.7,986.8 693.7,986.8 680.5,1000" stroke-linejoin="round" fill="#00ffff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-11-side">
+    <title>layer-11-side</title>
+    <polygon points="680.5,1000 693.7,986.8 693.7,1017.9 680.5,1031.1" stroke-linejoin="round" fill="#00ffff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-11-division-0.3333333333333333">
+    <title>layer-11-division-0.3333333333333333</title>
+    <polyline points="453.167,1000 453.167,1031.1" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="layer-11-division-0.6666666666666666">
+    <title>layer-11-division-0.6666666666666666</title>
+    <polyline points="566.833,1000 566.833,1031.1" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="swatch-10">
+    <title>swatch-10</title>
+    <rect x="1120.0" y="1000.0" width="34.0" height="34.0" fill="#00ffff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-label-10">
+    <title>layer-label-10</title>
+    <text x="1172.0" y="1023.0" font-family="sans-serif" font-size="18.0" fill="#000000"> 2 / side=0.550</text>
+  </g>
+  <g data-object-id="layer-volume-10">
+    <title>layer-volume-10</title>
+    <text x="1172.0" y="1049.0" font-family="sans-serif" font-size="15.0" fill="#000000">relative volume=0.166</text>
+  </g>
+  <g data-object-id="layer-12-front">
+    <title>layer-12-front</title>
+    <rect x="353.45" y="1082.0" width="313.09999999999997" height="29.210000000000036" fill="#ffff00" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-12-top">
+    <title>layer-12-top</title>
+    <polygon points="353.45,1082 365.57,1069.88 678.67,1069.88 666.55,1082" stroke-linejoin="round" fill="#ffff00" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-12-side">
+    <title>layer-12-side</title>
+    <polygon points="666.55,1082 678.67,1069.88 678.67,1099.09 666.55,1111.21" stroke-linejoin="round" fill="#ffff00" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-12-division-0.3333333333333333">
+    <title>layer-12-division-0.3333333333333333</title>
+    <polyline points="457.817,1082 457.817,1111.21" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="layer-12-division-0.6666666666666666">
+    <title>layer-12-division-0.6666666666666666</title>
+    <polyline points="562.183,1082 562.183,1111.21" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="swatch-11">
+    <title>swatch-11</title>
+    <rect x="1120.0" y="1082.0" width="34.0" height="34.0" fill="#ffff00" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="layer-label-11">
+    <title>layer-label-11</title>
+    <text x="1172.0" y="1105.0" font-family="sans-serif" font-size="18.0" fill="#000000"> 1 / side=0.505</text>
+  </g>
+  <g data-object-id="layer-volume-11">
+    <title>layer-volume-11</title>
+    <text x="1172.0" y="1131.0" font-family="sans-serif" font-size="15.0" fill="#000000">relative volume=0.129</text>
+  </g>
+  <g data-object-id="order">
+    <title>order</title>
+    <text x="1120.0" y="1145.0" font-family="sans-serif" font-size="18.0" fill="#000000">Bottom -&gt; top: largest -&gt; smallest</text>
+  </g>
+  <g data-object-id="volume-rule">
+    <title>volume-rule</title>
+    <text x="1120.0" y="1170.0" font-family="sans-serif" font-size="16.0" fill="#000000">side scale = L/Lmax · volume scale = (L/Lmax)^3</text>
+  </g>
+  <g data-object-id="renderer">
+    <title>renderer</title>
+    <text x="1120.0" y="1190.0" font-family="sans-serif" font-size="16.0" fill="#000000">deterministic flat-shaded software render</text>
+  </g>
+</svg>

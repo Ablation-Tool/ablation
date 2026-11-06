@@ -1,0 +1,29 @@
+GEM native workbench — upstream notices
+
+Ubuntu Update Manager
+- The GTK interaction model was informed by Ubuntu's UpdateManager source, including Gtk.TreeStore, Gtk.ToggleButton and toggled, Gio actions, GLib timeouts, cancellable backend work, and VTE terminal handling.
+- These are behavioral patterns, not copies of UpdateManager source files. UpdateManager source headers identify GPL-2-or-later.
+- Reference: /usr/lib/python3/dist-packages/UpdateManager and /usr/share/update-manager/gtkbuilder on Ubuntu systems.
+
+GNOME Baobab chart visualizations
+- Rings is adapted from GNOME Baobab 49.1, the Disk Usage Analyzer installed by Ubuntu. Its annular-sector geometry, depth limits, minimum angle, continuation markers, palette, and interaction model informed gem/rings_view.py.
+- Treemap and Rings share Baobab's position/depth palette through gem/chart_colors.py. Treemap uses the first-level x-position coloring from baobab-treemap.vala, with readable label colors and pagination rather than a status-colored geometry. The adjacent tree/chart layout and synchronized rerooting follow baobab-window.vala's interaction model.
+- Copyright (C) 2008 Igalia; 2013 Stefano Facchini. The adapted chart implementations are distributed under GPL-2.0-or-later. See licenses/GPL-2.0.txt and licenses/GPL-3.0.txt.
+- Source: https://gitlab.gnome.org/GNOME/baobab/-/blob/49.1/src/baobab-ringschart.vala, https://gitlab.gnome.org/GNOME/baobab/-/blob/49.1/src/baobab-treemap.vala, https://gitlab.gnome.org/GNOME/baobab/-/blob/49.1/src/baobab-chart.vala, and https://gitlab.gnome.org/GNOME/baobab/-/blob/49.1/src/baobab-window.vala
+- GEM uses investigation-subtree node counts, not bytes or analysis coverage, and adds explicit selection outlines, node-count captions, keyboard navigation, and accessible descriptions.
+
+Vanilla Framework icons
+- The p-icon--* SVG assets in gem/icons are a small subset adapted from Canonical's Vanilla Framework, including its official SVG path data.
+- Copyright: Canonical Ltd.
+- Source: https://github.com/canonical/vanilla-framework at commit 0afdee45c2e14373e9c0df9c3f846148f08f84c9, primarily scss/_base_icon-definitions.scss.
+- Documentation: https://vanillaframework.io/docs/patterns/icons
+- The Vanilla README identifies the code license as LGPLv3. See licenses/LGPL-3.0.txt and licenses/GPL-3.0.txt.
+- Fill and stroke colors were changed for GEM button and node presentation. No new icon artwork was drawn.
+
+Terminal palettes
+- Tango, Linux console, and XTerm palette choices use their conventional named ANSI color arrangements.
+- Solarized dark and light use the Solarized colors by Ethan Schoonover.
+- Solarized source and license: https://github.com/altercation/solarized and licenses/Solarized-MIT.txt (MIT).
+- The high-contrast palette is a GEM-specific arrangement. Color preferences are applied through VTE; no terminal emulator source files are copied.
+
+GEM does not use xdg-open for untrusted artifacts. Show in Files uses Nautilus with --select after an explicit user action.

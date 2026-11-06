@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "instrument": "accessible volume of a full-vocabulary token distribution",
+  "model": "dmis-lab/biobert-base-cased-v1.2",
+  "model_revision": "67c9c25b46986521ca33df05d8540da1210b3256",
+  "requested_revision": "67c9c25b46986521ca33df05d8540da1210b3256",
+  "runtime": {
+    "torch": "2.14.1+cu130",
+    "transformers": "4.56.2"
+  },
+  "prediction_style": "masked",
+  "text": "The study measured the protein",
+  "sequence_length": 7,
+  "target_position": 5,
+  "target_token_id": 4592,
+  "target_token": "protein",
+  "vocabulary_size": 28996,
+  "probability_sum": 0.9999999999999998,
+  "threshold_sweep": [
+    {
+      "tau": 0.02,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.448751551938198e-05
+    },
+    {
+      "tau": 0.05,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.1,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.15,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.3,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.5,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    }
+  ],
+  "entropy_bits": 9.887851095327129,
+  "top_10_probability_mass": 0.14065445806729626,
+  "target_probability": 0.0004123154349441524,
+  "target_rank": 426,
+  "top_tokens": [
+    {
+      "token_id": 2629,
+      "token": "effect",
+      "probability": 0.022374558143385695
+    },
+    {
+      "token_id": 3209,
+      "token": "potential",
+      "probability": 0.016045292034332276
+    },
+    {
+      "token_id": 1269,
+      "token": "same",
+      "probability": 0.01572120848492963
+    },
+    {
+      "token_id": 2439,
+      "token": "highest",
+      "probability": 0.015349713346395162
+    },
+    {
+      "token_id": 1211,
+      "token": "most",
+      "probability": 0.01470589875518395
+    },
+    {
+      "token_id": 1148,
+      "token": "first",
+      "probability": 0.013717036086671812
+    },
+    {
+      "token_id": 1436,
+      "token": "best",
+      "probability": 0.012748529519068422
+    },
+    {
+      "token_id": 12949,
+      "token": "effectiveness",
+      "probability": 0.011599545730331652
+    },
+    {
+      "token_id": 3187,
+      "token": "risk",
+      "probability": 0.009535654126712359
+    },
+    {
+      "token_id": 3772,
+      "token": "impact",
+      "probability": 0.008857021840285282
+    }
+  ],
+  "checks": {
+    "repeated_probabilities_identical": true,
+    "target_replaced_with_mask": true,
+    "mask_count": 1
+  },
+  "probability_values_sha256": "ca3f779bdf6f1b3062a92ab97332de0c191b4622b49e99b5fc66f7714ecd74b1",
+  "input_ids_sha256": "5b4a595f42d7b3280bef6a8b47f5c4fa11175be171a8383548ab01b39927a229",
+  "original_input_ids_sha256": "59e71491bede7f3ee3697bd7128c755ec3be44bce1305014fdaecb54cbd5495a",
+  "scope": [
+    "One dmis-lab/biobert-base-cased-v1.2 distribution for the final non-special token of the recorded text.",
+    "The target is replaced by a mask token.",
+    "This is a token-level measurement, not a model-quality, security, or action-level benchmark."
+  ]
+}

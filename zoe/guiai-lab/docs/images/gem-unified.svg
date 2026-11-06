@@ -1,0 +1,537 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1080" viewBox="0 0 1400 1080" role="img" aria-label="ZOE is allgems">
+  <title>ZOE is allgems</title>
+  <rect x="0" y="0" width="1400.0" height="1080.0" fill="#ffffff" />
+  <g data-object-id="background">
+    <title>background</title>
+    <rect x="0.0" y="0.0" width="1400.0" height="1080.0" fill="#080d18" stroke="#080d18" stroke-width="1.0" />
+  </g>
+  <g data-object-id="title">
+    <title>title</title>
+    <text x="40.0" y="51.0" font-family="sans-serif" font-size="29.0" fill="#67e8f9">ZOE · ALLGEMS</text>
+  </g>
+  <g data-object-id="subtitle">
+    <title>subtitle</title>
+    <text x="40.0" y="83.0" font-family="sans-serif" font-size="17.0" fill="#e2e8f0">Trust Context / Stability Context</text>
+  </g>
+  <g data-object-id="scope">
+    <title>scope</title>
+    <text x="40.0" y="109.0" font-family="sans-serif" font-size="12.0" fill="#9fb1c8">ZOE is allgems · full source trees · one replayable knowledge field</text>
+  </g>
+  <g data-object-id="entrypoints">
+    <title>entrypoints</title>
+    <text x="45.0" y="178.0" font-family="sans-serif" font-size="41.0" fill="#67e8f9">11</text>
+  </g>
+  <g data-object-id="entrypoint-label">
+    <title>entrypoint-label</title>
+    <text x="121.0" y="175.0" font-family="sans-serif" font-size="15.0" fill="#9fb1c8">registered entrypoints</text>
+  </g>
+  <g data-object-id="repositories">
+    <title>repositories</title>
+    <text x="45.0" y="222.0" font-family="sans-serif" font-size="32.0" fill="#fde68a">9</text>
+  </g>
+  <g data-object-id="repository-label">
+    <title>repository-label</title>
+    <text x="101.0" y="220.0" font-family="sans-serif" font-size="14.0" fill="#9fb1c8">upstream repositories + Zoe</text>
+  </g>
+  <g data-object-id="engine">
+    <title>engine</title>
+    <text x="355.0" y="178.0" font-family="sans-serif" font-size="28.0" fill="#f0abfc">FULL</text>
+  </g>
+  <g data-object-id="engine-label">
+    <title>engine-label</title>
+    <text x="451.0" y="176.0" font-family="sans-serif" font-size="14.0" fill="#9fb1c8">Ablation core and framework</text>
+  </g>
+  <g data-object-id="checkout">
+    <title>checkout</title>
+    <text x="355.0" y="218.0" font-family="sans-serif" font-size="24.0" fill="#86efac">ONE</text>
+  </g>
+  <g data-object-id="checkout-label">
+    <title>checkout-label</title>
+    <text x="427.0" y="216.0" font-family="sans-serif" font-size="14.0" fill="#9fb1c8">checkout · identity · manifest</text>
+  </g>
+  <g data-object-id="identity-orbit-0">
+    <title>identity-orbit-0</title>
+    <polygon points="1270,168 1269.74,170.747 1268.97,173.482 1267.69,176.194 1265.91,178.87 1263.63,181.5 1260.87,184.073 1257.62,186.576 1253.92,189 1249.78,191.334 1245.2,193.568 1240.22,195.693 1234.85,197.698 1229.12,199.577 1223.05,201.321 1216.67,202.922 1210,204.373 1203.07,205.669 1195.92,206.803 1188.57,207.771 1181.06,208.569 1173.41,209.193 1165.66,209.641 1157.85,209.91 1150,210 1142.15,209.91 1134.34,209.641 1126.59,209.193 1118.94,208.569 1111.43,207.771 1104.08,206.803 1096.93,205.669 1090,204.373 1083.33,202.922 1076.95,201.321 1070.88,199.577 1065.15,197.698 1059.78,195.693 1054.8,193.568 1050.22,191.334 1046.08,189 1042.38,186.576 1039.13,184.073 1036.37,181.5 1034.09,178.87 1032.31,176.194 1031.03,173.482 1030.26,170.747 1030,168 1030.26,165.253 1031.03,162.518 1032.31,159.806 1034.09,157.13 1036.37,154.5 1039.13,151.927 1042.38,149.424 1046.08,147 1050.22,144.666 1054.8,142.432 1059.78,140.307 1065.15,138.302 1070.88,136.423 1076.95,134.679 1083.33,133.078 1090,131.627 1096.93,130.331 1104.08,129.197 1111.43,128.229 1118.94,127.431 1126.59,126.807 1134.34,126.359 1142.15,126.09 1150,126 1157.85,126.09 1165.66,126.359 1173.41,126.807 1181.06,127.431 1188.57,128.229 1195.92,129.197 1203.07,130.331 1210,131.627 1216.67,133.078 1223.05,134.679 1229.12,136.423 1234.85,138.302 1240.22,140.307 1245.2,142.432 1249.78,144.666 1253.92,147 1257.62,149.424 1260.87,151.927 1263.63,154.5 1265.91,157.13 1267.69,159.806 1268.97,162.518 1269.74,165.253" stroke-linejoin="round" fill="none" stroke="#67e8f9" stroke-width="1.2" />
+  </g>
+  <g data-object-id="identity-orbit-1">
+    <title>identity-orbit-1</title>
+    <polygon points="1264.13,205.082 1263.03,207.615 1261.46,209.979 1259.4,212.162 1256.88,214.157 1253.9,215.954 1250.47,217.545 1246.62,218.925 1242.35,220.086 1237.68,221.024 1232.64,221.736 1227.25,222.217 1221.52,222.466 1215.49,222.482 1209.18,222.264 1202.61,221.814 1195.82,221.134 1188.84,220.226 1181.68,219.094 1174.39,217.744 1167,216.181 1159.54,214.411 1152.03,212.443 1144.51,210.284 1137.02,207.944 1129.58,205.434 1122.24,202.762 1115.01,199.943 1107.93,196.986 1101.03,193.905 1094.33,190.713 1087.88,187.424 1081.7,184.052 1075.8,180.611 1070.23,177.116 1064.99,173.582 1060.12,170.024 1055.64,166.457 1051.56,162.897 1047.9,159.359 1044.67,155.858 1041.9,152.409 1039.59,149.027 1037.76,145.726 1036.4,142.52 1035.53,139.423 1035.16,136.449 1035.27,133.61 1035.87,130.918 1036.97,128.385 1038.54,126.021 1040.6,123.838 1043.12,121.843 1046.1,120.046 1049.53,118.455 1053.38,117.075 1057.65,115.914 1062.32,114.976 1067.36,114.264 1072.75,113.783 1078.48,113.534 1084.51,113.518 1090.82,113.736 1097.39,114.186 1104.18,114.866 1111.16,115.774 1118.32,116.906 1125.61,118.256 1133,119.819 1140.46,121.589 1147.97,123.557 1155.49,125.716 1162.98,128.056 1170.42,130.566 1177.76,133.238 1184.99,136.057 1192.07,139.014 1198.97,142.095 1205.67,145.287 1212.12,148.576 1218.3,151.948 1224.2,155.389 1229.77,158.884 1235.01,162.418 1239.88,165.976 1244.36,169.543 1248.44,173.103 1252.1,176.641 1255.33,180.142 1258.1,183.591 1260.41,186.973 1262.24,190.274 1263.6,193.48 1264.47,196.577 1264.84,199.551 1264.73,202.39" stroke-linejoin="round" fill="none" stroke="#fde68a" stroke-width="1.2" />
+  </g>
+  <g data-object-id="identity-orbit-2">
+    <title>identity-orbit-2</title>
+    <polygon points="1247.08,238.534 1245.26,240.606 1243.03,242.366 1240.4,243.808 1237.38,244.925 1233.99,245.713 1230.24,246.168 1226.15,246.289 1221.73,246.074 1217.01,245.525 1211.99,244.643 1206.71,243.434 1201.19,241.902 1195.45,240.053 1189.51,237.896 1183.41,235.439 1177.16,232.694 1170.8,229.671 1164.34,226.385 1157.83,222.848 1151.28,219.077 1144.73,215.086 1138.2,210.895 1131.72,206.519 1125.31,201.979 1119.02,197.293 1112.85,192.481 1106.85,187.565 1101.03,182.565 1095.42,177.503 1090.04,172.4 1084.92,167.278 1080.08,162.159 1075.54,157.066 1071.31,152.019 1067.43,147.04 1063.9,142.151 1060.73,137.373 1057.95,132.726 1055.56,128.23 1053.58,123.905 1052.01,119.768 1050.86,115.838 1050.13,112.131 1049.84,108.664 1049.97,105.45 1050.53,102.504 1051.51,99.8391 1052.92,97.4658 1054.74,95.3945 1056.97,93.6341 1059.6,92.1921 1062.62,91.0748 1066.01,90.2869 1069.76,89.8318 1073.85,89.7114 1078.27,89.9262 1082.99,90.4754 1088.01,91.3565 1093.29,92.5658 1098.81,94.0982 1104.55,95.947 1110.49,98.1044 1116.59,100.561 1122.84,103.306 1129.2,106.329 1135.66,109.615 1142.17,113.152 1148.72,116.923 1155.27,120.914 1161.8,125.105 1168.28,129.481 1174.69,134.021 1180.98,138.707 1187.15,143.519 1193.15,148.435 1198.97,153.435 1204.58,158.497 1209.96,163.6 1215.08,168.722 1219.92,173.841 1224.46,178.934 1228.69,183.981 1232.57,188.96 1236.1,193.849 1239.27,198.627 1242.05,203.274 1244.44,207.77 1246.42,212.095 1247.99,216.232 1249.14,220.162 1249.87,223.869 1250.16,227.336 1250.03,230.55 1249.47,233.496 1248.49,236.161" stroke-linejoin="round" fill="none" stroke="#f0abfc" stroke-width="1.2" />
+  </g>
+  <g data-object-id="identity-orbit-3">
+    <title>identity-orbit-3</title>
+    <polygon points="1220.53,265.082 1218.16,266.489 1215.5,267.474 1212.55,268.033 1209.34,268.164 1205.87,267.865 1202.16,267.139 1198.23,265.989 1194.1,264.419 1189.77,262.436 1185.27,260.049 1180.63,257.267 1175.85,254.104 1170.96,250.571 1165.98,246.685 1160.93,242.462 1155.84,237.921 1150.72,233.079 1145.6,227.959 1140.5,222.583 1135.43,216.972 1130.43,211.152 1125.52,205.148 1120.71,198.984 1116.02,192.687 1111.48,186.285 1107.11,179.804 1102.91,173.273 1098.92,166.719 1095.15,160.171 1091.62,153.656 1088.33,147.203 1085.31,140.839 1082.56,134.591 1080.1,128.486 1077.95,122.55 1076.1,116.809 1074.57,111.287 1073.36,106.008 1072.48,100.995 1071.93,96.268 1071.71,91.8485 1071.83,87.7552 1072.29,84.0055 1073.07,80.6154 1074.19,77.5996 1075.63,74.9708 1077.39,72.7404 1079.47,70.918 1081.84,69.5112 1084.5,68.5262 1087.45,67.9672 1090.66,67.8365 1094.13,68.1347 1097.84,68.8606 1101.77,70.011 1105.9,71.581 1110.23,73.5639 1114.73,75.9512 1119.37,78.7326 1124.15,81.8963 1129.04,85.4287 1134.02,89.3147 1139.07,93.5376 1144.16,98.0794 1149.28,102.921 1154.4,108.041 1159.5,113.417 1164.57,119.028 1169.57,124.848 1174.48,130.852 1179.29,137.016 1183.98,143.313 1188.52,149.715 1192.89,156.196 1197.09,162.727 1201.08,169.281 1204.85,175.829 1208.38,182.344 1211.67,188.797 1214.69,195.161 1217.44,201.409 1219.9,207.514 1222.05,213.45 1223.9,219.191 1225.43,224.713 1226.64,229.992 1227.52,235.005 1228.07,239.732 1228.29,244.151 1228.17,248.245 1227.71,251.995 1226.93,255.385 1225.81,258.4 1224.37,261.029 1222.61,263.26" stroke-linejoin="round" fill="none" stroke="#86efac" stroke-width="1.2" />
+  </g>
+  <g data-object-id="identity-orbit-4">
+    <title>identity-orbit-4</title>
+    <polygon points="1187.08,282.127 1184.39,282.731 1181.55,282.844 1178.58,282.466 1175.48,281.597 1172.27,280.242 1168.97,278.406 1165.59,276.098 1162.14,273.326 1158.64,270.104 1155.1,266.444 1151.54,262.363 1147.98,257.877 1144.42,253.007 1140.88,247.773 1137.39,242.197 1133.95,236.303 1130.58,230.117 1127.29,223.665 1124.1,216.975 1121.01,210.075 1118.06,202.994 1115.24,195.764 1112.57,188.415 1110.06,180.979 1107.72,173.487 1105.56,165.971 1103.59,158.464 1101.82,150.998 1100.26,143.605 1098.91,136.316 1097.77,129.163 1096.87,122.177 1096.19,115.386 1095.74,108.821 1095.52,102.509 1095.53,96.4775 1095.78,90.7524 1096.26,85.3581 1096.98,80.3176 1097.91,75.6527 1099.08,71.3831 1100.45,67.5273 1102.05,64.1018 1103.84,61.1211 1105.84,58.5982 1108.02,56.5437 1110.38,54.9664 1112.92,53.8732 1115.61,53.2687 1118.45,53.1555 1121.42,53.5341 1124.52,54.4029 1127.73,55.758 1131.03,57.5939 1134.41,59.9025 1137.86,62.674 1141.36,65.8965 1144.9,69.5562 1148.46,73.6375 1152.02,78.1228 1155.58,82.9931 1159.12,88.2273 1162.61,93.8032 1166.05,99.6967 1169.42,105.883 1172.71,112.335 1175.9,119.025 1178.99,125.925 1181.94,133.006 1184.76,140.236 1187.43,147.585 1189.94,155.021 1192.28,162.513 1194.44,170.029 1196.41,177.536 1198.18,185.002 1199.74,192.395 1201.09,199.684 1202.23,206.837 1203.13,213.823 1203.81,220.614 1204.26,227.179 1204.48,233.491 1204.47,239.522 1204.22,245.248 1203.74,250.642 1203.02,255.682 1202.09,260.347 1200.92,264.617 1199.55,268.473 1197.95,271.898 1196.16,274.879 1194.16,277.402 1191.98,279.456 1189.62,281.034" stroke-linejoin="round" fill="none" stroke="#fda4af" stroke-width="1.2" />
+  </g>
+  <g data-object-id="identity-orbit-5">
+    <title>identity-orbit-5</title>
+    <polygon points="1150,288 1147.25,287.743 1144.52,286.973 1141.81,285.694 1139.13,283.911 1136.5,281.632 1133.93,278.866 1131.42,275.625 1129,271.923 1126.67,267.776 1124.43,263.202 1122.31,258.221 1120.3,252.853 1118.42,247.121 1116.68,241.051 1115.08,234.668 1113.63,228 1112.33,221.075 1111.2,213.922 1110.23,206.573 1109.43,199.058 1108.81,191.411 1108.36,183.663 1108.09,175.848 1108,168 1108.09,160.152 1108.36,152.337 1108.81,144.589 1109.43,136.942 1110.23,129.427 1111.2,122.078 1112.33,114.925 1113.63,108 1115.08,101.332 1116.68,94.9486 1118.42,88.8785 1120.3,83.1472 1122.31,77.7792 1124.43,72.7976 1126.67,68.2236 1129,64.077 1131.42,60.3753 1133.93,57.1345 1136.5,54.3684 1139.13,52.0889 1141.81,50.3058 1144.52,49.0266 1147.25,48.2569 1150,48 1152.75,48.2569 1155.48,49.0266 1158.19,50.3058 1160.87,52.0889 1163.5,54.3684 1166.07,57.1345 1168.58,60.3753 1171,64.077 1173.33,68.2236 1175.57,72.7976 1177.69,77.7792 1179.7,83.1472 1181.58,88.8785 1183.32,94.9486 1184.92,101.332 1186.37,108 1187.67,114.925 1188.8,122.078 1189.77,129.427 1190.57,136.942 1191.19,144.589 1191.64,152.337 1191.91,160.152 1192,168 1191.91,175.848 1191.64,183.663 1191.19,191.411 1190.57,199.058 1189.77,206.573 1188.8,213.922 1187.67,221.075 1186.37,228 1184.92,234.668 1183.32,241.051 1181.58,247.121 1179.7,252.853 1177.69,258.221 1175.57,263.202 1173.33,267.776 1171,271.923 1168.58,275.625 1166.07,278.866 1163.5,281.632 1160.87,283.911 1158.19,285.694 1155.48,286.973 1152.75,287.743" stroke-linejoin="round" fill="none" stroke="#93c5fd" stroke-width="1.2" />
+  </g>
+  <g data-object-id="identity-orbit-6">
+    <title>identity-orbit-6</title>
+    <polygon points="1112.92,282.127 1110.38,281.034 1108.02,279.456 1105.84,277.402 1103.84,274.879 1102.05,271.898 1100.45,268.473 1099.08,264.617 1097.91,260.347 1096.98,255.682 1096.26,250.642 1095.78,245.248 1095.53,239.522 1095.52,233.491 1095.74,227.179 1096.19,220.614 1096.87,213.823 1097.77,206.837 1098.91,199.684 1100.26,192.395 1101.82,185.002 1103.59,177.536 1105.56,170.029 1107.72,162.513 1110.06,155.021 1112.57,147.585 1115.24,140.236 1118.06,133.006 1121.01,125.925 1124.1,119.025 1127.29,112.335 1130.58,105.883 1133.95,99.6967 1137.39,93.8032 1140.88,88.2273 1144.42,82.9931 1147.98,78.1228 1151.54,73.6375 1155.1,69.5562 1158.64,65.8965 1162.14,62.674 1165.59,59.9025 1168.97,57.5939 1172.27,55.758 1175.48,54.4029 1178.58,53.5341 1181.55,53.1555 1184.39,53.2687 1187.08,53.8732 1189.62,54.9664 1191.98,56.5437 1194.16,58.5982 1196.16,61.1211 1197.95,64.1018 1199.55,67.5273 1200.92,71.3831 1202.09,75.6527 1203.02,80.3176 1203.74,85.3581 1204.22,90.7524 1204.47,96.4775 1204.48,102.509 1204.26,108.821 1203.81,115.386 1203.13,122.177 1202.23,129.163 1201.09,136.316 1199.74,143.605 1198.18,150.998 1196.41,158.464 1194.44,165.971 1192.28,173.487 1189.94,180.979 1187.43,188.415 1184.76,195.764 1181.94,202.994 1178.99,210.075 1175.9,216.975 1172.71,223.665 1169.42,230.117 1166.05,236.303 1162.61,242.197 1159.12,247.773 1155.58,253.007 1152.02,257.877 1148.46,262.363 1144.9,266.444 1141.36,270.104 1137.86,273.326 1134.41,276.098 1131.03,278.406 1127.73,280.242 1124.52,281.597 1121.42,282.466 1118.45,282.844 1115.61,282.731" stroke-linejoin="round" fill="none" stroke="#fdba74" stroke-width="1.2" />
+  </g>
+  <g data-object-id="identity-orbit-7">
+    <title>identity-orbit-7</title>
+    <polygon points="1079.47,265.082 1077.39,263.26 1075.63,261.029 1074.19,258.4 1073.07,255.385 1072.29,251.995 1071.83,248.245 1071.71,244.151 1071.93,239.732 1072.48,235.005 1073.36,229.992 1074.57,224.713 1076.1,219.191 1077.95,213.45 1080.1,207.514 1082.56,201.409 1085.31,195.161 1088.33,188.797 1091.62,182.344 1095.15,175.829 1098.92,169.281 1102.91,162.727 1107.11,156.196 1111.48,149.715 1116.02,143.313 1120.71,137.016 1125.52,130.852 1130.43,124.848 1135.43,119.028 1140.5,113.417 1145.6,108.041 1150.72,102.921 1155.84,98.0794 1160.93,93.5376 1165.98,89.3147 1170.96,85.4287 1175.85,81.8963 1180.63,78.7326 1185.27,75.9512 1189.77,73.5639 1194.1,71.581 1198.23,70.011 1202.16,68.8606 1205.87,68.1347 1209.34,67.8365 1212.55,67.9672 1215.5,68.5262 1218.16,69.5112 1220.53,70.918 1222.61,72.7404 1224.37,74.9708 1225.81,77.5996 1226.93,80.6154 1227.71,84.0055 1228.17,87.7552 1228.29,91.8485 1228.07,96.268 1227.52,100.995 1226.64,106.008 1225.43,111.287 1223.9,116.809 1222.05,122.55 1219.9,128.486 1217.44,134.591 1214.69,140.839 1211.67,147.203 1208.38,153.656 1204.85,160.171 1201.08,166.719 1197.09,173.273 1192.89,179.804 1188.52,186.285 1183.98,192.687 1179.29,198.984 1174.48,205.148 1169.57,211.152 1164.57,216.972 1159.5,222.583 1154.4,227.959 1149.28,233.079 1144.16,237.921 1139.07,242.462 1134.02,246.685 1129.04,250.571 1124.15,254.104 1119.37,257.267 1114.73,260.049 1110.23,262.436 1105.9,264.419 1101.77,265.989 1097.84,267.139 1094.13,267.865 1090.66,268.164 1087.45,268.033 1084.5,267.474 1081.84,266.489" stroke-linejoin="round" fill="none" stroke="#c4b5fd" stroke-width="1.2" />
+  </g>
+  <g data-object-id="identity-orbit-8">
+    <title>identity-orbit-8</title>
+    <polygon points="1052.92,238.534 1051.51,236.161 1050.53,233.496 1049.97,230.55 1049.84,227.336 1050.13,223.869 1050.86,220.162 1052.01,216.232 1053.58,212.095 1055.56,207.77 1057.95,203.274 1060.73,198.627 1063.9,193.849 1067.43,188.96 1071.31,183.981 1075.54,178.934 1080.08,173.841 1084.92,168.722 1090.04,163.6 1095.42,158.497 1101.03,153.435 1106.85,148.435 1112.85,143.519 1119.02,138.707 1125.31,134.021 1131.72,129.481 1138.2,125.105 1144.73,120.914 1151.28,116.923 1157.83,113.152 1164.34,109.615 1170.8,106.329 1177.16,103.306 1183.41,100.561 1189.51,98.1044 1195.45,95.947 1201.19,94.0982 1206.71,92.5658 1211.99,91.3565 1217.01,90.4754 1221.73,89.9262 1226.15,89.7114 1230.24,89.8318 1233.99,90.2869 1237.38,91.0748 1240.4,92.1921 1243.03,93.6341 1245.26,95.3945 1247.08,97.4658 1248.49,99.8391 1249.47,102.504 1250.03,105.45 1250.16,108.664 1249.87,112.131 1249.14,115.838 1247.99,119.768 1246.42,123.905 1244.44,128.23 1242.05,132.726 1239.27,137.373 1236.1,142.151 1232.57,147.04 1228.69,152.019 1224.46,157.066 1219.92,162.159 1215.08,167.278 1209.96,172.4 1204.58,177.503 1198.97,182.565 1193.15,187.565 1187.15,192.481 1180.98,197.293 1174.69,201.979 1168.28,206.519 1161.8,210.895 1155.27,215.086 1148.72,219.077 1142.17,222.848 1135.66,226.385 1129.2,229.671 1122.84,232.694 1116.59,235.439 1110.49,237.896 1104.55,240.053 1098.81,241.902 1093.29,243.434 1088.01,244.643 1082.99,245.525 1078.27,246.074 1073.85,246.289 1069.76,246.168 1066.01,245.713 1062.62,244.925 1059.6,243.808 1056.97,242.366 1054.74,240.606" stroke-linejoin="round" fill="none" stroke="#a7f3d0" stroke-width="1.2" />
+  </g>
+  <g data-object-id="identity-orbit-9">
+    <title>identity-orbit-9</title>
+    <polygon points="1035.87,205.082 1035.27,202.39 1035.16,199.551 1035.53,196.577 1036.4,193.48 1037.76,190.274 1039.59,186.973 1041.9,183.591 1044.67,180.142 1047.9,176.641 1051.56,173.103 1055.64,169.543 1060.12,165.976 1064.99,162.418 1070.23,158.884 1075.8,155.389 1081.7,151.948 1087.88,148.576 1094.33,145.287 1101.03,142.095 1107.93,139.014 1115.01,136.057 1122.24,133.238 1129.58,130.566 1137.02,128.056 1144.51,125.716 1152.03,123.557 1159.54,121.589 1167,119.819 1174.39,118.256 1181.68,116.906 1188.84,115.774 1195.82,114.866 1202.61,114.186 1209.18,113.736 1215.49,113.518 1221.52,113.534 1227.25,113.783 1232.64,114.264 1237.68,114.976 1242.35,115.914 1246.62,117.075 1250.47,118.455 1253.9,120.046 1256.88,121.843 1259.4,123.838 1261.46,126.021 1263.03,128.385 1264.13,130.918 1264.73,133.61 1264.84,136.449 1264.47,139.423 1263.6,142.52 1262.24,145.726 1260.41,149.027 1258.1,152.409 1255.33,155.858 1252.1,159.359 1248.44,162.897 1244.36,166.457 1239.88,170.024 1235.01,173.582 1229.77,177.116 1224.2,180.611 1218.3,184.052 1212.12,187.424 1205.67,190.713 1198.97,193.905 1192.07,196.986 1184.99,199.943 1177.76,202.762 1170.42,205.434 1162.98,207.944 1155.49,210.284 1147.97,212.443 1140.46,214.411 1133,216.181 1125.61,217.744 1118.32,219.094 1111.16,220.226 1104.18,221.134 1097.39,221.814 1090.82,222.264 1084.51,222.482 1078.48,222.466 1072.75,222.217 1067.36,221.736 1062.32,221.024 1057.65,220.086 1053.38,218.925 1049.53,217.545 1046.1,215.954 1043.12,214.157 1040.6,212.162 1038.54,209.979 1036.97,207.615" stroke-linejoin="round" fill="none" stroke="#f9a8d4" stroke-width="1.2" />
+  </g>
+  <g data-object-id="identity-center">
+    <title>identity-center</title>
+    <ellipse cx="1150.0" cy="168.0" rx="43.0" ry="30.0" fill="#080d18" stroke="#67e8f9" stroke-width="2.0" />
+  </g>
+  <g data-object-id="identity-center-label">
+    <title>identity-center-label</title>
+    <text x="1117.0" y="175.0" font-family="sans-serif" font-size="20.0" fill="#e2e8f0">ZOE</text>
+  </g>
+  <g data-object-id="orbital-caption">
+    <title>orbital-caption</title>
+    <text x="984.0" y="254.0" font-family="sans-serif" font-size="11.0" fill="#9fb1c8">ZOE orbital eye · allgems · original vector interpretation</text>
+  </g>
+  <g data-object-id="component-zoe">
+    <title>component-zoe</title>
+    <rect x="40.0" y="294.0" width="300.0" height="181.0" fill="#101b2b" stroke="#67e8f9" stroke-width="2.0" />
+  </g>
+  <g data-object-id="component-icon-0">
+    <title>component-icon-0</title>
+    <ellipse cx="69.0" cy="325.0" rx="8.0" ry="8.0" fill="#67e8f9" stroke="#67e8f9" stroke-width="1.0" />
+  </g>
+  <g data-object-id="component-title-0">
+    <title>component-title-0</title>
+    <text x="88.0" y="331.0" font-family="sans-serif" font-size="18.0" fill="#67e8f9">Zoe native shell</text>
+  </g>
+  <g data-object-id="component-summary-0">
+    <title>component-summary-0</title>
+    <text x="58.0" y="366.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee">Cognitive Field, Bayesian memory, geometry…</text>
+  </g>
+  <g data-object-id="component-summary-2-0">
+    <title>component-summary-2-0</title>
+    <text x="58.0" y="385.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee"> and unified hub</text>
+  </g>
+  <g data-object-id="component-command-0">
+    <title>component-command-0</title>
+    <text x="58.0" y="419.0" font-family="sans-serif" font-size="12.0" fill="#9fb1c8">zoe launch zoe</text>
+  </g>
+  <g data-object-id="component-status-0">
+    <title>component-status-0</title>
+    <text x="58.0" y="445.0" font-family="sans-serif" font-size="11.0" fill="#86efac">zoe · source present</text>
+  </g>
+  <g data-object-id="component-revision-0">
+    <title>component-revision-0</title>
+    <text x="58.0" y="464.0" font-family="sans-serif" font-size="9.0" fill="#64748b">upstream Zoe baseline</text>
+  </g>
+  <g data-object-id="component-ablation">
+    <title>component-ablation</title>
+    <rect x="380.0" y="294.0" width="300.0" height="181.0" fill="#101b2b" stroke="#fde68a" stroke-width="2.0" />
+  </g>
+  <g data-object-id="component-icon-1">
+    <title>component-icon-1</title>
+    <ellipse cx="409.0" cy="325.0" rx="8.0" ry="8.0" fill="#fde68a" stroke="#fde68a" stroke-width="1.0" />
+  </g>
+  <g data-object-id="component-title-1">
+    <title>component-title-1</title>
+    <text x="428.0" y="331.0" font-family="sans-serif" font-size="18.0" fill="#fde68a">Ablation core engine</text>
+  </g>
+  <g data-object-id="component-summary-1">
+    <title>component-summary-1</title>
+    <text x="398.0" y="366.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee">Complete AIARE framework, analyzers, parse…</text>
+  </g>
+  <g data-object-id="component-summary-2-1">
+    <title>component-summary-2-1</title>
+    <text x="398.0" y="385.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee">s, modules, and core CLI</text>
+  </g>
+  <g data-object-id="component-command-1">
+    <title>component-command-1</title>
+    <text x="398.0" y="419.0" font-family="sans-serif" font-size="12.0" fill="#9fb1c8">zoe launch ablation</text>
+  </g>
+  <g data-object-id="component-status-1">
+    <title>component-status-1</title>
+    <text x="398.0" y="445.0" font-family="sans-serif" font-size="11.0" fill="#86efac">host · source present</text>
+  </g>
+  <g data-object-id="component-revision-1">
+    <title>component-revision-1</title>
+    <text x="398.0" y="464.0" font-family="sans-serif" font-size="9.0" fill="#64748b">upstream b56f91e4c54c</text>
+  </g>
+  <g data-object-id="component-gem-lab">
+    <title>component-gem-lab</title>
+    <rect x="720.0" y="294.0" width="300.0" height="181.0" fill="#101b2b" stroke="#f0abfc" stroke-width="2.0" />
+  </g>
+  <g data-object-id="component-icon-2">
+    <title>component-icon-2</title>
+    <ellipse cx="749.0" cy="325.0" rx="8.0" ry="8.0" fill="#f0abfc" stroke="#f0abfc" stroke-width="1.0" />
+  </g>
+  <g data-object-id="component-title-2">
+    <title>component-title-2</title>
+    <text x="768.0" y="331.0" font-family="sans-serif" font-size="18.0" fill="#f0abfc">Ablation GEM Lab</text>
+  </g>
+  <g data-object-id="component-summary-2">
+    <title>component-summary-2</title>
+    <text x="738.0" y="366.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee">Default native investigation GUI and share…</text>
+  </g>
+  <g data-object-id="component-summary-2-2">
+    <title>component-summary-2-2</title>
+    <text x="738.0" y="385.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee"> Lab evidence protocol</text>
+  </g>
+  <g data-object-id="component-command-2">
+    <title>component-command-2</title>
+    <text x="738.0" y="419.0" font-family="sans-serif" font-size="12.0" fill="#9fb1c8">zoe launch gem-lab</text>
+  </g>
+  <g data-object-id="component-status-2">
+    <title>component-status-2</title>
+    <text x="738.0" y="445.0" font-family="sans-serif" font-size="11.0" fill="#86efac">host · source present</text>
+  </g>
+  <g data-object-id="component-revision-2">
+    <title>component-revision-2</title>
+    <text x="738.0" y="464.0" font-family="sans-serif" font-size="9.0" fill="#64748b">upstream b56f91e4c54c</text>
+  </g>
+  <g data-object-id="component-gem">
+    <title>component-gem</title>
+    <rect x="1060.0" y="294.0" width="300.0" height="181.0" fill="#101b2b" stroke="#86efac" stroke-width="2.0" />
+  </g>
+  <g data-object-id="component-icon-3">
+    <title>component-icon-3</title>
+    <ellipse cx="1089.0" cy="325.0" rx="8.0" ry="8.0" fill="#86efac" stroke="#86efac" stroke-width="1.0" />
+  </g>
+  <g data-object-id="component-title-3">
+    <title>component-title-3</title>
+    <text x="1108.0" y="331.0" font-family="sans-serif" font-size="18.0" fill="#86efac">Canonical GEM</text>
+  </g>
+  <g data-object-id="component-summary-3">
+    <title>component-summary-3</title>
+    <text x="1078.0" y="366.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee">Native workbench, mirrored brain, geometry…</text>
+  </g>
+  <g data-object-id="component-summary-2-3">
+    <title>component-summary-2-3</title>
+    <text x="1078.0" y="385.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee"> Spatial IR, and VDI</text>
+  </g>
+  <g data-object-id="component-command-3">
+    <title>component-command-3</title>
+    <text x="1078.0" y="419.0" font-family="sans-serif" font-size="12.0" fill="#9fb1c8">zoe launch gem</text>
+  </g>
+  <g data-object-id="component-status-3">
+    <title>component-status-3</title>
+    <text x="1078.0" y="445.0" font-family="sans-serif" font-size="11.0" fill="#86efac">bundled · source present</text>
+  </g>
+  <g data-object-id="component-revision-3">
+    <title>component-revision-3</title>
+    <text x="1078.0" y="464.0" font-family="sans-serif" font-size="9.0" fill="#64748b">upstream e63f6a7b84c2</text>
+  </g>
+  <g data-object-id="component-helen">
+    <title>component-helen</title>
+    <rect x="40.0" y="496.0" width="300.0" height="181.0" fill="#101b2b" stroke="#fda4af" stroke-width="2.0" />
+  </g>
+  <g data-object-id="component-icon-4">
+    <title>component-icon-4</title>
+    <ellipse cx="69.0" cy="527.0" rx="8.0" ry="8.0" fill="#fda4af" stroke="#fda4af" stroke-width="1.0" />
+  </g>
+  <g data-object-id="component-title-4">
+    <title>component-title-4</title>
+    <text x="88.0" y="533.0" font-family="sans-serif" font-size="18.0" fill="#fda4af">GEM HELEN</text>
+  </g>
+  <g data-object-id="component-summary-4">
+    <title>component-summary-4</title>
+    <text x="58.0" y="568.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee">Optimized geometry, rhythm, and forecast l…</text>
+  </g>
+  <g data-object-id="component-summary-2-4">
+    <title>component-summary-2-4</title>
+    <text x="58.0" y="587.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee">boratory</text>
+  </g>
+  <g data-object-id="component-command-4">
+    <title>component-command-4</title>
+    <text x="58.0" y="621.0" font-family="sans-serif" font-size="12.0" fill="#9fb1c8">zoe launch helen</text>
+  </g>
+  <g data-object-id="component-status-4">
+    <title>component-status-4</title>
+    <text x="58.0" y="647.0" font-family="sans-serif" font-size="11.0" fill="#86efac">bundled · source present</text>
+  </g>
+  <g data-object-id="component-revision-4">
+    <title>component-revision-4</title>
+    <text x="58.0" y="666.0" font-family="sans-serif" font-size="9.0" fill="#64748b">upstream 55fb1e494662</text>
+  </g>
+  <g data-object-id="component-brain">
+    <title>component-brain</title>
+    <rect x="380.0" y="496.0" width="300.0" height="181.0" fill="#101b2b" stroke="#93c5fd" stroke-width="2.0" />
+  </g>
+  <g data-object-id="component-icon-5">
+    <title>component-icon-5</title>
+    <ellipse cx="409.0" cy="527.0" rx="8.0" ry="8.0" fill="#93c5fd" stroke="#93c5fd" stroke-width="1.0" />
+  </g>
+  <g data-object-id="component-title-5">
+    <title>component-title-5</title>
+    <text x="428.0" y="533.0" font-family="sans-serif" font-size="18.0" fill="#93c5fd">BRAIN GEM</text>
+  </g>
+  <g data-object-id="component-summary-5">
+    <title>component-summary-5</title>
+    <text x="398.0" y="568.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee">Standalone Bayesian field notebook and cha…</text>
+  </g>
+  <g data-object-id="component-summary-2-5">
+    <title>component-summary-2-5</title>
+    <text x="398.0" y="587.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee">bered memory</text>
+  </g>
+  <g data-object-id="component-command-5">
+    <title>component-command-5</title>
+    <text x="398.0" y="621.0" font-family="sans-serif" font-size="12.0" fill="#9fb1c8">zoe launch brain</text>
+  </g>
+  <g data-object-id="component-status-5">
+    <title>component-status-5</title>
+    <text x="398.0" y="647.0" font-family="sans-serif" font-size="11.0" fill="#86efac">bundled · source present</text>
+  </g>
+  <g data-object-id="component-revision-5">
+    <title>component-revision-5</title>
+    <text x="398.0" y="666.0" font-family="sans-serif" font-size="9.0" fill="#64748b">upstream ed819c2824a5</text>
+  </g>
+  <g data-object-id="component-cerotto">
+    <title>component-cerotto</title>
+    <rect x="720.0" y="496.0" width="300.0" height="181.0" fill="#101b2b" stroke="#fdba74" stroke-width="2.0" />
+  </g>
+  <g data-object-id="component-icon-6">
+    <title>component-icon-6</title>
+    <ellipse cx="749.0" cy="527.0" rx="8.0" ry="8.0" fill="#fdba74" stroke="#fdba74" stroke-width="1.0" />
+  </g>
+  <g data-object-id="component-title-6">
+    <title>component-title-6</title>
+    <text x="768.0" y="533.0" font-family="sans-serif" font-size="18.0" fill="#fdba74">Cerotto GEM</text>
+  </g>
+  <g data-object-id="component-summary-6">
+    <title>component-summary-6</title>
+    <text x="738.0" y="568.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee">Guarded forensic cases, native C engine, t…</text>
+  </g>
+  <g data-object-id="component-summary-2-6">
+    <title>component-summary-2-6</title>
+    <text x="738.0" y="587.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee">melines, and vault evidence</text>
+  </g>
+  <g data-object-id="component-command-6">
+    <title>component-command-6</title>
+    <text x="738.0" y="621.0" font-family="sans-serif" font-size="12.0" fill="#9fb1c8">zoe launch cerotto</text>
+  </g>
+  <g data-object-id="component-status-6">
+    <title>component-status-6</title>
+    <text x="738.0" y="647.0" font-family="sans-serif" font-size="11.0" fill="#86efac">bundled · source present</text>
+  </g>
+  <g data-object-id="component-revision-6">
+    <title>component-revision-6</title>
+    <text x="738.0" y="666.0" font-family="sans-serif" font-size="9.0" fill="#64748b">upstream 5e2f0c06f1c9</text>
+  </g>
+  <g data-object-id="component-research">
+    <title>component-research</title>
+    <rect x="1060.0" y="496.0" width="300.0" height="181.0" fill="#101b2b" stroke="#c4b5fd" stroke-width="2.0" />
+  </g>
+  <g data-object-id="component-icon-7">
+    <title>component-icon-7</title>
+    <ellipse cx="1089.0" cy="527.0" rx="8.0" ry="8.0" fill="#c4b5fd" stroke="#c4b5fd" stroke-width="1.0" />
+  </g>
+  <g data-object-id="component-title-7">
+    <title>component-title-7</title>
+    <text x="1108.0" y="533.0" font-family="sans-serif" font-size="18.0" fill="#c4b5fd">Research GEM</text>
+  </g>
+  <g data-object-id="component-summary-7">
+    <title>component-summary-7</title>
+    <text x="1078.0" y="568.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee">Accessible-volume research, evidence packs…</text>
+  </g>
+  <g data-object-id="component-summary-2-7">
+    <title>component-summary-2-7</title>
+    <text x="1078.0" y="587.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee"> and mirrored workbench</text>
+  </g>
+  <g data-object-id="component-command-7">
+    <title>component-command-7</title>
+    <text x="1078.0" y="621.0" font-family="sans-serif" font-size="12.0" fill="#9fb1c8">zoe launch research</text>
+  </g>
+  <g data-object-id="component-status-7">
+    <title>component-status-7</title>
+    <text x="1078.0" y="647.0" font-family="sans-serif" font-size="11.0" fill="#86efac">bundled · source present</text>
+  </g>
+  <g data-object-id="component-revision-7">
+    <title>component-revision-7</title>
+    <text x="1078.0" y="666.0" font-family="sans-serif" font-size="9.0" fill="#64748b">upstream 83b89a385aa4</text>
+  </g>
+  <g data-object-id="component-kevlar">
+    <title>component-kevlar</title>
+    <rect x="40.0" y="698.0" width="300.0" height="181.0" fill="#101b2b" stroke="#a7f3d0" stroke-width="2.0" />
+  </g>
+  <g data-object-id="component-icon-8">
+    <title>component-icon-8</title>
+    <ellipse cx="69.0" cy="729.0" rx="8.0" ry="8.0" fill="#a7f3d0" stroke="#a7f3d0" stroke-width="1.0" />
+  </g>
+  <g data-object-id="component-title-8">
+    <title>component-title-8</title>
+    <text x="88.0" y="735.0" font-family="sans-serif" font-size="18.0" fill="#a7f3d0">Kevlar MCP firewall</text>
+  </g>
+  <g data-object-id="component-summary-8">
+    <title>component-summary-8</title>
+    <text x="58.0" y="770.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee">MCP proxy firewall, content disarm, policy…</text>
+  </g>
+  <g data-object-id="component-summary-2-8">
+    <title>component-summary-2-8</title>
+    <text x="58.0" y="789.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee">enforcement, and audit evidence</text>
+  </g>
+  <g data-object-id="component-command-8">
+    <title>component-command-8</title>
+    <text x="58.0" y="823.0" font-family="sans-serif" font-size="12.0" fill="#9fb1c8">zoe launch kevlar</text>
+  </g>
+  <g data-object-id="component-status-8">
+    <title>component-status-8</title>
+    <text x="58.0" y="849.0" font-family="sans-serif" font-size="11.0" fill="#86efac">bundled · source present</text>
+  </g>
+  <g data-object-id="component-revision-8">
+    <title>component-revision-8</title>
+    <text x="58.0" y="868.0" font-family="sans-serif" font-size="9.0" fill="#64748b">upstream 8ac3e0181e98</text>
+  </g>
+  <g data-object-id="component-pdf">
+    <title>component-pdf</title>
+    <rect x="380.0" y="698.0" width="300.0" height="181.0" fill="#101b2b" stroke="#f9a8d4" stroke-width="2.0" />
+  </g>
+  <g data-object-id="component-icon-9">
+    <title>component-icon-9</title>
+    <ellipse cx="409.0" cy="729.0" rx="8.0" ry="8.0" fill="#f9a8d4" stroke="#f9a8d4" stroke-width="1.0" />
+  </g>
+  <g data-object-id="component-title-9">
+    <title>component-title-9</title>
+    <text x="428.0" y="735.0" font-family="sans-serif" font-size="18.0" fill="#f9a8d4">PDF Signature Toolkit</text>
+  </g>
+  <g data-object-id="component-summary-9">
+    <title>component-summary-9</title>
+    <text x="398.0" y="770.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee">Reproducible source integrity records and …</text>
+  </g>
+  <g data-object-id="component-summary-2-9">
+    <title>component-summary-2-9</title>
+    <text x="398.0" y="789.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee">etached PDF signatures</text>
+  </g>
+  <g data-object-id="component-command-9">
+    <title>component-command-9</title>
+    <text x="398.0" y="823.0" font-family="sans-serif" font-size="12.0" fill="#9fb1c8">zoe launch pdf</text>
+  </g>
+  <g data-object-id="component-status-9">
+    <title>component-status-9</title>
+    <text x="398.0" y="849.0" font-family="sans-serif" font-size="11.0" fill="#86efac">bundled · source present</text>
+  </g>
+  <g data-object-id="component-revision-9">
+    <title>component-revision-9</title>
+    <text x="398.0" y="868.0" font-family="sans-serif" font-size="9.0" fill="#64748b">upstream 119816596295</text>
+  </g>
+  <g data-object-id="component-chalkboard">
+    <title>component-chalkboard</title>
+    <rect x="720.0" y="698.0" width="300.0" height="181.0" fill="#101b2b" stroke="#d9f99d" stroke-width="2.0" />
+  </g>
+  <g data-object-id="component-icon-10">
+    <title>component-icon-10</title>
+    <ellipse cx="749.0" cy="729.0" rx="8.0" ry="8.0" fill="#d9f99d" stroke="#d9f99d" stroke-width="1.0" />
+  </g>
+  <g data-object-id="component-title-10">
+    <title>component-title-10</title>
+    <text x="768.0" y="735.0" font-family="sans-serif" font-size="18.0" fill="#d9f99d">Chalkboard library</text>
+  </g>
+  <g data-object-id="component-summary-10">
+    <title>component-summary-10</title>
+    <text x="738.0" y="770.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee">Reusable ideas, templates, and prompts for…</text>
+  </g>
+  <g data-object-id="component-summary-2-10">
+    <title>component-summary-2-10</title>
+    <text x="738.0" y="789.0" font-family="sans-serif" font-size="11.0" fill="#d8e2ee">knowledge engineering</text>
+  </g>
+  <g data-object-id="component-command-10">
+    <title>component-command-10</title>
+    <text x="738.0" y="823.0" font-family="sans-serif" font-size="12.0" fill="#9fb1c8">zoe show chalkboard</text>
+  </g>
+  <g data-object-id="component-status-10">
+    <title>component-status-10</title>
+    <text x="738.0" y="849.0" font-family="sans-serif" font-size="11.0" fill="#86efac">bundled · source present</text>
+  </g>
+  <g data-object-id="component-revision-10">
+    <title>component-revision-10</title>
+    <text x="738.0" y="868.0" font-family="sans-serif" font-size="9.0" fill="#64748b">upstream 63646eb15737</text>
+  </g>
+  <g data-object-id="knowledge-card">
+    <title>knowledge-card</title>
+    <rect x="1060.0" y="698.0" width="300.0" height="181.0" fill="#101b2b" stroke="#67e8f9" stroke-width="2.0" />
+  </g>
+  <g data-object-id="knowledge-card-title">
+    <title>knowledge-card-title</title>
+    <text x="1078.0" y="735.0" font-family="sans-serif" font-size="18.0" fill="#67e8f9">Shared knowledge field</text>
+  </g>
+  <g data-object-id="knowledge-observations">
+    <title>knowledge-observations</title>
+    <text x="1078.0" y="776.0" font-family="sans-serif" font-size="13.0" fill="#e2e8f0">11 source observations</text>
+  </g>
+  <g data-object-id="knowledge-links">
+    <title>knowledge-links</title>
+    <text x="1078.0" y="801.0" font-family="sans-serif" font-size="13.0" fill="#e2e8f0">10 declared context links</text>
+  </g>
+  <g data-object-id="knowledge-hash">
+    <title>knowledge-hash</title>
+    <text x="1078.0" y="827.0" font-family="sans-serif" font-size="10.0" fill="#fde68a">SHA-256 31491af3d23a59a2b0770f6d</text>
+  </g>
+  <g data-object-id="knowledge-scope">
+    <title>knowledge-scope</title>
+    <text x="1078.0" y="852.0" font-family="sans-serif" font-size="11.0" fill="#9fb1c8">links do not transfer evidence</text>
+  </g>
+  <g data-object-id="knowledge-scope-2">
+    <title>knowledge-scope-2</title>
+    <text x="1078.0" y="870.0" font-family="sans-serif" font-size="11.0" fill="#86efac">or permission · executed=False</text>
+  </g>
+  <g data-object-id="unified-memory">
+    <title>unified-memory</title>
+    <rect x="40.0" y="915.0" width="1320.0" height="133.0" fill="#0e1828" stroke="#475569" stroke-width="1.0" />
+  </g>
+  <g data-object-id="symbol-cell-0">
+    <title>symbol-cell-0</title>
+    <rect x="62.0" y="939.0" width="48.0" height="46.0" fill="none" stroke="#9fb1c8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="symbol-0">
+    <title>symbol-0</title>
+    <text x="78.0" y="970.0" font-family="sans-serif" font-size="20.0" fill="#67e8f9">G</text>
+  </g>
+  <g data-object-id="symbol-cell-1">
+    <title>symbol-cell-1</title>
+    <rect x="112.0" y="939.0" width="48.0" height="46.0" fill="none" stroke="#9fb1c8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="symbol-1">
+    <title>symbol-1</title>
+    <text x="128.0" y="970.0" font-family="sans-serif" font-size="20.0" fill="#fde68a">E</text>
+  </g>
+  <g data-object-id="symbol-cell-2">
+    <title>symbol-cell-2</title>
+    <rect x="162.0" y="939.0" width="48.0" height="46.0" fill="none" stroke="#9fb1c8" stroke-width="1.0" />
+  </g>
+  <g data-object-id="symbol-2">
+    <title>symbol-2</title>
+    <text x="178.0" y="970.0" font-family="sans-serif" font-size="20.0" fill="#f0abfc">M</text>
+  </g>
+  <g data-object-id="symbol-caption">
+    <title>symbol-caption</title>
+    <text x="62.0" y="1011.0" font-family="sans-serif" font-size="11.0" fill="#9fb1c8">source / trust / stability</text>
+  </g>
+  <g data-object-id="symbol-note">
+    <title>symbol-note</title>
+    <text x="62.0" y="1033.0" font-family="sans-serif" font-size="9.0" fill="#64748b">original symbol-grid references</text>
+  </g>
+  <g data-object-id="memory-title">
+    <title>memory-title</title>
+    <text x="390.0" y="949.0" font-family="sans-serif" font-size="14.0" fill="#fde68a">TEN REPOSITORIES · ONE KNOWLEDGE FIELD</text>
+  </g>
+  <g data-object-id="memory-scope">
+    <title>memory-scope</title>
+    <text x="390.0" y="980.0" font-family="sans-serif" font-size="12.0" fill="#fda4af">Source context is inspectable; observation does not transfer evidence or permission.</text>
+  </g>
+  <g data-object-id="memory-detail">
+    <title>memory-detail</title>
+    <text x="390.0" y="1006.0" font-family="sans-serif" font-size="11.0" fill="#9fb1c8">Trust: repository + revision + scope · Stability: process + replay + tests</text>
+  </g>
+  <g data-object-id="memory-boundary">
+    <title>memory-boundary</title>
+    <text x="390.0" y="1032.0" font-family="sans-serif" font-size="11.0" fill="#86efac">No implicit agent launch · no runtime claim from source presence · executed=False</text>
+  </g>
+</svg>

@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "instrument": "accessible volume of a full-vocabulary token distribution",
+  "model": "google-bert/bert-base-cased",
+  "model_revision": "cd5ef92a9fb2f889e972770a36d4ed042daf221e",
+  "requested_revision": "cd5ef92a9fb2f889e972770a36d4ed042daf221e",
+  "runtime": {
+    "torch": "2.14.1+cu130",
+    "transformers": "4.56.2"
+  },
+  "prediction_style": "masked",
+  "text": "A language model's output tells us what it generated. It does not, by itself, tell us how many plausible continuations preceded that output. Accessible volume addresses this gap",
+  "sequence_length": 38,
+  "target_position": 36,
+  "target_token_id": 7275,
+  "target_token": "gap",
+  "vocabulary_size": 28996,
+  "probability_sum": 1.0,
+  "threshold_sweep": [
+    {
+      "tau": 0.02,
+      "accessible_volume": 2,
+      "normalized_accessible_volume": 6.897503103876396e-05
+    },
+    {
+      "tau": 0.05,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.448751551938198e-05
+    },
+    {
+      "tau": 0.1,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.448751551938198e-05
+    },
+    {
+      "tau": 0.15,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.448751551938198e-05
+    },
+    {
+      "tau": 0.3,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.448751551938198e-05
+    },
+    {
+      "tau": 0.5,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.448751551938198e-05
+    }
+  ],
+  "entropy_bits": 0.28648231019600856,
+  "top_10_probability_mass": 0.9997707025355699,
+  "target_probability": 1.9586422537364087e-08,
+  "target_rank": 1245,
+  "top_tokens": [
+    {
+      "token_id": 119,
+      "token": ".",
+      "probability": 0.9582788898818643
+    },
+    {
+      "token_id": 132,
+      "token": ";",
+      "probability": 0.035899474362036415
+    },
+    {
+      "token_id": 136,
+      "token": "?",
+      "probability": 0.0025558987628318134
+    },
+    {
+      "token_id": 131,
+      "token": ":",
+      "probability": 0.0024676252752395297
+    },
+    {
+      "token_id": 106,
+      "token": "!",
+      "probability": 0.00044724849342210946
+    },
+    {
+      "token_id": 1232,
+      "token": "...",
+      "probability": 5.196033748400834e-05
+    },
+    {
+      "token_id": 117,
+      "token": ",",
+      "probability": 2.205851570964879e-05
+    },
+    {
+      "token_id": 1272,
+      "token": "because",
+      "probability": 1.6787732630095676e-05
+    },
+    {
+      "token_id": 118,
+      "token": "-",
+      "probability": 1.568742351487939e-05
+    },
+    {
+      "token_id": 1112,
+      "token": "as",
+      "probability": 1.5071750837018773e-05
+    }
+  ],
+  "checks": {
+    "repeated_probabilities_identical": true,
+    "target_replaced_with_mask": true,
+    "mask_count": 1
+  },
+  "probability_values_sha256": "2eb2448513ebd8346dd8fdd25e28df4007ba95c2044257513c7b41b05d23a953",
+  "input_ids_sha256": "0a44b5f66c19f005b2b67198aed6da583897eb46d3eeba0558e14ca4be026de8",
+  "original_input_ids_sha256": "dfbc1af8504551a02ca3573d6c6d3b6dea49559ed8bbacf0a92f05e2bd83b76a",
+  "scope": [
+    "One google-bert/bert-base-cased distribution for the final non-special token of the recorded text.",
+    "The target is replaced by a mask token.",
+    "This is a token-level measurement, not a model-quality, security, or action-level benchmark."
+  ]
+}

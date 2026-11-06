@@ -1,0 +1,51 @@
+                                      ╔══════════════════════════════════════════════════╗
+                                      ║               Z O E                ║
+                                      ║     One native workspace · shared open evidence  ║
+                                      ╚═════════════════════════╦════════════════════════╝
+                                                                ║
+                                   user direction ──────────────╨────────────── creative exploration
+                                                                │
+  ┌─ CREATE ────────────────────┐  ┌─ VERIFY ───────────────────┐  ┌─ HOST ─────────────────────┐
+  │ GEM HELEN                   │  │ NEXT-TOKEN PREDICTABILITY  │  │ ABLATION GEM              │
+  │ Creative native workspace   │  │ Research + evidence pack   │  │ Native investigation host │
+  │                             │  │                            │  │                           │
+  │ Geometry + volume + onset   │  │ Equations + experiments    │  │ GTK + Lab + sessions      │
+  │ Lazy scenes + direct input  │  │ Golden vectors + reports   │  │ Replay + VDI + provenance │
+  └──────────────┬──────────────┘  └──────────────┬─────────────┘  └──────────────┬────────────┘
+                 │ scenes + interaction            │ math + artifacts              │ native runtime
+                 └─────────────────────────────────┼───────────────────────────────┘
+                                                   ▼
+       ╔══════════════════════════════════════════════════════════════════════════════════╗
+       ║               SHARED MATH + CONFORMANCE + ARTIFACT API                           ║
+       ║ strict p > τ · complements · momentum · Procrustes · calibration · joint paths ║
+       ║ golden metrics · versioned JSON · lazy NPZ loaders · immutable source hashes    ║
+       ╚══════════════════════════════════════════════════════════════════════════════════╝
+                                                   │
+             ┌─────────────────────────────────────┼─────────────────────────────────────┐
+             ▼                                     ▼                                     ▼
+  ┌─ GEOMETRY ────────┐       ┌─ FORECAST ────────┐       ┌─ RHYTHM ──────────┐       ┌─ MULTI-HORIZON ────┐       ┌─ EVIDENCE ─────────┐
+  │ Landmarks         │       │ Volume + momentum │       │ Synthetic motifs  │       │ h = 1, 2, 3       │       │ Lab + replay       │
+  │ Similarity/rigid  │       │ Threshold sweeps  │       │ Real MIDI onsets  │       │ Exact / bounded   │       │ Hashes + scope     │
+  │ Affine + scenes   │       │ Temperature       │       │ Forward / reverse │       │ Approximation     │       │ Papers + reports   │
+  └───────────────────┘       └───────────────────┘       └───────────────────┘       └────────────────────┘       └────────────────────┘
+  ┌─ BAYESIAN FIELD NOTEBOOK ──────────────────────────────────────────────────────────────────────────────┐
+  │ Questions · claims · belief diffs · evidence families · chambers · next tests · unified memory         │
+  └────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+            │                            │                            │                             │                            │
+            └────────────────────────────┴────────────────────────────┴─────────────────────────────┴────────────────────────────┘
+                                                                      │
+                    ┌──────────────────────────────────────────┼──────────────────────────────────────────┐
+                    ▼                                          ▼                                          ▼
+             ┌─ EXPORTS ──────────────┐              ┌─ EVIDENCE FLOW ──────────┐               ┌─ TWO MODES ───────────────┐
+             │ SVG · PNG · GEM VDI    │              │ Observe → measure        │               │ gem-helen = lightweight   │
+             │ Versioned scene JSON   │              │ Recommend → human decides│               │ gem zoe = integrated   │
+             │ No-overwrite artifacts │              │ Replay → compare → learn │               │ Same math · same evidence │
+             └────────────────────────┘              └──────────────────────────┘               └───────────────────────────┘
+                                                               │
+                                                               ▼
+       ╔══════════════════════════════════════════════════════════════════════════════════╗
+       ║                              HUMAN-CONTROLLED FEEDBACK                            ║
+       ║      observation → forecast → breadth + correctness → recommendation → action     ║
+       ║      breadth ≠ correctness · executed=False · HOP rejected · ratings pending      ║
+       ║      no automatic execution · no universal future predictor · no hidden rewrites  ║
+       ╚══════════════════════════════════════════════════════════════════════════════════╝

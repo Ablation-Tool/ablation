@@ -1,0 +1,392 @@
+{
+  "configuration": {
+    "working_capacity": 4
+  },
+  "events": [
+    {
+      "hash": "0d72142e6b6aad0527ca7791bbc80f7d4b82a0fdc39146dca3f9e4c08aa4d940",
+      "kind": "question_added",
+      "payload": {
+        "question": {
+          "context": "",
+          "id": "q-1",
+          "status": "open",
+          "text": "Can explicit memory operations remain inspectable?"
+        }
+      },
+      "previous_hash": null,
+      "sequence": 1
+    },
+    {
+      "hash": "770f2d5dbbe460f0bb06e0140df86d8175b42d94c0ed8399f8d16a078fba1946",
+      "kind": "claim_added",
+      "payload": {
+        "claim": {
+          "falsifier": "Inspect the event chain for a measurement that modifies a posterior.",
+          "id": "c-1",
+          "model": "independent binary claim; claims in a question are not automatically mutually exclusive",
+          "posterior": 0.5,
+          "prior": 0.5,
+          "question_id": "q-1",
+          "statement": "A measurement changes belief without an explicit evidence event.",
+          "status": "rejected",
+          "updates": []
+        }
+      },
+      "previous_hash": "0d72142e6b6aad0527ca7791bbc80f7d4b82a0fdc39146dca3f9e4c08aa4d940",
+      "sequence": 2
+    },
+    {
+      "hash": "0e0871fcf5e6f513b0efcd2fbe84856b9ad8abc33e9d0c3165c0de7c49651c9a",
+      "kind": "cognitive_operation_recorded",
+      "payload": {
+        "record": {
+          "event_sequence": 3,
+          "operation": "sensory_encoded",
+          "representation": {
+            "event_sequence": 3,
+            "id": "r-1",
+            "revision": 0,
+            "source": "Cognitive Field worked example",
+            "status": "active",
+            "tags": [
+              "information"
+            ],
+            "text": "Information enters as a sourced observation."
+          }
+        }
+      },
+      "previous_hash": "770f2d5dbbe460f0bb06e0140df86d8175b42d94c0ed8399f8d16a078fba1946",
+      "sequence": 3
+    },
+    {
+      "hash": "612934315a4b5a0118c75a058af7213ba74562404e33eaf9a9043ed068042d90",
+      "kind": "cognitive_operation_recorded",
+      "payload": {
+        "record": {
+          "event_sequence": 4,
+          "operation": "sensory_encoded",
+          "representation": {
+            "event_sequence": 4,
+            "id": "r-2",
+            "revision": 0,
+            "source": "Cognitive Field worked example",
+            "status": "active",
+            "tags": [
+              "working"
+            ],
+            "text": "Keep the active set small enough to inspect."
+          }
+        }
+      },
+      "previous_hash": "0e0871fcf5e6f513b0efcd2fbe84856b9ad8abc33e9d0c3165c0de7c49651c9a",
+      "sequence": 4
+    },
+    {
+      "hash": "2d6a579176c9eca0d0b22fced9144926ea219bd3275ce0488628d9c17dc0791b",
+      "kind": "cognitive_operation_recorded",
+      "payload": {
+        "record": {
+          "event_sequence": 5,
+          "operation": "sensory_encoded",
+          "representation": {
+            "event_sequence": 5,
+            "id": "r-3",
+            "revision": 0,
+            "source": "Cognitive Field worked example",
+            "status": "active",
+            "tags": [
+              "declarative"
+            ],
+            "text": "Retention requires an explicit storage operation."
+          }
+        }
+      },
+      "previous_hash": "612934315a4b5a0118c75a058af7213ba74562404e33eaf9a9043ed068042d90",
+      "sequence": 5
+    },
+    {
+      "hash": "327d3663aee9992b77b7b5a655a440c8bcdf96cf9f28986b64081db5582db613",
+      "kind": "cognitive_operation_recorded",
+      "payload": {
+        "record": {
+          "event_sequence": 6,
+          "operation": "sensory_encoded",
+          "representation": {
+            "event_sequence": 6,
+            "id": "r-4",
+            "revision": 0,
+            "source": "Cognitive Field worked example",
+            "status": "active",
+            "tags": [
+              "procedural",
+              "review"
+            ],
+            "text": "A matching rule describes performance; it does not perform."
+          }
+        }
+      },
+      "previous_hash": "2d6a579176c9eca0d0b22fced9144926ea219bd3275ce0488628d9c17dc0791b",
+      "sequence": 6
+    },
+    {
+      "hash": "a927eb52804c157d3bd7353a88c27f22d0b89c853d10113af5f8b1992b1bfb43",
+      "kind": "cognitive_operation_recorded",
+      "payload": {
+        "record": {
+          "event_sequence": 7,
+          "operation": "sensory_encoded",
+          "representation": {
+            "event_sequence": 7,
+            "id": "r-5",
+            "revision": 0,
+            "source": "Cognitive Field worked example",
+            "status": "active",
+            "tags": [
+              "eviction"
+            ],
+            "text": "Overflow is retained as an eviction, not silently forgotten."
+          }
+        }
+      },
+      "previous_hash": "327d3663aee9992b77b7b5a655a440c8bcdf96cf9f28986b64081db5582db613",
+      "sequence": 7
+    },
+    {
+      "hash": "150c40dfaf4bc6221b50e07de4a7e646ee5acee03c1461f2a11f2b8c34bd6e6b",
+      "kind": "cognitive_operation_recorded",
+      "payload": {
+        "record": {
+          "operation": "declarative_stored",
+          "record": {
+            "event_sequence": 8,
+            "id": "d-1",
+            "revision": 1,
+            "source": "Cognitive Field worked example",
+            "source_event_sequence": 5,
+            "source_representation_id": "r-3",
+            "tags": [
+              "declarative"
+            ],
+            "text": "Retention requires an explicit storage operation."
+          }
+        }
+      },
+      "previous_hash": "a927eb52804c157d3bd7353a88c27f22d0b89c853d10113af5f8b1992b1bfb43",
+      "sequence": 8
+    },
+    {
+      "hash": "18bded1802f571682a4bfd98f01582c7f40bef61214ef7883e6f7e09265e3a26",
+      "kind": "cognitive_operation_recorded",
+      "payload": {
+        "record": {
+          "operation": "declarative_retrieved",
+          "retrieval": {
+            "actual_revision": 1,
+            "belief_updated": false,
+            "event_sequence": 9,
+            "executed": false,
+            "expected_revision": 1,
+            "id": "q-1",
+            "record": {
+              "event_sequence": 8,
+              "id": "d-1",
+              "revision": 1,
+              "source": "Cognitive Field worked example",
+              "source_event_sequence": 5,
+              "source_representation_id": "r-3",
+              "tags": [
+                "declarative"
+              ],
+              "text": "Retention requires an explicit storage operation."
+            },
+            "record_id": "d-1",
+            "source_event_sequence": 5,
+            "source_representation_id": "r-3",
+            "status": "matched"
+          }
+        }
+      },
+      "previous_hash": "150c40dfaf4bc6221b50e07de4a7e646ee5acee03c1461f2a11f2b8c34bd6e6b",
+      "sequence": 9
+    },
+    {
+      "hash": "6d8b2903274dff0b508c6677686e29b5f1725342994cbf6e011fad0f662e8d48",
+      "kind": "cognitive_operation_recorded",
+      "payload": {
+        "record": {
+          "operation": "declarative_retrieved",
+          "retrieval": {
+            "actual_revision": 1,
+            "belief_updated": false,
+            "event_sequence": 10,
+            "executed": false,
+            "expected_revision": 0,
+            "id": "q-2",
+            "record_id": "d-1",
+            "source_event_sequence": 5,
+            "source_representation_id": "r-3",
+            "status": "revision_mismatch"
+          }
+        }
+      },
+      "previous_hash": "18bded1802f571682a4bfd98f01582c7f40bef61214ef7883e6f7e09265e3a26",
+      "sequence": 10
+    },
+    {
+      "hash": "38538e4400e7a44a7f380c3eca3fd33efb86a77aa1e0890b834a2b50f47f77dc",
+      "kind": "cognitive_operation_recorded",
+      "payload": {
+        "record": {
+          "operation": "procedural_registered",
+          "rule": {
+            "description": "Inspect the matched rule and its provenance before deciding what to do.",
+            "executable": false,
+            "id": "p-1",
+            "name": "Review a memory boundary",
+            "required_tags": [
+              "procedural",
+              "review"
+            ]
+          }
+        }
+      },
+      "previous_hash": "6d8b2903274dff0b508c6677686e29b5f1725342994cbf6e011fad0f662e8d48",
+      "sequence": 11
+    },
+    {
+      "hash": "fcfdd062e793d5f520bc6a25ed95aeb0de3100a55ee74f380ad9c89e2ee07c37",
+      "kind": "cognitive_operation_recorded",
+      "payload": {
+        "record": {
+          "operation": "procedural_registered",
+          "rule": {
+            "description": "This negative match remains available for inspection.",
+            "executable": false,
+            "id": "p-2",
+            "name": "Require a missing tag",
+            "required_tags": [
+              "unavailable"
+            ]
+          }
+        }
+      },
+      "previous_hash": "38538e4400e7a44a7f380c3eca3fd33efb86a77aa1e0890b834a2b50f47f77dc",
+      "sequence": 12
+    },
+    {
+      "hash": "1e2c4ff02252b351b4f24325d22d36cece5c8a0c855cbd492e8d33b578b41557",
+      "kind": "cognitive_operation_recorded",
+      "payload": {
+        "record": {
+          "match": {
+            "active_representation_ids": [
+              "r-2",
+              "r-3",
+              "r-4",
+              "r-5"
+            ],
+            "active_tags": [
+              "declarative",
+              "eviction",
+              "procedural",
+              "review",
+              "working"
+            ],
+            "belief_updated": false,
+            "event_sequence": 13,
+            "executed": false,
+            "id": "x-1",
+            "matched_rule_ids": [
+              "p-1"
+            ],
+            "status": "matched"
+          },
+          "operation": "procedural_matched"
+        }
+      },
+      "previous_hash": "fcfdd062e793d5f520bc6a25ed95aeb0de3100a55ee74f380ad9c89e2ee07c37",
+      "sequence": 13
+    },
+    {
+      "hash": "ffd34a0dd21c8f5995a37b8783153b128e868e8a0123bebfefcfd9964d486105",
+      "kind": "cognitive_operation_recorded",
+      "payload": {
+        "record": {
+          "operation": "performance_proposed",
+          "proposal": {
+            "belief_updated": false,
+            "description": "Inspect the matched rule and its provenance before deciding what to do.",
+            "event_sequence": 14,
+            "executed": false,
+            "id": "f-1",
+            "match_id": "x-1",
+            "rationale": "Review the architecture demonstration; no execution requested.",
+            "review_required": true,
+            "rule_id": "p-1",
+            "status": "review_required"
+          }
+        }
+      },
+      "previous_hash": "1e2c4ff02252b351b4f24325d22d36cece5c8a0c855cbd492e8d33b578b41557",
+      "sequence": 14
+    },
+    {
+      "hash": "db2510b9ff2e817522805e195f0ff971c47b0be98c2c66667b4294c52e2e0cff",
+      "kind": "chamber_added",
+      "payload": {
+        "chamber": {
+          "disposition": "active",
+          "equation": "volume/strict@v1",
+          "executed": false,
+          "id": "ch-1",
+          "mode": "deterministic",
+          "name": "Cognitive forecast breadth",
+          "parameters": {},
+          "provenance": "Nicholas Michael Kloster's accessible-volume equation"
+        }
+      },
+      "previous_hash": "ffd34a0dd21c8f5995a37b8783153b128e868e8a0123bebfefcfd9964d486105",
+      "sequence": 15
+    },
+    {
+      "hash": "72ebf08e9c9f8f54b14e48c7cb612a4dfbc966554c89f6dab57cbf4a2aed358c",
+      "kind": "measurement_recorded",
+      "payload": {
+        "measurement": {
+          "belief_updated": false,
+          "chamber_id": "ch-1",
+          "disposition": "active",
+          "equation": "volume/strict@v1",
+          "executed": false,
+          "id": "m-1",
+          "input_storage": "complete",
+          "inputs": {
+            "probabilities": [
+              0.7,
+              0.2,
+              0.08,
+              0.02
+            ],
+            "tau": 0.05
+          },
+          "mode": "deterministic",
+          "result": {
+            "accessible_volume": 3,
+            "complement_volume": 1,
+            "normalized_accessible_volume": 0.75,
+            "normalized_complement_volume": 0.25,
+            "strict_comparison": true,
+            "tau": 0.05,
+            "vocabulary_size": 4
+          }
+        }
+      },
+      "previous_hash": "db2510b9ff2e817522805e195f0ff971c47b0be98c2c66667b4294c52e2e0cff",
+      "sequence": 16
+    }
+  ],
+  "instrument": "zoe-cognitive-field",
+  "integrity": "canonical-json-sha256-chain; tamper evidence, not authentication",
+  "schema_version": 1
+}

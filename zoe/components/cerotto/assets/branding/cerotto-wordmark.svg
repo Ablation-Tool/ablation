@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="400" viewBox="0 0 1600 400" role="img" aria-labelledby="title description">
+  <title id="title">CEROTTO</title>
+  <desc id="description">CEROTTO wordmark with a magnifying glass connecting three evidence points.</desc>
+  <rect x="28" y="40" width="1544" height="320" rx="38" fill="#17202a"/>
+  <rect x="29.5" y="41.5" width="1541" height="317" rx="36.5" fill="none" stroke="#4b5563" stroke-width="3"/>
+  <path d="M70 72H356V328H70Z" fill="#1f2937"/>
+  <path d="M70 72H82V328H70Z" fill="#d97706"/>
+  <g fill="#6b7280" stroke="#9ca3af" stroke-width="2">
+    <circle cx="62" cy="74" r="7"/>
+    <circle cx="1538" cy="74" r="7"/>
+    <circle cx="62" cy="326" r="7"/>
+    <circle cx="1538" cy="326" r="7"/>
+  </g>
+  <g transform="translate(110 92)">
+    <circle cx="100" cy="92" r="76" fill="none" stroke="#f3f4f6" stroke-width="18"/>
+    <path d="M157 149L218 210" stroke="#f3f4f6" stroke-width="24" stroke-linecap="round"/>
+    <path d="M55 103L96 62L139 110" fill="none" stroke="#d97706" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="55" cy="103" r="14" fill="#d97706"/>
+    <circle cx="96" cy="62" r="14" fill="#d97706"/>
+    <circle cx="139" cy="110" r="14" fill="#d97706"/>
+  </g>
+  <text x="410" y="251" fill="#f9fafb" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="176" font-weight="700" letter-spacing="16">CEROTTO</text>
+</svg>

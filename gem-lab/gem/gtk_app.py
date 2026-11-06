@@ -132,10 +132,13 @@ def action_button(label, icon_name, callback, suggested=False, compact=False):
     if suggested:
         button.get_style_context().add_class("suggested-action")
     image = Gtk.Image()
+    icon_cache = {}
 
     def update_icon(_button, *_args):
         state = Gtk.StateFlags.NORMAL if _button.get_sensitive() else Gtk.StateFlags.INSENSITIVE
-        image.set_from_pixbuf(themed_pixbuf(icon_name, _button, 16, state))
+        pixbuf = themed_pixbuf(icon_name, _button, 16, state, icon_cache)
+        if image.get_pixbuf() is not pixbuf:
+            image.set_from_pixbuf(pixbuf)
 
     update_icon(button)
     button.connect("style-updated", update_icon)
@@ -160,7 +163,7 @@ def wait_for_agents(workspaces, timeout=2):
                 except ProcessLookupError:
                     workspace.agent_pid = None
                 else:
-                    if reap_fallback and workspace.agent_exited:
+                    if reap_fallback:
                         try:
                             waited, _status = os.waitpid(workspace.agent_pid, os.WNOHANG)
                         except ChildProcessError:
@@ -358,7 +361,7 @@ class PreferencesDialog(Gtk.Dialog):
         if self.section_expanders.get("layout") is expander and expanded:
             self.set_size_request(480, 500)
         elif not expanded:
-            GLib.idle_add(self.restore_compact_size)
+            self.restore_compact_size()
 
     def restore_compact_size(self):
         self.set_size_request(320, 300)

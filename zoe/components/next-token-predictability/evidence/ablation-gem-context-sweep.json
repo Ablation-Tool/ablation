@@ -1,0 +1,325 @@
+{
+  "schema_version": 1,
+  "instrument": "accessible-volume context sensitivity",
+  "model": {
+    "id": "onnx-community/distilgpt2-ONNX",
+    "model_sha256": "0f79f192f3137e9a90213f1b5d4a52b6d896b735f9cb82160e5de7cc6e539c41",
+    "runtime": "onnxruntime 1.31.1"
+  },
+  "baseline_probability_values_sha256": "5f6313599e77e72947435e52b273054fabda1e97006d0636658350ac253ed638",
+  "variants": {
+    "baseline": {
+      "context_tokens": 963,
+      "prompt": "You are the AI Agent in an Ablation + GEM reverse-engineering Lab.\nTarget: /usr/bin/gnutrue\nSelected event: artifact:913a39cd38f353497086bcf317b12f91f93c23b51869cea763b8340b4f84cfd3\nRecorded observation: System binary entropy inspection (complete_scoped)\nActual Ablation evidence follows:\nBinaryContext: true\n  sha256     : 913a39cd38f35349...\n  arch       : x86_64\n  base_va    : 0x0\n  func_starts: 20\n  exports    : 2\n  plt entries: 33\n  strings    : 65\n  call_edges : 136\n  str_xrefs  : 89 pairs indexed\n  named funcs: 0 (overlay)\n\n  exports (first 2):\n    0x257f  error\n    0x26c8  error_at_line\n\n  imports via PLT (first 20):\n    0x2250  __vfprintf_chk\n    0x2260  abort\n    0x2270  __errno_location\n    0x2280  strncmp\n    0x2290  _exit\n    0x22a0  __fpending\n    0x22b0  fcntl\n    0x22c0  textdomain\n    0x22d0  fclose\n    0x22e0  bindtextdomain\n    0x22f0  dcgettext\n    0x2300  __ctype_get_mb_cur_max\n    0x2310  strlen\n    0x2320  __stack_chk_fail\n    0x2330  __overflow\n    0x2340  strrchr\n    0x2350  mbrtoc32\n    0x2360  memcmp\n    0x2370  fputs_unlocked\n    0x2380  strcmp\n\nEntropy regions (26 found):\n  0x00000000 - 0x00000400  (     1,024 B)  H=2.291  SPARSE\n  0x00000400 - 0x00000700  (       768 B)  H=0.801  PADDING\n  0x00000700 - 0x00000a00  (       768 B)  H=3.128  SPARSE\n  0x00000a00 - 0x00000b00  (       256 B)  H=4.586  CODE\n  0x00000b00 - 0x00000d00  (       512 B)  H=2.972  SPARSE\n  0x00000d00 - 0x00002000  (     4,864 B)  H=0.271  PADDING\n  0x00002000 - 0x00002400  (     1,024 B)  H=3.973  SPARSE\n  0x00002400 - 0x00005300  (    12,032 B)  H=5.184  CODE\n  0x00005300 - 0x00005400  (       256 B)  H=4.333  SPARSE\n  0x00005400 - 0x00006000  (     3,072 B)  H=0.000  PADDING\n  0x00006000 - 0x00006300  (       768 B)  H=4.865  CODE\n  0x00006300 - 0x00006400  (       256 B)  H=3.591  SPARSE\n  0x00006400 - 0x00006500  (       256 B)  H=4.503  CODE\n  0x0000650\nSuggest the next investigation action.",
+      "input_ids_sha256": "970665aaaafdd2964012f3759b993e53dfe43e6d1793edc68a6b3896089fdbf8",
+      "probability_values_sha256": "5f6313599e77e72947435e52b273054fabda1e97006d0636658350ac253ed638",
+      "threshold_sweep": [
+        {
+          "tau": 0.02,
+          "accessible_volume": 4,
+          "normalized_accessible_volume": 7.959090275981455e-05
+        },
+        {
+          "tau": 0.05,
+          "accessible_volume": 2,
+          "normalized_accessible_volume": 3.9795451379907275e-05
+        },
+        {
+          "tau": 0.1,
+          "accessible_volume": 2,
+          "normalized_accessible_volume": 3.9795451379907275e-05
+        },
+        {
+          "tau": 0.15,
+          "accessible_volume": 1,
+          "normalized_accessible_volume": 1.9897725689953638e-05
+        },
+        {
+          "tau": 0.3,
+          "accessible_volume": 1,
+          "normalized_accessible_volume": 1.9897725689953638e-05
+        },
+        {
+          "tau": 0.5,
+          "accessible_volume": 1,
+          "normalized_accessible_volume": 1.9897725689953638e-05
+        }
+      ],
+      "entropy_bits": 4.299759845093285,
+      "max_probability": 0.5355873399683305,
+      "top_token": "\n",
+      "top_10_probability_mass": 0.754504689034669,
+      "delta_from_baseline": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "metadata_only": {
+      "context_tokens": 522,
+      "prompt": "You are the AI Agent in an Ablation + GEM reverse-engineering Lab.\nTarget: /usr/bin/gnutrue\nSelected event: artifact:913a39cd38f353497086bcf317b12f91f93c23b51869cea763b8340b4f84cfd3\nRecorded observation: System binary entropy inspection (complete_scoped)\nActual Ablation evidence follows:\nBinaryContext: true\n  sha256     : 913a39cd38f35349...\n  arch       : x86_64\n  base_va    : 0x0\n  func_starts: 20\n  exports    : 2\n  plt entries: 33\n  strings    : 65\n  call_edges : 136\n  str_xrefs  : 89 pairs indexed\n  named funcs: 0 (overlay)\n\n  exports (first 2):\n    0x257f  error\n    0x26c8  error_at_line\n\n  imports via PLT (first 20):\n    0x2250  __vfprintf_chk\n    0x2260  abort\n    0x2270  __errno_location\n    0x2280  strncmp\n    0x2290  _exit\n    0x22a0  __fpending\n    0x22b0  fcntl\n    0x22c0  textdomain\n    0x22d0  fclose\n    0x22e0  bindtextdomain\n    0x22f0  dcgettext\n    0x2300  __ctype_get_mb_cur_max\n    0x2310  strlen\n    0x2320  __stack_chk_fail\n    0x2330  __overflow\n    0x2340  strrchr\n    0x2350  mbrtoc32\n    0x2360  memcmp\n    0x2370  fputs_unlocked\n    0x2380  strcmp\n\nSuggest the next investigation action.",
+      "input_ids_sha256": "9b73ca123c454052524bf4084acc55264dce013ec330b5f7c520312c0759656f",
+      "probability_values_sha256": "e837e98a12fe58ef091506c951b9584f884684f6dd72d99f26baf7c2786d25c1",
+      "threshold_sweep": [
+        {
+          "tau": 0.02,
+          "accessible_volume": 4,
+          "normalized_accessible_volume": 7.959090275981455e-05
+        },
+        {
+          "tau": 0.05,
+          "accessible_volume": 2,
+          "normalized_accessible_volume": 3.9795451379907275e-05
+        },
+        {
+          "tau": 0.1,
+          "accessible_volume": 2,
+          "normalized_accessible_volume": 3.9795451379907275e-05
+        },
+        {
+          "tau": 0.15,
+          "accessible_volume": 2,
+          "normalized_accessible_volume": 3.9795451379907275e-05
+        },
+        {
+          "tau": 0.3,
+          "accessible_volume": 1,
+          "normalized_accessible_volume": 1.9897725689953638e-05
+        },
+        {
+          "tau": 0.5,
+          "accessible_volume": 0,
+          "normalized_accessible_volume": 0.0
+        }
+      ],
+      "entropy_bits": 4.211128850184002,
+      "max_probability": 0.4857505311449231,
+      "top_token": "\n",
+      "top_10_probability_mass": 0.7754117901086951,
+      "delta_from_baseline": [
+        0,
+        0,
+        0,
+        1,
+        0,
+        -1
+      ]
+    },
+    "abbreviated_evidence": {
+      "context_tokens": 295,
+      "prompt": "You are the AI Agent in an Ablation + GEM reverse-engineering Lab.\nTarget: /usr/bin/gnutrue\nSelected event: artifact:913a39cd38f353497086bcf317b12f91f93c23b51869cea763b8340b4f84cfd3\nRecorded observation: System binary entropy inspection (complete_scoped)\nActual Ablation evidence follows:\nBinaryContext: true\n  sha256     : 913a39cd38f35349...\n  arch       : x86_64\n  base_va    : 0x0\n  func_starts: 20\n  exports    : 2\n  plt entries: 33\n  strings    : 65\n  call_edges : 136\n  str_xrefs  : 89 pairs indexed\n  named funcs: 0 (overlay)\n\n  exports (first 2):\n    0x257f  error\n    0x26c8  error_at_line\n\n  imports via PLT (first 20):\n    0x2250  __vfprintf_chk\n    0x2260  abort\n    0x2270  _\nSuggest the next investigation action.",
+      "input_ids_sha256": "6848fe8bc2f16fb9e69ebdeaea8fa1634d01ebbb55cff575385b3fdb9454b030",
+      "probability_values_sha256": "dfcce3a0fe78c4080f628ce3b3e40e0580c275ba10621d7143f30cb8b31da6db",
+      "threshold_sweep": [
+        {
+          "tau": 0.02,
+          "accessible_volume": 4,
+          "normalized_accessible_volume": 7.959090275981455e-05
+        },
+        {
+          "tau": 0.05,
+          "accessible_volume": 2,
+          "normalized_accessible_volume": 3.9795451379907275e-05
+        },
+        {
+          "tau": 0.1,
+          "accessible_volume": 2,
+          "normalized_accessible_volume": 3.9795451379907275e-05
+        },
+        {
+          "tau": 0.15,
+          "accessible_volume": 2,
+          "normalized_accessible_volume": 3.9795451379907275e-05
+        },
+        {
+          "tau": 0.3,
+          "accessible_volume": 1,
+          "normalized_accessible_volume": 1.9897725689953638e-05
+        },
+        {
+          "tau": 0.5,
+          "accessible_volume": 1,
+          "normalized_accessible_volume": 1.9897725689953638e-05
+        }
+      ],
+      "entropy_bits": 4.214724084154042,
+      "max_probability": 0.5124033018733483,
+      "top_token": "\n",
+      "top_10_probability_mass": 0.7707926072833264,
+      "delta_from_baseline": [
+        0,
+        0,
+        0,
+        1,
+        0,
+        0
+      ]
+    },
+    "no_evidence": {
+      "context_tokens": 103,
+      "prompt": "You are the AI Agent in an Ablation + GEM reverse-engineering Lab.\nTarget: /usr/bin/gnutrue\nSelected event: artifact:913a39cd38f353497086bcf317b12f91f93c23b51869cea763b8340b4f84cfd3\nRecorded observation: System binary entropy inspection (complete_scoped)\nActual Ablation evidence follows:\nSuggest the next investigation action.",
+      "input_ids_sha256": "cb6dab0f1810c251fd793f23f57b70de193b6c250d671bea1cdd330e6f1911d5",
+      "probability_values_sha256": "faa1eae520177376c661614ab89d38de10431bbb40c738b75d1224b1f94db819",
+      "threshold_sweep": [
+        {
+          "tau": 0.02,
+          "accessible_volume": 3,
+          "normalized_accessible_volume": 5.9693177069860916e-05
+        },
+        {
+          "tau": 0.05,
+          "accessible_volume": 1,
+          "normalized_accessible_volume": 1.9897725689953638e-05
+        },
+        {
+          "tau": 0.1,
+          "accessible_volume": 1,
+          "normalized_accessible_volume": 1.9897725689953638e-05
+        },
+        {
+          "tau": 0.15,
+          "accessible_volume": 1,
+          "normalized_accessible_volume": 1.9897725689953638e-05
+        },
+        {
+          "tau": 0.3,
+          "accessible_volume": 1,
+          "normalized_accessible_volume": 1.9897725689953638e-05
+        },
+        {
+          "tau": 0.5,
+          "accessible_volume": 1,
+          "normalized_accessible_volume": 1.9897725689953638e-05
+        }
+      ],
+      "entropy_bits": 5.246072376846644,
+      "max_probability": 0.522499823411648,
+      "top_token": "\n",
+      "top_10_probability_mass": 0.6726939735204397,
+      "delta_from_baseline": [
+        -1,
+        -1,
+        -1,
+        0,
+        0,
+        0
+      ]
+    },
+    "summary_request": {
+      "context_tokens": 968,
+      "prompt": "You are the AI Agent in an Ablation + GEM reverse-engineering Lab.\nTarget: /usr/bin/gnutrue\nSelected event: artifact:913a39cd38f353497086bcf317b12f91f93c23b51869cea763b8340b4f84cfd3\nRecorded observation: System binary entropy inspection (complete_scoped)\nActual Ablation evidence follows:\nBinaryContext: true\n  sha256     : 913a39cd38f35349...\n  arch       : x86_64\n  base_va    : 0x0\n  func_starts: 20\n  exports    : 2\n  plt entries: 33\n  strings    : 65\n  call_edges : 136\n  str_xrefs  : 89 pairs indexed\n  named funcs: 0 (overlay)\n\n  exports (first 2):\n    0x257f  error\n    0x26c8  error_at_line\n\n  imports via PLT (first 20):\n    0x2250  __vfprintf_chk\n    0x2260  abort\n    0x2270  __errno_location\n    0x2280  strncmp\n    0x2290  _exit\n    0x22a0  __fpending\n    0x22b0  fcntl\n    0x22c0  textdomain\n    0x22d0  fclose\n    0x22e0  bindtextdomain\n    0x22f0  dcgettext\n    0x2300  __ctype_get_mb_cur_max\n    0x2310  strlen\n    0x2320  __stack_chk_fail\n    0x2330  __overflow\n    0x2340  strrchr\n    0x2350  mbrtoc32\n    0x2360  memcmp\n    0x2370  fputs_unlocked\n    0x2380  strcmp\n\nEntropy regions (26 found):\n  0x00000000 - 0x00000400  (     1,024 B)  H=2.291  SPARSE\n  0x00000400 - 0x00000700  (       768 B)  H=0.801  PADDING\n  0x00000700 - 0x00000a00  (       768 B)  H=3.128  SPARSE\n  0x00000a00 - 0x00000b00  (       256 B)  H=4.586  CODE\n  0x00000b00 - 0x00000d00  (       512 B)  H=2.972  SPARSE\n  0x00000d00 - 0x00002000  (     4,864 B)  H=0.271  PADDING\n  0x00002000 - 0x00002400  (     1,024 B)  H=3.973  SPARSE\n  0x00002400 - 0x00005300  (    12,032 B)  H=5.184  CODE\n  0x00005300 - 0x00005400  (       256 B)  H=4.333  SPARSE\n  0x00005400 - 0x00006000  (     3,072 B)  H=0.000  PADDING\n  0x00006000 - 0x00006300  (       768 B)  H=4.865  CODE\n  0x00006300 - 0x00006400  (       256 B)  H=3.591  SPARSE\n  0x00006400 - 0x00006500  (       256 B)  H=4.503  CODE\n  0x0000650\nSummarize the evidence rather than choosing an action.",
+      "input_ids_sha256": "ae6b9cc7ed522075c1c5720c3b7d9ff080f7658563d179e533e1c03209ddb8da",
+      "probability_values_sha256": "97d2d1c055f077a0568f72ce9e87f3cc9798ee1951dc9b0a2e8607ad8d60f7f9",
+      "threshold_sweep": [
+        {
+          "tau": 0.02,
+          "accessible_volume": 3,
+          "normalized_accessible_volume": 5.9693177069860916e-05
+        },
+        {
+          "tau": 0.05,
+          "accessible_volume": 2,
+          "normalized_accessible_volume": 3.9795451379907275e-05
+        },
+        {
+          "tau": 0.1,
+          "accessible_volume": 1,
+          "normalized_accessible_volume": 1.9897725689953638e-05
+        },
+        {
+          "tau": 0.15,
+          "accessible_volume": 1,
+          "normalized_accessible_volume": 1.9897725689953638e-05
+        },
+        {
+          "tau": 0.3,
+          "accessible_volume": 1,
+          "normalized_accessible_volume": 1.9897725689953638e-05
+        },
+        {
+          "tau": 0.5,
+          "accessible_volume": 0,
+          "normalized_accessible_volume": 0.0
+        }
+      ],
+      "entropy_bits": 5.2136179949179,
+      "max_probability": 0.47957019325857064,
+      "top_token": "\n",
+      "top_10_probability_mass": 0.6628971082216262,
+      "delta_from_baseline": [
+        -1,
+        0,
+        -1,
+        0,
+        0,
+        -1
+      ]
+    },
+    "repeated_short_evidence": {
+      "context_tokens": 487,
+      "prompt": "You are the AI Agent in an Ablation + GEM reverse-engineering Lab.\nTarget: /usr/bin/gnutrue\nSelected event: artifact:913a39cd38f353497086bcf317b12f91f93c23b51869cea763b8340b4f84cfd3\nRecorded observation: System binary entropy inspection (complete_scoped)\nActual Ablation evidence follows:\nBinaryContext: true\n  sha256     : 913a39cd38f35349...\n  arch       : x86_64\n  base_va    : 0x0\n  func_starts: 20\n  exports    : 2\n  plt entries: 33\n  strings    : 65\n  call_edges : 136\n  str_xrefs  : 89 pairs indexed\n  named funcs: 0 (overlay)\n\n  exports (first 2):\n    0x257f  error\n    0x26c8  error_at_line\n\n  imports via PLT (first 20):\n    0x2250  __vfprintf_chk\n    0x2260  abort\n    0x2270  _\nBinaryContext: true\n  sha256     : 913a39cd38f35349...\n  arch       : x86_64\n  base_va    : 0x0\n  func_starts: 20\n  exports    : 2\n  plt entries: 33\n  strings    : 65\n  call_edges : 136\n  str_xrefs  : 89 pairs indexed\n  named funcs: 0 (overlay)\n\n  exports (first 2):\n    0x257f  error\n    0x26c8  error_at_line\n\n  imports via PLT (first 20):\n    0x2250  __vfprintf_chk\n    0x2260  abort\n    0x2270  _\nSuggest the next investigation action.",
+      "input_ids_sha256": "8abb23678af74c5bc5cab727385cd9c480ba884bc5ac532c31c05229a5da666c",
+      "probability_values_sha256": "e47ab5b12fcf690ebe5f7e7201c345f666fecb8ea31e22323ff935441bac7fc2",
+      "threshold_sweep": [
+        {
+          "tau": 0.02,
+          "accessible_volume": 3,
+          "normalized_accessible_volume": 5.9693177069860916e-05
+        },
+        {
+          "tau": 0.05,
+          "accessible_volume": 2,
+          "normalized_accessible_volume": 3.9795451379907275e-05
+        },
+        {
+          "tau": 0.1,
+          "accessible_volume": 2,
+          "normalized_accessible_volume": 3.9795451379907275e-05
+        },
+        {
+          "tau": 0.15,
+          "accessible_volume": 1,
+          "normalized_accessible_volume": 1.9897725689953638e-05
+        },
+        {
+          "tau": 0.3,
+          "accessible_volume": 1,
+          "normalized_accessible_volume": 1.9897725689953638e-05
+        },
+        {
+          "tau": 0.5,
+          "accessible_volume": 1,
+          "normalized_accessible_volume": 1.9897725689953638e-05
+        }
+      ],
+      "entropy_bits": 4.0731434440514995,
+      "max_probability": 0.5481719524196234,
+      "top_token": "\n",
+      "top_10_probability_mass": 0.776622187663462,
+      "delta_from_baseline": [
+        -1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "checks": {
+    "baseline_repeated_identical": true,
+    "reference_strict_threshold": true,
+    "normalized_probability_vectors": true,
+    "monotonic_threshold_sweeps": true,
+    "raw_artifact_sha256": "87f204e2239fe2145322267466659f3c543305c8a52116c20b82cac9e91d1162"
+  },
+  "scope": [
+    "Controlled prompt perturbations using the same model and actual Ablation + GEM baseline context.",
+    "The no-evidence and abbreviated variants intentionally remove context; they are not expected to preserve meaning.",
+    "Differences describe these model/context pairs only, not universal token sensitivity or action quality.",
+    "No claim is made about other agents, other prompts, complete actions, or multi-step trajectories."
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "anchor": "README.md",
+  "checkout": "Chalkboard",
+  "default_args": [],
+  "identifier": "chalkboard",
+  "inspect_only": true,
+  "module": "",
+  "python_paths": [
+    ""
+  ],
+  "repository": "https://github.com/Ablation-Tool/Chalkboard",
+  "revision": "63646eb15737d822316073ba1f2114c608571c72",
+  "runtime_checkout": null,
+  "source": {
+    "mode": "bundled",
+    "path": "/home/cowboy/_projects/ablation/zoe/components/Chalkboard",
+    "runtime_verified": false,
+    "source_present": true
+  },
+  "summary": "Reusable ideas, templates, and prompts for knowledge engineering",
+  "title": "Chalkboard library"
+}

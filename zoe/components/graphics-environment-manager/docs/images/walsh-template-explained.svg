@@ -1,0 +1,2805 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1200" viewBox="0 0 1920 1200" role="img" aria-label="Walsh template: sixteen pattern questions and the reason for using them">
+  <title>Walsh template: sixteen pattern questions and the reason for using them</title>
+  <rect x="0" y="0" width="1920.0" height="1200.0" fill="#ffffff" />
+  <g data-object-id="background">
+    <title>background</title>
+    <rect x="0.0" y="0.0" width="1920.0" height="1200.0" fill="#000000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="title">
+    <title>title</title>
+    <text x="64.0" y="66.0" font-family="sans-serif" font-size="28.0" fill="#00ffff">WALSH TEMPLATE / A VISUAL RULER</text>
+  </g>
+  <g data-object-id="headline">
+    <title>headline</title>
+    <text x="64.0" y="112.0" font-family="sans-serif" font-size="34.0" fill="#ffffff">16 binary patterns. 16 coefficients. Less detail, not more evidence.</text>
+  </g>
+  <g data-object-id="subtitle">
+    <title>subtitle</title>
+    <text x="64.0" y="148.0" font-family="sans-serif" font-size="17.0" fill="#d3d3d3">Halo's actual reference projection -&gt; pooled cells -&gt; Boolean mask -&gt; signed Walsh spectrum</text>
+  </g>
+  <g data-object-id="panel-project">
+    <title>panel-project</title>
+    <rect x="55.0" y="190.0" width="415.0" height="400.0" fill="#000000" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="panel-pool">
+    <title>panel-pool</title>
+    <rect x="500.0" y="190.0" width="350.0" height="400.0" fill="#000000" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="panel-mask">
+    <title>panel-mask</title>
+    <rect x="875.0" y="190.0" width="350.0" height="400.0" fill="#000000" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="panel-transform">
+    <title>panel-transform</title>
+    <rect x="1250.0" y="190.0" width="615.0" height="400.0" fill="#000000" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="project-title">
+    <title>project-title</title>
+    <text x="80.0" y="226.0" font-family="sans-serif" font-size="20.0" fill="#00ffff">1 PROJECT</text>
+  </g>
+  <g data-object-id="project-subtitle">
+    <title>project-subtitle</title>
+    <text x="80.0" y="251.0" font-family="sans-serif" font-size="14.0" fill="#d3d3d3">one 48 x 48 pixel view</text>
+  </g>
+  <g data-object-id="pool-title">
+    <title>pool-title</title>
+    <text x="525.0" y="226.0" font-family="sans-serif" font-size="20.0" fill="#00ffff">2 POOL TO 4 x 4</text>
+  </g>
+  <g data-object-id="pool-subtitle">
+    <title>pool-subtitle</title>
+    <text x="525.0" y="251.0" font-family="sans-serif" font-size="14.0" fill="#d3d3d3">average each 12 x 12 block</text>
+  </g>
+  <g data-object-id="mask-title">
+    <title>mask-title</title>
+    <text x="900.0" y="226.0" font-family="sans-serif" font-size="20.0" fill="#00ffff">3 MAKE IT BINARY</text>
+  </g>
+  <g data-object-id="mask-subtitle">
+    <title>mask-subtitle</title>
+    <text x="900.0" y="251.0" font-family="sans-serif" font-size="14.0" fill="#d3d3d3">apply one brightness threshold</text>
+  </g>
+  <g data-object-id="transform-title">
+    <title>transform-title</title>
+    <text x="1280.0" y="226.0" font-family="sans-serif" font-size="20.0" fill="#00ffff">4 COMPARE WITH A PATTERN</text>
+  </g>
+  <g data-object-id="arrow-a">
+    <title>arrow-a</title>
+    <text x="476.0" y="410.0" font-family="sans-serif" font-size="20.0" fill="#00ffff">-&gt;</text>
+  </g>
+  <g data-object-id="arrow-b">
+    <title>arrow-b</title>
+    <text x="856.0" y="410.0" font-family="sans-serif" font-size="20.0" fill="#00ffff">-&gt;</text>
+  </g>
+  <g data-object-id="arrow-c">
+    <title>arrow-c</title>
+    <text x="1231.0" y="410.0" font-family="sans-serif" font-size="20.0" fill="#00ffff">-&gt;</text>
+  </g>
+  <g data-object-id="project-caption">
+    <title>project-caption</title>
+    <text x="118.0" y="578.0" font-family="sans-serif" font-size="14.0" fill="#808080">spatial detail is still present</text>
+  </g>
+  <g data-object-id="pool-caption">
+    <title>pool-caption</title>
+    <text x="535.0" y="558.0" font-family="sans-serif" font-size="13.0" fill="#808080">numbers show brightness / maximum</text>
+  </g>
+  <g data-object-id="pool-caption-2">
+    <title>pool-caption-2</title>
+    <text x="535.0" y="580.0" font-family="sans-serif" font-size="13.0" fill="#808080">16 averages replace 2304 pixels</text>
+  </g>
+  <g data-object-id="mask-caption">
+    <title>mask-caption</title>
+    <text x="910.0" y="558.0" font-family="sans-serif" font-size="13.0" fill="#808080">white = 1 when value &gt; 0.35 max</text>
+  </g>
+  <g data-object-id="mask-caption-2">
+    <title>mask-caption-2</title>
+    <text x="910.0" y="580.0" font-family="sans-serif" font-size="13.0" fill="#808080">image signs: 0 -&gt; +1, 1 -&gt; -1</text>
+  </g>
+  <g data-object-id="formula-intro">
+    <title>formula-intro</title>
+    <text x="1290.0" y="270.0" font-family="sans-serif" font-size="17.0" fill="#ffffff">For each Walsh pattern a:</text>
+  </g>
+  <g data-object-id="formula">
+    <title>formula</title>
+    <text x="1290.0" y="312.0" font-family="sans-serif" font-size="18.0" fill="#ffffff">W(a) = sum of</text>
+  </g>
+  <g data-object-id="formula-product">
+    <title>formula-product</title>
+    <text x="1290.0" y="348.0" font-family="sans-serif" font-size="22.0" fill="#ffff00">image_sign x pattern_sign</text>
+  </g>
+  <g data-object-id="same">
+    <title>same</title>
+    <text x="1290.0" y="390.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">same signs      -&gt; add 1</text>
+  </g>
+  <g data-object-id="different">
+    <title>different</title>
+    <text x="1290.0" y="420.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">different signs -&gt; subtract 1</text>
+  </g>
+  <g data-object-id="worked-box">
+    <title>worked-box</title>
+    <rect x="1280.0" y="445.0" width="555.0" height="113.0" fill="#000000" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="worked-title">
+    <title>worked-title</title>
+    <text x="1300.0" y="474.0" font-family="sans-serif" font-size="16.0" fill="#00ffff">Pattern 0000 is all +1</text>
+  </g>
+  <g data-object-id="worked-cells">
+    <title>worked-cells</title>
+    <text x="1300.0" y="505.0" font-family="sans-serif" font-size="16.0" fill="#ffffff">13 dark matches - 3 bright mismatches</text>
+  </g>
+  <g data-object-id="worked-result">
+    <title>worked-result</title>
+    <text x="1300.0" y="540.0" font-family="sans-serif" font-size="22.0" fill="#ffff00">W(0000) = 13 - 3 = 10</text>
+  </g>
+  <g data-object-id="separator">
+    <title>separator</title>
+    <polyline points="55,615 1865,615" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="patterns-panel">
+    <title>patterns-panel</title>
+    <rect x="55.0" y="640.0" width="1245.0" height="400.0" fill="#000000" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="patterns-title">
+    <title>patterns-title</title>
+    <text x="80.0" y="680.0" font-family="sans-serif" font-size="20.0" fill="#00ffff">5 ASK ALL 16 PATTERN QUESTIONS</text>
+  </g>
+  <g data-object-id="patterns-subtitle">
+    <title>patterns-subtitle</title>
+    <text x="80.0" y="710.0" font-family="sans-serif" font-size="14.0" fill="#808080">tiny grids: white = +1, black = -1; each W uses the Boolean mask above</text>
+  </g>
+  <g data-object-id="point-panel">
+    <title>point-panel</title>
+    <rect x="1330.0" y="640.0" width="535.0" height="400.0" fill="#000000" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="point-title">
+    <title>point-title</title>
+    <text x="1360.0" y="680.0" font-family="sans-serif" font-size="22.0" fill="#00ffff">THE POINT?</text>
+  </g>
+  <g data-object-id="useful-title">
+    <title>useful-title</title>
+    <text x="1360.0" y="720.0" font-family="sans-serif" font-size="17.0" fill="#ffffff">Walsh can be useful for:</text>
+  </g>
+  <g data-object-id="useful-fast">
+    <title>useful-fast</title>
+    <text x="1360.0" y="754.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">+ cheap additions and subtractions</text>
+  </g>
+  <g data-object-id="useful-compact">
+    <title>useful-compact</title>
+    <text x="1360.0" y="784.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">+ compact binary/parity descriptions</text>
+  </g>
+  <g data-object-id="useful-global">
+    <title>useful-global</title>
+    <text x="1360.0" y="814.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">+ inspecting global structure</text>
+  </g>
+  <g data-object-id="halo-title">
+    <title>halo-title</title>
+    <text x="1360.0" y="852.0" font-family="sans-serif" font-size="17.0" fill="#ffffff">But in this Halo experiment:</text>
+  </g>
+  <g data-object-id="halo-pool">
+    <title>halo-pool</title>
+    <text x="1360.0" y="884.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">- pooling loses fine position</text>
+  </g>
+  <g data-object-id="halo-sort">
+    <title>halo-sort</title>
+    <text x="1360.0" y="914.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">- sorting loses pattern identity</text>
+  </g>
+  <g data-object-id="halo-stall">
+    <title>halo-stall</title>
+    <text x="1360.0" y="944.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">- flat scores can stall the search</text>
+  </g>
+  <g data-object-id="point-summary">
+    <title>point-summary</title>
+    <text x="1360.0" y="990.0" font-family="sans-serif" font-size="17.0" fill="#ffff00">Different ruler. Not a better truth.</text>
+  </g>
+  <g data-object-id="conclusion">
+    <title>conclusion</title>
+    <rect x="55.0" y="1060.0" width="1810.0" height="90.0" fill="#000000" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="conclusion-main">
+    <title>conclusion-main</title>
+    <text x="80.0" y="1097.0" font-family="sans-serif" font-size="20.0" fill="#ffffff">FOR THIS HALO CASE: L2 preserved spatial detail; the coarse Walsh search stalled.</text>
+  </g>
+  <g data-object-id="conclusion-sub">
+    <title>conclusion-sub</title>
+    <text x="80.0" y="1130.0" font-family="sans-serif" font-size="16.0" fill="#d3d3d3">Use Walsh when binary structure or cheap computation is the point, not because it is magically smarter.</text>
+  </g>
+  <g data-object-id="footer">
+    <title>footer</title>
+    <text x="64.0" y="1182.0" font-family="sans-serif" font-size="13.0" fill="#808080">Actual Halo mask and coefficients - synthetic geometry only - no learning or encryption involved</text>
+  </g>
+  <g data-object-id="pixel-9-24">
+    <title>pixel-9-24</title>
+    <rect x="262.0" y="324.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-9-25">
+    <title>pixel-9-25</title>
+    <rect x="268.0" y="324.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-9-26">
+    <title>pixel-9-26</title>
+    <rect x="274.0" y="324.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-10-23">
+    <title>pixel-10-23</title>
+    <rect x="256.0" y="330.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-10-24">
+    <title>pixel-10-24</title>
+    <rect x="262.0" y="330.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-10-25">
+    <title>pixel-10-25</title>
+    <rect x="268.0" y="330.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-10-26">
+    <title>pixel-10-26</title>
+    <rect x="274.0" y="330.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-10-27">
+    <title>pixel-10-27</title>
+    <rect x="280.0" y="330.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-10-28">
+    <title>pixel-10-28</title>
+    <rect x="286.0" y="330.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-11-22">
+    <title>pixel-11-22</title>
+    <rect x="250.0" y="336.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-11-23">
+    <title>pixel-11-23</title>
+    <rect x="256.0" y="336.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-11-24">
+    <title>pixel-11-24</title>
+    <rect x="262.0" y="336.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-11-25">
+    <title>pixel-11-25</title>
+    <rect x="268.0" y="336.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-11-26">
+    <title>pixel-11-26</title>
+    <rect x="274.0" y="336.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-11-27">
+    <title>pixel-11-27</title>
+    <rect x="280.0" y="336.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-11-28">
+    <title>pixel-11-28</title>
+    <rect x="286.0" y="336.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-12-22">
+    <title>pixel-12-22</title>
+    <rect x="250.0" y="342.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-12-23">
+    <title>pixel-12-23</title>
+    <rect x="256.0" y="342.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-12-24">
+    <title>pixel-12-24</title>
+    <rect x="262.0" y="342.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-12-25">
+    <title>pixel-12-25</title>
+    <rect x="268.0" y="342.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-12-26">
+    <title>pixel-12-26</title>
+    <rect x="274.0" y="342.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-12-27">
+    <title>pixel-12-27</title>
+    <rect x="280.0" y="342.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-12-28">
+    <title>pixel-12-28</title>
+    <rect x="286.0" y="342.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-12-29">
+    <title>pixel-12-29</title>
+    <rect x="292.0" y="342.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-13-22">
+    <title>pixel-13-22</title>
+    <rect x="250.0" y="348.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-13-23">
+    <title>pixel-13-23</title>
+    <rect x="256.0" y="348.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-13-24">
+    <title>pixel-13-24</title>
+    <rect x="262.0" y="348.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-13-25">
+    <title>pixel-13-25</title>
+    <rect x="268.0" y="348.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-13-26">
+    <title>pixel-13-26</title>
+    <rect x="274.0" y="348.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-13-27">
+    <title>pixel-13-27</title>
+    <rect x="280.0" y="348.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-13-28">
+    <title>pixel-13-28</title>
+    <rect x="286.0" y="348.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-13-29">
+    <title>pixel-13-29</title>
+    <rect x="292.0" y="348.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-14-21">
+    <title>pixel-14-21</title>
+    <rect x="244.0" y="354.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-14-22">
+    <title>pixel-14-22</title>
+    <rect x="250.0" y="354.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-14-23">
+    <title>pixel-14-23</title>
+    <rect x="256.0" y="354.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-14-24">
+    <title>pixel-14-24</title>
+    <rect x="262.0" y="354.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-14-25">
+    <title>pixel-14-25</title>
+    <rect x="268.0" y="354.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-14-26">
+    <title>pixel-14-26</title>
+    <rect x="274.0" y="354.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-14-27">
+    <title>pixel-14-27</title>
+    <rect x="280.0" y="354.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-14-28">
+    <title>pixel-14-28</title>
+    <rect x="286.0" y="354.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-14-29">
+    <title>pixel-14-29</title>
+    <rect x="292.0" y="354.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-15-21">
+    <title>pixel-15-21</title>
+    <rect x="244.0" y="360.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-15-22">
+    <title>pixel-15-22</title>
+    <rect x="250.0" y="360.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-15-23">
+    <title>pixel-15-23</title>
+    <rect x="256.0" y="360.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-15-24">
+    <title>pixel-15-24</title>
+    <rect x="262.0" y="360.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-15-25">
+    <title>pixel-15-25</title>
+    <rect x="268.0" y="360.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-15-26">
+    <title>pixel-15-26</title>
+    <rect x="274.0" y="360.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-15-27">
+    <title>pixel-15-27</title>
+    <rect x="280.0" y="360.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-15-28">
+    <title>pixel-15-28</title>
+    <rect x="286.0" y="360.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-15-29">
+    <title>pixel-15-29</title>
+    <rect x="292.0" y="360.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-16-22">
+    <title>pixel-16-22</title>
+    <rect x="250.0" y="366.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-16-23">
+    <title>pixel-16-23</title>
+    <rect x="256.0" y="366.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-16-24">
+    <title>pixel-16-24</title>
+    <rect x="262.0" y="366.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-16-25">
+    <title>pixel-16-25</title>
+    <rect x="268.0" y="366.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-16-26">
+    <title>pixel-16-26</title>
+    <rect x="274.0" y="366.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-16-27">
+    <title>pixel-16-27</title>
+    <rect x="280.0" y="366.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-16-28">
+    <title>pixel-16-28</title>
+    <rect x="286.0" y="366.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-16-29">
+    <title>pixel-16-29</title>
+    <rect x="292.0" y="366.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-17-22">
+    <title>pixel-17-22</title>
+    <rect x="250.0" y="372.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-17-23">
+    <title>pixel-17-23</title>
+    <rect x="256.0" y="372.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-17-24">
+    <title>pixel-17-24</title>
+    <rect x="262.0" y="372.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-17-25">
+    <title>pixel-17-25</title>
+    <rect x="268.0" y="372.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-17-26">
+    <title>pixel-17-26</title>
+    <rect x="274.0" y="372.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-17-27">
+    <title>pixel-17-27</title>
+    <rect x="280.0" y="372.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-17-28">
+    <title>pixel-17-28</title>
+    <rect x="286.0" y="372.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-18-23">
+    <title>pixel-18-23</title>
+    <rect x="256.0" y="378.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-18-24">
+    <title>pixel-18-24</title>
+    <rect x="262.0" y="378.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-18-25">
+    <title>pixel-18-25</title>
+    <rect x="268.0" y="378.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-18-26">
+    <title>pixel-18-26</title>
+    <rect x="274.0" y="378.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-18-27">
+    <title>pixel-18-27</title>
+    <rect x="280.0" y="378.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-18-28">
+    <title>pixel-18-28</title>
+    <rect x="286.0" y="378.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-18-29">
+    <title>pixel-18-29</title>
+    <rect x="292.0" y="378.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-19-24">
+    <title>pixel-19-24</title>
+    <rect x="262.0" y="384.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-19-25">
+    <title>pixel-19-25</title>
+    <rect x="268.0" y="384.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-19-26">
+    <title>pixel-19-26</title>
+    <rect x="274.0" y="384.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-19-27">
+    <title>pixel-19-27</title>
+    <rect x="280.0" y="384.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-19-28">
+    <title>pixel-19-28</title>
+    <rect x="286.0" y="384.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-19-29">
+    <title>pixel-19-29</title>
+    <rect x="292.0" y="384.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-19-30">
+    <title>pixel-19-30</title>
+    <rect x="298.0" y="384.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-20-24">
+    <title>pixel-20-24</title>
+    <rect x="262.0" y="390.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-20-25">
+    <title>pixel-20-25</title>
+    <rect x="268.0" y="390.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-20-26">
+    <title>pixel-20-26</title>
+    <rect x="274.0" y="390.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-20-27">
+    <title>pixel-20-27</title>
+    <rect x="280.0" y="390.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-20-28">
+    <title>pixel-20-28</title>
+    <rect x="286.0" y="390.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-20-29">
+    <title>pixel-20-29</title>
+    <rect x="292.0" y="390.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-20-30">
+    <title>pixel-20-30</title>
+    <rect x="298.0" y="390.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-21-24">
+    <title>pixel-21-24</title>
+    <rect x="262.0" y="396.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-21-25">
+    <title>pixel-21-25</title>
+    <rect x="268.0" y="396.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-21-26">
+    <title>pixel-21-26</title>
+    <rect x="274.0" y="396.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-21-27">
+    <title>pixel-21-27</title>
+    <rect x="280.0" y="396.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-21-28">
+    <title>pixel-21-28</title>
+    <rect x="286.0" y="396.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-21-29">
+    <title>pixel-21-29</title>
+    <rect x="292.0" y="396.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-21-30">
+    <title>pixel-21-30</title>
+    <rect x="298.0" y="396.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-22-23">
+    <title>pixel-22-23</title>
+    <rect x="256.0" y="402.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-22-24">
+    <title>pixel-22-24</title>
+    <rect x="262.0" y="402.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-22-25">
+    <title>pixel-22-25</title>
+    <rect x="268.0" y="402.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-22-26">
+    <title>pixel-22-26</title>
+    <rect x="274.0" y="402.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-22-27">
+    <title>pixel-22-27</title>
+    <rect x="280.0" y="402.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-22-28">
+    <title>pixel-22-28</title>
+    <rect x="286.0" y="402.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-22-29">
+    <title>pixel-22-29</title>
+    <rect x="292.0" y="402.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-22-30">
+    <title>pixel-22-30</title>
+    <rect x="298.0" y="402.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-22-31">
+    <title>pixel-22-31</title>
+    <rect x="304.0" y="402.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-23-23">
+    <title>pixel-23-23</title>
+    <rect x="256.0" y="408.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-23-24">
+    <title>pixel-23-24</title>
+    <rect x="262.0" y="408.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-23-25">
+    <title>pixel-23-25</title>
+    <rect x="268.0" y="408.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-23-26">
+    <title>pixel-23-26</title>
+    <rect x="274.0" y="408.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-23-27">
+    <title>pixel-23-27</title>
+    <rect x="280.0" y="408.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-23-28">
+    <title>pixel-23-28</title>
+    <rect x="286.0" y="408.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-23-29">
+    <title>pixel-23-29</title>
+    <rect x="292.0" y="408.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-23-30">
+    <title>pixel-23-30</title>
+    <rect x="298.0" y="408.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-23-31">
+    <title>pixel-23-31</title>
+    <rect x="304.0" y="408.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-24-23">
+    <title>pixel-24-23</title>
+    <rect x="256.0" y="414.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-24-24">
+    <title>pixel-24-24</title>
+    <rect x="262.0" y="414.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-24-25">
+    <title>pixel-24-25</title>
+    <rect x="268.0" y="414.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-24-26">
+    <title>pixel-24-26</title>
+    <rect x="274.0" y="414.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-24-27">
+    <title>pixel-24-27</title>
+    <rect x="280.0" y="414.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-24-28">
+    <title>pixel-24-28</title>
+    <rect x="286.0" y="414.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-24-29">
+    <title>pixel-24-29</title>
+    <rect x="292.0" y="414.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-24-30">
+    <title>pixel-24-30</title>
+    <rect x="298.0" y="414.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-25-23">
+    <title>pixel-25-23</title>
+    <rect x="256.0" y="420.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-25-24">
+    <title>pixel-25-24</title>
+    <rect x="262.0" y="420.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-25-25">
+    <title>pixel-25-25</title>
+    <rect x="268.0" y="420.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-25-26">
+    <title>pixel-25-26</title>
+    <rect x="274.0" y="420.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-25-27">
+    <title>pixel-25-27</title>
+    <rect x="280.0" y="420.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-25-28">
+    <title>pixel-25-28</title>
+    <rect x="286.0" y="420.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-25-29">
+    <title>pixel-25-29</title>
+    <rect x="292.0" y="420.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-25-30">
+    <title>pixel-25-30</title>
+    <rect x="298.0" y="420.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-26-23">
+    <title>pixel-26-23</title>
+    <rect x="256.0" y="426.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-26-24">
+    <title>pixel-26-24</title>
+    <rect x="262.0" y="426.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-26-25">
+    <title>pixel-26-25</title>
+    <rect x="268.0" y="426.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-26-26">
+    <title>pixel-26-26</title>
+    <rect x="274.0" y="426.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-26-27">
+    <title>pixel-26-27</title>
+    <rect x="280.0" y="426.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-26-28">
+    <title>pixel-26-28</title>
+    <rect x="286.0" y="426.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-26-29">
+    <title>pixel-26-29</title>
+    <rect x="292.0" y="426.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-26-30">
+    <title>pixel-26-30</title>
+    <rect x="298.0" y="426.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-27-19">
+    <title>pixel-27-19</title>
+    <rect x="232.0" y="432.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-27-20">
+    <title>pixel-27-20</title>
+    <rect x="238.0" y="432.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-27-21">
+    <title>pixel-27-21</title>
+    <rect x="244.0" y="432.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-27-22">
+    <title>pixel-27-22</title>
+    <rect x="250.0" y="432.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-27-23">
+    <title>pixel-27-23</title>
+    <rect x="256.0" y="432.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-27-24">
+    <title>pixel-27-24</title>
+    <rect x="262.0" y="432.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-27-25">
+    <title>pixel-27-25</title>
+    <rect x="268.0" y="432.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-27-26">
+    <title>pixel-27-26</title>
+    <rect x="274.0" y="432.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-27-27">
+    <title>pixel-27-27</title>
+    <rect x="280.0" y="432.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-27-28">
+    <title>pixel-27-28</title>
+    <rect x="286.0" y="432.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-27-29">
+    <title>pixel-27-29</title>
+    <rect x="292.0" y="432.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-27-30">
+    <title>pixel-27-30</title>
+    <rect x="298.0" y="432.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-27-31">
+    <title>pixel-27-31</title>
+    <rect x="304.0" y="432.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-27-32">
+    <title>pixel-27-32</title>
+    <rect x="310.0" y="432.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-28-18">
+    <title>pixel-28-18</title>
+    <rect x="226.0" y="438.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-28-19">
+    <title>pixel-28-19</title>
+    <rect x="232.0" y="438.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-28-20">
+    <title>pixel-28-20</title>
+    <rect x="238.0" y="438.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-28-21">
+    <title>pixel-28-21</title>
+    <rect x="244.0" y="438.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-28-22">
+    <title>pixel-28-22</title>
+    <rect x="250.0" y="438.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-28-23">
+    <title>pixel-28-23</title>
+    <rect x="256.0" y="438.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-28-24">
+    <title>pixel-28-24</title>
+    <rect x="262.0" y="438.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-28-25">
+    <title>pixel-28-25</title>
+    <rect x="268.0" y="438.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-28-26">
+    <title>pixel-28-26</title>
+    <rect x="274.0" y="438.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-28-27">
+    <title>pixel-28-27</title>
+    <rect x="280.0" y="438.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-28-28">
+    <title>pixel-28-28</title>
+    <rect x="286.0" y="438.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-28-29">
+    <title>pixel-28-29</title>
+    <rect x="292.0" y="438.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-28-30">
+    <title>pixel-28-30</title>
+    <rect x="298.0" y="438.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-28-31">
+    <title>pixel-28-31</title>
+    <rect x="304.0" y="438.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-28-32">
+    <title>pixel-28-32</title>
+    <rect x="310.0" y="438.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-28-33">
+    <title>pixel-28-33</title>
+    <rect x="316.0" y="438.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-29-17">
+    <title>pixel-29-17</title>
+    <rect x="220.0" y="444.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-29-18">
+    <title>pixel-29-18</title>
+    <rect x="226.0" y="444.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-29-19">
+    <title>pixel-29-19</title>
+    <rect x="232.0" y="444.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-29-20">
+    <title>pixel-29-20</title>
+    <rect x="238.0" y="444.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-29-21">
+    <title>pixel-29-21</title>
+    <rect x="244.0" y="444.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-29-22">
+    <title>pixel-29-22</title>
+    <rect x="250.0" y="444.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-29-23">
+    <title>pixel-29-23</title>
+    <rect x="256.0" y="444.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-29-24">
+    <title>pixel-29-24</title>
+    <rect x="262.0" y="444.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-29-25">
+    <title>pixel-29-25</title>
+    <rect x="268.0" y="444.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-29-26">
+    <title>pixel-29-26</title>
+    <rect x="274.0" y="444.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-29-27">
+    <title>pixel-29-27</title>
+    <rect x="280.0" y="444.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-29-28">
+    <title>pixel-29-28</title>
+    <rect x="286.0" y="444.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-29-29">
+    <title>pixel-29-29</title>
+    <rect x="292.0" y="444.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-29-30">
+    <title>pixel-29-30</title>
+    <rect x="298.0" y="444.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-29-31">
+    <title>pixel-29-31</title>
+    <rect x="304.0" y="444.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-29-32">
+    <title>pixel-29-32</title>
+    <rect x="310.0" y="444.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-29-33">
+    <title>pixel-29-33</title>
+    <rect x="316.0" y="444.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-29-34">
+    <title>pixel-29-34</title>
+    <rect x="322.0" y="444.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-16">
+    <title>pixel-30-16</title>
+    <rect x="214.0" y="450.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-17">
+    <title>pixel-30-17</title>
+    <rect x="220.0" y="450.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-18">
+    <title>pixel-30-18</title>
+    <rect x="226.0" y="450.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-19">
+    <title>pixel-30-19</title>
+    <rect x="232.0" y="450.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-20">
+    <title>pixel-30-20</title>
+    <rect x="238.0" y="450.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-21">
+    <title>pixel-30-21</title>
+    <rect x="244.0" y="450.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-22">
+    <title>pixel-30-22</title>
+    <rect x="250.0" y="450.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-23">
+    <title>pixel-30-23</title>
+    <rect x="256.0" y="450.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-24">
+    <title>pixel-30-24</title>
+    <rect x="262.0" y="450.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-25">
+    <title>pixel-30-25</title>
+    <rect x="268.0" y="450.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-26">
+    <title>pixel-30-26</title>
+    <rect x="274.0" y="450.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-27">
+    <title>pixel-30-27</title>
+    <rect x="280.0" y="450.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-28">
+    <title>pixel-30-28</title>
+    <rect x="286.0" y="450.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-29">
+    <title>pixel-30-29</title>
+    <rect x="292.0" y="450.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-30">
+    <title>pixel-30-30</title>
+    <rect x="298.0" y="450.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-31">
+    <title>pixel-30-31</title>
+    <rect x="304.0" y="450.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-32">
+    <title>pixel-30-32</title>
+    <rect x="310.0" y="450.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-33">
+    <title>pixel-30-33</title>
+    <rect x="316.0" y="450.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-34">
+    <title>pixel-30-34</title>
+    <rect x="322.0" y="450.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-30-35">
+    <title>pixel-30-35</title>
+    <rect x="328.0" y="450.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-31-16">
+    <title>pixel-31-16</title>
+    <rect x="214.0" y="456.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-31-17">
+    <title>pixel-31-17</title>
+    <rect x="220.0" y="456.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-31-18">
+    <title>pixel-31-18</title>
+    <rect x="226.0" y="456.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-31-19">
+    <title>pixel-31-19</title>
+    <rect x="232.0" y="456.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-31-20">
+    <title>pixel-31-20</title>
+    <rect x="238.0" y="456.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-31-21">
+    <title>pixel-31-21</title>
+    <rect x="244.0" y="456.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-31-22">
+    <title>pixel-31-22</title>
+    <rect x="250.0" y="456.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-31-23">
+    <title>pixel-31-23</title>
+    <rect x="256.0" y="456.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-31-24">
+    <title>pixel-31-24</title>
+    <rect x="262.0" y="456.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-31-25">
+    <title>pixel-31-25</title>
+    <rect x="268.0" y="456.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-31-28">
+    <title>pixel-31-28</title>
+    <rect x="286.0" y="456.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-31-29">
+    <title>pixel-31-29</title>
+    <rect x="292.0" y="456.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-31-30">
+    <title>pixel-31-30</title>
+    <rect x="298.0" y="456.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-31-31">
+    <title>pixel-31-31</title>
+    <rect x="304.0" y="456.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-31-32">
+    <title>pixel-31-32</title>
+    <rect x="310.0" y="456.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-31-33">
+    <title>pixel-31-33</title>
+    <rect x="316.0" y="456.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-31-34">
+    <title>pixel-31-34</title>
+    <rect x="322.0" y="456.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-31-35">
+    <title>pixel-31-35</title>
+    <rect x="328.0" y="456.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-32-15">
+    <title>pixel-32-15</title>
+    <rect x="208.0" y="462.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-32-16">
+    <title>pixel-32-16</title>
+    <rect x="214.0" y="462.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-32-17">
+    <title>pixel-32-17</title>
+    <rect x="220.0" y="462.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-32-18">
+    <title>pixel-32-18</title>
+    <rect x="226.0" y="462.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-32-19">
+    <title>pixel-32-19</title>
+    <rect x="232.0" y="462.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-32-20">
+    <title>pixel-32-20</title>
+    <rect x="238.0" y="462.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-32-21">
+    <title>pixel-32-21</title>
+    <rect x="244.0" y="462.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-32-22">
+    <title>pixel-32-22</title>
+    <rect x="250.0" y="462.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-32-23">
+    <title>pixel-32-23</title>
+    <rect x="256.0" y="462.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-32-24">
+    <title>pixel-32-24</title>
+    <rect x="262.0" y="462.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-32-25">
+    <title>pixel-32-25</title>
+    <rect x="268.0" y="462.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-32-26">
+    <title>pixel-32-26</title>
+    <rect x="274.0" y="462.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-32-29">
+    <title>pixel-32-29</title>
+    <rect x="292.0" y="462.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-32-30">
+    <title>pixel-32-30</title>
+    <rect x="298.0" y="462.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-32-31">
+    <title>pixel-32-31</title>
+    <rect x="304.0" y="462.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-32-32">
+    <title>pixel-32-32</title>
+    <rect x="310.0" y="462.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-32-33">
+    <title>pixel-32-33</title>
+    <rect x="316.0" y="462.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-32-34">
+    <title>pixel-32-34</title>
+    <rect x="322.0" y="462.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-33-15">
+    <title>pixel-33-15</title>
+    <rect x="208.0" y="468.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-33-16">
+    <title>pixel-33-16</title>
+    <rect x="214.0" y="468.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-33-17">
+    <title>pixel-33-17</title>
+    <rect x="220.0" y="468.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-33-18">
+    <title>pixel-33-18</title>
+    <rect x="226.0" y="468.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-33-19">
+    <title>pixel-33-19</title>
+    <rect x="232.0" y="468.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-33-20">
+    <title>pixel-33-20</title>
+    <rect x="238.0" y="468.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-33-21">
+    <title>pixel-33-21</title>
+    <rect x="244.0" y="468.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-33-22">
+    <title>pixel-33-22</title>
+    <rect x="250.0" y="468.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-33-23">
+    <title>pixel-33-23</title>
+    <rect x="256.0" y="468.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-33-24">
+    <title>pixel-33-24</title>
+    <rect x="262.0" y="468.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-33-25">
+    <title>pixel-33-25</title>
+    <rect x="268.0" y="468.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-33-26">
+    <title>pixel-33-26</title>
+    <rect x="274.0" y="468.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-33-30">
+    <title>pixel-33-30</title>
+    <rect x="298.0" y="468.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-33-31">
+    <title>pixel-33-31</title>
+    <rect x="304.0" y="468.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-33-32">
+    <title>pixel-33-32</title>
+    <rect x="310.0" y="468.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-33-33">
+    <title>pixel-33-33</title>
+    <rect x="316.0" y="468.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-34-14">
+    <title>pixel-34-14</title>
+    <rect x="202.0" y="474.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-34-15">
+    <title>pixel-34-15</title>
+    <rect x="208.0" y="474.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-34-16">
+    <title>pixel-34-16</title>
+    <rect x="214.0" y="474.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-34-17">
+    <title>pixel-34-17</title>
+    <rect x="220.0" y="474.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-34-18">
+    <title>pixel-34-18</title>
+    <rect x="226.0" y="474.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-34-19">
+    <title>pixel-34-19</title>
+    <rect x="232.0" y="474.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-34-20">
+    <title>pixel-34-20</title>
+    <rect x="238.0" y="474.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-34-21">
+    <title>pixel-34-21</title>
+    <rect x="244.0" y="474.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-34-22">
+    <title>pixel-34-22</title>
+    <rect x="250.0" y="474.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-34-23">
+    <title>pixel-34-23</title>
+    <rect x="256.0" y="474.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-34-24">
+    <title>pixel-34-24</title>
+    <rect x="262.0" y="474.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-34-25">
+    <title>pixel-34-25</title>
+    <rect x="268.0" y="474.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-34-26">
+    <title>pixel-34-26</title>
+    <rect x="274.0" y="474.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-35-14">
+    <title>pixel-35-14</title>
+    <rect x="202.0" y="480.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-35-15">
+    <title>pixel-35-15</title>
+    <rect x="208.0" y="480.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-35-16">
+    <title>pixel-35-16</title>
+    <rect x="214.0" y="480.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-35-17">
+    <title>pixel-35-17</title>
+    <rect x="220.0" y="480.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-35-18">
+    <title>pixel-35-18</title>
+    <rect x="226.0" y="480.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-35-19">
+    <title>pixel-35-19</title>
+    <rect x="232.0" y="480.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-35-20">
+    <title>pixel-35-20</title>
+    <rect x="238.0" y="480.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-35-21">
+    <title>pixel-35-21</title>
+    <rect x="244.0" y="480.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-35-22">
+    <title>pixel-35-22</title>
+    <rect x="250.0" y="480.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-35-23">
+    <title>pixel-35-23</title>
+    <rect x="256.0" y="480.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-35-24">
+    <title>pixel-35-24</title>
+    <rect x="262.0" y="480.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-35-25">
+    <title>pixel-35-25</title>
+    <rect x="268.0" y="480.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-36-15">
+    <title>pixel-36-15</title>
+    <rect x="208.0" y="486.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-36-16">
+    <title>pixel-36-16</title>
+    <rect x="214.0" y="486.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-36-17">
+    <title>pixel-36-17</title>
+    <rect x="220.0" y="486.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-36-18">
+    <title>pixel-36-18</title>
+    <rect x="226.0" y="486.0" width="6.0" height="6.0" fill="#ffffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-36-19">
+    <title>pixel-36-19</title>
+    <rect x="232.0" y="486.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-36-20">
+    <title>pixel-36-20</title>
+    <rect x="238.0" y="486.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-36-21">
+    <title>pixel-36-21</title>
+    <rect x="244.0" y="486.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-36-22">
+    <title>pixel-36-22</title>
+    <rect x="250.0" y="486.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-36-23">
+    <title>pixel-36-23</title>
+    <rect x="256.0" y="486.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-37-15">
+    <title>pixel-37-15</title>
+    <rect x="208.0" y="492.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-37-16">
+    <title>pixel-37-16</title>
+    <rect x="214.0" y="492.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-37-17">
+    <title>pixel-37-17</title>
+    <rect x="220.0" y="492.0" width="6.0" height="6.0" fill="#00ffff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-37-18">
+    <title>pixel-37-18</title>
+    <rect x="226.0" y="492.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-37-19">
+    <title>pixel-37-19</title>
+    <rect x="232.0" y="492.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-37-20">
+    <title>pixel-37-20</title>
+    <rect x="238.0" y="492.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-37-21">
+    <title>pixel-37-21</title>
+    <rect x="244.0" y="492.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pixel-37-22">
+    <title>pixel-37-22</title>
+    <rect x="250.0" y="492.0" width="6.0" height="6.0" fill="#0000ff" stroke="none" stroke-width="0.0" />
+  </g>
+  <g data-object-id="pool-0-0">
+    <title>pool-0-0</title>
+    <rect x="551.0" y="288.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pool-value-0-0">
+    <title>pool-value-0-0</title>
+    <text x="560.0" y="325.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">0.00</text>
+  </g>
+  <g data-object-id="mask-0-0">
+    <title>mask-0-0</title>
+    <rect x="926.0" y="288.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-value-0-0">
+    <title>mask-value-0-0</title>
+    <text x="949.0" y="327.0" font-family="sans-serif" font-size="20.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="pool-0-1">
+    <title>pool-0-1</title>
+    <rect x="613.0" y="288.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pool-value-0-1">
+    <title>pool-value-0-1</title>
+    <text x="622.0" y="325.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">0.02</text>
+  </g>
+  <g data-object-id="mask-0-1">
+    <title>mask-0-1</title>
+    <rect x="988.0" y="288.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-value-0-1">
+    <title>mask-value-0-1</title>
+    <text x="1011.0" y="327.0" font-family="sans-serif" font-size="20.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="pool-0-2">
+    <title>pool-0-2</title>
+    <rect x="675.0" y="288.0" width="60.0" height="60.0" fill="#0000ff" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pool-value-0-2">
+    <title>pool-value-0-2</title>
+    <text x="684.0" y="325.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">0.08</text>
+  </g>
+  <g data-object-id="mask-0-2">
+    <title>mask-0-2</title>
+    <rect x="1050.0" y="288.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-value-0-2">
+    <title>mask-value-0-2</title>
+    <text x="1073.0" y="327.0" font-family="sans-serif" font-size="20.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="pool-0-3">
+    <title>pool-0-3</title>
+    <rect x="737.0" y="288.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pool-value-0-3">
+    <title>pool-value-0-3</title>
+    <text x="746.0" y="325.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">0.00</text>
+  </g>
+  <g data-object-id="mask-0-3">
+    <title>mask-0-3</title>
+    <rect x="1112.0" y="288.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-value-0-3">
+    <title>mask-value-0-3</title>
+    <text x="1135.0" y="327.0" font-family="sans-serif" font-size="20.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="pool-1-0">
+    <title>pool-1-0</title>
+    <rect x="551.0" y="350.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pool-value-1-0">
+    <title>pool-value-1-0</title>
+    <text x="560.0" y="387.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">0.00</text>
+  </g>
+  <g data-object-id="mask-1-0">
+    <title>mask-1-0</title>
+    <rect x="926.0" y="350.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-value-1-0">
+    <title>mask-value-1-0</title>
+    <text x="949.0" y="389.0" font-family="sans-serif" font-size="20.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="pool-1-1">
+    <title>pool-1-1</title>
+    <rect x="613.0" y="350.0" width="60.0" height="60.0" fill="#0000ff" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pool-value-1-1">
+    <title>pool-value-1-1</title>
+    <text x="622.0" y="387.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">0.08</text>
+  </g>
+  <g data-object-id="mask-1-1">
+    <title>mask-1-1</title>
+    <rect x="988.0" y="350.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-value-1-1">
+    <title>mask-value-1-1</title>
+    <text x="1011.0" y="389.0" font-family="sans-serif" font-size="20.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="pool-1-2">
+    <title>pool-1-2</title>
+    <rect x="675.0" y="350.0" width="60.0" height="60.0" fill="#ffffff" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pool-value-1-2">
+    <title>pool-value-1-2</title>
+    <text x="684.0" y="387.0" font-family="sans-serif" font-size="14.0" fill="#000000">0.72</text>
+  </g>
+  <g data-object-id="mask-1-2">
+    <title>mask-1-2</title>
+    <rect x="1050.0" y="350.0" width="60.0" height="60.0" fill="#ffffff" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-value-1-2">
+    <title>mask-value-1-2</title>
+    <text x="1073.0" y="389.0" font-family="sans-serif" font-size="20.0" fill="#000000">1</text>
+  </g>
+  <g data-object-id="pool-1-3">
+    <title>pool-1-3</title>
+    <rect x="737.0" y="350.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pool-value-1-3">
+    <title>pool-value-1-3</title>
+    <text x="746.0" y="387.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">0.00</text>
+  </g>
+  <g data-object-id="mask-1-3">
+    <title>mask-1-3</title>
+    <rect x="1112.0" y="350.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-value-1-3">
+    <title>mask-value-1-3</title>
+    <text x="1135.0" y="389.0" font-family="sans-serif" font-size="20.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="pool-2-0">
+    <title>pool-2-0</title>
+    <rect x="551.0" y="412.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pool-value-2-0">
+    <title>pool-value-2-0</title>
+    <text x="560.0" y="449.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">0.00</text>
+  </g>
+  <g data-object-id="mask-2-0">
+    <title>mask-2-0</title>
+    <rect x="926.0" y="412.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-value-2-0">
+    <title>mask-value-2-0</title>
+    <text x="949.0" y="451.0" font-family="sans-serif" font-size="20.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="pool-2-1">
+    <title>pool-2-1</title>
+    <rect x="613.0" y="412.0" width="60.0" height="60.0" fill="#ffffff" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pool-value-2-1">
+    <title>pool-value-2-1</title>
+    <text x="622.0" y="449.0" font-family="sans-serif" font-size="14.0" fill="#000000">0.79</text>
+  </g>
+  <g data-object-id="mask-2-1">
+    <title>mask-2-1</title>
+    <rect x="988.0" y="412.0" width="60.0" height="60.0" fill="#ffffff" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-value-2-1">
+    <title>mask-value-2-1</title>
+    <text x="1011.0" y="451.0" font-family="sans-serif" font-size="20.0" fill="#000000">1</text>
+  </g>
+  <g data-object-id="pool-2-2">
+    <title>pool-2-2</title>
+    <rect x="675.0" y="412.0" width="60.0" height="60.0" fill="#ffffff" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pool-value-2-2">
+    <title>pool-value-2-2</title>
+    <text x="684.0" y="449.0" font-family="sans-serif" font-size="14.0" fill="#000000">1.00</text>
+  </g>
+  <g data-object-id="mask-2-2">
+    <title>mask-2-2</title>
+    <rect x="1050.0" y="412.0" width="60.0" height="60.0" fill="#ffffff" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-value-2-2">
+    <title>mask-value-2-2</title>
+    <text x="1073.0" y="451.0" font-family="sans-serif" font-size="20.0" fill="#000000">1</text>
+  </g>
+  <g data-object-id="pool-2-3">
+    <title>pool-2-3</title>
+    <rect x="737.0" y="412.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pool-value-2-3">
+    <title>pool-value-2-3</title>
+    <text x="746.0" y="449.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">0.00</text>
+  </g>
+  <g data-object-id="mask-2-3">
+    <title>mask-2-3</title>
+    <rect x="1112.0" y="412.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-value-2-3">
+    <title>mask-value-2-3</title>
+    <text x="1135.0" y="451.0" font-family="sans-serif" font-size="20.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="pool-3-0">
+    <title>pool-3-0</title>
+    <rect x="551.0" y="474.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pool-value-3-0">
+    <title>pool-value-3-0</title>
+    <text x="560.0" y="511.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">0.00</text>
+  </g>
+  <g data-object-id="mask-3-0">
+    <title>mask-3-0</title>
+    <rect x="926.0" y="474.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-value-3-0">
+    <title>mask-value-3-0</title>
+    <text x="949.0" y="513.0" font-family="sans-serif" font-size="20.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="pool-3-1">
+    <title>pool-3-1</title>
+    <rect x="613.0" y="474.0" width="60.0" height="60.0" fill="#0000ff" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pool-value-3-1">
+    <title>pool-value-3-1</title>
+    <text x="622.0" y="511.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">0.16</text>
+  </g>
+  <g data-object-id="mask-3-1">
+    <title>mask-3-1</title>
+    <rect x="988.0" y="474.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-value-3-1">
+    <title>mask-value-3-1</title>
+    <text x="1011.0" y="513.0" font-family="sans-serif" font-size="20.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="pool-3-2">
+    <title>pool-3-2</title>
+    <rect x="675.0" y="474.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pool-value-3-2">
+    <title>pool-value-3-2</title>
+    <text x="684.0" y="511.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">0.00</text>
+  </g>
+  <g data-object-id="mask-3-2">
+    <title>mask-3-2</title>
+    <rect x="1050.0" y="474.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-value-3-2">
+    <title>mask-value-3-2</title>
+    <text x="1073.0" y="513.0" font-family="sans-serif" font-size="20.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="pool-3-3">
+    <title>pool-3-3</title>
+    <rect x="737.0" y="474.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pool-value-3-3">
+    <title>pool-value-3-3</title>
+    <text x="746.0" y="511.0" font-family="sans-serif" font-size="14.0" fill="#ffffff">0.00</text>
+  </g>
+  <g data-object-id="mask-3-3">
+    <title>mask-3-3</title>
+    <rect x="1112.0" y="474.0" width="60.0" height="60.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-value-3-3">
+    <title>mask-value-3-3</title>
+    <text x="1135.0" y="513.0" font-family="sans-serif" font-size="20.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="pattern-label-0">
+    <title>pattern-label-0</title>
+    <text x="80.0" y="736.0" font-family="sans-serif" font-size="13.0" fill="#00ffff">a=0000</text>
+  </g>
+  <g data-object-id="pattern-0-0">
+    <title>pattern-0-0</title>
+    <rect x="80.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-0-1">
+    <title>pattern-0-1</title>
+    <rect x="96.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-0-2">
+    <title>pattern-0-2</title>
+    <rect x="112.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-0-3">
+    <title>pattern-0-3</title>
+    <rect x="128.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-0-4">
+    <title>pattern-0-4</title>
+    <rect x="80.0" y="764.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-0-5">
+    <title>pattern-0-5</title>
+    <rect x="96.0" y="764.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-0-6">
+    <title>pattern-0-6</title>
+    <rect x="112.0" y="764.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-0-7">
+    <title>pattern-0-7</title>
+    <rect x="128.0" y="764.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-0-8">
+    <title>pattern-0-8</title>
+    <rect x="80.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-0-9">
+    <title>pattern-0-9</title>
+    <rect x="96.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-0-10">
+    <title>pattern-0-10</title>
+    <rect x="112.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-0-11">
+    <title>pattern-0-11</title>
+    <rect x="128.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-0-12">
+    <title>pattern-0-12</title>
+    <rect x="80.0" y="796.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-0-13">
+    <title>pattern-0-13</title>
+    <rect x="96.0" y="796.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-0-14">
+    <title>pattern-0-14</title>
+    <rect x="112.0" y="796.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-0-15">
+    <title>pattern-0-15</title>
+    <rect x="128.0" y="796.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-w-0">
+    <title>pattern-w-0</title>
+    <text x="80.0" y="839.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">W=10</text>
+  </g>
+  <g data-object-id="pattern-label-1">
+    <title>pattern-label-1</title>
+    <text x="230.0" y="736.0" font-family="sans-serif" font-size="13.0" fill="#00ffff">a=0001</text>
+  </g>
+  <g data-object-id="pattern-1-0">
+    <title>pattern-1-0</title>
+    <rect x="230.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-1-1">
+    <title>pattern-1-1</title>
+    <rect x="246.0" y="748.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-1-2">
+    <title>pattern-1-2</title>
+    <rect x="262.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-1-3">
+    <title>pattern-1-3</title>
+    <rect x="278.0" y="748.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-1-4">
+    <title>pattern-1-4</title>
+    <rect x="230.0" y="764.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-1-5">
+    <title>pattern-1-5</title>
+    <rect x="246.0" y="764.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-1-6">
+    <title>pattern-1-6</title>
+    <rect x="262.0" y="764.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-1-7">
+    <title>pattern-1-7</title>
+    <rect x="278.0" y="764.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-1-8">
+    <title>pattern-1-8</title>
+    <rect x="230.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-1-9">
+    <title>pattern-1-9</title>
+    <rect x="246.0" y="780.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-1-10">
+    <title>pattern-1-10</title>
+    <rect x="262.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-1-11">
+    <title>pattern-1-11</title>
+    <rect x="278.0" y="780.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-1-12">
+    <title>pattern-1-12</title>
+    <rect x="230.0" y="796.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-1-13">
+    <title>pattern-1-13</title>
+    <rect x="246.0" y="796.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-1-14">
+    <title>pattern-1-14</title>
+    <rect x="262.0" y="796.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-1-15">
+    <title>pattern-1-15</title>
+    <rect x="278.0" y="796.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-w-1">
+    <title>pattern-w-1</title>
+    <text x="230.0" y="839.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">W=-2</text>
+  </g>
+  <g data-object-id="pattern-label-2">
+    <title>pattern-label-2</title>
+    <text x="380.0" y="736.0" font-family="sans-serif" font-size="13.0" fill="#00ffff">a=0010</text>
+  </g>
+  <g data-object-id="pattern-2-0">
+    <title>pattern-2-0</title>
+    <rect x="380.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-2-1">
+    <title>pattern-2-1</title>
+    <rect x="396.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-2-2">
+    <title>pattern-2-2</title>
+    <rect x="412.0" y="748.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-2-3">
+    <title>pattern-2-3</title>
+    <rect x="428.0" y="748.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-2-4">
+    <title>pattern-2-4</title>
+    <rect x="380.0" y="764.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-2-5">
+    <title>pattern-2-5</title>
+    <rect x="396.0" y="764.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-2-6">
+    <title>pattern-2-6</title>
+    <rect x="412.0" y="764.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-2-7">
+    <title>pattern-2-7</title>
+    <rect x="428.0" y="764.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-2-8">
+    <title>pattern-2-8</title>
+    <rect x="380.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-2-9">
+    <title>pattern-2-9</title>
+    <rect x="396.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-2-10">
+    <title>pattern-2-10</title>
+    <rect x="412.0" y="780.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-2-11">
+    <title>pattern-2-11</title>
+    <rect x="428.0" y="780.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-2-12">
+    <title>pattern-2-12</title>
+    <rect x="380.0" y="796.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-2-13">
+    <title>pattern-2-13</title>
+    <rect x="396.0" y="796.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-2-14">
+    <title>pattern-2-14</title>
+    <rect x="412.0" y="796.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-2-15">
+    <title>pattern-2-15</title>
+    <rect x="428.0" y="796.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-w-2">
+    <title>pattern-w-2</title>
+    <text x="380.0" y="839.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">W=2</text>
+  </g>
+  <g data-object-id="pattern-label-3">
+    <title>pattern-label-3</title>
+    <text x="530.0" y="736.0" font-family="sans-serif" font-size="13.0" fill="#00ffff">a=0011</text>
+  </g>
+  <g data-object-id="pattern-3-0">
+    <title>pattern-3-0</title>
+    <rect x="530.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-3-1">
+    <title>pattern-3-1</title>
+    <rect x="546.0" y="748.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-3-2">
+    <title>pattern-3-2</title>
+    <rect x="562.0" y="748.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-3-3">
+    <title>pattern-3-3</title>
+    <rect x="578.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-3-4">
+    <title>pattern-3-4</title>
+    <rect x="530.0" y="764.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-3-5">
+    <title>pattern-3-5</title>
+    <rect x="546.0" y="764.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-3-6">
+    <title>pattern-3-6</title>
+    <rect x="562.0" y="764.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-3-7">
+    <title>pattern-3-7</title>
+    <rect x="578.0" y="764.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-3-8">
+    <title>pattern-3-8</title>
+    <rect x="530.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-3-9">
+    <title>pattern-3-9</title>
+    <rect x="546.0" y="780.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-3-10">
+    <title>pattern-3-10</title>
+    <rect x="562.0" y="780.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-3-11">
+    <title>pattern-3-11</title>
+    <rect x="578.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-3-12">
+    <title>pattern-3-12</title>
+    <rect x="530.0" y="796.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-3-13">
+    <title>pattern-3-13</title>
+    <rect x="546.0" y="796.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-3-14">
+    <title>pattern-3-14</title>
+    <rect x="562.0" y="796.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-3-15">
+    <title>pattern-3-15</title>
+    <rect x="578.0" y="796.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-w-3">
+    <title>pattern-w-3</title>
+    <text x="530.0" y="839.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">W=6</text>
+  </g>
+  <g data-object-id="pattern-label-4">
+    <title>pattern-label-4</title>
+    <text x="680.0" y="736.0" font-family="sans-serif" font-size="13.0" fill="#00ffff">a=0100</text>
+  </g>
+  <g data-object-id="pattern-4-0">
+    <title>pattern-4-0</title>
+    <rect x="680.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-4-1">
+    <title>pattern-4-1</title>
+    <rect x="696.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-4-2">
+    <title>pattern-4-2</title>
+    <rect x="712.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-4-3">
+    <title>pattern-4-3</title>
+    <rect x="728.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-4-4">
+    <title>pattern-4-4</title>
+    <rect x="680.0" y="764.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-4-5">
+    <title>pattern-4-5</title>
+    <rect x="696.0" y="764.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-4-6">
+    <title>pattern-4-6</title>
+    <rect x="712.0" y="764.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-4-7">
+    <title>pattern-4-7</title>
+    <rect x="728.0" y="764.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-4-8">
+    <title>pattern-4-8</title>
+    <rect x="680.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-4-9">
+    <title>pattern-4-9</title>
+    <rect x="696.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-4-10">
+    <title>pattern-4-10</title>
+    <rect x="712.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-4-11">
+    <title>pattern-4-11</title>
+    <rect x="728.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-4-12">
+    <title>pattern-4-12</title>
+    <rect x="680.0" y="796.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-4-13">
+    <title>pattern-4-13</title>
+    <rect x="696.0" y="796.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-4-14">
+    <title>pattern-4-14</title>
+    <rect x="712.0" y="796.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-4-15">
+    <title>pattern-4-15</title>
+    <rect x="728.0" y="796.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-w-4">
+    <title>pattern-w-4</title>
+    <text x="680.0" y="839.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">W=-2</text>
+  </g>
+  <g data-object-id="pattern-label-5">
+    <title>pattern-label-5</title>
+    <text x="830.0" y="736.0" font-family="sans-serif" font-size="13.0" fill="#00ffff">a=0101</text>
+  </g>
+  <g data-object-id="pattern-5-0">
+    <title>pattern-5-0</title>
+    <rect x="830.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-5-1">
+    <title>pattern-5-1</title>
+    <rect x="846.0" y="748.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-5-2">
+    <title>pattern-5-2</title>
+    <rect x="862.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-5-3">
+    <title>pattern-5-3</title>
+    <rect x="878.0" y="748.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-5-4">
+    <title>pattern-5-4</title>
+    <rect x="830.0" y="764.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-5-5">
+    <title>pattern-5-5</title>
+    <rect x="846.0" y="764.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-5-6">
+    <title>pattern-5-6</title>
+    <rect x="862.0" y="764.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-5-7">
+    <title>pattern-5-7</title>
+    <rect x="878.0" y="764.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-5-8">
+    <title>pattern-5-8</title>
+    <rect x="830.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-5-9">
+    <title>pattern-5-9</title>
+    <rect x="846.0" y="780.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-5-10">
+    <title>pattern-5-10</title>
+    <rect x="862.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-5-11">
+    <title>pattern-5-11</title>
+    <rect x="878.0" y="780.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-5-12">
+    <title>pattern-5-12</title>
+    <rect x="830.0" y="796.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-5-13">
+    <title>pattern-5-13</title>
+    <rect x="846.0" y="796.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-5-14">
+    <title>pattern-5-14</title>
+    <rect x="862.0" y="796.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-5-15">
+    <title>pattern-5-15</title>
+    <rect x="878.0" y="796.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-w-5">
+    <title>pattern-w-5</title>
+    <text x="830.0" y="839.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">W=2</text>
+  </g>
+  <g data-object-id="pattern-label-6">
+    <title>pattern-label-6</title>
+    <text x="980.0" y="736.0" font-family="sans-serif" font-size="13.0" fill="#00ffff">a=0110</text>
+  </g>
+  <g data-object-id="pattern-6-0">
+    <title>pattern-6-0</title>
+    <rect x="980.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-6-1">
+    <title>pattern-6-1</title>
+    <rect x="996.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-6-2">
+    <title>pattern-6-2</title>
+    <rect x="1012.0" y="748.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-6-3">
+    <title>pattern-6-3</title>
+    <rect x="1028.0" y="748.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-6-4">
+    <title>pattern-6-4</title>
+    <rect x="980.0" y="764.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-6-5">
+    <title>pattern-6-5</title>
+    <rect x="996.0" y="764.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-6-6">
+    <title>pattern-6-6</title>
+    <rect x="1012.0" y="764.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-6-7">
+    <title>pattern-6-7</title>
+    <rect x="1028.0" y="764.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-6-8">
+    <title>pattern-6-8</title>
+    <rect x="980.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-6-9">
+    <title>pattern-6-9</title>
+    <rect x="996.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-6-10">
+    <title>pattern-6-10</title>
+    <rect x="1012.0" y="780.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-6-11">
+    <title>pattern-6-11</title>
+    <rect x="1028.0" y="780.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-6-12">
+    <title>pattern-6-12</title>
+    <rect x="980.0" y="796.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-6-13">
+    <title>pattern-6-13</title>
+    <rect x="996.0" y="796.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-6-14">
+    <title>pattern-6-14</title>
+    <rect x="1012.0" y="796.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-6-15">
+    <title>pattern-6-15</title>
+    <rect x="1028.0" y="796.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-w-6">
+    <title>pattern-w-6</title>
+    <text x="980.0" y="839.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">W=-2</text>
+  </g>
+  <g data-object-id="pattern-label-7">
+    <title>pattern-label-7</title>
+    <text x="1130.0" y="736.0" font-family="sans-serif" font-size="13.0" fill="#00ffff">a=0111</text>
+  </g>
+  <g data-object-id="pattern-7-0">
+    <title>pattern-7-0</title>
+    <rect x="1130.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-7-1">
+    <title>pattern-7-1</title>
+    <rect x="1146.0" y="748.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-7-2">
+    <title>pattern-7-2</title>
+    <rect x="1162.0" y="748.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-7-3">
+    <title>pattern-7-3</title>
+    <rect x="1178.0" y="748.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-7-4">
+    <title>pattern-7-4</title>
+    <rect x="1130.0" y="764.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-7-5">
+    <title>pattern-7-5</title>
+    <rect x="1146.0" y="764.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-7-6">
+    <title>pattern-7-6</title>
+    <rect x="1162.0" y="764.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-7-7">
+    <title>pattern-7-7</title>
+    <rect x="1178.0" y="764.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-7-8">
+    <title>pattern-7-8</title>
+    <rect x="1130.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-7-9">
+    <title>pattern-7-9</title>
+    <rect x="1146.0" y="780.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-7-10">
+    <title>pattern-7-10</title>
+    <rect x="1162.0" y="780.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-7-11">
+    <title>pattern-7-11</title>
+    <rect x="1178.0" y="780.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-7-12">
+    <title>pattern-7-12</title>
+    <rect x="1130.0" y="796.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-7-13">
+    <title>pattern-7-13</title>
+    <rect x="1146.0" y="796.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-7-14">
+    <title>pattern-7-14</title>
+    <rect x="1162.0" y="796.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-7-15">
+    <title>pattern-7-15</title>
+    <rect x="1178.0" y="796.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-w-7">
+    <title>pattern-w-7</title>
+    <text x="1130.0" y="839.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">W=2</text>
+  </g>
+  <g data-object-id="pattern-label-8">
+    <title>pattern-label-8</title>
+    <text x="80.0" y="880.0" font-family="sans-serif" font-size="13.0" fill="#00ffff">a=1000</text>
+  </g>
+  <g data-object-id="pattern-8-0">
+    <title>pattern-8-0</title>
+    <rect x="80.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-8-1">
+    <title>pattern-8-1</title>
+    <rect x="96.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-8-2">
+    <title>pattern-8-2</title>
+    <rect x="112.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-8-3">
+    <title>pattern-8-3</title>
+    <rect x="128.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-8-4">
+    <title>pattern-8-4</title>
+    <rect x="80.0" y="908.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-8-5">
+    <title>pattern-8-5</title>
+    <rect x="96.0" y="908.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-8-6">
+    <title>pattern-8-6</title>
+    <rect x="112.0" y="908.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-8-7">
+    <title>pattern-8-7</title>
+    <rect x="128.0" y="908.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-8-8">
+    <title>pattern-8-8</title>
+    <rect x="80.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-8-9">
+    <title>pattern-8-9</title>
+    <rect x="96.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-8-10">
+    <title>pattern-8-10</title>
+    <rect x="112.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-8-11">
+    <title>pattern-8-11</title>
+    <rect x="128.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-8-12">
+    <title>pattern-8-12</title>
+    <rect x="80.0" y="940.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-8-13">
+    <title>pattern-8-13</title>
+    <rect x="96.0" y="940.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-8-14">
+    <title>pattern-8-14</title>
+    <rect x="112.0" y="940.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-8-15">
+    <title>pattern-8-15</title>
+    <rect x="128.0" y="940.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-w-8">
+    <title>pattern-w-8</title>
+    <text x="80.0" y="983.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">W=2</text>
+  </g>
+  <g data-object-id="pattern-label-9">
+    <title>pattern-label-9</title>
+    <text x="230.0" y="880.0" font-family="sans-serif" font-size="13.0" fill="#00ffff">a=1001</text>
+  </g>
+  <g data-object-id="pattern-9-0">
+    <title>pattern-9-0</title>
+    <rect x="230.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-9-1">
+    <title>pattern-9-1</title>
+    <rect x="246.0" y="892.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-9-2">
+    <title>pattern-9-2</title>
+    <rect x="262.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-9-3">
+    <title>pattern-9-3</title>
+    <rect x="278.0" y="892.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-9-4">
+    <title>pattern-9-4</title>
+    <rect x="230.0" y="908.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-9-5">
+    <title>pattern-9-5</title>
+    <rect x="246.0" y="908.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-9-6">
+    <title>pattern-9-6</title>
+    <rect x="262.0" y="908.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-9-7">
+    <title>pattern-9-7</title>
+    <rect x="278.0" y="908.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-9-8">
+    <title>pattern-9-8</title>
+    <rect x="230.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-9-9">
+    <title>pattern-9-9</title>
+    <rect x="246.0" y="924.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-9-10">
+    <title>pattern-9-10</title>
+    <rect x="262.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-9-11">
+    <title>pattern-9-11</title>
+    <rect x="278.0" y="924.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-9-12">
+    <title>pattern-9-12</title>
+    <rect x="230.0" y="940.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-9-13">
+    <title>pattern-9-13</title>
+    <rect x="246.0" y="940.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-9-14">
+    <title>pattern-9-14</title>
+    <rect x="262.0" y="940.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-9-15">
+    <title>pattern-9-15</title>
+    <rect x="278.0" y="940.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-w-9">
+    <title>pattern-w-9</title>
+    <text x="230.0" y="983.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">W=-2</text>
+  </g>
+  <g data-object-id="pattern-label-10">
+    <title>pattern-label-10</title>
+    <text x="380.0" y="880.0" font-family="sans-serif" font-size="13.0" fill="#00ffff">a=1010</text>
+  </g>
+  <g data-object-id="pattern-10-0">
+    <title>pattern-10-0</title>
+    <rect x="380.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-10-1">
+    <title>pattern-10-1</title>
+    <rect x="396.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-10-2">
+    <title>pattern-10-2</title>
+    <rect x="412.0" y="892.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-10-3">
+    <title>pattern-10-3</title>
+    <rect x="428.0" y="892.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-10-4">
+    <title>pattern-10-4</title>
+    <rect x="380.0" y="908.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-10-5">
+    <title>pattern-10-5</title>
+    <rect x="396.0" y="908.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-10-6">
+    <title>pattern-10-6</title>
+    <rect x="412.0" y="908.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-10-7">
+    <title>pattern-10-7</title>
+    <rect x="428.0" y="908.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-10-8">
+    <title>pattern-10-8</title>
+    <rect x="380.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-10-9">
+    <title>pattern-10-9</title>
+    <rect x="396.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-10-10">
+    <title>pattern-10-10</title>
+    <rect x="412.0" y="924.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-10-11">
+    <title>pattern-10-11</title>
+    <rect x="428.0" y="924.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-10-12">
+    <title>pattern-10-12</title>
+    <rect x="380.0" y="940.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-10-13">
+    <title>pattern-10-13</title>
+    <rect x="396.0" y="940.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-10-14">
+    <title>pattern-10-14</title>
+    <rect x="412.0" y="940.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-10-15">
+    <title>pattern-10-15</title>
+    <rect x="428.0" y="940.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-w-10">
+    <title>pattern-w-10</title>
+    <text x="380.0" y="983.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">W=2</text>
+  </g>
+  <g data-object-id="pattern-label-11">
+    <title>pattern-label-11</title>
+    <text x="530.0" y="880.0" font-family="sans-serif" font-size="13.0" fill="#00ffff">a=1011</text>
+  </g>
+  <g data-object-id="pattern-11-0">
+    <title>pattern-11-0</title>
+    <rect x="530.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-11-1">
+    <title>pattern-11-1</title>
+    <rect x="546.0" y="892.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-11-2">
+    <title>pattern-11-2</title>
+    <rect x="562.0" y="892.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-11-3">
+    <title>pattern-11-3</title>
+    <rect x="578.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-11-4">
+    <title>pattern-11-4</title>
+    <rect x="530.0" y="908.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-11-5">
+    <title>pattern-11-5</title>
+    <rect x="546.0" y="908.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-11-6">
+    <title>pattern-11-6</title>
+    <rect x="562.0" y="908.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-11-7">
+    <title>pattern-11-7</title>
+    <rect x="578.0" y="908.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-11-8">
+    <title>pattern-11-8</title>
+    <rect x="530.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-11-9">
+    <title>pattern-11-9</title>
+    <rect x="546.0" y="924.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-11-10">
+    <title>pattern-11-10</title>
+    <rect x="562.0" y="924.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-11-11">
+    <title>pattern-11-11</title>
+    <rect x="578.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-11-12">
+    <title>pattern-11-12</title>
+    <rect x="530.0" y="940.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-11-13">
+    <title>pattern-11-13</title>
+    <rect x="546.0" y="940.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-11-14">
+    <title>pattern-11-14</title>
+    <rect x="562.0" y="940.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-11-15">
+    <title>pattern-11-15</title>
+    <rect x="578.0" y="940.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-w-11">
+    <title>pattern-w-11</title>
+    <text x="530.0" y="983.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">W=-2</text>
+  </g>
+  <g data-object-id="pattern-label-12">
+    <title>pattern-label-12</title>
+    <text x="680.0" y="880.0" font-family="sans-serif" font-size="13.0" fill="#00ffff">a=1100</text>
+  </g>
+  <g data-object-id="pattern-12-0">
+    <title>pattern-12-0</title>
+    <rect x="680.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-12-1">
+    <title>pattern-12-1</title>
+    <rect x="696.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-12-2">
+    <title>pattern-12-2</title>
+    <rect x="712.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-12-3">
+    <title>pattern-12-3</title>
+    <rect x="728.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-12-4">
+    <title>pattern-12-4</title>
+    <rect x="680.0" y="908.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-12-5">
+    <title>pattern-12-5</title>
+    <rect x="696.0" y="908.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-12-6">
+    <title>pattern-12-6</title>
+    <rect x="712.0" y="908.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-12-7">
+    <title>pattern-12-7</title>
+    <rect x="728.0" y="908.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-12-8">
+    <title>pattern-12-8</title>
+    <rect x="680.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-12-9">
+    <title>pattern-12-9</title>
+    <rect x="696.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-12-10">
+    <title>pattern-12-10</title>
+    <rect x="712.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-12-11">
+    <title>pattern-12-11</title>
+    <rect x="728.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-12-12">
+    <title>pattern-12-12</title>
+    <rect x="680.0" y="940.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-12-13">
+    <title>pattern-12-13</title>
+    <rect x="696.0" y="940.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-12-14">
+    <title>pattern-12-14</title>
+    <rect x="712.0" y="940.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-12-15">
+    <title>pattern-12-15</title>
+    <rect x="728.0" y="940.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-w-12">
+    <title>pattern-w-12</title>
+    <text x="680.0" y="983.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">W=6</text>
+  </g>
+  <g data-object-id="pattern-label-13">
+    <title>pattern-label-13</title>
+    <text x="830.0" y="880.0" font-family="sans-serif" font-size="13.0" fill="#00ffff">a=1101</text>
+  </g>
+  <g data-object-id="pattern-13-0">
+    <title>pattern-13-0</title>
+    <rect x="830.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-13-1">
+    <title>pattern-13-1</title>
+    <rect x="846.0" y="892.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-13-2">
+    <title>pattern-13-2</title>
+    <rect x="862.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-13-3">
+    <title>pattern-13-3</title>
+    <rect x="878.0" y="892.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-13-4">
+    <title>pattern-13-4</title>
+    <rect x="830.0" y="908.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-13-5">
+    <title>pattern-13-5</title>
+    <rect x="846.0" y="908.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-13-6">
+    <title>pattern-13-6</title>
+    <rect x="862.0" y="908.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-13-7">
+    <title>pattern-13-7</title>
+    <rect x="878.0" y="908.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-13-8">
+    <title>pattern-13-8</title>
+    <rect x="830.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-13-9">
+    <title>pattern-13-9</title>
+    <rect x="846.0" y="924.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-13-10">
+    <title>pattern-13-10</title>
+    <rect x="862.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-13-11">
+    <title>pattern-13-11</title>
+    <rect x="878.0" y="924.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-13-12">
+    <title>pattern-13-12</title>
+    <rect x="830.0" y="940.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-13-13">
+    <title>pattern-13-13</title>
+    <rect x="846.0" y="940.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-13-14">
+    <title>pattern-13-14</title>
+    <rect x="862.0" y="940.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-13-15">
+    <title>pattern-13-15</title>
+    <rect x="878.0" y="940.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-w-13">
+    <title>pattern-w-13</title>
+    <text x="830.0" y="983.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">W=2</text>
+  </g>
+  <g data-object-id="pattern-label-14">
+    <title>pattern-label-14</title>
+    <text x="980.0" y="880.0" font-family="sans-serif" font-size="13.0" fill="#00ffff">a=1110</text>
+  </g>
+  <g data-object-id="pattern-14-0">
+    <title>pattern-14-0</title>
+    <rect x="980.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-14-1">
+    <title>pattern-14-1</title>
+    <rect x="996.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-14-2">
+    <title>pattern-14-2</title>
+    <rect x="1012.0" y="892.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-14-3">
+    <title>pattern-14-3</title>
+    <rect x="1028.0" y="892.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-14-4">
+    <title>pattern-14-4</title>
+    <rect x="980.0" y="908.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-14-5">
+    <title>pattern-14-5</title>
+    <rect x="996.0" y="908.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-14-6">
+    <title>pattern-14-6</title>
+    <rect x="1012.0" y="908.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-14-7">
+    <title>pattern-14-7</title>
+    <rect x="1028.0" y="908.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-14-8">
+    <title>pattern-14-8</title>
+    <rect x="980.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-14-9">
+    <title>pattern-14-9</title>
+    <rect x="996.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-14-10">
+    <title>pattern-14-10</title>
+    <rect x="1012.0" y="924.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-14-11">
+    <title>pattern-14-11</title>
+    <rect x="1028.0" y="924.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-14-12">
+    <title>pattern-14-12</title>
+    <rect x="980.0" y="940.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-14-13">
+    <title>pattern-14-13</title>
+    <rect x="996.0" y="940.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-14-14">
+    <title>pattern-14-14</title>
+    <rect x="1012.0" y="940.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-14-15">
+    <title>pattern-14-15</title>
+    <rect x="1028.0" y="940.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-w-14">
+    <title>pattern-w-14</title>
+    <text x="980.0" y="983.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">W=-2</text>
+  </g>
+  <g data-object-id="pattern-label-15">
+    <title>pattern-label-15</title>
+    <text x="1130.0" y="880.0" font-family="sans-serif" font-size="13.0" fill="#00ffff">a=1111</text>
+  </g>
+  <g data-object-id="pattern-15-0">
+    <title>pattern-15-0</title>
+    <rect x="1130.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-15-1">
+    <title>pattern-15-1</title>
+    <rect x="1146.0" y="892.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-15-2">
+    <title>pattern-15-2</title>
+    <rect x="1162.0" y="892.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-15-3">
+    <title>pattern-15-3</title>
+    <rect x="1178.0" y="892.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-15-4">
+    <title>pattern-15-4</title>
+    <rect x="1130.0" y="908.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-15-5">
+    <title>pattern-15-5</title>
+    <rect x="1146.0" y="908.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-15-6">
+    <title>pattern-15-6</title>
+    <rect x="1162.0" y="908.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-15-7">
+    <title>pattern-15-7</title>
+    <rect x="1178.0" y="908.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-15-8">
+    <title>pattern-15-8</title>
+    <rect x="1130.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-15-9">
+    <title>pattern-15-9</title>
+    <rect x="1146.0" y="924.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-15-10">
+    <title>pattern-15-10</title>
+    <rect x="1162.0" y="924.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-15-11">
+    <title>pattern-15-11</title>
+    <rect x="1178.0" y="924.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-15-12">
+    <title>pattern-15-12</title>
+    <rect x="1130.0" y="940.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-15-13">
+    <title>pattern-15-13</title>
+    <rect x="1146.0" y="940.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-15-14">
+    <title>pattern-15-14</title>
+    <rect x="1162.0" y="940.0" width="15.0" height="15.0" fill="#000000" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-15-15">
+    <title>pattern-15-15</title>
+    <rect x="1178.0" y="940.0" width="15.0" height="15.0" fill="#ffffff" stroke="#808080" stroke-width="0.5" />
+  </g>
+  <g data-object-id="pattern-w-15">
+    <title>pattern-w-15</title>
+    <text x="1130.0" y="983.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">W=-6</text>
+  </g>
+</svg>

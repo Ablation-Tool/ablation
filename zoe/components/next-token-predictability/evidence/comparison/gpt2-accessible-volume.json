@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "instrument": "accessible volume of a full-vocabulary token distribution",
+  "model": "openai-community/gpt2",
+  "model_revision": "607a30d783dfa663caf39e06633721c8d4cfcd7e",
+  "requested_revision": "607a30d783dfa663caf39e06633721c8d4cfcd7e",
+  "runtime": {
+    "torch": "2.14.1+cu130",
+    "transformers": "4.56.2"
+  },
+  "prediction_style": "causal",
+  "text": "A language model's output tells us what it generated. It does not, by itself, tell us how many plausible continuations preceded that output. Accessible volume addresses this gap",
+  "sequence_length": 35,
+  "target_position": 34,
+  "target_token_id": 7625,
+  "target_token": " gap",
+  "vocabulary_size": 50257,
+  "probability_sum": 1.0,
+  "threshold_sweep": [
+    {
+      "tau": 0.02,
+      "accessible_volume": 7,
+      "normalized_accessible_volume": 0.00013928407982967547
+    },
+    {
+      "tau": 0.05,
+      "accessible_volume": 3,
+      "normalized_accessible_volume": 5.9693177069860916e-05
+    },
+    {
+      "tau": 0.1,
+      "accessible_volume": 2,
+      "normalized_accessible_volume": 3.9795451379907275e-05
+    },
+    {
+      "tau": 0.15,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 1.9897725689953638e-05
+    },
+    {
+      "tau": 0.3,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.5,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    }
+  ],
+  "entropy_bits": 6.219492364432723,
+  "top_10_probability_mass": 0.6128967660881403,
+  "target_probability": 0.0013128478713675636,
+  "target_rank": 70,
+  "top_tokens": [
+    {
+      "token_id": 1917,
+      "token": " problem",
+      "probability": 0.2670932624935929
+    },
+    {
+      "token_id": 416,
+      "token": " by",
+      "probability": 0.11110005004460109
+    },
+    {
+      "token_id": 2071,
+      "token": " issue",
+      "probability": 0.08907274219087014
+    },
+    {
+      "token_id": 13,
+      "token": ".",
+      "probability": 0.03108053253822724
+    },
+    {
+      "token_id": 1808,
+      "token": " question",
+      "probability": 0.029113820929100913
+    },
+    {
+      "token_id": 11,
+      "token": ",",
+      "probability": 0.024526023462055943
+    },
+    {
+      "token_id": 33985,
+      "token": " ambiguity",
+      "probability": 0.02322183528975956
+    },
+    {
+      "token_id": 287,
+      "token": " in",
+      "probability": 0.015486081381842745
+    },
+    {
+      "token_id": 351,
+      "token": " with",
+      "probability": 0.012150157805802735
+    },
+    {
+      "token_id": 1109,
+      "token": " fact",
+      "probability": 0.01005225995228702
+    }
+  ],
+  "checks": {
+    "repeated_probabilities_identical": true,
+    "target_absent_from_input_by_construction": true,
+    "prefix_length": 34
+  },
+  "probability_values_sha256": "13a004fe08f692d6a51384b0fabee79627f51bb7809f9df4ff15a4b50c225a06",
+  "input_ids_sha256": "49cf49e256d6ba83271d2642c0ac78c55debc7a297de50c4e6168e741376668a",
+  "original_input_ids_sha256": "ca36ed87014d441cdd82ad4fd5d1dd2467e3498d5f2c009ec723fd83e235cec4",
+  "scope": [
+    "One openai-community/gpt2 distribution for the final non-special token of the recorded text.",
+    "The target is absent because the model input ends immediately before it.",
+    "This is a token-level measurement, not a model-quality, security, or action-level benchmark."
+  ]
+}

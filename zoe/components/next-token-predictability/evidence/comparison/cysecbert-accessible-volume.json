@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "instrument": "accessible volume of a full-vocabulary token distribution",
+  "model": "markusbayer/CySecBERT",
+  "model_revision": "c9e04e355a2bc0690b6e55833a9895d7591afcd0",
+  "requested_revision": "c9e04e355a2bc0690b6e55833a9895d7591afcd0",
+  "runtime": {
+    "torch": "2.14.1+cu130",
+    "transformers": "4.56.2"
+  },
+  "prediction_style": "masked",
+  "text": "The analyst documented the firmware vulnerability in the report",
+  "sequence_length": 12,
+  "target_position": 10,
+  "target_token_id": 3189,
+  "target_token": "report",
+  "vocabulary_size": 30522,
+  "probability_sum": 0.9999999999999998,
+  "threshold_sweep": [
+    {
+      "tau": 0.02,
+      "accessible_volume": 2,
+      "normalized_accessible_volume": 6.552650547146321e-05
+    },
+    {
+      "tau": 0.05,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.1,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.15,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.3,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.5,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    }
+  ],
+  "entropy_bits": 9.753574008672087,
+  "top_10_probability_mass": 0.19504707205539282,
+  "target_probability": 0.006890482207850986,
+  "target_rank": 21,
+  "top_tokens": [
+    {
+      "token_id": 4044,
+      "token": "environment",
+      "probability": 0.04246119357374874
+    },
+    {
+      "token_id": 6112,
+      "token": "cloud",
+      "probability": 0.0308541222734619
+    },
+    {
+      "token_id": 4007,
+      "token": "software",
+      "probability": 0.01989325761636782
+    },
+    {
+      "token_id": 2291,
+      "token": "system",
+      "probability": 0.017328007204080575
+    },
+    {
+      "token_id": 6845,
+      "token": "lab",
+      "probability": 0.01682892670458799
+    },
+    {
+      "token_id": 5911,
+      "token": "laboratory",
+      "probability": 0.015929190199211924
+    },
+    {
+      "token_id": 2902,
+      "token": "hospital",
+      "probability": 0.015387821653110458
+    },
+    {
+      "token_id": 2897,
+      "token": "network",
+      "probability": 0.012470597841016048
+    },
+    {
+      "token_id": 7809,
+      "token": "database",
+      "probability": 0.011973988649684431
+    },
+    {
+      "token_id": 7396,
+      "token": "client",
+      "probability": 0.011919966340122944
+    }
+  ],
+  "checks": {
+    "repeated_probabilities_identical": true,
+    "target_replaced_with_mask": true,
+    "mask_count": 1
+  },
+  "probability_values_sha256": "01b496f84ea765c896a7811c1c22bc885a4486843057beabf4bf984bf7d3602c",
+  "input_ids_sha256": "e476ebf4bc5f472d3766328424dfa505fd943c5a7965ad0e653a01dc4f631c3a",
+  "original_input_ids_sha256": "51874b14a373cb3a033cc70f23a0832124b60a10cb312cc34362f3b39ec0a5cf",
+  "scope": [
+    "One markusbayer/CySecBERT distribution for the final non-special token of the recorded text.",
+    "The target is replaced by a mask token.",
+    "This is a token-level measurement, not a model-quality, security, or action-level benchmark."
+  ]
+}

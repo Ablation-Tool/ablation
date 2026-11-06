@@ -1,0 +1,549 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-label="Projection Dialogue: pose, projection, similarity, and optimizer boundaries">
+  <title>Projection Dialogue: pose, projection, similarity, and optimizer boundaries</title>
+  <rect x="0" y="0" width="1920.0" height="1080.0" fill="#ffffff" />
+  <g data-object-id="background">
+    <title>background</title>
+    <rect x="0.0" y="0.0" width="1920.0" height="1080.0" fill="#000000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="title">
+    <title>title</title>
+    <text x="70.0" y="72.0" font-family="sans-serif" font-size="28.0" fill="#00ffff">PROJECTION DIALOGUE</text>
+  </g>
+  <g data-object-id="headline">
+    <title>headline</title>
+    <text x="70.0" y="124.0" font-family="sans-serif" font-size="34.0" fill="#ffffff">Pose is a hypothesis. Projection is a measurement.</text>
+  </g>
+  <g data-object-id="subtitle">
+    <title>subtitle</title>
+    <text x="70.0" y="164.0" font-family="sans-serif" font-size="17.0" fill="#d3d3d3">Six pose parameters · one similarity metric · explicit optimizer boundaries</text>
+  </g>
+  <g data-object-id="layers-label">
+    <title>layers-label</title>
+    <text x="100.0" y="210.0" font-family="sans-serif" font-size="16.0" fill="#00ffff">EXPLODED CANDIDATE STATE</text>
+  </g>
+  <g data-object-id="pose-layer-0-front">
+    <title>pose-layer-0-front</title>
+    <rect x="100.0" y="238.0" width="480.0" height="42.0" fill="#008000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-0-top">
+    <title>pose-layer-0-top</title>
+    <polygon points="100,238 122,216 602,216 580,238" stroke-linejoin="round" fill="#008000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-0-side">
+    <title>pose-layer-0-side</title>
+    <polygon points="580,238 602,216 602,258 580,280" stroke-linejoin="round" fill="#008000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-0-division-0.3333333333333333">
+    <title>pose-layer-0-division-0.3333333333333333</title>
+    <polyline points="260,238 260,280" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="pose-layer-0-division-0.6666666666666666">
+    <title>pose-layer-0-division-0.6666666666666666</title>
+    <polyline points="420,238 420,280" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="pose-layer-1-front">
+    <title>pose-layer-1-front</title>
+    <rect x="124.0" y="320.0" width="455.0" height="42.0" fill="#0000ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-1-top">
+    <title>pose-layer-1-top</title>
+    <polygon points="124,320 146,298 601,298 579,320" stroke-linejoin="round" fill="#0000ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-1-side">
+    <title>pose-layer-1-side</title>
+    <polygon points="579,320 601,298 601,340 579,362" stroke-linejoin="round" fill="#0000ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-1-division-0.3333333333333333">
+    <title>pose-layer-1-division-0.3333333333333333</title>
+    <polyline points="275.667,320 275.667,362" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="pose-layer-1-division-0.6666666666666666">
+    <title>pose-layer-1-division-0.6666666666666666</title>
+    <polyline points="427.333,320 427.333,362" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="pose-layer-2-front">
+    <title>pose-layer-2-front</title>
+    <rect x="148.0" y="402.0" width="430.0" height="42.0" fill="#ff0000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-2-top">
+    <title>pose-layer-2-top</title>
+    <polygon points="148,402 170,380 600,380 578,402" stroke-linejoin="round" fill="#ff0000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-2-side">
+    <title>pose-layer-2-side</title>
+    <polygon points="578,402 600,380 600,422 578,444" stroke-linejoin="round" fill="#ff0000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-2-division-0.3333333333333333">
+    <title>pose-layer-2-division-0.3333333333333333</title>
+    <polyline points="291.333,402 291.333,444" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="pose-layer-2-division-0.6666666666666666">
+    <title>pose-layer-2-division-0.6666666666666666</title>
+    <polyline points="434.667,402 434.667,444" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="pose-layer-3-front">
+    <title>pose-layer-3-front</title>
+    <rect x="172.0" y="484.0" width="405.0" height="42.0" fill="#ff00ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-3-top">
+    <title>pose-layer-3-top</title>
+    <polygon points="172,484 194,462 599,462 577,484" stroke-linejoin="round" fill="#ff00ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-3-side">
+    <title>pose-layer-3-side</title>
+    <polygon points="577,484 599,462 599,504 577,526" stroke-linejoin="round" fill="#ff00ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-3-division-0.3333333333333333">
+    <title>pose-layer-3-division-0.3333333333333333</title>
+    <polyline points="307,484 307,526" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="pose-layer-3-division-0.6666666666666666">
+    <title>pose-layer-3-division-0.6666666666666666</title>
+    <polyline points="442,484 442,526" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="pose-layer-4-front">
+    <title>pose-layer-4-front</title>
+    <rect x="196.0" y="566.0" width="380.0" height="42.0" fill="#00ffff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-4-top">
+    <title>pose-layer-4-top</title>
+    <polygon points="196,566 218,544 598,544 576,566" stroke-linejoin="round" fill="#00ffff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-4-side">
+    <title>pose-layer-4-side</title>
+    <polygon points="576,566 598,544 598,586 576,608" stroke-linejoin="round" fill="#00ffff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-4-division-0.3333333333333333">
+    <title>pose-layer-4-division-0.3333333333333333</title>
+    <polyline points="322.667,566 322.667,608" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="pose-layer-4-division-0.6666666666666666">
+    <title>pose-layer-4-division-0.6666666666666666</title>
+    <polyline points="449.333,566 449.333,608" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="pose-layer-5-front">
+    <title>pose-layer-5-front</title>
+    <rect x="220.0" y="648.0" width="355.0" height="42.0" fill="#ffff00" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-5-top">
+    <title>pose-layer-5-top</title>
+    <polygon points="220,648 242,626 597,626 575,648" stroke-linejoin="round" fill="#ffff00" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-5-side">
+    <title>pose-layer-5-side</title>
+    <polygon points="575,648 597,626 597,668 575,690" stroke-linejoin="round" fill="#ffff00" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-5-division-0.3333333333333333">
+    <title>pose-layer-5-division-0.3333333333333333</title>
+    <polyline points="338.333,648 338.333,690" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="pose-layer-5-division-0.6666666666666666">
+    <title>pose-layer-5-division-0.6666666666666666</title>
+    <polyline points="456.667,648 456.667,690" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="pose-layer-6-front">
+    <title>pose-layer-6-front</title>
+    <rect x="244.0" y="730.0" width="330.0" height="42.0" fill="#008000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-6-top">
+    <title>pose-layer-6-top</title>
+    <polygon points="244,730 266,708 596,708 574,730" stroke-linejoin="round" fill="#008000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-6-side">
+    <title>pose-layer-6-side</title>
+    <polygon points="574,730 596,708 596,750 574,772" stroke-linejoin="round" fill="#008000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-6-division-0.3333333333333333">
+    <title>pose-layer-6-division-0.3333333333333333</title>
+    <polyline points="354,730 354,772" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="pose-layer-6-division-0.6666666666666666">
+    <title>pose-layer-6-division-0.6666666666666666</title>
+    <polyline points="464,730 464,772" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="pose-layer-7-front">
+    <title>pose-layer-7-front</title>
+    <rect x="268.0" y="812.0" width="305.0" height="42.0" fill="#0000ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-7-top">
+    <title>pose-layer-7-top</title>
+    <polygon points="268,812 290,790 595,790 573,812" stroke-linejoin="round" fill="#0000ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-7-side">
+    <title>pose-layer-7-side</title>
+    <polygon points="573,812 595,790 595,832 573,854" stroke-linejoin="round" fill="#0000ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="pose-layer-7-division-0.3333333333333333">
+    <title>pose-layer-7-division-0.3333333333333333</title>
+    <polyline points="369.667,812 369.667,854" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="pose-layer-7-division-0.6666666666666666">
+    <title>pose-layer-7-division-0.6666666666666666</title>
+    <polyline points="471.333,812 471.333,854" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="source">
+    <title>source</title>
+    <ellipse cx="760.0" cy="440.0" rx="13.0" ry="13.0" fill="#000000" stroke="#ffff00" stroke-width="2.0" />
+  </g>
+  <g data-object-id="source-label">
+    <title>source-label</title>
+    <text x="710.0" y="482.0" font-family="sans-serif" font-size="15.0" fill="#ffff00">SOURCE</text>
+  </g>
+  <g data-object-id="pose-label">
+    <title>pose-label</title>
+    <text x="670.0" y="520.0" font-family="sans-serif" font-size="18.0" fill="#ffffff">6D POSE</text>
+  </g>
+  <g data-object-id="pose-values">
+    <title>pose-values</title>
+    <text x="640.0" y="550.0" font-family="sans-serif" font-size="15.0" fill="#d3d3d3">rx ry rz tx ty tz</text>
+  </g>
+  <g data-object-id="projection-plane">
+    <title>projection-plane</title>
+    <rect x="1010.0" y="240.0" width="320.0" height="500.0" fill="#000000" stroke="#00ffff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="projection-label">
+    <title>projection-label</title>
+    <text x="1040.0" y="218.0" font-family="sans-serif" font-size="16.0" fill="#00ffff">DRR / SYNTHETIC PROJECTION</text>
+  </g>
+  <g data-object-id="metric-box">
+    <title>metric-box</title>
+    <rect x="1370.0" y="380.0" width="210.0" height="100.0" fill="#000000" stroke="#ffff00" stroke-width="2.0" />
+  </g>
+  <g data-object-id="metric-label">
+    <title>metric-label</title>
+    <text x="1390.0" y="423.0" font-family="sans-serif" font-size="17.0" fill="#ffff00">1D MATCHING METRIC</text>
+  </g>
+  <g data-object-id="optimizer-box">
+    <title>optimizer-box</title>
+    <rect x="1090.0" y="800.0" width="330.0" height="100.0" fill="#000000" stroke="#00ffff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="optimizer-label">
+    <title>optimizer-label</title>
+    <text x="1120.0" y="843.0" font-family="sans-serif" font-size="17.0" fill="#00ffff">BOUNDED OPTIMIZER</text>
+  </g>
+  <g data-object-id="optimizer-note">
+    <title>optimizer-note</title>
+    <text x="1120.0" y="875.0" font-family="sans-serif" font-size="14.0" fill="#d3d3d3">candidate -> score -> next candidate</text>
+  </g>
+  <g data-object-id="fluoro-frame">
+    <title>fluoro-frame</title>
+    <rect x="1630.0" y="240.0" width="200.0" height="500.0" fill="#000000" stroke="#00ffff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="fluoro-label">
+    <title>fluoro-label</title>
+    <text x="1640.0" y="218.0" font-family="sans-serif" font-size="15.0" fill="#00ffff">FLUORO / OBSERVED TARGET</text>
+  </g>
+  <g data-object-id="metric-link">
+    <title>metric-link</title>
+    <polyline points="1330,430 1370,430" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="2.0" />
+  </g>
+  <g data-object-id="fluoro-link">
+    <title>fluoro-link</title>
+    <polyline points="1630,430 1580,430" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="2.0" />
+  </g>
+  <g data-object-id="optimizer-link">
+    <title>optimizer-link</title>
+    <polyline points="1450,480 1300,800" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="optimizer-return">
+    <title>optimizer-return</title>
+    <polyline points="1090,850 770,455" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="measurement-note">
+    <title>measurement-note</title>
+    <text x="1360.0" y="535.0" font-family="sans-serif" font-size="15.0" fill="#d3d3d3">similarity is a choice,</text>
+  </g>
+  <g data-object-id="measurement-note-2">
+    <title>measurement-note-2</title>
+    <text x="1360.0" y="562.0" font-family="sans-serif" font-size="15.0" fill="#d3d3d3">not an oracle</text>
+  </g>
+  <g data-object-id="bottom-summary">
+    <title>bottom-summary</title>
+    <text x="650.0" y="990.0" font-family="sans-serif" font-size="17.0" fill="#00ffff">candidate pose -> projection -> similarity -> bounded update</text>
+  </g>
+  <g data-object-id="scope">
+    <title>scope</title>
+    <text x="70.0" y="1032.0" font-family="sans-serif" font-size="14.0" fill="#808080">Synthetic point cloud and illustrative geometry · no clinical reconstruction · no X-ray simulator</text>
+  </g>
+  <g data-object-id="projection-ray-440-260-0">
+    <title>projection-ray-440-260-0</title>
+    <polyline points="773,440 783.862,431.75" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-260-1">
+    <title>projection-ray-440-260-1</title>
+    <polyline points="792.75,425 803.612,416.75" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-260-2">
+    <title>projection-ray-440-260-2</title>
+    <polyline points="812.5,410 823.362,401.75" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-260-3">
+    <title>projection-ray-440-260-3</title>
+    <polyline points="832.25,395 843.112,386.75" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-260-4">
+    <title>projection-ray-440-260-4</title>
+    <polyline points="852,380 862.862,371.75" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-260-5">
+    <title>projection-ray-440-260-5</title>
+    <polyline points="871.75,365 882.612,356.75" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-260-6">
+    <title>projection-ray-440-260-6</title>
+    <polyline points="891.5,350 902.362,341.75" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-260-7">
+    <title>projection-ray-440-260-7</title>
+    <polyline points="911.25,335 922.112,326.75" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-260-8">
+    <title>projection-ray-440-260-8</title>
+    <polyline points="931,320 941.862,311.75" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-260-9">
+    <title>projection-ray-440-260-9</title>
+    <polyline points="950.75,305 961.613,296.75" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-260-10">
+    <title>projection-ray-440-260-10</title>
+    <polyline points="970.5,290 981.363,281.75" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-260-11">
+    <title>projection-ray-440-260-11</title>
+    <polyline points="990.25,275 1001.11,266.75" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-720-0">
+    <title>projection-ray-440-720-0</title>
+    <polyline points="773,440 783.862,452.833" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-720-1">
+    <title>projection-ray-440-720-1</title>
+    <polyline points="792.75,463.333 803.612,476.167" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-720-2">
+    <title>projection-ray-440-720-2</title>
+    <polyline points="812.5,486.667 823.362,499.5" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-720-3">
+    <title>projection-ray-440-720-3</title>
+    <polyline points="832.25,510 843.112,522.833" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-720-4">
+    <title>projection-ray-440-720-4</title>
+    <polyline points="852,533.333 862.862,546.167" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-720-5">
+    <title>projection-ray-440-720-5</title>
+    <polyline points="871.75,556.667 882.612,569.5" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-720-6">
+    <title>projection-ray-440-720-6</title>
+    <polyline points="891.5,580 902.362,592.833" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-720-7">
+    <title>projection-ray-440-720-7</title>
+    <polyline points="911.25,603.333 922.112,616.167" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-720-8">
+    <title>projection-ray-440-720-8</title>
+    <polyline points="931,626.667 941.862,639.5" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-720-9">
+    <title>projection-ray-440-720-9</title>
+    <polyline points="950.75,650 961.613,662.833" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-720-10">
+    <title>projection-ray-440-720-10</title>
+    <polyline points="970.5,673.333 981.363,686.167" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="projection-ray-440-720-11">
+    <title>projection-ray-440-720-11</title>
+    <polyline points="990.25,696.667 1001.11,709.5" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="cloud-0">
+    <title>cloud-0</title>
+    <ellipse cx="1185.0" cy="490.0" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-1">
+    <title>cloud-1</title>
+    <ellipse cx="1147.750835173525" cy="516.0727191258266" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-2">
+    <title>cloud-2</title>
+    <ellipse cx="1167.34176048349" cy="445.972797747492" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-3">
+    <title>cloud-3</title>
+    <ellipse cx="1183.3618156259693" cy="529.5170659817303" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-4">
+    <title>cloud-4</title>
+    <ellipse cx="1131.9417615644106" cy="480.35156410577457" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-5">
+    <title>cloud-5</title>
+    <ellipse cx="1196.1888117903868" cy="457.2643810045498" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-6">
+    <title>cloud-6</title>
+    <ellipse cx="1154.5231119807613" cy="554.3062770062014" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-7">
+    <title>cloud-7</title>
+    <ellipse cx="1144.83531766879" cy="425.9373165138583" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-8">
+    <title>cloud-8</title>
+    <ellipse cx="1209.2822896838513" cy="516.6835049301355" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-9">
+    <title>cloud-9</title>
+    <ellipse cx="1118.2875370737502" cy="521.815672310245" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-10">
+    <title>cloud-10</title>
+    <ellipse cx="1187.857409018655" cy="409.4058235688459" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-11">
+    <title>cloud-11</title>
+    <ellipse cx="1182.1553786583581" cy="580.2451832716209" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-12">
+    <title>cloud-12</title>
+    <ellipse cx="1112.4693194078395" cy="439.7697048086801" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-13">
+    <title>cloud-13</title>
+    <ellipse cx="1227.611893345092" cy="467.2876689656091" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-14">
+    <title>cloud-14</title>
+    <ellipse cx="1126.178763533068" cy="581.1117031657492" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-15">
+    <title>cloud-15</title>
+    <ellipse cx="1155.88951002675" cy="373.99671313786223" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-16">
+    <title>cloud-16</title>
+    <ellipse cx="1221.802496805306" cy="568.9907873306173" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-17">
+    <title>cloud-17</title>
+    <ellipse cx="1087.38776187622" cy="495.2956910273511" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-18">
+    <title>cloud-18</title>
+    <ellipse cx="1222.465813231027" cy="395.6428367968748" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-19">
+    <title>cloud-19</title>
+    <ellipse cx="1161.0984725125377" cy="629.2173128498086" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-20">
+    <title>cloud-20</title>
+    <ellipse cx="1108.7091251210466" cy="378.6987860859051" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-21">
+    <title>cloud-21</title>
+    <ellipse cx="1255.435083911901" cy="510.07705584466044" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-22">
+    <title>cloud-22</title>
+    <ellipse cx="1087.3116216800147" cy="579.1883577224013" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-23">
+    <title>cloud-23</title>
+    <ellipse cx="1186.517012806475" cy="332.1852893014528" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-24">
+    <title>cloud-24</title>
+    <ellipse cx="1215.4283458893372" cy="635.2069095190966" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-25">
+    <title>cloud-25</title>
+    <ellipse cx="1065.137382104561" cy="437.43281692624" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-26">
+    <title>cloud-26</title>
+    <ellipse cx="1263.2359690985968" cy="415.11060951949156" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="cloud-27">
+    <title>cloud-27</title>
+    <ellipse cx="1121.9128256468261" cy="659.8750906557547" rx="4.0" ry="4.0" fill="#ffffff" stroke="#ffffff" stroke-width="0.0" />
+  </g>
+  <g data-object-id="target-cloud-0">
+    <title>target-cloud-0</title>
+    <ellipse cx="1745.0" cy="490.0" rx="3.0" ry="3.0" fill="#d3d3d3" stroke="#d3d3d3" stroke-width="0.0" />
+  </g>
+  <g data-object-id="target-cloud-1">
+    <title>target-cloud-1</title>
+    <ellipse cx="1716.4815705685642" cy="512.2911797106303" rx="3.0" ry="3.0" fill="#d3d3d3" stroke="#d3d3d3" stroke-width="0.0" />
+  </g>
+  <g data-object-id="target-cloud-2">
+    <title>target-cloud-2</title>
+    <ellipse cx="1731.894224035534" cy="451.1493294062717" rx="3.0" ry="3.0" fill="#d3d3d3" stroke="#d3d3d3" stroke-width="0.0" />
+  </g>
+  <g data-object-id="target-cloud-3">
+    <title>target-cloud-3</title>
+    <ellipse cx="1745.2109715244715" cy="525.7120338081263" rx="3.0" ry="3.0" fill="#d3d3d3" stroke="#d3d3d3" stroke-width="0.0" />
+  </g>
+  <g data-object-id="target-cloud-4">
+    <title>target-cloud-4</title>
+    <ellipse cx="1702.0997845827296" cy="481.11672053065513" rx="3.0" ry="3.0" fill="#d3d3d3" stroke="#d3d3d3" stroke-width="0.0" />
+  </g>
+  <g data-object-id="target-cloud-5">
+    <title>target-cloud-5</title>
+    <ellipse cx="1756.7189176690592" cy="459.4065010002995" rx="3.0" ry="3.0" fill="#d3d3d3" stroke="#d3d3d3" stroke-width="0.0" />
+  </g>
+  <g data-object-id="target-cloud-6">
+    <title>target-cloud-6</title>
+    <ellipse cx="1720.913849328448" cy="550.840049685674" rx="3.0" ry="3.0" fill="#d3d3d3" stroke="#d3d3d3" stroke-width="0.0" />
+  </g>
+  <g data-object-id="target-cloud-7">
+    <title>target-cloud-7</title>
+    <ellipse cx="1712.3318973859873" cy="428.7660583820775" rx="3.0" ry="3.0" fill="#d3d3d3" stroke="#d3d3d3" stroke-width="0.0" />
+  </g>
+  <g data-object-id="target-cloud-8">
+    <title>target-cloud-8</title>
+    <ellipse cx="1769.1383873468383" cy="515.7278973155577" rx="3.0" ry="3.0" fill="#d3d3d3" stroke="#d3d3d3" stroke-width="0.0" />
+  </g>
+  <g data-object-id="target-cloud-9">
+    <title>target-cloud-9</title>
+    <ellipse cx="1688.4044499737988" cy="520.9060690864699" rx="3.0" ry="3.0" fill="#d3d3d3" stroke="#d3d3d3" stroke-width="0.0" />
+  </g>
+  <g data-object-id="target-cloud-10">
+    <title>target-cloud-10</title>
+    <ellipse cx="1750.485889760649" cy="411.20111828766153" rx="3.0" ry="3.0" fill="#d3d3d3" stroke="#d3d3d3" stroke-width="0.0" />
+  </g>
+  <g data-object-id="target-cloud-11">
+    <title>target-cloud-11</title>
+    <ellipse cx="1745.4629996629853" cy="578.7372631886343" rx="3.0" ry="3.0" fill="#d3d3d3" stroke="#d3d3d3" stroke-width="0.0" />
+  </g>
+  <g data-object-id="target-cloud-12">
+    <title>target-cloud-12</title>
+    <ellipse cx="1682.4133834635722" cy="440.3606494579898" rx="3.0" ry="3.0" fill="#d3d3d3" stroke="#d3d3d3" stroke-width="0.0" />
+  </g>
+  <g data-object-id="target-cloud-13">
+    <title>target-cloud-13</title>
+    <ellipse cx="1786.9727534616436" cy="467.4544599506679" rx="3.0" ry="3.0" fill="#d3d3d3" stroke="#d3d3d3" stroke-width="0.0" />
+  </g>
+  <g data-object-id="target-cloud-14">
+    <title>target-cloud-14</title>
+    <ellipse cx="1694.5336852030498" cy="580.8049297544168" rx="3.0" ry="3.0" fill="#d3d3d3" stroke="#d3d3d3" stroke-width="0.0" />
+  </g>
+  <g data-object-id="target-cloud-15">
+    <title>target-cloud-15</title>
+    <ellipse cx="1721.6468051630654" cy="373.970149527406" rx="3.0" ry="3.0" fill="#d3d3d3" stroke="#d3d3d3" stroke-width="0.0" />
+  </g>
+  <g data-object-id="target-cloud-16">
+    <title>target-cloud-16</title>
+    <ellipse cx="1782.2510146894963" cy="569.2669788947104" rx="3.0" ry="3.0" fill="#d3d3d3" stroke="#d3d3d3" stroke-width="0.0" />
+  </g>
+  <g data-object-id="target-cloud-17">
+    <title>target-cloud-17</title>
+    <ellipse cx="1658.3945327961449" cy="495.3299995794614" rx="3.0" ry="3.0" fill="#d3d3d3" stroke="#d3d3d3" stroke-width="0.0" />
+  </g>
+</svg>

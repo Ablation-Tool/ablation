@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "purpose": "PoC verification summary for Zoe and companion packages",
+  "zoe_native": {"tests": 25, "passed": 25, "skipped": 0, "result": "passed under native X11"},
+  "zoe_headless": {"tests": 25, "passed": 21, "native_only_skipped": 4, "result": "21 passed; 4 native-only tests skipped"},
+  "brain_gem_headless": {"tests": 16, "passed": 13, "native_only_skipped": 3, "result": "13 passed; 3 native-only tests skipped"},
+  "broader_gem_native": {"tests": 20, "passed": 20, "skipped": 0, "result": "passed under native X11"},
+  "research_conformance": {"checks": 17, "passed": 17, "result": "passed"},
+  "original_model_comparison": {"cases": 16, "result": "all saved distributions and metrics independently verified"},
+  "biobert_optimization": {"cases": 120, "candidate_rules": 54, "original_tau_0.05": {"auroc": 0.7736572890025576, "auprc": 0.7978260869565218}, "adaptive": {"auroc": 0.7007672634271099, "auprc": 0.6599405468584421}, "result": "original fixed rule transferred better"},
+  "cerotto": {"normal_suite": {"tests": 65, "passed": 64, "skipped": 1, "reason": "EWF tools unavailable"}, "sanitizer_suite": {"tests": 65, "passed": 64, "skipped": 1, "reason": "EWF tools unavailable"}},
+  "pala": {"rust_unit_tests": {"passed": 25, "failed": 0}, "integration": {"passed": 125, "skipped": 2, "reason": "optional zstandard module and synthetic fixture"}, "result": "format, recovery, lint, release, and integration checks passed"},
+  "qualia_guide": {"source": "Balduzzi & Tononi (2009)", "repertoires": 16, "subset_links": 32, "ordered_q_edges": 24, "silent_and_whole_vs_product_bits": 0.2516291673878228, "accessible_q_volume": {"delta_at_tau_0.20": -1, "delta_at_tau_0.30": 3, "ei_bits": 0.4150374992788437, "strict_equality_at_one_third": "empty set", "past_accessible_at_tau_0.20": 3, "future_accessible_at_tau_0.05": 3, "finite_grid_max_error_below": 0.0001}, "result": "six lens choices including overview, exact toy comparisons, native controls, SVG/PNG/GEM exports, JSON evidence, and unchanged notebook observations passed", "scope": "proposed threshold annotation of explicit causal repertoires; complete continuous filtrations are lossless and finite sweeps approximate; not a general Phi/gamma calculator or consciousness measurement"},
+  "interactive_browser": {"paths": 10, "feedback_paths": 3, "particles": 23, "external_requests": 0, "browser_errors": 0, "result": "desktop, mobile, reduced motion, and field details passed"},
+  "packaging": {"brain-gem": "wheel, sdist, installed notebook, and packaged HELEN asset passed", "zoe": "wheel, sdist, installed notebook, packaged HELEN asset, and all 17 conformance checks passed"},
+  "evidence_boundaries": [
+    "Accessible volume measures forecast breadth, not correctness or human surprise.",
+    "HOP remains a rejected deterministic baseline.",
+    "Nightingale per-onset distributions are aggregate-only in the saved evidence pack.",
+    "Multi-horizon continuation results are exact toy Markov enumerations, not a real language-model benchmark.",
+    "Posteriors are conditional on user-supplied likelihoods and are not objective truth scores.",
+    "The memory hash chain provides tamper evidence, not authentication.",
+    "Cerotto-specific bridge execution was not separately revalidated as part of Zoe.",
+    "Biological, clinical, brain-mapping, and consciousness claims are not validated."
+  ]
+}

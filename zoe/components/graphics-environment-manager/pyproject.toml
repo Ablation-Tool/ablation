@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "graphics-environment-manager"
+version = "0.3.0"
+description = "The standalone Graphics Environment Manager native workbench and reusable agent environment"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE", "NOTICE", "UPSTREAM-NOTICE", "licenses/*.txt"]
+dependencies = [
+    "pyte>=0.8.1,<1",
+    "tkinterdnd2==0.7.0",
+    "pywinpty>=2,<3; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+drop = ["tkinterdnd2==0.7.0"]
+windows = ["pywinpty>=2,<3; sys_platform == 'win32'"]
+halo = ["numpy>=2.3.5,<3"]
+predict = [
+    "numpy>=2.3.5,<3",
+    "onnxruntime>=1.31.1,<2",
+    "tokenizers>=0.23.3,<1",
+    "huggingface-hub>=1.33.0,<2",
+]
+
+[project.scripts]
+gem = "gem.cli:main"
+metrix = "metrix.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["gem*", "metrix*"]
+
+[tool.setuptools.package-data]
+gem = ["assets/*.png", "assets/*.ico", "assets/*.icns", "assets/*.json.gz", "icons/*.svg", "icons/*.png", "icons/*.ico", "icons/*.icns"]
+metrix = ["templates/*.html", "gui/*.html", "gui/*.css", "gui/*.js"]

@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "identity": "ZOE is allgems",
+  "repository": "https://github.com/Ablation-Tool/zoe",
+  "revision": "8ac90bb7364d27eb4814498c93a2b7c00ef109f6",
+  "import": "git archive",
+  "host": {
+    "repository": "https://github.com/Ablation-Tool/ablation",
+    "components": ["ablation", "gem-lab"],
+    "duplicate_path_excluded": "components/ablation",
+    "detection": "The host checkout is used when its component anchors exist; ZOE_ABLATION_ROOT overrides it."
+  }
+}

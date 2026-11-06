@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "instrument": "accessible volume of a full-vocabulary token distribution",
+  "model": "microsoft/codebert-base",
+  "model_revision": "3b0952feddeffad0063f274080e3c23d75e7eb39",
+  "requested_revision": "3b0952feddeffad0063f274080e3c23d75e7eb39",
+  "runtime": {
+    "torch": "2.14.1+cu130",
+    "transformers": "4.56.2"
+  },
+  "prediction_style": "masked",
+  "text": "def get_value():\n    return",
+  "sequence_length": 12,
+  "target_position": 10,
+  "target_token_id": 671,
+  "target_token": " return",
+  "vocabulary_size": 50265,
+  "probability_sum": 1.0000000000000002,
+  "threshold_sweep": [
+    {
+      "tau": 0.02,
+      "accessible_volume": 4,
+      "normalized_accessible_volume": 7.957823535263105e-05
+    },
+    {
+      "tau": 0.05,
+      "accessible_volume": 3,
+      "normalized_accessible_volume": 5.968367651447329e-05
+    },
+    {
+      "tau": 0.1,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 1.9894558838157762e-05
+    },
+    {
+      "tau": 0.15,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 1.9894558838157762e-05
+    },
+    {
+      "tau": 0.3,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 1.9894558838157762e-05
+    },
+    {
+      "tau": 0.5,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    }
+  ],
+  "entropy_bits": 5.1174560604732235,
+  "top_10_probability_mass": 0.6976129127300317,
+  "target_probability": 6.190185267123785e-08,
+  "target_rank": 20066,
+  "top_tokens": [
+    {
+      "token_id": 5647,
+      "token": " partly",
+      "probability": 0.4567807308779178
+    },
+    {
+      "token_id": 49688,
+      "token": "^{",
+      "probability": 0.07640520177448894
+    },
+    {
+      "token_id": 44319,
+      "token": " Judgment",
+      "probability": 0.05525779482936798
+    },
+    {
+      "token_id": 19616,
+      "token": "esse",
+      "probability": 0.020088502011988623
+    },
+    {
+      "token_id": 36828,
+      "token": "imony",
+      "probability": 0.01834169015130085
+    },
+    {
+      "token_id": 10437,
+      "token": " evaluation",
+      "probability": 0.017410701059987134
+    },
+    {
+      "token_id": 9031,
+      "token": " sem",
+      "probability": 0.016930417320112235
+    },
+    {
+      "token_id": 8531,
+      "token": " partially",
+      "probability": 0.013888701275827373
+    },
+    {
+      "token_id": 43533,
+      "token": " Slightly",
+      "probability": 0.012633691943500119
+    },
+    {
+      "token_id": 38024,
+      "token": "uctions",
+      "probability": 0.009875481485540523
+    }
+  ],
+  "checks": {
+    "repeated_probabilities_identical": true,
+    "target_replaced_with_mask": true,
+    "mask_count": 1
+  },
+  "probability_values_sha256": "36a67671a0bf28237b5797d69ac64b3f51b6b5363be7cba405951a1cb655af06",
+  "input_ids_sha256": "4a945e24a7a9948c45816f55345c9ac123ab454c7f8bb9c31a7ff907bf5a04ce",
+  "original_input_ids_sha256": "ae50384a1b89bc53e391b4ff1d19c272faa636519ed61ff1d7f1538dfc06cd66",
+  "scope": [
+    "One microsoft/codebert-base distribution for the final non-special token of the recorded text.",
+    "The target is replaced by a mask token.",
+    "This is a token-level measurement, not a model-quality, security, or action-level benchmark."
+  ]
+}

@@ -1,0 +1,15 @@
+A(S) = vol({a ∈ O | P(a | h_T(S)) > τ})
+
+
+A(Q) = vol({p ∈ C | R(p | h(Q, S_p)) > τ})
+
+
+
+h_T(S) = Attn^L ∘ ... ∘ Attn¹(e(s₁), ..., e(s_T))
+
+
+h(Q, S_p) = f_rank ∘ f_personal ∘ f_trust ∘ f_perf ∘ f_relevance(e(Q), e(S_p))
+
+
+∂A/∂s_i ≠ 0 ∀ i ∈ [1,T]
+

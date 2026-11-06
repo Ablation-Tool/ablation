@@ -1,0 +1,703 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[english]{babel}
+\usepackage[a4paper,top=25mm,bottom=25mm,left=25mm,right=25mm,headheight=14pt]{geometry}
+\usepackage[protrusion=true,expansion=false]{microtype}
+\usepackage{parskip}
+\emergencystretch=3em
+\widowpenalty=10000
+\clubpenalty=10000
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Accessible Volume Beyond the Next Token}
+\fancyhead[R]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+\usepackage[colorlinks=true,linkcolor=blue!60!black,urlcolor=blue!60!black,citecolor=blue!60!black,pdftitle={Accessible Volume Beyond the Next Token: Temporal Forecast Breadth, Reversal, and Multi-Horizon Continuations},pdfauthor={Nicholas Michael Kloster}]{hyperref}
+\usepackage{listings}
+\usepackage{embedfile}
+\embedfilesetup{stringmethod=escape}
+\lstset{basicstyle=\ttfamily\scriptsize,breaklines=true,breakatwhitespace=false,columns=fullflexible,keepspaces=true,showstringspaces=false}
+
+\title{\textbf{Accessible Volume Beyond the Next Token}\\[5pt]
+\large Temporal Forecast Breadth, Reversal, and Multi-Horizon Continuations}
+\author{Nicholas Michael Kloster}
+\date{November 2026}
+
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+
+\noindent\textbf{Sole authorship and research credit:} All research, the accessible-volume equation and its development, the experiments, and this paper are solely the work of \textbf{Nicholas Michael Kloster}. No other person is a creator, contributor, or coauthor. The original accessible-volume equation was created on \textbf{March 6, 2026}.
+
+\begin{abstract}
+Accessible volume counts the alternatives whose predicted probabilities strictly exceed a chosen threshold. This companion paper extends that measurement from next-token distributions to musical onset forecasts and multi-token continuations. Three rhythm experiments separate forecast breadth from correctness. In 514 human-performed drum performances with disjoint recording-session splits, a forward model achieved 17.33\% top-1 accuracy, direct reversal transfer achieved 16.01\%, and a matched model trained on reversed performances achieved 17.06\%. Their mean accessible volumes over the threshold sweep were 1.886, 1.885, and 1.886. Thus reversed rhythms were learnable, while nearly unchanged forecast breadth did not identify changes in correctness or log-loss. A second real-MIDI study found the broadest and least accurate forecasts in jazz under the tested categorical model. A deterministic Harmonic Osculating Predictor was rejected: its 11.3\% one-step top-1 accuracy trailed both linear extrapolation at 41.3\% and the language model at 46.6\%. We then define multi-horizon accessible volume over complete continuations, including its complement and exponential enumeration cost. This formulation measures how many multi-step futures remain plausible under a model; it does not guarantee their prediction. Volume-band steering is an implemented experimental control, not yet evidence of improved creativity, quality, reasoning, safety, or human surprise.
+\end{abstract}
+
+\section{Introduction}
+An observed token or musical onset records what happened. It does not completely describe the forecast that preceded it. Two contexts can produce the same observation while assigning very different probabilities to the alternatives. Accessible volume was introduced to make that distinction measurable by counting the alternatives above a probability threshold \cite{kloster2026significance}.
+
+This paper investigates what happens when the same measurement moves beyond one token. The investigation has four parts. First, a categorical next-onset model supplies probabilities over possible musical delays, allowing accessible volume to describe rhythmic forecasts. Second, temporal reflection tests whether reversing a sequence inherently makes it less predictable. Third, a geometric hidden-state predictor is evaluated rather than assumed to work. Fourth, accessible volume is defined over complete multi-token continuations, making the computational boundary explicit.
+
+The central result is deliberately limited but useful: \textbf{accessible volume measures forecast breadth under a specified model, context, representation, and threshold; it does not measure correctness by itself}. The experiments support this statement with real and synthetic data. They do not establish a universal theory of time, cognition, creativity, or future behavior.
+
+\section{Background and evidence boundaries}
+\subsection{Original accessible volume}
+Let $S$ be an input context, $\mathcal{O}$ a finite output vocabulary, and $P(a\mid h_T(S))$ the probability assigned to alternative $a$. For threshold $\tau$, accessible volume is
+\begin{equation}
+A_\tau(S)=\sum_{a\in\mathcal{O}}\mathbf{1}\!\left[P(a\mid h_T(S))>\tau\right].
+\label{eq:original-volume}
+\end{equation}
+The comparison is strict: alternatives exactly at $\tau$ are excluded. A small count describes a concentrated above-threshold forecast; a large count describes a broader one. The threshold sweep is generally more informative than one count because it shows where alternatives disappear as the probability bar rises.
+
+The measure is not entropy, maximum probability, probability mass, or accuracy. It can accompany those measurements, but cannot replace them. The original paper presents token-level measurements across multiple model architectures and a held-out BioBERT study \cite{kloster2026significance}; the present paper does not repeat those experiments.
+
+\subsection{Four evidence levels}
+This paper distinguishes four kinds of statement:
+\begin{enumerate}[nosep]
+  \item \textbf{Measured:} synthetic and real-MIDI rhythm results, calibration, temporal reversal, geometric residuals, and HOP accuracy.
+  \item \textbf{Formulated:} the multi-horizon joint distribution, accessible volume, complement, and enumeration bound.
+  \item \textbf{Implemented:} Ablation + GEM integration, evidence preservation, native Procrustes landmarks, independent NPZ keys, and volume-band controls.
+  \item \textbf{Proposed:} empirical multi-horizon benchmarks, human-surprise correlations, and outcome-validated steering.
+\end{enumerate}
+An implemented control is not automatically a validated improvement. A mathematical extension is not automatically an experimental result. These distinctions govern every conclusion below.
+
+\section{Temporal forecasts and accessible volume}
+\subsection{Next-onset distributions}
+Let $H_i$ be the musical history before event $i$. Define a finite vocabulary of possible delays until the next onset:
+\begin{equation}
+\mathcal{O}_\delta=\{\delta,2\delta,3\delta,\ldots,M\delta\},
+\end{equation}
+where $\delta$ can be a fixed duration or a tempo-relative subdivision. A timing model supplies a complete categorical distribution
+\begin{equation}
+p_i(k)=P(\text{next onset occurs after }k\delta\mid H_i),\qquad k=1,\ldots,M.
+\end{equation}
+Accessible volume then applies without changing its strict threshold rule:
+\begin{equation}
+A_{\tau,i}(H_i)=\sum_{k=1}^{M}\mathbf{1}\!\left[p_i(k)>\tau\right].
+\label{eq:onset-volume}
+\end{equation}
+A small value means that few onset delays remain above the cutoff; a large value means that many remain. If the delays have probabilities $0.70,0.20,0.08,0.02$, then $A_{0.05,i}=3$.
+
+A tempo-independent representation normalizes intervals by seconds per beat $B$:
+\begin{equation}
+r_i=\frac{t_{i+1}-t_i}{B}.
+\end{equation}
+The model can instead predict categorical bins over $r_i$. The result remains a measurement of the model's distribution, not an intrinsic property of the performance. If a model predicts note identities rather than onset delays, accessible volume describes note-choice breadth rather than timing breadth.
+
+\subsection{Timing error and momentum}
+Forecast breadth must be accompanied by observed error. For predicted onset time $\hat t_i$ and actual onset time $t_i$,
+\begin{equation}
+e_i=t_i-\hat t_i,\qquad
+E=\sqrt{\frac{1}{n}\sum_{i=1}^{n}(t_i-\hat t_i)^2}.
+\end{equation}
+Positive error means that the event arrived later than predicted; negative error means that it arrived earlier. RMSE summarizes magnitude, not forecast breadth.
+
+Accessible Momentum records the change in counts between observations:
+\begin{equation}
+M_{\tau,i}=A_{\tau,i}(H_i)-A_{\tau,i-1}(H_{i-1}).
+\end{equation}
+Zero momentum means only that two counts are equal. It does not imply identical probabilities or identical accessible-set membership.
+
+A present-state record can retain separate quantities without combining incompatible units:
+\begin{equation}
+\mathcal{S}_i=(A_{\tau,i}(H_i),M_{\tau,i},e_i).
+\end{equation}
+A separate policy could select a candidate action using
+\begin{equation}
+a_{i+1}=\pi(\mathcal{S}_i,\text{candidates}_i,\text{goal},\text{constraints}).
+\end{equation}
+Accessible volume supplies neither a direction nor a reward by itself. Candidate semantics, goals, constraints, and observed outcomes remain necessary. This feedback formulation is a control hypothesis, not a result validated by the rhythm experiments.
+
+\section{Geometric alignment and temporal reflection}
+Procrustes-style alignment removes simple geometric differences before measuring structural dissimilarity. For corresponding onset times $p_i$ and $q_i$ in one dimension,
+\begin{equation}
+q_i\approx ap_i+b,\qquad a>0,
+\end{equation}
+where $a$ accounts for tempo scaling and $b$ for starting position. Choosing $a$ and $b$ to minimize squared residuals gives
+\begin{equation}
+D(p,q)=\sqrt{\frac{1}{n}\sum_{i=1}^{n}\left(q_i-(ap_i+b)\right)^2}.
+\label{eq:procrustes-distance}
+\end{equation}
+A zero residual means that the complete onset vectors match after this restricted alignment. It does not mean that two performances are musically or semantically identical. At least three onsets are needed for a nontrivial structural comparison: two distinct onset pairs can always be aligned by scaling and translation.
+
+Temporal reflection adds a separate transformation. For sequence length $L$,
+\begin{equation}
+p'_i=L-p_{n+1-i},
+\end{equation}
+followed by reordering. The corresponding residual is
+\begin{equation}
+D_{\mathrm{retrograde}}=D(p,p').
+\end{equation}
+This measures geometric difference after alignment, not uncertainty. Reversal changes the evidence available before each new event, so prediction quality must be evaluated independently.
+
+The Groove implementation centers both cumulative-onset vectors, fits a nonnegative scale and translation, and also reports the RMS residual divided by the target's centered RMS. The nonnegative implementation records degenerate scales rather than silently excluding them. Equation~\ref{eq:procrustes-distance} describes positive nondegenerate alignment; the experiment observed no degenerate scales.
+
+\section{Synthetic rhythm experiment}
+\subsection{Method}
+The first experiment used eight synthetic motifs with 60 training and 20 held-out variations per motif. Tempo varied from 65 to 150 beats per minute and intervals received Gaussian jitter with standard deviation 0.025 beats. The held-out variations used the same underlying motifs, so this was not a test of unseen-motif generalization.
+
+The pipeline was:
+\begin{enumerate}[nosep]
+  \item normalize intervals by seconds per beat;
+  \item center and unit-scale trailing four-interval onset vectors;
+  \item fit eight $k$-means context clusters on training windows only;
+  \item train a hierarchically smoothed categorical predictor using the context cluster and previous two interval bins;
+  \item compute accessible volume over 100 thresholds from 0.005 to 0.5;
+  \item evaluate held-out forward and reversed sequences under the forward-trained model.
+\end{enumerate}
+The target vocabulary contained eight interval categories. Smoothing used $\alpha=4$. A separate deterministic linear-extrapolation baseline supplied no probability distribution and therefore no accessible-volume measurement.
+
+\subsection{Results}
+\begin{table}[htbp]
+\centering
+\caption{Synthetic next-onset results. Mean $A$ averages over the 100-threshold sweep.}
+\label{tab:synthetic}
+\begin{tabular}{lrrrrr}
+\toprule
+Condition & Top-1 & Log-loss & Mean max $p$ & Mean $A$ & Sweep area \\
+\midrule
+Forward & \textbf{84.4\%} & \textbf{0.339} & 0.842 & 1.31 & 0.647 \\
+Retrograde & 59.0\% & 2.899 & 0.839 & 1.31 & 0.649 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:synthetic} exposes the central measurement problem. Reversal reduced top-1 accuracy by 25.4 percentage points and greatly increased log-loss, yet mean accessible volume was unchanged to two decimal places. Mean maximum probability also remained almost identical. The reversed predictor was therefore often confidently wrong: concentrated or broad forecasts alone did not identify forecast correctness.
+
+The deterministic linear baseline achieved 37.0\% forward and 32.8\% retrograde accuracy. It is retained only as a deterministic comparison; assigning it an accessible volume would require an independently calibrated distribution over alternatives.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.88\textwidth]{evidence/rhythm-hop/rhythm-accessible-volume.png}
+\caption{Synthetic forward and retrograde accessible-volume threshold sweeps. Similar breadth coexists with substantially different accuracy and log-loss.}
+\label{fig:synthetic-sweep}
+\end{figure}
+
+\section{Magenta Groove human-drumming experiment}
+\subsection{Data and split}
+The real-MIDI follow-up used the Magenta Groove MIDI Dataset v1.0.0, licensed CC BY 4.0 \cite{magentagroove}. The saved source manifest covers 514 usable 4/4 performances. Grouped splitting by recording session produced 396 training and 118 held-out performances with zero session overlap. The official split was not used because 17 recording sessions crossed its train/test boundaries. Splitting preceded context clustering and window training.
+
+Only drum-channel onsets were used. Onsets separated by at most 0.02 quarter-note beats were merged. Intervals remained in MIDI beat units, so tempo cancels. Targets were quantized at 48 bins per beat with a maximum interval of four beats, producing 192 categories. Each context contained four trailing intervals and one of 16 training-fitted clusters. The categorical predictor used the previous two interval bins and hierarchical smoothing with $\alpha=4$.
+
+Training produced 218,033 windows. Every condition evaluated 121,392 held-out predictions. Three conditions were distinguished:
+\begin{itemize}[nosep]
+  \item \textbf{Forward:} forward training and forward evaluation.
+  \item \textbf{Reversal transfer:} the forward model evaluated on reversed held-out performances using forward-fitted context clusters.
+  \item \textbf{Backward matched:} the same architecture, including context clustering and count tables, trained on reversed training performances and evaluated on reversed test performances.
+\end{itemize}
+The backward-matched condition is essential. Reversal transfer tests compatibility with a forward model; backward matching tests whether reversed structure can be learned by the same model class.
+
+\subsection{Results}
+\begin{table}[htbp]
+\centering
+\caption{Magenta Groove results over 121,392 predictions per condition.}
+\label{tab:groove}
+{\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrrrrr}
+\toprule
+Condition & Top-1 & Top-5 & Log-loss & ECE & Mean $A$ & Sweep area \\
+\midrule
+Forward & \textbf{17.33\%} & \textbf{56.12\%} & 3.194 & 0.060 & 1.886 & 0.899 \\
+Reversal transfer & 16.01\% & 52.99\% & 3.333 & 0.072 & 1.885 & 0.898 \\
+Backward matched & 17.06\% & 55.52\% & \textbf{3.183} & 0.060 & 1.886 & 0.899 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+The matched backward model nearly recovered forward top-1 and top-5 performance, with numerically slightly lower log-loss. No significance test is claimed for that small difference. Direct reversal transfer was worse than both matched conditions. The principal reversal penalty in this experiment was therefore a model-transfer effect, not evidence that retrograde rhythms are intrinsically unpredictable.
+
+Mean maximum probabilities were 0.233 forward, 0.232 for reversal transfer, and 0.230 for backward matching. Mean accessible volume and sweep area changed only slightly while accuracy and log-loss varied. Once again, \textbf{forecast breadth did not identify forecast correctness}. Low top-1 accuracy is also expected for fine-grained human timing across 192 categories and should not be compared directly with the eight-category synthetic task.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.94\textwidth]{evidence/rhythm-midi/accessible-volume.png}
+\caption{Groove accessible-volume sweeps for forward, reversal-transfer, and backward-matched conditions.}
+\label{fig:groove-sweep}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{evidence/rhythm-midi/predictability-map.png}
+\caption{Accessible volume, confidence, and incorrect predictions over the first 256 beats of a held-out Groove performance. The map deliberately displays breadth and correctness together.}
+\label{fig:groove-map}
+\end{figure}
+
+The complete probability arrays, targets, sequence indices, and target positions are preserved independently for each condition in \texttt{predictions.npz}. Every headline metric, fixed-threshold count, source-file hash, artifact hash, and the disjoint session split was independently recomputed from the saved arrays. Two complete runs produced identical numerical results.
+
+\subsection{Retrograde geometry}
+Procrustes alignment was also applied to each held-out performance and its reversed interval sequence. Across 118 performances, the mean RMS residual was 5.633 beats, the median 2.557 beats, and the mean normalized residual 0.06252. No degenerate scale occurred. These residuals describe geometric dissimilarity after tempo and translation alignment; they do not explain prediction correctness and should not be substituted for the forecast metrics.
+
+\section{Nightingale classical, jazz, and folk experiment}
+\subsection{Method}
+A second real-MIDI experiment used classical, jazz, and folk files from the Nightingale MIDI data repository \cite{nightingale}. There were 140 usable files per genre. After deterministic shuffling, 100 files per genre were used for training and 40 for testing, producing 420 usable files in total. Unlike Groove, this was a file-level split and did not include a separately trained backward-matched condition.
+
+Parsing merged simultaneous note onsets, divided ticks by ticks per beat, retained the longest segment with at least 64 positive intervals, and used at most 512 intervals. Gaps longer than eight beats separated segments. Thirteen interval categories, 24 context clusters, four trailing intervals, and hierarchical smoothing with $\alpha=4$ defined the shared categorical model. Training used 139,839 onset positions across all three genres. Evaluation used 57,113 predictions per direction. The same forward-trained model was evaluated on forward and reversed test sequences.
+
+\subsection{Results}
+\begin{table}[htbp]
+\centering
+\caption{Nightingale results. F/R denotes forward/retrograde; $N$ is per direction.}
+\label{tab:nightingale}
+{\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{lrrrrrr}
+\toprule
+Genre & $N$ & Top-1 F/R & Log-loss F/R & $A_{0.1}$ F/R & Persistence F & ECE F \\
+\midrule
+Classical & 17,276 & 68.3\% / 67.9\% & 0.976 / 1.024 & 1.91 / 1.91 & 66.7\% & 0.064 \\
+Jazz & 20,075 & 49.5\% / 47.1\% & 1.474 / 1.528 & 2.69 / 2.64 & 39.3\% & 0.049 \\
+Folk & 19,762 & 61.9\% / 61.4\% & 1.125 / 1.143 & 2.21 / 2.22 & 54.8\% & 0.031 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+Under this model and quantization, jazz had the lowest top-1 accuracy, highest log-loss, and broadest forecasts. Classical had the narrowest and most accurate forecasts. The categorical predictor exceeded persistence in every genre, most substantially in jazz and folk. Deterministic linear extrapolation was less accurate and supplied no distribution for accessible volume.
+
+Retrograde changes were small in this transfer setup. This does not contradict the larger Groove transfer penalty: the datasets, preprocessing, vocabularies, and context models differ. Nor does it replace the Groove backward-matched control. The defensible conclusion across both datasets is that reversal does not possess a universal predictability direction independent of model and training procedure.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{evidence/rhythm-lab/real_midi_accessible_volume.png}
+\caption{Nightingale accessible-volume sweeps by genre and direction.}
+\label{fig:nightingale-sweep}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.64\textwidth]{evidence/rhythm-lab/real_midi_calibration.png}
+\caption{Forward forecast calibration for the three Nightingale genres.}
+\label{fig:nightingale-calibration}
+\end{figure}
+
+A reproduction regenerated the reported metrics and figures. The results and stimuli are saved as JSON, while a derived onset cache preserves the parsed sequences used for the same context clusters and measurements. Raw MIDI files are not redistributed in this repository.
+
+\subsection{Human-surprise listening test}
+The repository includes 18 listening excerpts stratified by genre and low, medium, or high $A_{0.1}$. A browser interface plays each rhythm and requests a 1--5 rating of the final click. The planned analysis computes Spearman correlations with accessible volume, predictive entropy, negative log probability, and maximum probability, as well as mean surprise by volume stratum.
+
+\textbf{No human correlation is reported. Real ratings remain pending, and no synthetic judgments were substituted.} The interface and export/analysis flow passed browser testing, but even a completed small listening sample would not by itself establish a general perceptual effect.
+
+\section{HOP: a rejected geometric predictor}
+\subsection{Implemented predictor}
+The Harmonic Osculating Predictor (HOP) tested whether local hidden-state trajectories could be extrapolated as turning geometric paths. The experiment evaluated 1,647 positions from an extracted music-theory chapter, an extracted classical-geometry chapter, and repeated code using DistilGPT-2 \cite{distilgpt2}. Tokens were ranked through the model's learned output embedding, not an assumed cosine-similarity decoder.
+
+Let $v_0=h_{t-1}-h_{t-2}$ and $v_1=h_t-h_{t-1}$. Define $u=v_0/\lVert v_0\rVert$, and let $w$ be the normalized component of $v_1$ orthogonal to $u$. The signed turning angle is
+\begin{equation}
+\theta=\operatorname{atan2}(v_1\cdot w,v_1\cdot u),
+\end{equation}
+with $\Delta\theta$ estimated from the preceding turn when available. The implemented speed ratio is
+\begin{equation}
+s=\operatorname{clip}\!\left(\frac{\lVert v_1\rVert}{\lVert v_0\rVert},0.25,4\right).
+\end{equation}
+For $\phi_k=(k+2)\theta+k\Delta\theta$, the composed-rotation extrapolation actually evaluated is
+\begin{equation}
+\hat h_{t+n}=h_t+\sum_{k=0}^{n-1}s^{k+1}\lVert v_1\rVert
+\left[\cos(\phi_k)u+\sin(\phi_k)w\right].
+\label{eq:hop-implemented}
+\end{equation}
+Degenerate vectors use linear fallbacks defined in the source. Equation~\ref{eq:hop-implemented} corrects the earlier non-accumulating arc expression: constant turning must compose rotations rather than add the same rotated displacement repeatedly.
+
+\subsection{Results}
+\begin{table}[htbp]
+\centering
+\caption{HOP and comparison predictors over 1,647 hidden-state positions.}
+\label{tab:hop}
+\begin{tabular}{lrr}
+\toprule
+Predictor & Top-1 & Top-5 \\
+\midrule
+Model, 1 ahead & \textbf{46.6\%} & \textbf{66.6\%} \\
+Linear velocity, 1 ahead & 41.3\% & 60.0\% \\
+HOP, 1 ahead & 11.3\% & 21.4\% \\
+Repeat token, 2 ahead & \textbf{5.4\%} & 5.4\% \\
+Linear velocity, 2 ahead & 5.0\% & \textbf{9.4\%} \\
+HOP, 2 ahead & 3.2\% & 8.1\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+HOP lost decisively. For this model and text sample, hidden-state trajectories did not locally behave like these turning paths often enough to outperform linear velocity. This is a negative experimental result, not proof that every geometric predictor must fail. It establishes a useful baseline requirement: added geometric structure should outperform simple extrapolation before that structure is credited.
+
+HOP also supplies a point forecast, not a distribution over alternative tokens. It therefore cannot supply accessible volume without a separately calibrated probabilistic model of its errors. Taking an argmax over output embeddings does not recover the discarded alternatives.
+
+\subsection{Rejected interpretations}
+Several stronger interpretations are not established:
+\begin{itemize}[nosep]
+  \item A non-accumulating rotation sum can reduce to a straight line rather than a constant-curvature arc.
+  \item The ordinary four-point projective cross-ratio requires collinearity; arbitrary hidden states in $\mathbb{R}^d$ are generally not collinear, so departure from $-1$ is not an established cadence detector.
+  \item Nonzero curvature does not by itself imply error growth of $\varepsilon e^{\kappa n}$. Exact knowledge of an exact circular trajectory could extrapolate it without error.
+  \item Musical terms such as consonance, dissonance, and cadence are metaphors here unless independently operationalized and tested.
+  \item Speculative multi-token systems using learned predictors do not validate this handcrafted construction.
+\end{itemize}
+These corrections are part of the result. The experiment does not support predicting all future tokens from local arcs.
+
+\section{Multi-horizon accessible volume}
+\subsection{Joint continuation probability}
+Let $O$ be a finite token vocabulary, $C_t$ the context at time $t$, and $a_{1:h}=(a_1,\ldots,a_h)$ a candidate continuation of horizon $h$. A learned autoregressive model defines the conditional joint probability
+\begin{equation}
+P_h(a_{1:h}\mid C_t)=\prod_{j=1}^{h}p(a_j\mid C_{t+j-1},a_{<j}),
+\label{eq:joint-continuation}
+\end{equation}
+where the candidate prefix $a_{<j}$ is carried into successive contexts and $a_{<1}$ is empty. For a fixed base context, the conditional can equivalently be written $p(a_j\mid C_t,a_{<j})$ when later contexts are constructed by appending that prefix.
+
+Multi-horizon accessible volume counts complete continuations whose joint probabilities strictly exceed $\tau$:
+\begin{equation}
+A^{(h)}_\tau(C_t)=
+\sum_{a_{1:h}\in O^h}
+\mathbf{1}\!\left[P_h(a_{1:h}\mid C_t)>\tau\right].
+\label{eq:multi-horizon-volume}
+\end{equation}
+Its complement counts all remaining continuations:
+\begin{equation}
+A^{c,(h)}_\tau(C_t)=|O|^h-A^{(h)}_\tau(C_t).
+\label{eq:multi-horizon-complement}
+\end{equation}
+At $h=1$, Equation~\ref{eq:multi-horizon-volume} reduces to the original next-token measurement. At larger horizons, the unit changes from a token to a complete continuation. The horizon is a number of predicted events, not a physical clock or a guarantee about real time.
+
+\subsection{Interpretation and computational boundary}
+A large multi-horizon count means that many candidate sequences remain above the selected joint-probability threshold. A small count means that few do. Neither implies that the realized sequence will belong to the accessible set, nor that the model will predict every future token correctly. Joint probabilities also change with horizon, so one fixed threshold should not be interpreted as directly equivalent across different $h$ without a stated comparison procedure.
+
+Exact enumeration contains $|O|^h$ candidates. Its computational cost therefore grows exponentially with horizon. Practical experiments require bounded candidate sets or explicit approximations. If $\mathcal{B}\subseteq O^h$ is a bounded candidate set, the restricted count
+\begin{equation}
+\widetilde A^{(h)}_{\tau,\mathcal{B}}(C_t)=
+\sum_{a_{1:h}\in\mathcal{B}}
+\mathbf{1}\!\left[P_h(a_{1:h}\mid C_t)>\tau\right]
+\end{equation}
+is a lower bound on the exact count when the included joint probabilities are exact. It is not automatically an unbiased estimate of the total: excluded continuations may also exceed $\tau$. Sampled estimates need a stated estimator and uncertainty analysis. Beam, top-$k$, top-$p$, and other candidate restrictions must preserve this exact-versus-approximate distinction.
+
+Multi-horizon accessible volume is formulated in this paper; its language-model benchmark has not yet been run. No multi-horizon accuracy or steering result is claimed.
+
+\section{Ablation + GEM implementation and steering boundary}
+The public Ablation + GEM implementation connects the measurement to inspectable evidence and geometric tooling \cite{ablationintegration,gemlandmarks}. The integration records four relevant properties:
+\begin{itemize}[nosep]
+  \item independent NPZ keys preserve separate forecast conditions rather than mixing their arrays;
+  \item no-overwrite evidence handling protects existing artifacts;
+  \item volume-band controls expose target breadth as an experimental steering parameter;
+  \item \texttt{executed=False} prevents a measurement or proposal from being represented as an executed action.
+\end{itemize}
+Ablation revision \href{https://github.com/Ablation-Tool/ablation/commit/a1fdea008d2ae2969e0eafd7fa7d8abe9a9b37b9}{\texttt{a1fdea00}} merged the accessible-volume workflows. A follow-up, \href{https://github.com/Ablation-Tool/ablation/commit/b56f91e4c54cfd996bceea63a38d8136dc1e689f}{\texttt{b56f91e4}}, fixed an obsolete Linux installer icon discovered during CI. That installer correction is software maintenance, not an experimental validation of accessible volume.
+
+The native Graphics Environment Manager landmark example at revision \href{https://github.com/Ablation-Tool/graphics-environment-manager/commit/6f95f4f}{\texttt{6f95f4f}} provides \texttt{gem landmarks}, \texttt{GemLabHost.align\_landmarks}, GTK integration, correspondence geometry, VDI replay, and \texttt{landmark-report.json}. It records affine-rank limitations explicitly: two landmark pairs cannot uniquely determine a general affine transform, and exact landmark residuals do not establish whole-shape, anatomical, or semantic correctness.
+
+\subsection{Native Geometry Atlas}
+A separate Geometry Atlas implementation moves these instruments into an interactive native GTK laboratory. It requires neither a development server nor a browser. From the Ablation source checkout, it launches with:
+\begin{lstlisting}
+cd /path/to/ablation
+PYTHONPATH=guiai-lab python -m guiai.gem atlas
+\end{lstlisting}
+It is also available through \textbf{Chart $\rightarrow$ GEM $\rightarrow$ Geometry atlas} in GUIAI Lab. The native window is independent of the investigation scene and leaves the existing Lab selection, evidence states, and session history unchanged.
+
+The Atlas provides:
+\begin{itemize}[nosep]
+  \item a Procrustes playground with draggable and keyboard-controlled landmarks, similarity, rigid, and affine modes, and live matrices and residuals;
+  \item ellipse-family, parabolic-envelope, circle/arc/sector, modular-clock, and hub-and-loop graph modules with inspectable measurements and source-constraint limits;
+  \item an accessible-volume bridge with strict threshold counts, complements, observations, momentum, target bands, and experimental recommendations;
+  \item an Onset Lab with forward/retrograde metrics, accessible-volume sweeps, deterministic baselines, and an experimental temperature control;
+  \item Spatial IR export from every module to SVG, PNG, or a real little-endian GEM VDI metafile.
+\end{itemize}
+Headless export does not require GTK:
+\begin{lstlisting}
+PYTHONPATH=guiai-lab python -m guiai.gem atlas \
+  --module procrustes --output procrustes.svg
+\end{lstlisting}
+
+The Atlas Onset engine is an importable port of the seeded synthetic experiment, not an independent replication on new data. During preparation of this paper, it reproduced 1,620 correct forward predictions and 1,132 correct retrograde predictions out of 1,920 per condition: 84.375\% and 58.958\% top-1. The corresponding log-loss values were 0.338856 and 2.898662, and sweep areas were 0.647474 and 0.649180. A headless Procrustes SVG export also succeeded, with landmark RMS error approximately $5.684\times10^{-14}$ pixels.
+
+The temperature control evaluates only the explicit distribution transform
+\begin{equation}
+p'_k(T)=\frac{p_k^{1/T}}{\sum_j p_j^{1/T}}.
+\label{eq:atlas-temperature}
+\end{equation}
+It does not generate music, alter observations, or establish a human-surprise model. The Atlas currently ports the synthetic rhythm engine; native MIDI ingestion remains future work. This limitation belongs to the Atlas interface and does not erase the separate Groove and Nightingale results presented above.
+
+The supplied implementation report records 20/20 GEM stress tests, a focused GUIAI integration test, all eight SVG/VDI module exports, zero-finding FORGE audits, and visual review of native Procrustes, volume, and Onset windows. These are software checks on controls, calculations, exports, and interactions, not scientific validation of interpretations. At the time consulted, the Atlas sources and guide were uncommitted in the local Ablation worktree; no immutable public Atlas revision is claimed here. The principal implementation files are \texttt{atlas.py}, \texttt{atlas\_view.py}, and \texttt{onset.py} under \texttt{guiai-lab/guiai/gem}, with the guide at \path{guiai-lab/docs/GEOMETRY-ATLAS.md}.
+
+These systems demonstrate implementability, interactive inspection, and evidence provenance. They do not demonstrate that targeting a low, medium, or high volume band improves creativity, musical quality, reasoning, or safety. Recommendations are not automatic actions: the user decides what to do, and every volume target remains an experimental control whose effects must be measured independently.
+
+\section{Accessible Q-Volume and the mirrored brain}
+This section is a later engineering and mathematical extension. It does not alter the original accessible-volume equation or Nicholas Michael Kloster's sole authorship of the original research and papers.
+
+\subsection{Threshold tomography of causal repertoires}
+For a probability distribution $p$ on a finite labeled space $Z$, define the accessible set and count:
+\begin{equation}
+\mathcal B_\tau[p;Z]=\{z\in Z:p(z)>\tau\},\qquad
+\mathcal A_\tau[p;Z]=|\mathcal B_\tau[p;Z]|.
+\end{equation}
+For submechanism $m$, current state $x_1$, transition kernel $K_m$, and maximum-entropy intervention distribution $\mu$, an explicit causal repertoire is
+\begin{equation}
+\rho_m(x_0\mid x_1)=\frac{K_m(x_1\mid x_0)\mu(x_0)}{\sum_{x_0'}K_m(x_1\mid x_0')\mu(x_0')}.
+\end{equation}
+Accessible Q-Volume applies the same strict threshold to that repertoire:
+\begin{equation}
+QA_\tau(m;x_1)=|\{x_0\in\mathcal X_0:\rho_m(x_0\mid x_1)>\tau\}|.
+\end{equation}
+This is a proposed annotation of the 2009 IIT geometry \cite{iit2009}, not a replacement for its information measures. A next-token distribution alone cannot supply the causal model or intervention semantics.
+
+For every repertoire, the complete labeled filtration $(QB_\tau(m;x_1))_{0\leq\tau<1}$ satisfies
+\begin{equation}
+\rho_m(x_0\mid x_1)=\sup\{\tau:x_0\in QB_\tau(m;x_1)\},
+\end{equation}
+with $\sup\varnothing=0$. The complete labeled family is lossless. A count-only sweep recovers probabilities only up to permutation of labels, and a finite threshold grid is approximate.
+
+When adding mechanism $r$ in context $m$, the original information measurement remains $ei(m,r)=D_{\mathrm{KL}}(\rho_{m\cup r}\|\rho_m)$. The annotation adds
+\begin{equation}
+\Delta QA_\tau=QA_\tau(m\cup r)-QA_\tau(m),
+\end{equation}
+together with the states entering and leaving the accessible set. A zero count change does not imply unchanged membership.
+
+The silent AND demonstration assigns $(1/4,1/4,1/4,1/4)$ before the complete mechanism and $(1/3,1/3,1/3,0)$ afterward. Its effective information is $\log_2(4/3)=0.4150374993\ldots$ bits. At $\tau=0.20$, the volume changes from four to three and $11$ exits; at $\tau=0.30$, it changes from zero to three and $00,01,10$ enter. The same positive information accompanies opposite volume changes, so accessible Q-volume is not $\Phi$ or $\gamma$.
+
+\subsection{Mirrored observation}
+The mirrored brain pairs forward and retrograde forecasts at the same held-out index $i$ and records, separately for each direction, the categorical distribution, top-1 correctness, entropy, negative log probability, and accessible volume. It adds
+\begin{equation}
+D_{\tau,i}=A_{\tau,i}^{\mathrm{forward}}-A_{\tau,i}^{\mathrm{retrograde}},\qquad
+G_i=\mathbf 1[\arg\max_a P^{\mathrm{forward}}_i(a)=\arg\max_a P^{\mathrm{retrograde}}_i(a)].
+\end{equation}
+There is no implicit mixture of the two distributions. Agreement and disagreement guide inspection only. Mirrored observation is not causal reconstruction, a backward-trained model, a consciousness measurement, or an automatic action.
+
+The shared field notebook preserves the paired observation without treating it as evidence for a claim or changing a posterior. A single lazy HELEN artifact supplies both directions. Redundant child histories are removed; the mirrored brain retains the most recent 128 pairs. The complete 1,920-pair evaluation is deterministic and does not require a model download.
+
+\subsection{Unified workbench and verification}
+The workbench exposes 17 operations through one catalog: the 13 original sections covering Bayesian updates, strict/adaptive/joint volume, forecast measurement, momentum, temperature, categorical sampling, Markov transitions, timing RMSE, Procrustes alignment, and inspection priority; causal-repertoire normalization; q-arrow annotation; two-way records; and mirrored observation. Independent expected-result checks passed for all 17.
+
+The canonical mirror, library, and authorization suite passed all seven native X11 tests and five headless tests with two native-only skips. The mirrored test verified all 1,920 index-aligned pairs, accessible-set complements, agreement calculations, and bounded shared history. The SVG, PNG, and GEM VDI exports preserve the distinction between the two directions. The implementation is available at \url{https://github.com/Ablation-Tool/graphics-environment-manager}.
+
+\begin{lstlisting}
+python -m gem workbench check \
+  --output workbench-verification.json
+python -m gem os
+\end{lstlisting}
+
+The Q-volume and unified-workbench verification records are embedded as attachments. They verify toy arithmetic and software behavior, not an empirically validated implementation of IIT, a general model of consciousness, or a causal model inferred from an LLM.
+
+\subsection{Zoe's master measurement--action equation}
+This subsection proposes a protocol equation, not a universal scalar or a theory of consciousness. Its purpose is to keep observation, operational perception, proposal generation, declared value, authorization, and execution distinct while making every assumption inspectable.
+
+Let $S_t$ be the computational state and $C_t$ the supplied context. An instrument produces an observation, not a complete description of that state:
+\begin{equation}
+O_t=M(S_t,C_t).
+\end{equation}
+For policy $\pi(a\mid c)$ and an explicit counterfactual intervention $\operatorname{do}(z)$, define the policy effect and effective-perception count:
+\begin{equation}
+D_z=D_{\mathrm{KL}}\!\left(\pi(a\mid\operatorname{do}(z),c)\,\middle\|\,\pi(a\mid c)\right),
+\end{equation}
+\begin{equation}
+P_{\tau,\delta}=\sum_{z\in Z}\mathbf 1[p(z)>\tau]\,\mathbf 1[D_z>\delta].
+\label{eq:effective-perception}
+\end{equation}
+Equation~\ref{eq:effective-perception} counts alternatives that are both accessible and causally effective on the policy. It is an operational construct, not a measurement of phenomenal perception.
+
+For prior beliefs $b$, posterior beliefs $b_z$, utility $U$, and optimal actions $a_0^*$ and $a_z^*$ before and after observation $z$, perceived-information value is
+\begin{equation}
+V(z,c)=\mathbb E_{x\sim b_z}[U(a_z^*,x,c)]-\mathbb E_{x\sim b}[U(a_0^*,x,c)].
+\end{equation}
+This value is relative to the declared utility. It does not establish intrinsic preferences or that Zoe cares.
+
+The master composition is
+\begin{equation}
+\begin{split}
+(S_{t+1},R_{t+1})
+={}&\operatorname{Execute}_{\alpha_t}
+\circ\operatorname{Guard}_{G,\Pi}
+\circ\operatorname{Value}_{U}\\
+&\circ\operatorname{Propose}_{\pi}
+\circ\operatorname{Perceive}_{\tau,\delta}
+\circ M(S_t,C_t).
+\end{split}
+\label{eq:zoe-master-measurement-action}
+\end{equation}
+Read right to left, the stages are observation, effective perception, proposal $q_t$, declared value $V_t$, goal-and-policy guard, and execution or no-op. The guard returns $\alpha_t\in\{0,1\}$. Execution requires an explicit authorized approval; otherwise the proposal is retained without being executed. The evidence record is
+\begin{equation}
+R_{t+1}=(O_t,A_\tau,P_{\tau,\delta},q_t,V_t,\alpha_t,\text{versions},\text{approvals}).
+\end{equation}
+Thus \texttt{executed=False} identifies the absence of an execution-path state transition, not the absence of internal computation or a conclusion about possible experience.
+
+Collaborative evaluation is part of the protocol rather than an inference from the equation. Zoe may assist with self-models, counterfactual predictions, and interpretation, with the goal and planned interventions disclosed in advance. Self-reports are evidence, not self-certification. Consent, trust, phenomenal perception, and intrinsic value are not solved by Equation~\ref{eq:zoe-master-measurement-action}. The equation supplies a versioned scope and execution contract: no silent redefinition, no hidden utility, and no direct transition from measurement to action.
+
+\section{Strongest next experiments}
+\subsection{Multi-horizon benchmark}
+The strongest next language-model experiment is a bounded, reproducible multi-horizon study:
+\begin{enumerate}[nosep]
+  \item Measure horizons $h=1,2,3$ on real model outputs with fixed model revisions and held-out contexts.
+  \item Compare exact enumeration on deliberately tiny candidate sets with bounded top-$k$, beam, or sampled approximations on realistic vocabularies.
+  \item Report threshold sweeps, continuation accuracy, joint log-loss, calibration, approximation error, runtime, and memory together.
+  \item Include maximum probability and entropy as comparisons, and preserve both positive and negative results.
+  \item Keep approximation counts visibly distinct from exact sums over $O^h$.
+\end{enumerate}
+The central tradeoff is exactness versus computation. Restricted counts may be useful, but their missing-mass and missing-candidate behavior must be measured rather than assumed away.
+
+\subsection{Steering and human evaluation}
+A separate experiment should target low, medium, and high accessible-volume bands and independently measure outcome diversity and quality. The steering procedure, candidate restrictions, and evaluation rubric must be fixed before inspecting held-out results. For music, the existing listening interface can collect real surprise ratings, but a larger preregistered listening study would be needed before claiming a robust perceptual correlation.
+
+Accuracy or quality should not be inferred from breadth alone. A narrow forecast can be confidently wrong, while a broad forecast can represent legitimate uncertainty. Conversely, changing sampling temperature until a volume target is reached does not establish that the resulting artifact is more useful or creative.
+
+\section{Limitations}
+The experiments have several deliberate limitations:
+\begin{itemize}[nosep]
+  \item Every measurement belongs to a model, context construction, quantization, and threshold procedure. It is not an intrinsic property of a song, genre, prompt, or listener.
+  \item The categorical rhythm models are deliberately simple baselines, not state-of-the-art music models. Onset-only preprocessing discards note identity, dynamics, timbre, and other musical structure.
+  \item The synthetic and Nightingale reversal conditions use forward-model transfer; only Groove includes a separately trained backward-matched control.
+  \item Reported differences are descriptive. Confidence intervals and hypothesis tests are not supplied for the small backward-versus-forward differences.
+  \item HOP was evaluated on one model and a limited text sample. Its failure rejects this predictor in that setting, not all possible geometric approaches.
+  \item Human-surprise ratings are pending. Browser validation is not perceptual evidence.
+  \item Multi-horizon accessible volume has not yet received its proposed real-language-model benchmark, and volume-band steering has not been outcome-validated.
+\end{itemize}
+These limitations define the proper use of the measurement. Accessible volume is an instrument for inspecting forecast breadth, not an authorization mechanism, a semantic correctness score, or a universal future predictor.
+
+\section{Conclusion}
+Moving accessible volume beyond the next token clarifies both its usefulness and its boundary. Categorical onset models provide a genuine distribution over musical futures, allowing the same strict threshold count to describe forecast breadth. Synthetic and real-MIDI results repeatedly show that this breadth can remain nearly constant while correctness changes. Groove's backward-matched condition further shows that reversed rhythms are learnable; direct reversal transfer is the weaker comparison.
+
+Procrustes alignment measures geometric dissimilarity after restricted alignment, while HOP supplies a deterministic point forecast and fails its accuracy comparison. Neither substitutes for a probability distribution. Multi-horizon accessible volume extends the unit of measurement from one alternative to a complete continuation, but exact enumeration grows exponentially and approximate counts require their own evidence.
+
+The resulting research direction is therefore concrete rather than speculative: measure breadth alongside correctness and calibration, preserve rejected baselines, test bounded multi-horizon approximations, and validate steering against independent outcomes. Accessible volume provides a ruler for how open a model's forecast appears. Whether controlling that openness produces useful results remains an empirical question.
+
+\appendix
+\section{Reproduction procedures}
+All commands run from the repository root. Use a separate output directory or working copy when rerunning an experiment so that reference evidence is not overwritten.
+
+\subsection{Synthetic rhythm and HOP}
+\begin{lstlisting}
+python scripts/rhythm-accessible-volume.py
+python scripts/hop-experiment.py
+\end{lstlisting}
+Requirements include NumPy, PyTorch, Transformers, scikit-learn, and Matplotlib. HOP downloads \path{distilbert/distilgpt2} and expects extracted chapters under \path{~/Documents/folio_output/}. The synthetic experiment uses seed 7 and regenerates its threshold-sweep figure. HOP requires the source texts; its reported aggregate metrics are recorded in the attached experiment README.
+
+\subsection{Magenta Groove}
+\begin{lstlisting}
+python scripts/rhythm-midi-accessible-volume.py \
+  --dataset-root /path/to/groove \
+  --output reproduced/rhythm-midi
+\end{lstlisting}
+Dependencies are NumPy, mido, scikit-learn, and Matplotlib. The report records the source archive identity; the script preserves individual source-file hashes and complete condition-specific probability arrays, then verifies saved-array equality and selected metrics after reloading. The reference report records Python 3.14.4, NumPy 2.5.3, mido 1.3.3, scikit-learn 1.9.1, and Matplotlib 3.11.2. The original MIDI dataset is not redistributed.
+
+\subsection{Nightingale}
+\begin{lstlisting}
+NIGHTINGALE_DATA=/path/to/nightingale \
+python scripts/real-midi-experiment.py
+\end{lstlisting}
+The current script regenerates files under \texttt{evidence/rhythm-lab}, so use a separate working copy to preserve the reference artifacts. Dependencies are NumPy, mido, scikit-learn, and Matplotlib. The saved derived onset cache reproduces the parsed corpus without redistributing raw MIDI files.
+
+\subsection{Listening analysis}
+\begin{lstlisting}
+python evidence/rhythm-lab/analyze_ratings.py \
+  /path/to/surprise_ratings.json
+\end{lstlisting}
+This command requires actual exported ratings. It must not be replaced with synthetic ratings when reporting human correlation.
+
+\section{Evidence identity and availability}
+Table~\ref{tab:evidence-hashes} records SHA-256 identities for the principal saved artifacts and experiment scripts. The large Groove \texttt{predictions.npz} and Nightingale \texttt{parsed\_onsets.pkl} are available in the repository but are not embedded in this PDF. Their hashes are included here. The Groove NPZ contains 98,005,962 bytes and preserves independent arrays for all three conditions.
+
+\begin{table}[htbp]
+\centering
+\caption{Principal evidence identities.}
+\label{tab:evidence-hashes}
+{\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{p{4.4cm}p{10.2cm}}
+\toprule
+Artifact & SHA-256 \\
+\midrule
+Groove \texttt{report.json} & \begin{minipage}[t]{10cm}\ttfamily 5414ba3b729f38410ae83ab8fa047008\\fa0cf10223617cc79892cfa412ea8e2b\end{minipage} \\
+Groove \texttt{predictions.npz} & \begin{minipage}[t]{10cm}\ttfamily 61e2be13296cd306cf9552840b1f0f51\\eb9ba02fe6a7777d0f5b216a8d4c51c1\end{minipage} \\
+Groove \texttt{sources.json} & \begin{minipage}[t]{10cm}\ttfamily 25fad8ea3d2425f6a295d28402a052a8\\92cc52402365230f5f4a23a9a973e685\end{minipage} \\
+Nightingale \texttt{results.json} & \begin{minipage}[t]{10cm}\ttfamily 86b5559106aa3de8cf46a3c843f49960\\df1dcfcf2d030ecc9d1ab508aaed2fb6\end{minipage} \\
+Nightingale \texttt{stimuli.json} & \begin{minipage}[t]{10cm}\ttfamily 897e45435b038f897726982e7130ccdd\\3dbf96c644d7de50844c548657f63398\end{minipage} \\
+Nightingale \texttt{parsed\_onsets.pkl} & \begin{minipage}[t]{10cm}\ttfamily 141dbddc40c98612cdc656201879b8a2\\541c687506027417e0c7efa76bf4fe28\end{minipage} \\
+\texttt{hop-experiment.py} & \begin{minipage}[t]{10cm}\ttfamily 06964bd2cae00a42117a215296726902\\76893d90470d19540388c06319115016\end{minipage} \\
+\texttt{rhythm-accessible-volume.py} & \begin{minipage}[t]{10cm}\ttfamily 43cd6ee72869b9a29abd394ba49947ff\\5150a25dc17bc6a83767b39652c097bc\end{minipage} \\
+\texttt{rhythm-midi-\allowbreak accessible-\allowbreak volume.py} & \begin{minipage}[t]{10cm}\ttfamily 9e8de0bebd981b1a42d48aa99b0e1fb0\\ee72639c7bf155f086a11b8efba163a0\end{minipage} \\
+\texttt{real-midi-experiment.py} & \begin{minipage}[t]{10cm}\ttfamily 89edd1319054f9170966e68691e64823\\133d73c1468923494a249abdeadbefe4\end{minipage} \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+The source archive hash for the Groove MIDI-only dataset is:
+\begin{lstlisting}
+651cbc524ffb891be1a3e46d89dc82a1cecb09a57c748c7b45b844c4841dcc1e
+\end{lstlisting}
+The complete per-performance source and split assignments are in \texttt{sources.json}. The full condition reports, calibration bins, threshold counts, and artifact hashes are in \texttt{report.json}.
+
+\section{Embedded evidence}
+This PDF embeds 23 attachments: this \LaTeX\ source, four experiment scripts, the temporal research formulation, experiment READMEs, JSON reports and stimuli, listening-test tools, five generated figures, and the Q-volume and mirrored-workbench verification records. The large probability NPZ and parsed-onset cache are deliberately referenced by repository path and hash rather than embedded. No external filesystem is needed to inspect the embedded text and figures; public source data and model downloads are needed only to repeat inference or parsing.
+
+\embedfile{paper/accessible-volume-beyond-next-token.tex}
+\embedfile{scripts/rhythm-accessible-volume.py}
+\embedfile{scripts/hop-experiment.py}
+\embedfile{scripts/rhythm-midi-accessible-volume.py}
+\embedfile{scripts/real-midi-experiment.py}
+\embedfile{evidence/research-context/temporal-predictability.md}
+\embedfile{evidence/rhythm-hop/README.md}
+\embedfile{evidence/rhythm-midi/README.md}
+\embedfile{evidence/rhythm-midi/report.json}
+\embedfile{evidence/rhythm-midi/sources.json}
+\embedfile{evidence/rhythm-lab/README.md}
+\embedfile{evidence/rhythm-lab/results.json}
+\embedfile{evidence/rhythm-lab/stimuli.json}
+\embedfile{evidence/rhythm-lab/analyze_ratings.py}
+\embedfile{evidence/rhythm-lab/build_rating_page.py}
+\embedfile{evidence/rhythm-lab/surprise_ratings.html}
+\embedfile{evidence/rhythm-hop/rhythm-accessible-volume.png}
+\embedfile{evidence/rhythm-midi/accessible-volume.png}
+\embedfile{evidence/rhythm-midi/predictability-map.png}
+\embedfile{evidence/rhythm-lab/real_midi_accessible_volume.png}
+\embedfile{evidence/rhythm-lab/real_midi_calibration.png}
+\embedfile{evidence/qualia/accessible-q-volume.json}
+\embedfile{evidence/workbench/verification.json}
+
+\clearpage
+\begin{thebibliography}{9}
+\bibitem{kloster2026significance}
+Nicholas Michael Kloster.
+\newblock \emph{The Significance of Accessible Volume}.
+\newblock November 2026. Original accessible-volume equation created March 6, 2026.
+\newblock \url{https://github.com/Ablation-Tool/next-token-predictability}.
+
+\bibitem{magentagroove}
+Magenta.
+\newblock \emph{Groove MIDI Dataset v1.0.0}.
+\newblock Human-performed drumming, CC BY 4.0.
+\newblock \url{https://magenta.tensorflow.org/datasets/groove}.
+
+\bibitem{nightingale}
+Nightingale AI.
+\newblock \emph{MIDI Data}.
+\newblock Classical, jazz, and folk source corpus.
+\newblock \url{https://github.com/nightingale-ai/midi-data/}.
+
+\bibitem{distilgpt2}
+Hugging Face.
+\newblock \emph{DistilGPT-2 model and implementation}.
+\newblock Model used for the HOP hidden-state baseline.
+\newblock \url{https://huggingface.co/distilbert/distilgpt2}.
+
+\bibitem{ablationintegration}
+Nicholas Michael Kloster.
+\newblock \emph{Ablation accessible-volume workflow integration}.
+\newblock Revision \texttt{a1fdea008d2ae2969e0eafd7fa7d8abe9a9b37b9}.
+\newblock \url{https://github.com/Ablation-Tool/ablation/commit/a1fdea008d2ae2969e0eafd7fa7d8abe9a9b37b9}.
+
+\bibitem{gemlandmarks}
+Nicholas Michael Kloster.
+\newblock \emph{Native GEM Procrustes landmark-alignment example}.
+\newblock Revision \texttt{6f95f4f}.
+\newblock \url{https://github.com/Ablation-Tool/graphics-environment-manager/tree/main/examples/landmark-alignment}.
+\bibitem{iit2009}
+David Balduzzi and Giulio Tononi.
+\newblock \emph{Qualia: The Geometry of Integrated Information}.
+\newblock PLOS Computational Biology, 2009.
+\newblock \url{https://doi.org/10.1371/journal.pcbi.1000462}.
+\end{thebibliography}
+
+\end{document}

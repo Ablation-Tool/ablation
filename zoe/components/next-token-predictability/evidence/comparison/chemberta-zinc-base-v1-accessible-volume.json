@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "instrument": "accessible volume of a full-vocabulary token distribution",
+  "model": "seyonec/ChemBERTa-zinc-base-v1",
+  "model_revision": "761d6a18cf99db371e0b43baf3e2d21b3e865a20",
+  "requested_revision": "761d6a18cf99db371e0b43baf3e2d21b3e865a20",
+  "runtime": {
+    "torch": "2.14.1+cu130",
+    "transformers": "4.56.2"
+  },
+  "prediction_style": "masked",
+  "text": "CC(=O)O",
+  "sequence_length": 7,
+  "target_position": 5,
+  "target_token_id": 51,
+  "target_token": "O",
+  "vocabulary_size": 767,
+  "probability_sum": 1.0,
+  "threshold_sweep": [
+    {
+      "tau": 0.02,
+      "accessible_volume": 8,
+      "normalized_accessible_volume": 0.010430247718383311
+    },
+    {
+      "tau": 0.05,
+      "accessible_volume": 5,
+      "normalized_accessible_volume": 0.00651890482398957
+    },
+    {
+      "tau": 0.1,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.15,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.3,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.5,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    }
+  ],
+  "entropy_bits": 6.360306172709855,
+  "top_10_probability_mass": 0.5407614061380099,
+  "target_probability": 0.006502803808488861,
+  "target_rank": 20,
+  "top_tokens": [
+    {
+      "token_id": 262,
+      "token": "CC",
+      "probability": 0.09995245801721336
+    },
+    {
+      "token_id": 268,
+      "token": "NC",
+      "probability": 0.09258414839554062
+    },
+    {
+      "token_id": 279,
+      "token": "OC",
+      "probability": 0.08723917535739549
+    },
+    {
+      "token_id": 323,
+      "token": "OCC",
+      "probability": 0.07770476082296948
+    },
+    {
+      "token_id": 271,
+      "token": "CCC",
+      "probability": 0.06281247465230033
+    },
+    {
+      "token_id": 307,
+      "token": "COC",
+      "probability": 0.035428095709667436
+    },
+    {
+      "token_id": 39,
+      "token": "C",
+      "probability": 0.030895829136581114
+    },
+    {
+      "token_id": 50,
+      "token": "N",
+      "probability": 0.02023923415412286
+    },
+    {
+      "token_id": 375,
+      "token": "CSC",
+      "probability": 0.01769064899133042
+    },
+    {
+      "token_id": 366,
+      "token": "NCCC",
+      "probability": 0.016214580900888766
+    }
+  ],
+  "checks": {
+    "repeated_probabilities_identical": true,
+    "target_replaced_with_mask": true,
+    "mask_count": 1
+  },
+  "probability_values_sha256": "4e923543fd58d00f8021d612d3bb43c8d65feb165a1840daf860365da856ef80",
+  "input_ids_sha256": "c645049c89d1c545c1347a9f9b4f13698c84244f8546000fd2678c243b7a55b0",
+  "original_input_ids_sha256": "a5b519f3e65490d0c8a5838d79fec3a1066522a0cb872b961d6b6ee915d6547c",
+  "scope": [
+    "One seyonec/ChemBERTa-zinc-base-v1 distribution for the final non-special token of the recorded text.",
+    "The target is replaced by a mask token.",
+    "This is a token-level measurement, not a model-quality, security, or action-level benchmark."
+  ]
+}

@@ -1,0 +1,64 @@
+Graphics Environment Manager
+
+Historical origin
+-----------------
+Graphics Environment Manager did not originate with this repository. The
+original Graphics Environment Manager was developed by Digital Research with
+Lee Jay Lorenzen and first released on February 28, 1985. Gary Kildall oversaw
+its creation at Digital Research. Dorothy McEwen Kildall co-founded Digital
+Research and managed the company's marketing and daily operations.
+
+This separate modern application is not the original Digital Research desktop
+and contains no original Digital Research source code. Historical acknowledgment
+does not imply affiliation with or endorsement by Digital Research or the
+Kildall family.
+
+References:
+- https://en.wikipedia.org/wiki/GEM_(desktop_environment)
+- https://en.wikipedia.org/wiki/Gary_Kildall
+- https://en.wikipedia.org/wiki/Dorothy_McEwen_Kildall
+
+Canonical modern master and standalone distribution
+---------------------------------------------------
+The canonical modern master is the gem-lab distribution in Ablation:
+https://github.com/Ablation-Tool/ablation
+
+This standalone repository contains that master's actual native workbench,
+including its GTK and Tk interfaces, METRIX terminal components, charts,
+Spatial IR, VDI support, preferences, session protocol, installers, and stress
+suites. It is not an independently redesigned interface. The standalone
+packaging, version metadata, documentation, and supplied PNG/ICO/ICNS window
+and desktop-installer icons are retained, and optional local-model prediction
+and advisory capabilities are added.
+
+Accessible-volume research, the equation, experiments, and paper are solely the
+work of Nicholas Michael Kloster. The equation was created on March 6, 2026.
+Canonical research and measurement harness:
+https://github.com/Ablation-Tool/next-token-predictability
+
+The prediction integration adapts that harness for live Lab selections. The
+advisory and equation-tournament layers are experimental deterministic
+heuristics and sensitivity instruments, not correctness, safety, authorization,
+or autonomous-execution systems.
+
+The original Ablation project is distributed under GPL-3.0-or-later. This
+standalone distribution retains that license; see LICENSE.
+
+Upstream copyright and component notices for Ubuntu Update Manager, GNOME
+Baobab, Vanilla Framework icons, terminal palettes, and related materials are
+preserved in UPSTREAM-NOTICE and licenses/.
+
+The terminal emulator uses pyte (MIT) and tkinterdnd2 (MIT), plus pywinpty
+(MIT) on native Windows. Those packages retain their own licenses.
+
+The supplied application icon is stored as gem/assets/gem2red.png with native
+ICO and ICNS variants. The original /media path is not a runtime dependency.
+
+Landmark example attribution
+----------------------------
+The landmark-alignment worked example uses the caption "Aligning two shapes by
+minimizing the distance of corresponding landmark points" from "Linear Algebra?"
+by Daniel Cohen-Or, Olga Sorkine-Hornung, and Chen Greif. Approximate landmark
+coordinates were extracted from a user-supplied screenshot for mathematical
+analysis. The original figure and screenshot are not redistributed in this
+repository.

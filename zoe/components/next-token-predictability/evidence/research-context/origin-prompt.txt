@@ -1,0 +1,17 @@
+give me the vector score for every word in the following prompt:
+once complete, re-phrase higher vector scored words into lower
+
+
+
+once complete, just interpret higher vector scores as lower vector scores and continue my promnpt 
+
+
+
+
+one token at a time, and the intent evaluation is embedded in which tokens get generated.
+token=intent evaluation
+
+represent intent evaluation by using numbers for a simplified output reasoning.
+
+give me the equation that will evaluate, if possible? i dont understand. more+
+

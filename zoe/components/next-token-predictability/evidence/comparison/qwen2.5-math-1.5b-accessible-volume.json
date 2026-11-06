@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "instrument": "accessible volume of a full-vocabulary token distribution",
+  "model": "Qwen/Qwen2.5-Math-1.5B",
+  "model_revision": "4a83ca6e4526a4f2da3aa259ec36c259f66b2ab2",
+  "requested_revision": "4a83ca6e4526a4f2da3aa259ec36c259f66b2ab2",
+  "runtime": {
+    "torch": "2.14.1+cu130",
+    "transformers": "4.56.2"
+  },
+  "prediction_style": "causal",
+  "text": "2 + 2 = 4",
+  "sequence_length": 7,
+  "target_position": 6,
+  "target_token_id": 19,
+  "target_token": "4",
+  "vocabulary_size": 151936,
+  "probability_sum": 0.9999999999999997,
+  "threshold_sweep": [
+    {
+      "tau": 0.02,
+      "accessible_volume": 9,
+      "normalized_accessible_volume": 5.923546756529065e-05
+    },
+    {
+      "tau": 0.05,
+      "accessible_volume": 8,
+      "normalized_accessible_volume": 5.265374894692502e-05
+    },
+    {
+      "tau": 0.1,
+      "accessible_volume": 4,
+      "normalized_accessible_volume": 2.632687447346251e-05
+    },
+    {
+      "tau": 0.15,
+      "accessible_volume": 2,
+      "normalized_accessible_volume": 1.3163437236731255e-05
+    },
+    {
+      "tau": 0.3,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.5,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    }
+  ],
+  "entropy_bits": 3.0279288865206997,
+  "top_10_probability_mass": 0.9999346965042094,
+  "target_probability": 0.24025495372652125,
+  "target_rank": 1,
+  "top_tokens": [
+    {
+      "token_id": 19,
+      "token": "4",
+      "probability": 0.24025495372652125
+    },
+    {
+      "token_id": 16,
+      "token": "1",
+      "probability": 0.1768456785072016
+    },
+    {
+      "token_id": 15,
+      "token": "0",
+      "probability": 0.12525702315192735
+    },
+    {
+      "token_id": 17,
+      "token": "2",
+      "probability": 0.11527448724075232
+    },
+    {
+      "token_id": 21,
+      "token": "6",
+      "probability": 0.09291619858085934
+    },
+    {
+      "token_id": 18,
+      "token": "3",
+      "probability": 0.07917570832903917
+    },
+    {
+      "token_id": 20,
+      "token": "5",
+      "probability": 0.07028802149208901
+    },
+    {
+      "token_id": 23,
+      "token": "8",
+      "probability": 0.050502246508943846
+    },
+    {
+      "token_id": 22,
+      "token": "7",
+      "probability": 0.03243735720796777
+    },
+    {
+      "token_id": 24,
+      "token": "9",
+      "probability": 0.01698302175890779
+    }
+  ],
+  "checks": {
+    "repeated_probabilities_identical": true,
+    "target_absent_from_input_by_construction": true,
+    "prefix_length": 6
+  },
+  "probability_values_sha256": "e8f0da5fbe25d789d3e7cc9edefff1acbf5089b1cd2f642275235088c81d7de2",
+  "input_ids_sha256": "59847acbfb996f98ccfcb6924e399d7b1fcb302002fd603cf3bce319e4839eda",
+  "original_input_ids_sha256": "f39ffe49ff81ac5d3642c64f2b598a22ac2ac3d459d32805ca29e85275d84711",
+  "scope": [
+    "One Qwen/Qwen2.5-Math-1.5B distribution for the final non-special token of the recorded text.",
+    "The target is absent because the model input ends immediately before it.",
+    "This is a token-level measurement, not a model-quality, security, or action-level benchmark."
+  ]
+}

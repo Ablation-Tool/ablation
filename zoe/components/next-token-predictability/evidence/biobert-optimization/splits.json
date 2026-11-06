@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "seed": 20261103,
+  "split_unit": "source_document",
+  "cases_sha256": "cd743b76dc7e9ccc6d1c17dba546544271eac22dc557cb152c601c824e8922b6",
+  "documents": [
+    {
+      "source_document_id": "pmid-38323478",
+      "split": "development"
+    },
+    {
+      "source_document_id": "pmid-38338092",
+      "split": "test"
+    },
+    {
+      "source_document_id": "pmid-38803272",
+      "split": "test"
+    },
+    {
+      "source_document_id": "pmid-38843269",
+      "split": "validation"
+    },
+    {
+      "source_document_id": "pmid-39024305",
+      "split": "test"
+    },
+    {
+      "source_document_id": "pmid-39145612",
+      "split": "test"
+    },
+    {
+      "source_document_id": "pmid-39192025",
+      "split": "test"
+    },
+    {
+      "source_document_id": "pmid-39194690",
+      "split": "development"
+    },
+    {
+      "source_document_id": "pmid-39302990",
+      "split": "validation"
+    },
+    {
+      "source_document_id": "pmid-39336807",
+      "split": "development"
+    },
+    {
+      "source_document_id": "pmid-39363912",
+      "split": "development"
+    },
+    {
+      "source_document_id": "pmid-39386182",
+      "split": "development"
+    },
+    {
+      "source_document_id": "pmid-39409754",
+      "split": "development"
+    },
+    {
+      "source_document_id": "pmid-39499190",
+      "split": "development"
+    },
+    {
+      "source_document_id": "pmid-39564820",
+      "split": "development"
+    },
+    {
+      "source_document_id": "pmid-39595642",
+      "split": "development"
+    },
+    {
+      "source_document_id": "pmid-39623868",
+      "split": "test"
+    },
+    {
+      "source_document_id": "pmid-39659589",
+      "split": "development"
+    },
+    {
+      "source_document_id": "pmid-39663244",
+      "split": "validation"
+    },
+    {
+      "source_document_id": "pmid-39676795",
+      "split": "test"
+    },
+    {
+      "source_document_id": "pmid-39678806",
+      "split": "validation"
+    },
+    {
+      "source_document_id": "pmid-39684669",
+      "split": "development"
+    },
+    {
+      "source_document_id": "pmid-39713159",
+      "split": "development"
+    },
+    {
+      "source_document_id": "pmid-39728965",
+      "split": "development"
+    },
+    {
+      "source_document_id": "pmid-39765677",
+      "split": "test"
+    },
+    {
+      "source_document_id": "pmid-39768193",
+      "split": "development"
+    },
+    {
+      "source_document_id": "pmid-39768223",
+      "split": "validation"
+    },
+    {
+      "source_document_id": "pmid-39791729",
+      "split": "test"
+    },
+    {
+      "source_document_id": "pmid-39857237",
+      "split": "test"
+    },
+    {
+      "source_document_id": "pmid-39858550",
+      "split": "development"
+    }
+  ],
+  "case_counts": {
+    "development": 60,
+    "validation": 20,
+    "test": 40
+  }
+}

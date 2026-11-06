@@ -1,0 +1,621 @@
+{
+  "algorithm_count": 17,
+  "executed": false,
+  "failed": 0,
+  "instrument": "Zoe unified workbench verification",
+  "passed": 17,
+  "results": [
+    {
+      "equation": "bayes/binary@v1",
+      "expected": {
+        "posterior": 0.8
+      },
+      "passed": true,
+      "result": {
+        "likelihood_false": 0.2,
+        "likelihood_ratio": 4.0,
+        "likelihood_true": 0.8,
+        "log_likelihood_ratio": 1.3862943611198906,
+        "model": "independent binary claim; posterior is conditional on the supplied likelihood model",
+        "posterior": 0.8,
+        "posterior_log_odds": 1.3862943611198906,
+        "prior": 0.5,
+        "prior_log_odds": 0.0
+      },
+      "scope": "Binary claims with explicit likelihoods; dependent evidence requires adjusted likelihoods."
+    },
+    {
+      "equation": "causal/q-arrow@v1",
+      "expected": {
+        "delta_accessible_q_volume": -1,
+        "ei_bits": 0.41503749927884376,
+        "exited": [
+          "11"
+        ]
+      },
+      "passed": true,
+      "result": {
+        "delta_accessible_q_volume": -1,
+        "ei_bits": 0.4150374992788437,
+        "entered": [],
+        "exited": [
+          "11"
+        ],
+        "tau": 0.2
+      },
+      "scope": "Information and accessible-set annotation; Phi and gamma remain separate."
+    },
+    {
+      "equation": "causal/repertoire@v1",
+      "expected": {
+        "00": 0.3333333333333333,
+        "01": 0.3333333333333333,
+        "10": 0.3333333333333333,
+        "11": 0.0
+      },
+      "passed": true,
+      "result": {
+        "00": 0.3333333333333333,
+        "01": 0.3333333333333333,
+        "10": 0.3333333333333333,
+        "11": 0.0
+      },
+      "scope": "A causal posterior, not a next-token forecast or general IIT calculator."
+    },
+    {
+      "equation": "causal/two-way@v1",
+      "expected": {
+        "future": {
+          "accessible_volume": 3
+        },
+        "past": {
+          "accessible_q_volume": 3
+        }
+      },
+      "passed": true,
+      "result": {
+        "context_link": "explicitly supplied forecast and context; no internal-state mapping is inferred",
+        "future": {
+          "accessible_states": [
+            "A",
+            "B",
+            "C"
+          ],
+          "accessible_volume": 3,
+          "horizon": 1
+        },
+        "past": {
+          "accessible_q_volume": 3,
+          "accessible_states": [
+            "00",
+            "01",
+            "10"
+          ]
+        },
+        "tau": 0.05
+      },
+      "scope": "An explicit forecast and context are required; no internal-state mapping is inferred."
+    },
+    {
+      "equation": "distribution/temperature@v1",
+      "expected": {
+        "probabilities": [
+          0.4898083047208549,
+          0.26181355163742975,
+          0.1655854290944769,
+          0.08279271454723845
+        ]
+      },
+      "passed": true,
+      "result": {
+        "probabilities": [
+          0.4898083047208549,
+          0.26181355163742975,
+          0.1655854290944769,
+          0.08279271454723845
+        ],
+        "temperature": 2.0
+      },
+      "scope": ""
+    },
+    {
+      "equation": "forecast/measure@v1",
+      "expected": {
+        "accessible_volume": 3,
+        "outcome": {
+          "correct": true
+        }
+      },
+      "passed": true,
+      "result": {
+        "accessible_volume": 3,
+        "complement_volume": 1,
+        "entropy_bits": 1.2289724589357758,
+        "forecast_breadth_is_correctness": false,
+        "maximum_probability": 0.7,
+        "normalized_accessible_volume": 0.75,
+        "normalized_complement_volume": 0.25,
+        "outcome": {
+          "actual_probability": 0.7,
+          "brier_score": 0.13680000000000003,
+          "correct": true,
+          "negative_log_probability": 0.35667494393873245,
+          "target": 0
+        },
+        "predicted_target": 0,
+        "probability_values_sha256": "afb2b82e675cfc80bbd14659e134d31ddd4590de588232716e507259cec00eda",
+        "strict_comparison": true,
+        "tau": 0.05,
+        "top_10_probability_mass": 1.0,
+        "vocabulary_size": 4
+      },
+      "scope": "A deterministic measurement of a supplied stochastic or deterministic forecast."
+    },
+    {
+      "equation": "geometry/procrustes@v1",
+      "expected": {
+        "rmse_per_landmark": 0.0,
+        "scale": 2.0
+      },
+      "passed": true,
+      "result": {
+        "determinant": 4.0,
+        "landmark_count": 3,
+        "mapped": [
+          [
+            1.0,
+            1.0
+          ],
+          [
+            3.0,
+            1.0
+          ],
+          [
+            1.0,
+            3.0
+          ]
+        ],
+        "matrix": [
+          [
+            2.0,
+            -0.0
+          ],
+          [
+            0.0,
+            2.0
+          ]
+        ],
+        "mode": "similarity",
+        "rmse_per_coordinate": 0.0,
+        "rmse_per_landmark": 0.0,
+        "rotation_degrees": 0.0,
+        "scale": 2.0,
+        "squared_error": 0.0,
+        "translation": [
+          1.0,
+          1.0
+        ]
+      },
+      "scope": ""
+    },
+    {
+      "equation": "heuristic/inspection-priority@v1",
+      "expected": {
+        "priority": 2.5,
+        "status": "heuristic_not_a_probability_or_validated_control_policy"
+      },
+      "passed": true,
+      "result": {
+        "priority": 2.5,
+        "status": "heuristic_not_a_probability_or_validated_control_policy"
+      },
+      "scope": "Inspection triage only; not a probability, reward, or authorization rule."
+    },
+    {
+      "equation": "process/continuation@v1",
+      "expected": {
+        "accessible_volume": 5,
+        "exact": true
+      },
+      "passed": true,
+      "result": {
+        "accessible_volume": 5,
+        "complement_volume": 3,
+        "continuations": [
+          {
+            "accessible": true,
+            "probability": 0.294,
+            "sequence": [
+              "A",
+              "A",
+              "A"
+            ]
+          },
+          {
+            "accessible": true,
+            "probability": 0.144,
+            "sequence": [
+              "B",
+              "B",
+              "B"
+            ]
+          },
+          {
+            "accessible": true,
+            "probability": 0.126,
+            "sequence": [
+              "A",
+              "A",
+              "B"
+            ]
+          },
+          {
+            "accessible": true,
+            "probability": 0.11200000000000002,
+            "sequence": [
+              "B",
+              "A",
+              "A"
+            ]
+          },
+          {
+            "accessible": true,
+            "probability": 0.108,
+            "sequence": [
+              "A",
+              "B",
+              "B"
+            ]
+          },
+          {
+            "accessible": false,
+            "probability": 0.096,
+            "sequence": [
+              "B",
+              "B",
+              "A"
+            ]
+          },
+          {
+            "accessible": false,
+            "probability": 0.072,
+            "sequence": [
+              "A",
+              "B",
+              "A"
+            ]
+          },
+          {
+            "accessible": false,
+            "probability": 0.04800000000000001,
+            "sequence": [
+              "B",
+              "A",
+              "B"
+            ]
+          }
+        ],
+        "exact": true,
+        "horizon": 3,
+        "tau": 0.1,
+        "universe_size": 8
+      },
+      "scope": "Exact bounded Markov enumeration only; not a real language-model benchmark."
+    },
+    {
+      "equation": "process/markov-step@v1",
+      "expected": {
+        "following": {
+          "A": 0.58,
+          "B": 0.42
+        }
+      },
+      "passed": true,
+      "result": {
+        "equation": "pi_(n+1) = pi_n P",
+        "following": {
+          "A": 0.5800000000000001,
+          "B": 0.42
+        },
+        "initial": {
+          "A": 0.6,
+          "B": 0.4
+        }
+      },
+      "scope": ""
+    },
+    {
+      "equation": "sample/categorical@v1",
+      "expected": {
+        "generator": "Python random MT19937; one reproducible pseudo-random draw",
+        "selected_index": 0
+      },
+      "passed": true,
+      "result": {
+        "generator": "Python random MT19937; one reproducible pseudo-random draw",
+        "scope": "A sampled outcome is not evidence of correctness and authorizes no action.",
+        "seed": 7,
+        "selected_index": 0,
+        "selected_probability": 0.7,
+        "unit_draw": 0.32383276483316237
+      },
+      "scope": ""
+    },
+    {
+      "equation": "timing/rmse@v1",
+      "expected": {
+        "rmse": 1.2909944487358056
+      },
+      "passed": true,
+      "result": {
+        "errors": [
+          0.0,
+          1.0,
+          2.0
+        ],
+        "rmse": 1.2909944487358056
+      },
+      "scope": ""
+    },
+    {
+      "equation": "volume/adaptive@v1",
+      "expected": {
+        "accessible_volume": 3,
+        "effective_threshold": 0.07
+      },
+      "passed": true,
+      "result": {
+        "accessible_volume": 3,
+        "alpha": 0.1,
+        "beta": 0.05,
+        "complement_volume": 1,
+        "effective_threshold": 0.06999999999999999,
+        "evidence_status": "The selected adaptive rule transferred worse than fixed tau=0.05 in the held-out BioBERT experiment.",
+        "normalized_accessible_volume": 0.75,
+        "strict_comparison": true
+      },
+      "scope": "Retain as a comparison; the selected adaptive rule did not transfer better on held-out BioBERT cases."
+    },
+    {
+      "equation": "volume/joint@v1",
+      "expected": {
+        "accessible_volume": 3,
+        "exact": true
+      },
+      "passed": true,
+      "result": {
+        "accessible_volume": 3,
+        "candidate_count": 4,
+        "complement_volume": 1,
+        "exact": true,
+        "excluded_probability_mass": 0.0,
+        "horizon": 2,
+        "included_probability_mass": 1.0,
+        "joint_outcome_space": 4,
+        "lower_bound_only": false,
+        "strict_comparison": true,
+        "tau": 0.2,
+        "vocabulary_size": 2
+      },
+      "scope": "Complete vectors produce exact counts; restricted vectors produce lower bounds only."
+    },
+    {
+      "equation": "volume/momentum@v1",
+      "expected": {
+        "accessible_momentum": 1
+      },
+      "passed": true,
+      "result": {
+        "accessible_momentum": 1,
+        "current_count": 3,
+        "previous_count": 2,
+        "scope": "Equal counts do not imply identical probabilities or accessible-set membership."
+      },
+      "scope": ""
+    },
+    {
+      "equation": "volume/strict@v1",
+      "expected": {
+        "accessible_volume": 3,
+        "normalized_accessible_volume": 0.75
+      },
+      "passed": true,
+      "result": {
+        "accessible_volume": 3,
+        "complement_volume": 1,
+        "normalized_accessible_volume": 0.75,
+        "normalized_complement_volume": 0.25,
+        "strict_comparison": true,
+        "tau": 0.05,
+        "vocabulary_size": 4
+      },
+      "scope": "Forecast breadth, not correctness; tokens exactly at tau are excluded."
+    },
+    {
+      "equation": "brain/mirror@v1",
+      "expected": {
+        "current": {
+          "executed": false,
+          "index": 0,
+          "source": "helen.mirror.seed7"
+        },
+        "observation_count": 1
+      },
+      "passed": true,
+      "result": {
+        "current": {
+          "accessible_volume": {
+            "forward": 1,
+            "retrograde": 1
+          },
+          "argmax_agreement": true,
+          "complement_volume": {
+            "forward": 7,
+            "retrograde": 7
+          },
+          "condition": "paired-forward-retrograde",
+          "executed": false,
+          "forward": {
+            "accessible_volume": 1,
+            "complement_volume": 7,
+            "condition": "forward",
+            "entropy": 0.19057343686909373,
+            "executed": false,
+            "index": 0,
+            "maximum_probability": 0.9539802605458109,
+            "momentum": null,
+            "negative_log_probability": 0.04711229899968696,
+            "observation": 1,
+            "predicted_target": 3,
+            "recommendation": {
+              "action": "preserve",
+              "module": "research",
+              "reason": "Preserve the measured state and its source evidence before the next experiment."
+            },
+            "source": "helen.seed7",
+            "target": 3,
+            "target_band": [
+              1,
+              4
+            ],
+            "tau": 0.05,
+            "temperature": 1.0,
+            "top1": true
+          },
+          "index": 0,
+          "observation": 1,
+          "recommendation": {
+            "action": "preserve",
+            "module": "research",
+            "reason": "Preserve both observations and their matched index before another experiment."
+          },
+          "retrograde": {
+            "accessible_volume": 1,
+            "complement_volume": 7,
+            "condition": "retrograde",
+            "entropy": 0.19057343686909373,
+            "executed": false,
+            "index": 0,
+            "maximum_probability": 0.9539802605458109,
+            "momentum": null,
+            "negative_log_probability": 0.04711229899968696,
+            "observation": 1,
+            "predicted_target": 3,
+            "recommendation": {
+              "action": "preserve",
+              "module": "research",
+              "reason": "Preserve the measured state and its source evidence before the next experiment."
+            },
+            "source": "helen.seed7",
+            "target": 3,
+            "target_band": [
+              1,
+              4
+            ],
+            "tau": 0.05,
+            "temperature": 1.0,
+            "top1": true
+          },
+          "source": "helen.mirror.seed7",
+          "tau": 0.05,
+          "temperature": 1.0,
+          "volume_delta": 0
+        },
+        "evidence_exports": 0,
+        "executed": false,
+        "history": [
+          {
+            "accessible_volume": {
+              "forward": 1,
+              "retrograde": 1
+            },
+            "argmax_agreement": true,
+            "complement_volume": {
+              "forward": 7,
+              "retrograde": 7
+            },
+            "condition": "paired-forward-retrograde",
+            "executed": false,
+            "forward": {
+              "accessible_volume": 1,
+              "complement_volume": 7,
+              "condition": "forward",
+              "entropy": 0.19057343686909373,
+              "executed": false,
+              "index": 0,
+              "maximum_probability": 0.9539802605458109,
+              "momentum": null,
+              "negative_log_probability": 0.04711229899968696,
+              "observation": 1,
+              "predicted_target": 3,
+              "recommendation": {
+                "action": "preserve",
+                "module": "research",
+                "reason": "Preserve the measured state and its source evidence before the next experiment."
+              },
+              "source": "helen.seed7",
+              "target": 3,
+              "target_band": [
+                1,
+                4
+              ],
+              "tau": 0.05,
+              "temperature": 1.0,
+              "top1": true
+            },
+            "index": 0,
+            "observation": 1,
+            "recommendation": {
+              "action": "preserve",
+              "module": "research",
+              "reason": "Preserve both observations and their matched index before another experiment."
+            },
+            "retrograde": {
+              "accessible_volume": 1,
+              "complement_volume": 7,
+              "condition": "retrograde",
+              "entropy": 0.19057343686909373,
+              "executed": false,
+              "index": 0,
+              "maximum_probability": 0.9539802605458109,
+              "momentum": null,
+              "negative_log_probability": 0.04711229899968696,
+              "observation": 1,
+              "predicted_target": 3,
+              "recommendation": {
+                "action": "preserve",
+                "module": "research",
+                "reason": "Preserve the measured state and its source evidence before the next experiment."
+              },
+              "source": "helen.seed7",
+              "target": 3,
+              "target_band": [
+                1,
+                4
+              ],
+              "tau": 0.05,
+              "temperature": 1.0,
+              "top1": true
+            },
+            "source": "helen.mirror.seed7",
+            "tau": 0.05,
+            "temperature": 1.0,
+            "volume_delta": 0
+          }
+        ],
+        "history_included": true,
+        "instrument": "Zoe mirrored brain",
+        "observation_count": 1,
+        "recommendation": {
+          "action": "preserve",
+          "module": "research",
+          "reason": "Preserve both observations and their matched index before another experiment."
+        },
+        "schema_version": 1,
+        "scope": "Paired forward and retrograde evaluation of stored categorical forecasts. This is not a time-reversed model, causal reconstruction, consciousness claim, or automatic action."
+      },
+      "scope": "Paired evaluation, not a time-reversed model, implicit mixture, causal reconstruction, or consciousness measurement."
+    }
+  ],
+  "schema_version": 1
+}

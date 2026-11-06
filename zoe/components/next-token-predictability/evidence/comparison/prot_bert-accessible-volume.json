@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "instrument": "accessible volume of a full-vocabulary token distribution",
+  "model": "Rostlab/prot_bert",
+  "model_revision": "7a894481acdc12202f0a415dd567f6cfdb698908",
+  "requested_revision": "7a894481acdc12202f0a415dd567f6cfdb698908",
+  "runtime": {
+    "torch": "2.14.1+cu130",
+    "transformers": "4.56.2"
+  },
+  "prediction_style": "masked",
+  "text": "M K T A",
+  "sequence_length": 6,
+  "target_position": 4,
+  "target_token_id": 6,
+  "target_token": "A",
+  "vocabulary_size": 30,
+  "probability_sum": 1.0000000000000002,
+  "threshold_sweep": [
+    {
+      "tau": 0.02,
+      "accessible_volume": 18,
+      "normalized_accessible_volume": 0.6
+    },
+    {
+      "tau": 0.05,
+      "accessible_volume": 9,
+      "normalized_accessible_volume": 0.3
+    },
+    {
+      "tau": 0.1,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.15,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.3,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    },
+    {
+      "tau": 0.5,
+      "accessible_volume": 0,
+      "normalized_accessible_volume": 0.0
+    }
+  ],
+  "entropy_bits": 4.204556682705429,
+  "top_10_probability_mass": 0.6554341777568399,
+  "target_probability": 0.04621632564593339,
+  "target_rank": 12,
+  "top_tokens": [
+    {
+      "token_id": 5,
+      "token": "L",
+      "probability": 0.09583888802709516
+    },
+    {
+      "token_id": 13,
+      "token": "R",
+      "probability": 0.08641969584482165
+    },
+    {
+      "token_id": 12,
+      "token": "K",
+      "probability": 0.07867991759255674
+    },
+    {
+      "token_id": 10,
+      "token": "S",
+      "probability": 0.0660023286143069
+    },
+    {
+      "token_id": 18,
+      "token": "Q",
+      "probability": 0.061230753030534206
+    },
+    {
+      "token_id": 9,
+      "token": "E",
+      "probability": 0.05739906739298855
+    },
+    {
+      "token_id": 15,
+      "token": "T",
+      "probability": 0.055648024286877
+    },
+    {
+      "token_id": 11,
+      "token": "I",
+      "probability": 0.05406769772046083
+    },
+    {
+      "token_id": 7,
+      "token": "G",
+      "probability": 0.052457220849179344
+    },
+    {
+      "token_id": 17,
+      "token": "N",
+      "probability": 0.04769058439801948
+    }
+  ],
+  "checks": {
+    "repeated_probabilities_identical": true,
+    "target_replaced_with_mask": true,
+    "mask_count": 1
+  },
+  "probability_values_sha256": "8c2fcbcc72c8c6cc27f6c34f2884d5c07ad92f4be904f633614ade555f998d7d",
+  "input_ids_sha256": "1ae8288a5cf16a05cc82390910077f2321549a9649cb3d683f982860f9b0bd8d",
+  "original_input_ids_sha256": "2b035200f7b1476f031d3da92dab82b4fc9f05afd53c51fb9349721a7ed4d3cc",
+  "scope": [
+    "One Rostlab/prot_bert distribution for the final non-special token of the recorded text.",
+    "The target is replaced by a mask token.",
+    "This is a token-level measurement, not a model-quality, security, or action-level benchmark."
+  ]
+}

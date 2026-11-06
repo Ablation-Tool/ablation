@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "instrument": "hidden-token accessible volume using XLNet query-stream self-attention",
+  "model": "xlnet/xlnet-base-cased",
+  "runtime": {
+    "torch": "2.14.1+cu130",
+    "transformers": "5.18.0"
+  },
+  "text": "A language model's output tells us what it generated. It does not, by itself, tell us how many plausible continuations preceded that output. Accessible volume addresses this gap",
+  "sequence_length": 38,
+  "target_position": 35,
+  "target_token_id": 4774,
+  "target_token": "gap",
+  "vocabulary_size": 32000,
+  "probability_sum": 1.0000000000000004,
+  "threshold_sweep": [
+    {
+      "tau": 0.02,
+      "accessible_volume": 6,
+      "normalized_accessible_volume": 0.0001875
+    },
+    {
+      "tau": 0.05,
+      "accessible_volume": 2,
+      "normalized_accessible_volume": 6.25e-05
+    },
+    {
+      "tau": 0.1,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.125e-05
+    },
+    {
+      "tau": 0.15,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.125e-05
+    },
+    {
+      "tau": 0.3,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.125e-05
+    },
+    {
+      "tau": 0.5,
+      "accessible_volume": 1,
+      "normalized_accessible_volume": 3.125e-05
+    }
+  ],
+  "entropy_bits": 3.594613867680489,
+  "top_10_probability_mass": 0.8221877085970415,
+  "target_probability": 0.01235398106194743,
+  "target_rank": 12,
+  "top_tokens": [
+    {
+      "token_id": 9,
+      "token": ".",
+      "probability": 0.5597581168971278
+    },
+    {
+      "token_id": 671,
+      "token": "issue",
+      "probability": 0.06850999284271803
+    },
+    {
+      "token_id": 52,
+      "token": "this",
+      "probability": 0.03958140319012633
+    },
+    {
+      "token_id": 662,
+      "token": "problem",
+      "probability": 0.038886857311052285
+    },
+    {
+      "token_id": 25,
+      "token": "in",
+      "probability": 0.03226045017034757
+    },
+    {
+      "token_id": 60,
+      "token": ":",
+      "probability": 0.020434510209928803
+    },
+    {
+      "token_id": 17,
+      "token": "",
+      "probability": 0.01905008255782414
+    },
+    {
+      "token_id": 33,
+      "token": "with",
+      "probability": 0.01688870035896439
+    },
+    {
+      "token_id": 21,
+      "token": "and",
+      "probability": 0.01358939903431777
+    },
+    {
+      "token_id": 893,
+      "token": "question",
+      "probability": 0.013228196024634157
+    }
+  ],
+  "leakage_checks": [
+    {
+      "replacement_token_id": 0,
+      "probabilities_identical": true
+    },
+    {
+      "replacement_token_id": 1,
+      "probabilities_identical": true
+    },
+    {
+      "replacement_token_id": 2,
+      "probabilities_identical": true
+    }
+  ],
+  "probability_values_sha256": "c445b5ca7d6e46a01b071720c65f88db4411c69fcaf32a59b2a124c472b6d2ff",
+  "input_ids_sha256": "2b84113e5c3b6006c097f5bea0966a972833d7a43de8e745c22a15c7b10c60ac",
+  "scope": [
+    "One xlnet/xlnet-base-cased distribution for the final token of text quoted from the paper.",
+    "The query stream can attend to every other token but not the target token.",
+    "This is a token-level measurement, not a distribution over actions or complete responses."
+  ]
+}

@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="620" viewBox="0 0 1600 620" role="img" aria-labelledby="title description">
+  <title id="title">Accessible Volume: see the shape of a decision</title>
+  <desc id="description">The strict accessible-volume equation beside four categorical probabilities. Three alternatives exceed a threshold of 0.05. Created by Nicholas Michael Kloster on March 6, 2026.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07131e"/>
+      <stop offset="1" stop-color="#12192d"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#62dce8"/>
+      <stop offset="1" stop-color="#c4b5fd"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="620" fill="url(#background)"/>
+  <path d="M72 146 H730" stroke="url(#line)" stroke-width="3"/>
+  <g font-family="DejaVu Sans, Segoe UI, Arial, sans-serif">
+    <text x="72" y="76" fill="#62dce8" font-size="20" letter-spacing="4">FORECASTS · CAUSES · EVIDENCE</text>
+    <text x="72" y="130" fill="#f0f6fc" font-size="52" font-weight="600">See the shape of a decision.</text>
+    <text x="72" y="194" fill="#a9bdd2" font-size="24">One threshold instrument for possible futures and causal pasts.</text>
+    <rect x="64" y="232" width="760" height="156" rx="16" fill="#101f33" stroke="#29465e"/>
+    <text x="96" y="304" fill="#f0f6fc" font-size="31" font-family="DejaVu Sans Mono, monospace">Aτ(S) = Σ 1[P(a | h_T(S)) &gt; τ]</text>
+    <text x="96" y="350" fill="#8ee5bd" font-size="22">Strictly above the threshold. Never at it.</text>
+    <text x="72" y="442" fill="#a9bdd2" font-size="20">Created by Nicholas Michael Kloster · March 6, 2026</text>
+    <rect x="886" y="154" width="650" height="376" rx="18" fill="#101f33" stroke="#29465e"/>
+    <text x="924" y="198" fill="#a9bdd2" font-size="17" letter-spacing="2">ONE DISTRIBUTION, FOUR POSSIBILITIES</text>
+    <path d="M934 400 H1484" stroke="#6d849c" stroke-width="2"/>
+    <path d="M934 390 H1484" stroke="#e7c77b" stroke-width="2" stroke-dasharray="8 7"/>
+    <text x="1480" y="374" fill="#e7c77b" font-size="18" text-anchor="end">τ = 0.05</text>
+    <g font-size="18" text-anchor="middle">
+      <rect x="960" y="260" width="82" height="140" rx="5" fill="#62dce8"/>
+      <text x="1001" y="248" fill="#f0f6fc">0.70</text>
+      <text x="1001" y="429" fill="#f0f6fc">A</text>
+      <rect x="1080" y="360" width="82" height="40" rx="5" fill="#62dce8"/>
+      <text x="1121" y="348" fill="#f0f6fc">0.20</text>
+      <text x="1121" y="429" fill="#f0f6fc">B</text>
+      <rect x="1200" y="384" width="82" height="16" rx="5" fill="#62dce8"/>
+      <text x="1241" y="372" fill="#f0f6fc">0.08</text>
+      <text x="1241" y="429" fill="#f0f6fc">C</text>
+      <rect x="1320" y="396" width="82" height="4" rx="2" fill="#ef445a"/>
+      <text x="1361" y="380" fill="#f0f6fc" font-size="16">0.02</text>
+      <text x="1361" y="429" fill="#f0f6fc">D</text>
+    </g>
+    <text x="924" y="484" fill="#8ee5bd" font-size="28" font-weight="600">3 accessible alternatives</text>
+    <path d="M846 249 L870 235 L894 249 L870 288 Z" fill="none" stroke="#ef445a" stroke-width="4"/>
+    <path d="M852 251 L870 241 L888 251 L870 280 Z" fill="none" stroke="#ef445a" stroke-width="2"/>
+    <text x="72" y="564" fill="#62dce8" font-size="18" letter-spacing="2">NEXT TOKENS  ↔  CAUSAL REPERTOIRES  ·  ONE INSPECTABLE BRAIN</text>
+    <text x="1530" y="582" fill="#ef445a" font-size="18" text-anchor="end">ZOE / GEM</text>
+  </g>
+</svg>

@@ -1,0 +1,501 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-label="Cognitive Field: explicit working memory and information boundaries">
+  <title>Cognitive Field: explicit working memory and information boundaries</title>
+  <rect x="0" y="0" width="1920.0" height="1080.0" fill="#ffffff" />
+  <g data-object-id="background">
+    <title>background</title>
+    <rect x="0.0" y="0.0" width="1920.0" height="1080.0" fill="#000000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="title">
+    <title>title</title>
+    <text x="70.0" y="72.0" font-family="sans-serif" font-size="28.0" fill="#00ffff">COGNITIVE FIELD / MEMORY AS A BOUNDARY</text>
+  </g>
+  <g data-object-id="headline">
+    <title>headline</title>
+    <text x="70.0" y="124.0" font-family="sans-serif" font-size="34.0" fill="#ffffff">Information changes form. Working memory stays explicit.</text>
+  </g>
+  <g data-object-id="subtitle">
+    <title>subtitle</title>
+    <text x="70.0" y="164.0" font-family="sans-serif" font-size="17.0" fill="#d3d3d3">Illustrative information flow · not ACT-R · not a model of consciousness</text>
+  </g>
+  <g data-object-id="information-box">
+    <title>information-box</title>
+    <rect x="85.0" y="370.0" width="195.0" height="85.0" fill="#000000" stroke="#00ffff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="information-label">
+    <title>information-label</title>
+    <text x="110.0" y="419.0" font-family="sans-serif" font-size="18.0" fill="#00ffff">INFORMATION</text>
+  </g>
+  <g data-object-id="sensory-box">
+    <title>sensory-box</title>
+    <rect x="345.0" y="370.0" width="210.0" height="85.0" fill="#000000" stroke="#ff00ff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="sensory-label">
+    <title>sensory-label</title>
+    <text x="365.0" y="419.0" font-family="sans-serif" font-size="16.0" fill="#ff00ff">SENSORY REGISTER</text>
+  </g>
+  <g data-object-id="working-box">
+    <title>working-box</title>
+    <rect x="690.0" y="370.0" width="270.0" height="130.0" fill="#000000" stroke="#ffff00" stroke-width="2.0" />
+  </g>
+  <g data-object-id="working-label">
+    <title>working-label</title>
+    <text x="735.0" y="420.0" font-family="sans-serif" font-size="20.0" fill="#ffff00">WORKING MEMORY</text>
+  </g>
+  <g data-object-id="working-note">
+    <title>working-note</title>
+    <text x="740.0" y="460.0" font-family="sans-serif" font-size="15.0" fill="#000000">active representation</text>
+  </g>
+  <g data-object-id="declarative-box">
+    <title>declarative-box</title>
+    <rect x="640.0" y="220.0" width="290.0" height="85.0" fill="#000000" stroke="#00ffff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="declarative-label">
+    <title>declarative-label</title>
+    <text x="680.0" y="262.0" font-family="sans-serif" font-size="18.0" fill="#00ffff">DECLARATIVE MEMORY</text>
+  </g>
+  <g data-object-id="procedural-box">
+    <title>procedural-box</title>
+    <rect x="1000.0" y="220.0" width="270.0" height="85.0" fill="#000000" stroke="#ff00ff" stroke-width="2.0" />
+  </g>
+  <g data-object-id="procedural-label">
+    <title>procedural-label</title>
+    <text x="1030.0" y="262.0" font-family="sans-serif" font-size="17.0" fill="#ff00ff">PROCEDURAL MEMORY</text>
+  </g>
+  <g data-object-id="performance-box">
+    <title>performance-box</title>
+    <rect x="1010.0" y="610.0" width="230.0" height="85.0" fill="#000000" stroke="#008000" stroke-width="2.0" />
+  </g>
+  <g data-object-id="performance-label">
+    <title>performance-label</title>
+    <text x="1040.0" y="657.0" font-family="sans-serif" font-size="18.0" fill="#008000">PERFORMANCE</text>
+  </g>
+  <g data-object-id="storage-label">
+    <title>storage-label</title>
+    <text x="655.0" y="335.0" font-family="sans-serif" font-size="14.0" fill="#d3d3d3">storage / retrieval</text>
+  </g>
+  <g data-object-id="match-label">
+    <title>match-label</title>
+    <text x="1030.0" y="335.0" font-family="sans-serif" font-size="14.0" fill="#d3d3d3">match / execution</text>
+  </g>
+  <g data-object-id="layers-label">
+    <title>layers-label</title>
+    <text x="1390.0" y="220.0" font-family="sans-serif" font-size="16.0" fill="#00ffff">STATE TRANSITIONS</text>
+  </g>
+  <g data-object-id="mask-label">
+    <title>mask-label</title>
+    <text x="110.0" y="676.0" font-family="sans-serif" font-size="16.0" fill="#00ffff">EXPLICIT STATE MASK</text>
+  </g>
+  <g data-object-id="mask-value">
+    <title>mask-value</title>
+    <text x="110.0" y="862.0" font-family="sans-serif" font-size="16.0" fill="#ffff00">3 active cells · W(0000)=10</text>
+  </g>
+  <g data-object-id="firewall-label">
+    <title>firewall-label</title>
+    <text x="680.0" y="760.0" font-family="sans-serif" font-size="18.0" fill="#00ffff">EPISTEMIC FIREWALL</text>
+  </g>
+  <g data-object-id="firewall-line">
+    <title>firewall-line</title>
+    <text x="680.0" y="805.0" font-family="sans-serif" font-size="18.0" fill="#ffffff">measurement != evidence != belief update != action</text>
+  </g>
+  <g data-object-id="firewall-note">
+    <title>firewall-note</title>
+    <text x="680.0" y="842.0" font-family="sans-serif" font-size="15.0" fill="#d3d3d3">memory is inspectable, not self-certifying</text>
+  </g>
+  <g data-object-id="scope">
+    <title>scope</title>
+    <text x="70.0" y="1032.0" font-family="sans-serif" font-size="14.0" fill="#808080">Illustrative architecture · not ACT-R · not consciousness · not autonomous action</text>
+  </g>
+  <g data-object-id="information-encoding">
+    <title>information-encoding</title>
+    <polyline points="280,412 345,412" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="information-encoding-head-a">
+    <title>information-encoding-head-a</title>
+    <polyline points="335,406 345,412" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="information-encoding-head-b">
+    <title>information-encoding-head-b</title>
+    <polyline points="335,418 345,412" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="sensory-working">
+    <title>sensory-working</title>
+    <polyline points="555,412 690,412" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="sensory-working-head-a">
+    <title>sensory-working-head-a</title>
+    <polyline points="680,406 690,412" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="sensory-working-head-b">
+    <title>sensory-working-head-b</title>
+    <polyline points="680,418 690,412" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="declarative-working">
+    <title>declarative-working</title>
+    <polyline points="790,305 810,370" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="declarative-working-head-a">
+    <title>declarative-working-head-a</title>
+    <polyline points="800,364 810,370" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="declarative-working-head-b">
+    <title>declarative-working-head-b</title>
+    <polyline points="800,376 810,370" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="procedural-working">
+    <title>procedural-working</title>
+    <polyline points="1130,305 940,370" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="procedural-working-head-a">
+    <title>procedural-working-head-a</title>
+    <polyline points="930,364 940,370" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="procedural-working-head-b">
+    <title>procedural-working-head-b</title>
+    <polyline points="930,376 940,370" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.5" />
+  </g>
+  <g data-object-id="working-performance">
+    <title>working-performance</title>
+    <polyline points="900,500 1100,610" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.5" />
+  </g>
+  <g data-object-id="working-performance-head-a">
+    <title>working-performance-head-a</title>
+    <polyline points="1090,604 1100,610" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.5" />
+  </g>
+  <g data-object-id="working-performance-head-b">
+    <title>working-performance-head-b</title>
+    <polyline points="1090,616 1100,610" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.5" />
+  </g>
+  <g data-object-id="performance-declarative">
+    <title>performance-declarative</title>
+    <polyline points="1240,655 930,500" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.5" />
+  </g>
+  <g data-object-id="performance-declarative-head-a">
+    <title>performance-declarative-head-a</title>
+    <polyline points="920,494 930,500" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.5" />
+  </g>
+  <g data-object-id="performance-declarative-head-b">
+    <title>performance-declarative-head-b</title>
+    <polyline points="920,506 930,500" stroke-linejoin="round" fill="none" stroke="#808080" stroke-width="1.5" />
+  </g>
+  <g data-object-id="state-0">
+    <title>state-0</title>
+    <rect x="1390.0" y="250.0" width="420.0" height="50.0" fill="#008000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-top-0">
+    <title>state-top-0</title>
+    <polyline points="1390,250 1412,228" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-side-0">
+    <title>state-side-0</title>
+    <polyline points="1810,250 1832,228" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-bottom-0">
+    <title>state-bottom-0</title>
+    <polyline points="1832,228 1832,278" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-division-0">
+    <title>state-division-0</title>
+    <polyline points="1530,250 1530,300" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="state-division-2-0">
+    <title>state-division-2-0</title>
+    <polyline points="1670,250 1670,300" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="state-1">
+    <title>state-1</title>
+    <rect x="1408.0" y="332.0" width="394.79999999999995" height="47.48000000000002" fill="#0000ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-top-1">
+    <title>state-top-1</title>
+    <polyline points="1408,332 1430,310" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-side-1">
+    <title>state-side-1</title>
+    <polyline points="1802.8,332 1824.8,310" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-bottom-1">
+    <title>state-bottom-1</title>
+    <polyline points="1824.8,310 1824.8,357.48" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-division-1">
+    <title>state-division-1</title>
+    <polyline points="1539.6,332 1539.6,379.48" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="state-division-2-1">
+    <title>state-division-2-1</title>
+    <polyline points="1671.2,332 1671.2,379.48" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="state-2">
+    <title>state-2</title>
+    <rect x="1426.0" y="414.0" width="369.5999999999999" height="44.95999999999998" fill="#ff0000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-top-2">
+    <title>state-top-2</title>
+    <polyline points="1426,414 1448,392" stroke-linejoin="round" fill="none" stroke="#ff0000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-side-2">
+    <title>state-side-2</title>
+    <polyline points="1795.6,414 1817.6,392" stroke-linejoin="round" fill="none" stroke="#ff0000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-bottom-2">
+    <title>state-bottom-2</title>
+    <polyline points="1817.6,392 1817.6,436.96" stroke-linejoin="round" fill="none" stroke="#ff0000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-division-2">
+    <title>state-division-2</title>
+    <polyline points="1549.2,414 1549.2,458.96" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="state-division-2-2">
+    <title>state-division-2-2</title>
+    <polyline points="1672.4,414 1672.4,458.96" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="state-3">
+    <title>state-3</title>
+    <rect x="1444.0" y="496.0" width="344.4000000000001" height="42.440000000000055" fill="#ff00ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-top-3">
+    <title>state-top-3</title>
+    <polyline points="1444,496 1466,474" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-side-3">
+    <title>state-side-3</title>
+    <polyline points="1788.4,496 1810.4,474" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-bottom-3">
+    <title>state-bottom-3</title>
+    <polyline points="1810.4,474 1810.4,516.44" stroke-linejoin="round" fill="none" stroke="#ff00ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-division-3">
+    <title>state-division-3</title>
+    <polyline points="1558.8,496 1558.8,538.44" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="state-division-2-3">
+    <title>state-division-2-3</title>
+    <polyline points="1673.6,496 1673.6,538.44" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="state-4">
+    <title>state-4</title>
+    <rect x="1462.0" y="578.0" width="319.20000000000005" height="39.91999999999996" fill="#00ffff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-top-4">
+    <title>state-top-4</title>
+    <polyline points="1462,578 1484,556" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-side-4">
+    <title>state-side-4</title>
+    <polyline points="1781.2,578 1803.2,556" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-bottom-4">
+    <title>state-bottom-4</title>
+    <polyline points="1803.2,556 1803.2,595.92" stroke-linejoin="round" fill="none" stroke="#00ffff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-division-4">
+    <title>state-division-4</title>
+    <polyline points="1568.4,578 1568.4,617.92" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="state-division-2-4">
+    <title>state-division-2-4</title>
+    <polyline points="1674.8,578 1674.8,617.92" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="state-5">
+    <title>state-5</title>
+    <rect x="1480.0" y="660.0" width="294.0" height="37.39999999999998" fill="#ffff00" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-top-5">
+    <title>state-top-5</title>
+    <polyline points="1480,660 1502,638" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-side-5">
+    <title>state-side-5</title>
+    <polyline points="1774,660 1796,638" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-bottom-5">
+    <title>state-bottom-5</title>
+    <polyline points="1796,638 1796,675.4" stroke-linejoin="round" fill="none" stroke="#ffff00" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-division-5">
+    <title>state-division-5</title>
+    <polyline points="1578,660 1578,697.4" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="state-division-2-5">
+    <title>state-division-2-5</title>
+    <polyline points="1676,660 1676,697.4" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="state-6">
+    <title>state-6</title>
+    <rect x="1498.0" y="742.0" width="268.79999999999995" height="34.879999999999995" fill="#008000" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-top-6">
+    <title>state-top-6</title>
+    <polyline points="1498,742 1520,720" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-side-6">
+    <title>state-side-6</title>
+    <polyline points="1766.8,742 1788.8,720" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-bottom-6">
+    <title>state-bottom-6</title>
+    <polyline points="1788.8,720 1788.8,754.88" stroke-linejoin="round" fill="none" stroke="#008000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-division-6">
+    <title>state-division-6</title>
+    <polyline points="1587.6,742 1587.6,776.88" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="state-division-2-6">
+    <title>state-division-2-6</title>
+    <polyline points="1677.2,742 1677.2,776.88" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="state-7">
+    <title>state-7</title>
+    <rect x="1516.0" y="824.0" width="243.5999999999999" height="32.360000000000014" fill="#0000ff" stroke="#000000" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-top-7">
+    <title>state-top-7</title>
+    <polyline points="1516,824 1538,802" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-side-7">
+    <title>state-side-7</title>
+    <polyline points="1759.6,824 1781.6,802" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-bottom-7">
+    <title>state-bottom-7</title>
+    <polyline points="1781.6,802 1781.6,834.36" stroke-linejoin="round" fill="none" stroke="#0000ff" stroke-width="1.0" />
+  </g>
+  <g data-object-id="state-division-7">
+    <title>state-division-7</title>
+    <polyline points="1597.2,824 1597.2,856.36" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="state-division-2-7">
+    <title>state-division-2-7</title>
+    <polyline points="1678.4,824 1678.4,856.36" stroke-linejoin="round" fill="none" stroke="#000000" stroke-width="0.7" />
+  </g>
+  <g data-object-id="mask-0-0">
+    <title>mask-0-0</title>
+    <rect x="110.0" y="710.0" width="56.0" height="56.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-cell-0-0">
+    <title>mask-cell-0-0</title>
+    <text x="125.0" y="746.0" font-family="sans-serif" font-size="18.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="mask-0-1">
+    <title>mask-0-1</title>
+    <rect x="166.0" y="710.0" width="56.0" height="56.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-cell-0-1">
+    <title>mask-cell-0-1</title>
+    <text x="181.0" y="746.0" font-family="sans-serif" font-size="18.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="mask-0-2">
+    <title>mask-0-2</title>
+    <rect x="222.0" y="710.0" width="56.0" height="56.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-cell-0-2">
+    <title>mask-cell-0-2</title>
+    <text x="237.0" y="746.0" font-family="sans-serif" font-size="18.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="mask-0-3">
+    <title>mask-0-3</title>
+    <rect x="278.0" y="710.0" width="56.0" height="56.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-cell-0-3">
+    <title>mask-cell-0-3</title>
+    <text x="293.0" y="746.0" font-family="sans-serif" font-size="18.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="mask-1-0">
+    <title>mask-1-0</title>
+    <rect x="110.0" y="766.0" width="56.0" height="56.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-cell-1-0">
+    <title>mask-cell-1-0</title>
+    <text x="125.0" y="802.0" font-family="sans-serif" font-size="18.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="mask-1-1">
+    <title>mask-1-1</title>
+    <rect x="166.0" y="766.0" width="56.0" height="56.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-cell-1-1">
+    <title>mask-cell-1-1</title>
+    <text x="181.0" y="802.0" font-family="sans-serif" font-size="18.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="mask-1-2">
+    <title>mask-1-2</title>
+    <rect x="222.0" y="766.0" width="56.0" height="56.0" fill="#ffffff" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-cell-1-2">
+    <title>mask-cell-1-2</title>
+    <text x="237.0" y="802.0" font-family="sans-serif" font-size="18.0" fill="#000000">1</text>
+  </g>
+  <g data-object-id="mask-1-3">
+    <title>mask-1-3</title>
+    <rect x="278.0" y="766.0" width="56.0" height="56.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-cell-1-3">
+    <title>mask-cell-1-3</title>
+    <text x="293.0" y="802.0" font-family="sans-serif" font-size="18.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="mask-2-0">
+    <title>mask-2-0</title>
+    <rect x="110.0" y="822.0" width="56.0" height="56.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-cell-2-0">
+    <title>mask-cell-2-0</title>
+    <text x="125.0" y="858.0" font-family="sans-serif" font-size="18.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="mask-2-1">
+    <title>mask-2-1</title>
+    <rect x="166.0" y="822.0" width="56.0" height="56.0" fill="#ffffff" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-cell-2-1">
+    <title>mask-cell-2-1</title>
+    <text x="181.0" y="858.0" font-family="sans-serif" font-size="18.0" fill="#000000">1</text>
+  </g>
+  <g data-object-id="mask-2-2">
+    <title>mask-2-2</title>
+    <rect x="222.0" y="822.0" width="56.0" height="56.0" fill="#ffffff" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-cell-2-2">
+    <title>mask-cell-2-2</title>
+    <text x="237.0" y="858.0" font-family="sans-serif" font-size="18.0" fill="#000000">1</text>
+  </g>
+  <g data-object-id="mask-2-3">
+    <title>mask-2-3</title>
+    <rect x="278.0" y="822.0" width="56.0" height="56.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-cell-2-3">
+    <title>mask-cell-2-3</title>
+    <text x="293.0" y="858.0" font-family="sans-serif" font-size="18.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="mask-3-0">
+    <title>mask-3-0</title>
+    <rect x="110.0" y="878.0" width="56.0" height="56.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-cell-3-0">
+    <title>mask-cell-3-0</title>
+    <text x="125.0" y="914.0" font-family="sans-serif" font-size="18.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="mask-3-1">
+    <title>mask-3-1</title>
+    <rect x="166.0" y="878.0" width="56.0" height="56.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-cell-3-1">
+    <title>mask-cell-3-1</title>
+    <text x="181.0" y="914.0" font-family="sans-serif" font-size="18.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="mask-3-2">
+    <title>mask-3-2</title>
+    <rect x="222.0" y="878.0" width="56.0" height="56.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-cell-3-2">
+    <title>mask-cell-3-2</title>
+    <text x="237.0" y="914.0" font-family="sans-serif" font-size="18.0" fill="#ffffff">0</text>
+  </g>
+  <g data-object-id="mask-3-3">
+    <title>mask-3-3</title>
+    <rect x="278.0" y="878.0" width="56.0" height="56.0" fill="#000000" stroke="#808080" stroke-width="1.0" />
+  </g>
+  <g data-object-id="mask-cell-3-3">
+    <title>mask-cell-3-3</title>
+    <text x="293.0" y="914.0" font-family="sans-serif" font-size="18.0" fill="#ffffff">0</text>
+  </g>
+</svg>

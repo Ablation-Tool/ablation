@@ -1,0 +1,36 @@
+{
+  "belief_updated": false,
+  "consciousness_measured": false,
+  "contour_segments": 8,
+  "executed": false,
+  "future_accessible_volume": 3,
+  "future_threshold": 0.05,
+  "module": "hourglass",
+  "past_accessible_q_volume": 3,
+  "past_threshold": 0.2,
+  "phi_computed": false,
+  "q_arrows": [
+    {
+      "delta_accessible_q_volume": -1,
+      "ei_bits": 0.4150374992788437,
+      "entered": [],
+      "exited": [
+        "11"
+      ],
+      "tau": 0.2
+    },
+    {
+      "delta_accessible_q_volume": 3,
+      "ei_bits": 0.4150374992788437,
+      "entered": [
+        "00",
+        "01",
+        "10"
+      ],
+      "exited": [],
+      "tau": 0.3
+    }
+  ],
+  "style": "GEM/Artline geometry using the standard VDI palette",
+  "summary": "Causal pasts converge into the present; forecast futures diverge. One strict threshold ruler measures both without measuring consciousness or authorizing action."
+}

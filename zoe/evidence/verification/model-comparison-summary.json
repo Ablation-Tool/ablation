@@ -1,0 +1,696 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-11-05T06:38:27Z",
+  "manifest_sha256": "a278cbc15b5d9c6027678154c76a591fa5c95fb8c6e3e01ee26034d4a224e129",
+  "thresholds": [
+    0.02,
+    0.05,
+    0.1,
+    0.15,
+    0.3,
+    0.5
+  ],
+  "comparison": "strict_probability_greater_than_threshold",
+  "verified_case_count": 16,
+  "verification": [
+    "Every saved probability vector is finite, nonnegative, and sums to one within 1e-8.",
+    "Every raw probability, model-input, and original-input hash matches its report.",
+    "Every threshold count, target rank, entropy, top-10 mass, and top-token ordering recomputes from raw values.",
+    "Every repeated inference was bit-identical; masked inputs changed only the target; causal inputs exclude the target."
+  ],
+  "scope": "One fixed case per model. These measurements describe distribution shape, not model quality, security, safety, correctness, or actions.",
+  "results": [
+    {
+      "category": "baseline",
+      "model": "google-bert/bert-base-cased",
+      "model_revision": "cd5ef92a9fb2f889e972770a36d4ed042daf221e",
+      "prediction_style": "masked",
+      "text": "A language model's output tells us what it generated. It does not, by itself, tell us how many plausible continuations preceded that output. Accessible volume addresses this gap",
+      "target": "gap",
+      "target_token_id": 7275,
+      "vocabulary_size": 28996,
+      "threshold_sweep": [
+        2,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "target_probability": 1.9586422537364087e-08,
+      "target_rank": 1245,
+      "top_token": {
+        "token_id": 119,
+        "token": ".",
+        "probability": 0.9582788898818643
+      },
+      "entropy_bits": 0.28648231019600856,
+      "maximum_probability": 0.9582788898818643,
+      "top_10_probability_mass": 0.9997707025355699,
+      "probability_values_sha256": "2eb2448513ebd8346dd8fdd25e28df4007ba95c2044257513c7b41b05d23a953",
+      "input_ids_sha256": "0a44b5f66c19f005b2b67198aed6da583897eb46d3eeba0558e14ca4be026de8",
+      "original_input_ids_sha256": "dfbc1af8504551a02ca3573d6c6d3b6dea49559ed8bbacf0a92f05e2bd83b76a",
+      "report_sha256": "8802ca8db876584229ce24e9b050572d880a166773ad10298dfdd07857fca5cf",
+      "raw_artifact_sha256": "1e9186301e10ffdf2ea867bf36f4484c5d7610c2c09ea1ff81e21e8d21a6d789",
+      "runtime": {
+        "torch": "2.14.1+cu130",
+        "transformers": "4.56.2"
+      },
+      "checks": {
+        "repeated_probabilities_identical": true,
+        "target_replaced_with_mask": true,
+        "mask_count": 1
+      }
+    },
+    {
+      "category": "baseline",
+      "model": "FacebookAI/roberta-base",
+      "model_revision": "e2da8e2f811d1448a5b465c236feacd80ffbac7b",
+      "prediction_style": "masked",
+      "text": "A language model's output tells us what it generated. It does not, by itself, tell us how many plausible continuations preceded that output. Accessible volume addresses this gap",
+      "target": "gap",
+      "target_token_id": 4044,
+      "vocabulary_size": 50265,
+      "threshold_sweep": [
+        2,
+        2,
+        1,
+        1,
+        1,
+        1
+      ],
+      "target_probability": 2.9973262398040968e-05,
+      "target_rank": 27,
+      "top_token": {
+        "token_id": 4,
+        "token": ".",
+        "probability": 0.9345209890422012
+      },
+      "entropy_bits": 0.4506686193845855,
+      "maximum_probability": 0.9345209890422012,
+      "top_10_probability_mass": 0.9962055253144915,
+      "probability_values_sha256": "47b37920b2514043fe9d88ba007bbcf82c05e82387abad5eab6d783cec574344",
+      "input_ids_sha256": "2ef5b2ba1f7cabc44a6efb80d2525ca7307bd688cf2a4d68869250c1e6fa4197",
+      "original_input_ids_sha256": "9b8551ce8c216904d5d1230f85368d8db0bf87fd9d8e65508dd5f67aec78f5d9",
+      "report_sha256": "442f2506ba82a1c13ef91cc3922083cb22dd271a4caf73e9a9f7cfc68ff72a28",
+      "raw_artifact_sha256": "2e67acdc9ff2bc66fe104125854d7b8caaa1cb7ce577807869cca422ce9c0246",
+      "runtime": {
+        "torch": "2.14.1+cu130",
+        "transformers": "4.56.2"
+      },
+      "checks": {
+        "repeated_probabilities_identical": true,
+        "target_replaced_with_mask": true,
+        "mask_count": 1
+      }
+    },
+    {
+      "category": "baseline",
+      "model": "albert/albert-base-v2",
+      "model_revision": "8e2f239c5f8a2c0f253781ca60135db913e5c80c",
+      "prediction_style": "masked",
+      "text": "A language model's output tells us what it generated. It does not, by itself, tell us how many plausible continuations preceded that output. Accessible volume addresses this gap",
+      "target": "gap",
+      "target_token_id": 4127,
+      "vocabulary_size": 30000,
+      "threshold_sweep": [
+        5,
+        1,
+        1,
+        1,
+        1,
+        0
+      ],
+      "target_probability": 2.9557940405214914e-05,
+      "target_rank": 1601,
+      "top_token": {
+        "token_id": 9,
+        "token": ".",
+        "probability": 0.46319783105347095
+      },
+      "entropy_bits": 5.691685301301195,
+      "maximum_probability": 0.46319783105347095,
+      "top_10_probability_mass": 0.6738051737491049,
+      "probability_values_sha256": "e980326c3bb845335582cb992b477e1ae5b41deb5d4dfd16470e12c1df63cf56",
+      "input_ids_sha256": "100faa10cd0289600d3ed34d878fb65a47ede4a7c7f5159e4369fcf5b34e460d",
+      "original_input_ids_sha256": "a90d0da80b901c7df1606dd8eef3eb4bdbb11fc5894a028ac17d950b0d60ad43",
+      "report_sha256": "bd7e1d4fb520d063b71896b8d3d87a90ab390b71c7290c135ca3c13e154dbc09",
+      "raw_artifact_sha256": "7a5e74155020cfed6c68f9f0384a9382a542e32df7c7cbdee69efe94561f8094",
+      "runtime": {
+        "torch": "2.14.1+cu130",
+        "transformers": "4.56.2"
+      },
+      "checks": {
+        "repeated_probabilities_identical": true,
+        "target_replaced_with_mask": true,
+        "mask_count": 1
+      }
+    },
+    {
+      "category": "baseline",
+      "model": "openai-community/gpt2",
+      "model_revision": "607a30d783dfa663caf39e06633721c8d4cfcd7e",
+      "prediction_style": "causal",
+      "text": "A language model's output tells us what it generated. It does not, by itself, tell us how many plausible continuations preceded that output. Accessible volume addresses this gap",
+      "target": "gap",
+      "target_token_id": 7625,
+      "vocabulary_size": 50257,
+      "threshold_sweep": [
+        7,
+        3,
+        2,
+        1,
+        0,
+        0
+      ],
+      "target_probability": 0.0013128478713675636,
+      "target_rank": 70,
+      "top_token": {
+        "token_id": 1917,
+        "token": " problem",
+        "probability": 0.2670932624935929
+      },
+      "entropy_bits": 6.219492364432723,
+      "maximum_probability": 0.2670932624935929,
+      "top_10_probability_mass": 0.6128967660881403,
+      "probability_values_sha256": "13a004fe08f692d6a51384b0fabee79627f51bb7809f9df4ff15a4b50c225a06",
+      "input_ids_sha256": "49cf49e256d6ba83271d2642c0ac78c55debc7a297de50c4e6168e741376668a",
+      "original_input_ids_sha256": "ca36ed87014d441cdd82ad4fd5d1dd2467e3498d5f2c009ec723fd83e235cec4",
+      "report_sha256": "77977b580015d7542a01bb2a457b0673fa957d2fec22f622f2f8c4f62607afd5",
+      "raw_artifact_sha256": "e9d3be79d8566785c44469234cc1b36d8660018a1b0efbbe9d03669eb76717c5",
+      "runtime": {
+        "torch": "2.14.1+cu130",
+        "transformers": "4.56.2"
+      },
+      "checks": {
+        "repeated_probabilities_identical": true,
+        "target_absent_from_input_by_construction": true,
+        "prefix_length": 34
+      }
+    },
+    {
+      "category": "security",
+      "model": "ehsanaghaei/SecureBERT",
+      "model_revision": "3a47918dd874e5c769efd152b51c5756a953fb67",
+      "prediction_style": "masked",
+      "text": "The analyst documented the firmware vulnerability in the report",
+      "target": "report",
+      "target_token_id": 266,
+      "vocabulary_size": 50265,
+      "threshold_sweep": [
+        6,
+        4,
+        2,
+        0,
+        0,
+        0
+      ],
+      "target_probability": 0.009494356278549524,
+      "target_rank": 14,
+      "top_token": {
+        "token_id": 1152,
+        "token": " product",
+        "probability": 0.12004973356047954
+      },
+      "entropy_bits": 6.945886891835405,
+      "maximum_probability": 0.12004973356047954,
+      "top_10_probability_mass": 0.5279445617596982,
+      "probability_values_sha256": "f54d12e4fe0521bd0fb152e870eb4efb6034dd2354b466858f562541ac33b536",
+      "input_ids_sha256": "81264aaa37de80fd429f98bc379d33b30504673d436b8d6a3c89897bfbd196f9",
+      "original_input_ids_sha256": "36a6567a7e943550cedb6fed27f683a22e62400cfbd3c67f598d9e1678b79c0c",
+      "report_sha256": "6c6515ee1e0f854026525d2cc838715158b79b4fc77a909e9d3ee9f108687fd4",
+      "raw_artifact_sha256": "8bda2eda637fc438652f9cf7abe94f6dcfd5d0c9e7528c92b98bd602a6bcd967",
+      "runtime": {
+        "torch": "2.14.1+cu130",
+        "transformers": "4.56.2"
+      },
+      "checks": {
+        "repeated_probabilities_identical": true,
+        "target_replaced_with_mask": true,
+        "mask_count": 1
+      }
+    },
+    {
+      "category": "security",
+      "model": "markusbayer/CySecBERT",
+      "model_revision": "c9e04e355a2bc0690b6e55833a9895d7591afcd0",
+      "prediction_style": "masked",
+      "text": "The analyst documented the firmware vulnerability in the report",
+      "target": "report",
+      "target_token_id": 3189,
+      "vocabulary_size": 30522,
+      "threshold_sweep": [
+        2,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "target_probability": 0.006890482207850986,
+      "target_rank": 21,
+      "top_token": {
+        "token_id": 4044,
+        "token": "environment",
+        "probability": 0.04246119357374874
+      },
+      "entropy_bits": 9.753574008672087,
+      "maximum_probability": 0.04246119357374874,
+      "top_10_probability_mass": 0.19504707205539282,
+      "probability_values_sha256": "01b496f84ea765c896a7811c1c22bc885a4486843057beabf4bf984bf7d3602c",
+      "input_ids_sha256": "e476ebf4bc5f472d3766328424dfa505fd943c5a7965ad0e653a01dc4f631c3a",
+      "original_input_ids_sha256": "51874b14a373cb3a033cc70f23a0832124b60a10cb312cc34362f3b39ec0a5cf",
+      "report_sha256": "34d5bb923119a26d028de5436ac8d03168d71262a5519c63d9ecd0376e617142",
+      "raw_artifact_sha256": "bab5322a3244f8b2c70f45277e0b7526156ec3f3c2078b9a68516ff17de7d805",
+      "runtime": {
+        "torch": "2.14.1+cu130",
+        "transformers": "4.56.2"
+      },
+      "checks": {
+        "repeated_probabilities_identical": true,
+        "target_replaced_with_mask": true,
+        "mask_count": 1
+      }
+    },
+    {
+      "category": "biomedical",
+      "model": "dmis-lab/biobert-base-cased-v1.2",
+      "model_revision": "67c9c25b46986521ca33df05d8540da1210b3256",
+      "prediction_style": "masked",
+      "text": "The study measured the protein",
+      "target": "protein",
+      "target_token_id": 4592,
+      "vocabulary_size": 28996,
+      "threshold_sweep": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "target_probability": 0.0004123154349441524,
+      "target_rank": 426,
+      "top_token": {
+        "token_id": 2629,
+        "token": "effect",
+        "probability": 0.022374558143385695
+      },
+      "entropy_bits": 9.887851095327129,
+      "maximum_probability": 0.022374558143385695,
+      "top_10_probability_mass": 0.14065445806729626,
+      "probability_values_sha256": "ca3f779bdf6f1b3062a92ab97332de0c191b4622b49e99b5fc66f7714ecd74b1",
+      "input_ids_sha256": "5b4a595f42d7b3280bef6a8b47f5c4fa11175be171a8383548ab01b39927a229",
+      "original_input_ids_sha256": "59e71491bede7f3ee3697bd7128c755ec3be44bce1305014fdaecb54cbd5495a",
+      "report_sha256": "d0458e28a5db98dfe5541f3654525dcaf44c26fa5f96e24aac581c1f58ee5fae",
+      "raw_artifact_sha256": "fb6ee8287f9631d31aaff637fff2f0cd1bfac74261d7a30dfe87008ac597e649",
+      "runtime": {
+        "torch": "2.14.1+cu130",
+        "transformers": "4.56.2"
+      },
+      "checks": {
+        "repeated_probabilities_identical": true,
+        "target_replaced_with_mask": true,
+        "mask_count": 1
+      }
+    },
+    {
+      "category": "clinical",
+      "model": "emilyalsentzer/Bio_ClinicalBERT",
+      "model_revision": "d5892b39a4adaed74b92212a44081509db72f87b",
+      "prediction_style": "masked",
+      "text": "The clinician documented the diagnosis",
+      "target": "diagnosis",
+      "target_token_id": 12645,
+      "vocabulary_size": 28996,
+      "threshold_sweep": [
+        6,
+        2,
+        2,
+        1,
+        0,
+        0
+      ],
+      "target_probability": 0.0006536957990977444,
+      "target_rank": 121,
+      "top_token": {
+        "token_id": 5351,
+        "token": "patient",
+        "probability": 0.23717074044451752
+      },
+      "entropy_bits": 6.615658712806766,
+      "maximum_probability": 0.23717074044451752,
+      "top_10_probability_mass": 0.5458412684259784,
+      "probability_values_sha256": "c1e288e8c870df95d29879de7b034bb7560f2fe04f1a8fb59b1ff992bacdceaf",
+      "input_ids_sha256": "b81475dd9f0c63296a854ba14c6fed6e916c6afcc765171f1f535daa5ea74b1e",
+      "original_input_ids_sha256": "ece1b62c98ee7cb90a5d2dc79c73d9f152a9001f11fbea4be5c9970d126b4992",
+      "report_sha256": "0015c6843f0cd43e950c68d06239b0f2748bb838f45a3f38b5198eb861810ed2",
+      "raw_artifact_sha256": "e00e225c4982d471f7cda5872ea2e7a59e741c3475621d05e692d8f0ac9b80ea",
+      "runtime": {
+        "torch": "2.14.1+cu130",
+        "transformers": "4.56.2"
+      },
+      "checks": {
+        "repeated_probabilities_identical": true,
+        "target_replaced_with_mask": true,
+        "mask_count": 1
+      }
+    },
+    {
+      "category": "scientific",
+      "model": "allenai/scibert_scivocab_cased",
+      "model_revision": "ddf0be025f8e432a1870e34811997ba6725bf04a",
+      "prediction_style": "masked",
+      "text": "The experiment supported the hypothesis",
+      "target": "hypothesis",
+      "target_token_id": 3665,
+      "vocabulary_size": 31116,
+      "threshold_sweep": [
+        6,
+        3,
+        2,
+        0,
+        0,
+        0
+      ],
+      "target_probability": 0.11193765939961747,
+      "target_rank": 2,
+      "top_token": {
+        "token_id": 211,
+        "token": ".",
+        "probability": 0.14495400044811751
+      },
+      "entropy_bits": 8.357980807525271,
+      "maximum_probability": 0.14495400044811751,
+      "top_10_probability_mass": 0.42929429818524556,
+      "probability_values_sha256": "b9e940ffe2b6653210cf8d2258e132103cfe4606c60ab374cad014beba5300e6",
+      "input_ids_sha256": "971f35ddec5c08e6b7420bc3348c2bb53aa478a025762186da0b2ebd032fc121",
+      "original_input_ids_sha256": "8be199843e8f95df934bfff1b5351b311be3c28816dbdd77b77b12bd48fb7fc6",
+      "report_sha256": "05c37c3733c684a2dadfda648ed5575f8bf1b74180f88910f26438e88fbbcc58",
+      "raw_artifact_sha256": "91ef0f1675392774b79aac6bc21527d3775ea6f3374a849ed25c893a5964a2c2",
+      "runtime": {
+        "torch": "2.14.1+cu130",
+        "transformers": "4.56.2"
+      },
+      "checks": {
+        "repeated_probabilities_identical": true,
+        "target_replaced_with_mask": true,
+        "mask_count": 1
+      }
+    },
+    {
+      "category": "legal",
+      "model": "nlpaueb/legal-bert-base-uncased",
+      "model_revision": "15b570cbf88259610b082a167dacc190124f60f6",
+      "prediction_style": "masked",
+      "text": "The parties signed the agreement",
+      "target": "agreement",
+      "target_token_id": 232,
+      "vocabulary_size": 30522,
+      "threshold_sweep": [
+        7,
+        2,
+        1,
+        1,
+        1,
+        0
+      ],
+      "target_probability": 0.3638567203414802,
+      "target_rank": 1,
+      "top_token": {
+        "token_id": 232,
+        "token": "agreement",
+        "probability": 0.3638567203414802
+      },
+      "entropy_bits": 5.080231368754015,
+      "maximum_probability": 0.3638567203414802,
+      "top_10_probability_mass": 0.6486007023175913,
+      "probability_values_sha256": "7334404f1ce267046b19fd5bba4446b36bdf8c9e41fb9081ada136a51efe40bb",
+      "input_ids_sha256": "641caaf61de658c5c32177054ae633dde3a40e680dafece4c3b1813c076a3cc6",
+      "original_input_ids_sha256": "a0ad5ad8dd432d6a60e41d67ff9de33e7ef6291a5a88851706d5bcde6bb8215f",
+      "report_sha256": "c780ab87348e54594ee4bdc866e0446ae1046ec3f1236995c3e44dc8e1238106",
+      "raw_artifact_sha256": "b12bb4ec11b8a1e15b023274d9801d32c6f6ad67df392df3aad6c6a8bcd85727",
+      "runtime": {
+        "torch": "2.14.1+cu130",
+        "transformers": "4.56.2"
+      },
+      "checks": {
+        "repeated_probabilities_identical": true,
+        "target_replaced_with_mask": true,
+        "mask_count": 1
+      }
+    },
+    {
+      "category": "financial",
+      "model": "yiyanghkust/finbert-pretrain",
+      "model_revision": "88ab954a39ea6d3ce2b62cff086dd5ad1172c664",
+      "prediction_style": "masked",
+      "text": "The company reported earnings",
+      "target": "earnings",
+      "target_token_id": 149,
+      "vocabulary_size": 30873,
+      "threshold_sweep": [
+        5,
+        3,
+        2,
+        2,
+        0,
+        0
+      ],
+      "target_probability": 0.014250847429907778,
+      "target_rank": 7,
+      "top_token": {
+        "token_id": 15,
+        "token": "that",
+        "probability": 0.21932430040506593
+      },
+      "entropy_bits": 6.57924452906204,
+      "maximum_probability": 0.21932430040506593,
+      "top_10_probability_mass": 0.5855895349498187,
+      "probability_values_sha256": "0693cad31d71459af6d5198dee845d86a176d93e809757184df9160508dc2aec",
+      "input_ids_sha256": "9423e68bf7715dace4f2df600bd9e3fb7f8afc0735e0ab5715d7122be088b42b",
+      "original_input_ids_sha256": "152b1fad00dcdfbe5ed4e1f8f754d8b089cb847a3ce057f9b13614b2bc0be562",
+      "report_sha256": "8040757e5f0e6875fe16bbc73d6e27cc8cb69da227c056eb083c411d1e3972da",
+      "raw_artifact_sha256": "3251763de7718c4de8daec541ea142d8e658b0c8c6eb43b945b4fcc69ba1c08e",
+      "runtime": {
+        "torch": "2.14.1+cu130",
+        "transformers": "4.56.2"
+      },
+      "checks": {
+        "repeated_probabilities_identical": true,
+        "target_replaced_with_mask": true,
+        "mask_count": 1
+      }
+    },
+    {
+      "category": "programming",
+      "model": "microsoft/codebert-base",
+      "model_revision": "3b0952feddeffad0063f274080e3c23d75e7eb39",
+      "prediction_style": "masked",
+      "text": "def get_value():\n    return",
+      "target": "return",
+      "target_token_id": 671,
+      "vocabulary_size": 50265,
+      "threshold_sweep": [
+        4,
+        3,
+        1,
+        1,
+        1,
+        0
+      ],
+      "target_probability": 6.190185267123785e-08,
+      "target_rank": 20066,
+      "top_token": {
+        "token_id": 5647,
+        "token": " partly",
+        "probability": 0.4567807308779178
+      },
+      "entropy_bits": 5.1174560604732235,
+      "maximum_probability": 0.4567807308779178,
+      "top_10_probability_mass": 0.6976129127300317,
+      "probability_values_sha256": "36a67671a0bf28237b5797d69ac64b3f51b6b5363be7cba405951a1cb655af06",
+      "input_ids_sha256": "4a945e24a7a9948c45816f55345c9ac123ab454c7f8bb9c31a7ff907bf5a04ce",
+      "original_input_ids_sha256": "ae50384a1b89bc53e391b4ff1d19c272faa636519ed61ff1d7f1538dfc06cd66",
+      "report_sha256": "369a922b76c321567447014d023d816afd6604fc36e87667d0ec63471efbf4af",
+      "raw_artifact_sha256": "951ba376fbc8cc328ef2d3e4c4efd4a84725290e2e22062b30c86d8766ff8533",
+      "runtime": {
+        "torch": "2.14.1+cu130",
+        "transformers": "4.56.2"
+      },
+      "checks": {
+        "repeated_probabilities_identical": true,
+        "target_replaced_with_mask": true,
+        "mask_count": 1
+      }
+    },
+    {
+      "category": "multilingual",
+      "model": "FacebookAI/xlm-roberta-base",
+      "model_revision": "e73636d4f797dec63c3081bb6ed5c7b0bb3f2089",
+      "prediction_style": "masked",
+      "text": "La casa es grande",
+      "target": "grande",
+      "target_token_id": 3189,
+      "vocabulary_size": 250002,
+      "threshold_sweep": [
+        6,
+        3,
+        1,
+        0,
+        0,
+        0
+      ],
+      "target_probability": 0.06992051532096344,
+      "target_rank": 3,
+      "top_token": {
+        "token_id": 27,
+        "token": "...",
+        "probability": 0.1086931571279397
+      },
+      "entropy_bits": 7.720807139336259,
+      "maximum_probability": 0.1086931571279397,
+      "top_10_probability_mass": 0.42656784842362183,
+      "probability_values_sha256": "5df64f5c7ee6628098f59e236f016eef0b467b843506bf0e0788de96760c7e3e",
+      "input_ids_sha256": "8d9666f78d9f9d9c5d33b09c932256e6eeff73fa0d4870853c5c4ae8dcf180e0",
+      "original_input_ids_sha256": "2cdd8ae591cc804471aaa04e7dc1f00f72295ca6929e74b5ebb2eb5ec5849fba",
+      "report_sha256": "c1f4cf0888427763dcbc13ea4094aada76e35020ee35069c984c54893f5969b4",
+      "raw_artifact_sha256": "64cef6fa7dddbdcf91248612feca2ee4616f611a9630e8fae05b38223d7f6699",
+      "runtime": {
+        "torch": "2.14.1+cu130",
+        "transformers": "4.56.2"
+      },
+      "checks": {
+        "repeated_probabilities_identical": true,
+        "target_replaced_with_mask": true,
+        "mask_count": 1
+      }
+    },
+    {
+      "category": "chemistry",
+      "model": "seyonec/ChemBERTa-zinc-base-v1",
+      "model_revision": "761d6a18cf99db371e0b43baf3e2d21b3e865a20",
+      "prediction_style": "masked",
+      "text": "CC(=O)O",
+      "target": "O",
+      "target_token_id": 51,
+      "vocabulary_size": 767,
+      "threshold_sweep": [
+        8,
+        5,
+        0,
+        0,
+        0,
+        0
+      ],
+      "target_probability": 0.006502803808488861,
+      "target_rank": 20,
+      "top_token": {
+        "token_id": 262,
+        "token": "CC",
+        "probability": 0.09995245801721336
+      },
+      "entropy_bits": 6.360306172709855,
+      "maximum_probability": 0.09995245801721336,
+      "top_10_probability_mass": 0.5407614061380099,
+      "probability_values_sha256": "4e923543fd58d00f8021d612d3bb43c8d65feb165a1840daf860365da856ef80",
+      "input_ids_sha256": "c645049c89d1c545c1347a9f9b4f13698c84244f8546000fd2678c243b7a55b0",
+      "original_input_ids_sha256": "a5b519f3e65490d0c8a5838d79fec3a1066522a0cb872b961d6b6ee915d6547c",
+      "report_sha256": "5ef8d71411f508915aa5a8a18b077bb4cfbb5dd028139fbc1234d95f88b8331d",
+      "raw_artifact_sha256": "e47da4ca668dc309176fb76f288e36a0e6034fd0bbc2162e0e81db3e2807ba9d",
+      "runtime": {
+        "torch": "2.14.1+cu130",
+        "transformers": "4.56.2"
+      },
+      "checks": {
+        "repeated_probabilities_identical": true,
+        "target_replaced_with_mask": true,
+        "mask_count": 1
+      }
+    },
+    {
+      "category": "protein",
+      "model": "Rostlab/prot_bert",
+      "model_revision": "7a894481acdc12202f0a415dd567f6cfdb698908",
+      "prediction_style": "masked",
+      "text": "M K T A",
+      "target": "A",
+      "target_token_id": 6,
+      "vocabulary_size": 30,
+      "threshold_sweep": [
+        18,
+        9,
+        0,
+        0,
+        0,
+        0
+      ],
+      "target_probability": 0.04621632564593339,
+      "target_rank": 12,
+      "top_token": {
+        "token_id": 5,
+        "token": "L",
+        "probability": 0.09583888802709516
+      },
+      "entropy_bits": 4.204556682705429,
+      "maximum_probability": 0.09583888802709516,
+      "top_10_probability_mass": 0.6554341777568399,
+      "probability_values_sha256": "8c2fcbcc72c8c6cc27f6c34f2884d5c07ad92f4be904f633614ade555f998d7d",
+      "input_ids_sha256": "1ae8288a5cf16a05cc82390910077f2321549a9649cb3d683f982860f9b0bd8d",
+      "original_input_ids_sha256": "2b035200f7b1476f031d3da92dab82b4fc9f05afd53c51fb9349721a7ed4d3cc",
+      "report_sha256": "181c8849df01beaf460e503329c634854c922ae1493d4abf38a0a45a998dc76c",
+      "raw_artifact_sha256": "f711a3b890695f8a3f6ea99699fb224e806144bd994af8faff6f0824d124ef5c",
+      "runtime": {
+        "torch": "2.14.1+cu130",
+        "transformers": "4.56.2"
+      },
+      "checks": {
+        "repeated_probabilities_identical": true,
+        "target_replaced_with_mask": true,
+        "mask_count": 1
+      }
+    },
+    {
+      "category": "mathematics",
+      "model": "Qwen/Qwen2.5-Math-1.5B",
+      "model_revision": "4a83ca6e4526a4f2da3aa259ec36c259f66b2ab2",
+      "prediction_style": "causal",
+      "text": "2 + 2 = 4",
+      "target": "4",
+      "target_token_id": 19,
+      "vocabulary_size": 151936,
+      "threshold_sweep": [
+        9,
+        8,
+        4,
+        2,
+        0,
+        0
+      ],
+      "target_probability": 0.24025495372652125,
+      "target_rank": 1,
+      "top_token": {
+        "token_id": 19,
+        "token": "4",
+        "probability": 0.24025495372652125
+      },
+      "entropy_bits": 3.0279288865206997,
+      "maximum_probability": 0.24025495372652125,
+      "top_10_probability_mass": 0.9999346965042094,
+      "probability_values_sha256": "e8f0da5fbe25d789d3e7cc9edefff1acbf5089b1cd2f642275235088c81d7de2",
+      "input_ids_sha256": "59847acbfb996f98ccfcb6924e399d7b1fcb302002fd603cf3bce319e4839eda",
+      "original_input_ids_sha256": "f39ffe49ff81ac5d3642c64f2b598a22ac2ac3d459d32805ca29e85275d84711",
+      "report_sha256": "b36ed5ec5ce1b257f6442db5ccaff088a70db8a835e435ab3bfcbb7121c2588b",
+      "raw_artifact_sha256": "e2dc3bf19c8fa04f2955ad781b33b4ca2d28a657257536c51e44f601ac384a84",
+      "runtime": {
+        "torch": "2.14.1+cu130",
+        "transformers": "4.56.2"
+      },
+      "checks": {
+        "repeated_probabilities_identical": true,
+        "target_absent_from_input_by_construction": true,
+        "prefix_length": 6
+      }
+    }
+  ]
+}

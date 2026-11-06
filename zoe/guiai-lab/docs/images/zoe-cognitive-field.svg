@@ -1,0 +1,477 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900" role="img" aria-label="Zoe Cognitive Field · bounded inspectable memory">
+  <title>Zoe Cognitive Field · bounded inspectable memory</title>
+  <rect x="0" y="0" width="1400.0" height="900.0" fill="#ffffff" />
+  <g data-object-id="background">
+    <title>background</title>
+    <rect x="0.0" y="0.0" width="1400.0" height="900.0" fill="#080d18" stroke="#080d18" stroke-width="1.0" />
+  </g>
+  <g data-object-id="title">
+    <title>title</title>
+    <text x="32.0" y="43.0" font-family="sans-serif" font-size="27.0" fill="#67e8f9">Z.O.E. · COGNITIVE FIELD / GSP</text>
+  </g>
+  <g data-object-id="subtitle">
+    <title>subtitle</title>
+    <text x="32.0" y="74.0" font-family="sans-serif" font-size="17.0" fill="#e2e8f0">Information changes form. Working memory stays explicit.</text>
+  </g>
+  <g data-object-id="architecture">
+    <title>architecture</title>
+    <text x="32.0" y="98.0" font-family="sans-serif" font-size="12.0" fill="#94a3b8">GENERAL SYMBOL PROCESSOR · bounded software architecture · not ACT-R or consciousness</text>
+  </g>
+  <g data-object-id="clock">
+    <title>clock</title>
+    <text x="1070.0" y="42.0" font-family="sans-serif" font-size="14.0" fill="#fde68a">EVENT CLOCK · 16</text>
+  </g>
+  <g data-object-id="clock-note">
+    <title>clock-note</title>
+    <text x="1070.0" y="63.0" font-family="sans-serif" font-size="11.0" fill="#94a3b8">ordinal sequence, not wall-clock time</text>
+  </g>
+  <g data-object-id="logical-viewport">
+    <title>logical-viewport</title>
+    <rect x="1070.0" y="82.0" width="298.0" height="44.0" fill="#111c2f" stroke="#475569" stroke-width="1.0" />
+  </g>
+  <g data-object-id="logical-work-area">
+    <title>logical-work-area</title>
+    <rect x="1080.0" y="90.0" width="278.0" height="28.0" fill="#18263b" stroke="#64748b" stroke-width="1.0" />
+  </g>
+  <g data-object-id="logical-label">
+    <title>logical-label</title>
+    <text x="1090.0" y="109.0" font-family="sans-serif" font-size="11.0" fill="#cbd5e1">work area · logical 1400 × 900</text>
+  </g>
+  <g data-object-id="declarative-panel">
+    <title>declarative-panel</title>
+    <rect x="32.0" y="155.0" width="403.0" height="340.0" fill="#0e1828" stroke="#67e8f9" stroke-width="2.0" />
+  </g>
+  <g data-object-id="declarative-panel-title">
+    <title>declarative-panel-title</title>
+    <text x="50.0" y="184.0" font-family="sans-serif" font-size="17.0" fill="#67e8f9">DECLARATIVE MEMORY</text>
+  </g>
+  <g data-object-id="declarative-panel-subtitle">
+    <title>declarative-panel-subtitle</title>
+    <text x="50.0" y="206.0" font-family="sans-serif" font-size="11.0" fill="#94a3b8">explicit store / provenance / revision checks</text>
+  </g>
+  <g data-object-id="working-panel">
+    <title>working-panel</title>
+    <rect x="480.0" y="155.0" width="460.0" height="340.0" fill="#0e1828" stroke="#fde68a" stroke-width="2.0" />
+  </g>
+  <g data-object-id="working-panel-title">
+    <title>working-panel-title</title>
+    <text x="498.0" y="184.0" font-family="sans-serif" font-size="17.0" fill="#fde68a">WORKING MEMORY</text>
+  </g>
+  <g data-object-id="working-panel-subtitle">
+    <title>working-panel-subtitle</title>
+    <text x="498.0" y="206.0" font-family="sans-serif" font-size="11.0" fill="#94a3b8">active representations · bounded FIFO · capacity 4</text>
+  </g>
+  <g data-object-id="procedural-panel">
+    <title>procedural-panel</title>
+    <rect x="985.0" y="155.0" width="383.0" height="340.0" fill="#0e1828" stroke="#f0abfc" stroke-width="2.0" />
+  </g>
+  <g data-object-id="procedural-panel-title">
+    <title>procedural-panel-title</title>
+    <text x="1003.0" y="184.0" font-family="sans-serif" font-size="17.0" fill="#f0abfc">PROCEDURAL MEMORY</text>
+  </g>
+  <g data-object-id="procedural-panel-subtitle">
+    <title>procedural-panel-subtitle</title>
+    <text x="1003.0" y="206.0" font-family="sans-serif" font-size="11.0" fill="#94a3b8">declared tags / match results · never executable code</text>
+  </g>
+  <g data-object-id="sensory-panel">
+    <title>sensory-panel</title>
+    <rect x="32.0" y="545.0" width="403.0" height="165.0" fill="#0e1828" stroke="#f0abfc" stroke-width="2.0" />
+  </g>
+  <g data-object-id="sensory-panel-title">
+    <title>sensory-panel-title</title>
+    <text x="50.0" y="574.0" font-family="sans-serif" font-size="17.0" fill="#f0abfc">SENSORY ENCODING</text>
+  </g>
+  <g data-object-id="sensory-panel-subtitle">
+    <title>sensory-panel-subtitle</title>
+    <text x="50.0" y="596.0" font-family="sans-serif" font-size="11.0" fill="#94a3b8">information + source + tags -&gt; active representation</text>
+  </g>
+  <g data-object-id="performance-panel">
+    <title>performance-panel</title>
+    <rect x="985.0" y="545.0" width="383.0" height="165.0" fill="#0e1828" stroke="#86efac" stroke-width="2.0" />
+  </g>
+  <g data-object-id="performance-panel-title">
+    <title>performance-panel-title</title>
+    <text x="1003.0" y="574.0" font-family="sans-serif" font-size="17.0" fill="#86efac">PERFORMANCE</text>
+  </g>
+  <g data-object-id="performance-panel-subtitle">
+    <title>performance-panel-subtitle</title>
+    <text x="1003.0" y="596.0" font-family="sans-serif" font-size="11.0" fill="#94a3b8">proposals remain review-required · executed=False</text>
+  </g>
+  <g data-object-id="sensory-to-working">
+    <title>sensory-to-working</title>
+    <polyline points="435,625 522,495" stroke-linejoin="round" fill="none" stroke="#f0abfc" stroke-width="2.0" />
+  </g>
+  <g data-object-id="sensory-to-working-head">
+    <title>sensory-to-working-head</title>
+    <polygon points="522,495 512,490 512,500" stroke-linejoin="round" fill="#f0abfc" stroke="#f0abfc" stroke-width="1.0" />
+  </g>
+  <g data-object-id="declarative-to-working">
+    <title>declarative-to-working</title>
+    <polyline points="435,310 480,310" stroke-linejoin="round" fill="none" stroke="#67e8f9" stroke-width="2.0" />
+  </g>
+  <g data-object-id="declarative-to-working-head">
+    <title>declarative-to-working-head</title>
+    <polygon points="480,310 470,305 470,315" stroke-linejoin="round" fill="#67e8f9" stroke="#67e8f9" stroke-width="1.0" />
+  </g>
+  <g data-object-id="procedural-to-working">
+    <title>procedural-to-working</title>
+    <polyline points="985,310 940,310" stroke-linejoin="round" fill="none" stroke="#f0abfc" stroke-width="2.0" />
+  </g>
+  <g data-object-id="procedural-to-working-head">
+    <title>procedural-to-working-head</title>
+    <polygon points="940,310 950,305 950,315" stroke-linejoin="round" fill="#f0abfc" stroke="#f0abfc" stroke-width="1.0" />
+  </g>
+  <g data-object-id="working-to-performance">
+    <title>working-to-performance</title>
+    <polyline points="940,450 985,575" stroke-linejoin="round" fill="none" stroke="#86efac" stroke-width="2.0" />
+  </g>
+  <g data-object-id="working-to-performance-head">
+    <title>working-to-performance-head</title>
+    <polygon points="985,575 975,570 975,580" stroke-linejoin="round" fill="#86efac" stroke="#86efac" stroke-width="1.0" />
+  </g>
+  <g data-object-id="storage-flow">
+    <title>storage-flow</title>
+    <text x="374.0" y="287.0" font-family="sans-serif" font-size="11.0" fill="#67e8f9">store / retrieve</text>
+  </g>
+  <g data-object-id="match-flow">
+    <title>match-flow</title>
+    <text x="889.0" y="287.0" font-family="sans-serif" font-size="11.0" fill="#f0abfc">match</text>
+  </g>
+  <g data-object-id="review-flow">
+    <title>review-flow</title>
+    <text x="908.0" y="520.0" font-family="sans-serif" font-size="11.0" fill="#86efac">review</text>
+  </g>
+  <g data-object-id="working-slot-0">
+    <title>working-slot-0</title>
+    <rect x="500.0" y="230.0" width="420.0" height="42.0" fill="#17253a" stroke="#3f4b61" stroke-width="1.0" />
+  </g>
+  <g data-object-id="working-layer-0-0">
+    <title>working-layer-0-0</title>
+    <polygon points="507,258 531,253 547,258 523,263" stroke-linejoin="round" fill="#4e9fb0" stroke="#d7f3ff" stroke-width="0.5" />
+  </g>
+  <g data-object-id="working-layer-0-1">
+    <title>working-layer-0-1</title>
+    <polygon points="510,253 534,248 550,253 526,258" stroke-linejoin="round" fill="#4e9fb0" stroke="#d7f3ff" stroke-width="0.5" />
+  </g>
+  <g data-object-id="working-layer-0-2">
+    <title>working-layer-0-2</title>
+    <polygon points="513,248 537,243 553,248 529,253" stroke-linejoin="round" fill="#4e9fb0" stroke="#d7f3ff" stroke-width="0.5" />
+  </g>
+  <g data-object-id="working-item-0">
+    <title>working-item-0</title>
+    <text x="562.0" y="248.0" font-family="sans-serif" font-size="12.0" fill="#f8fafc">r-2 · Keep the active set small enough to inspect.</text>
+  </g>
+  <g data-object-id="working-source-0">
+    <title>working-source-0</title>
+    <text x="562.0" y="264.0" font-family="sans-serif" font-size="10.0" fill="#fde68a">event 4 · working</text>
+  </g>
+  <g data-object-id="working-slot-1">
+    <title>working-slot-1</title>
+    <rect x="500.0" y="283.0" width="420.0" height="42.0" fill="#17253a" stroke="#3f4b61" stroke-width="1.0" />
+  </g>
+  <g data-object-id="working-layer-1-0">
+    <title>working-layer-1-0</title>
+    <polygon points="507,311 531,306 547,311 523,316" stroke-linejoin="round" fill="#b486bf" stroke="#d7f3ff" stroke-width="0.5" />
+  </g>
+  <g data-object-id="working-layer-1-1">
+    <title>working-layer-1-1</title>
+    <polygon points="510,306 534,301 550,306 526,311" stroke-linejoin="round" fill="#b486bf" stroke="#d7f3ff" stroke-width="0.5" />
+  </g>
+  <g data-object-id="working-layer-1-2">
+    <title>working-layer-1-2</title>
+    <polygon points="513,301 537,296 553,301 529,306" stroke-linejoin="round" fill="#b486bf" stroke="#d7f3ff" stroke-width="0.5" />
+  </g>
+  <g data-object-id="working-item-1">
+    <title>working-item-1</title>
+    <text x="562.0" y="301.0" font-family="sans-serif" font-size="12.0" fill="#f8fafc">r-3 · Retention requires an explicit storage oper…</text>
+  </g>
+  <g data-object-id="working-source-1">
+    <title>working-source-1</title>
+    <text x="562.0" y="317.0" font-family="sans-serif" font-size="10.0" fill="#fde68a">event 5 · declarative</text>
+  </g>
+  <g data-object-id="working-slot-2">
+    <title>working-slot-2</title>
+    <rect x="500.0" y="336.0" width="420.0" height="42.0" fill="#17253a" stroke="#3f4b61" stroke-width="1.0" />
+  </g>
+  <g data-object-id="working-layer-2-0">
+    <title>working-layer-2-0</title>
+    <polygon points="507,364 531,359 547,364 523,369" stroke-linejoin="round" fill="#8aab62" stroke="#d7f3ff" stroke-width="0.5" />
+  </g>
+  <g data-object-id="working-layer-2-1">
+    <title>working-layer-2-1</title>
+    <polygon points="510,359 534,354 550,359 526,364" stroke-linejoin="round" fill="#8aab62" stroke="#d7f3ff" stroke-width="0.5" />
+  </g>
+  <g data-object-id="working-layer-2-2">
+    <title>working-layer-2-2</title>
+    <polygon points="513,354 537,349 553,354 529,359" stroke-linejoin="round" fill="#8aab62" stroke="#d7f3ff" stroke-width="0.5" />
+  </g>
+  <g data-object-id="working-item-2">
+    <title>working-item-2</title>
+    <text x="562.0" y="354.0" font-family="sans-serif" font-size="12.0" fill="#f8fafc">r-4 · A matching rule describes performance; it d…</text>
+  </g>
+  <g data-object-id="working-source-2">
+    <title>working-source-2</title>
+    <text x="562.0" y="370.0" font-family="sans-serif" font-size="10.0" fill="#fde68a">event 6 · procedural, review</text>
+  </g>
+  <g data-object-id="working-slot-3">
+    <title>working-slot-3</title>
+    <rect x="500.0" y="389.0" width="420.0" height="42.0" fill="#17253a" stroke="#3f4b61" stroke-width="1.0" />
+  </g>
+  <g data-object-id="working-layer-3-0">
+    <title>working-layer-3-0</title>
+    <polygon points="507,417 531,412 547,417 523,422" stroke-linejoin="round" fill="#c37d8d" stroke="#d7f3ff" stroke-width="0.5" />
+  </g>
+  <g data-object-id="working-layer-3-1">
+    <title>working-layer-3-1</title>
+    <polygon points="510,412 534,407 550,412 526,417" stroke-linejoin="round" fill="#c37d8d" stroke="#d7f3ff" stroke-width="0.5" />
+  </g>
+  <g data-object-id="working-layer-3-2">
+    <title>working-layer-3-2</title>
+    <polygon points="513,407 537,402 553,407 529,412" stroke-linejoin="round" fill="#c37d8d" stroke="#d7f3ff" stroke-width="0.5" />
+  </g>
+  <g data-object-id="working-item-3">
+    <title>working-item-3</title>
+    <text x="562.0" y="407.0" font-family="sans-serif" font-size="12.0" fill="#f8fafc">r-5 · Overflow is retained as an eviction, not si…</text>
+  </g>
+  <g data-object-id="working-source-3">
+    <title>working-source-3</title>
+    <text x="562.0" y="423.0" font-family="sans-serif" font-size="10.0" fill="#fde68a">event 7 · eviction</text>
+  </g>
+  <g data-object-id="working-overflow">
+    <title>working-overflow</title>
+    <text x="500.0" y="466.0" font-family="sans-serif" font-size="11.0" fill="#fde68a">4 active · 1 evicted · overflow preserved below</text>
+  </g>
+  <g data-object-id="working-boundary">
+    <title>working-boundary</title>
+    <text x="500.0" y="484.0" font-family="sans-serif" font-size="10.0" fill="#94a3b8">Capacity limits display state, not the evidence chain.</text>
+  </g>
+  <g data-object-id="context-panel">
+    <title>context-panel</title>
+    <rect x="480.0" y="545.0" width="460.0" height="165.0" fill="#0e1828" stroke="#475569" stroke-width="1.0" />
+  </g>
+  <g data-object-id="context-title">
+    <title>context-title</title>
+    <text x="500.0" y="574.0" font-family="sans-serif" font-size="13.0" fill="#67e8f9">PORTABLE CONTEXT · VISUAL KEY</text>
+  </g>
+  <g data-object-id="legend-record">
+    <title>legend-record</title>
+    <rect x="500.0" y="589.0" width="15.0" height="12.0" fill="#163b49" stroke="#67e8f9" stroke-width="1.0" />
+  </g>
+  <g data-object-id="legend-record-label">
+    <title>legend-record-label</title>
+    <text x="526.0" y="599.0" font-family="sans-serif" font-size="11.0" fill="#e2e8f0">bounded record / retained state</text>
+  </g>
+  <g data-object-id="legend-observation">
+    <title>legend-observation</title>
+    <polygon points="507,613 515,621 507,629 499,621" stroke-linejoin="round" fill="#f0abfc" stroke="#f0abfc" stroke-width="1.0" />
+  </g>
+  <g data-object-id="legend-observation-label">
+    <title>legend-observation-label</title>
+    <text x="526.0" y="625.0" font-family="sans-serif" font-size="11.0" fill="#e2e8f0">sourced input / explicit match</text>
+  </g>
+  <g data-object-id="legend-provenance">
+    <title>legend-provenance</title>
+    <text x="714.0" y="599.0" font-family="sans-serif" font-size="11.0" fill="#67e8f9">source + event + revision</text>
+  </g>
+  <g data-object-id="legend-match">
+    <title>legend-match</title>
+    <text x="714.0" y="625.0" font-family="sans-serif" font-size="11.0" fill="#f0abfc">required tags &lt;= active tags</text>
+  </g>
+  <g data-object-id="legend-review">
+    <title>legend-review</title>
+    <text x="714.0" y="652.0" font-family="sans-serif" font-size="11.0" fill="#86efac">match =&gt; proposal only</text>
+  </g>
+  <g data-object-id="legend-event">
+    <title>legend-event</title>
+    <text x="714.0" y="679.0" font-family="sans-serif" font-size="11.0" fill="#fde68a">chain =&gt; inspectable past</text>
+  </g>
+  <g data-object-id="legend-note">
+    <title>legend-note</title>
+    <text x="500.0" y="699.0" font-family="sans-serif" font-size="10.0" fill="#94a3b8">Symbols compress the view; JSON retains the complete context.</text>
+  </g>
+  <g data-object-id="legend-layer-0">
+    <title>legend-layer-0</title>
+    <polygon points="499,662 523,657 539,662 515,667" stroke-linejoin="round" fill="#4e9fb0" stroke="#d7f3ff" stroke-width="0.5" />
+  </g>
+  <g data-object-id="legend-layer-1">
+    <title>legend-layer-1</title>
+    <polygon points="502,657 526,652 542,657 518,662" stroke-linejoin="round" fill="#b486bf" stroke="#d7f3ff" stroke-width="0.5" />
+  </g>
+  <g data-object-id="legend-layer-2">
+    <title>legend-layer-2</title>
+    <polygon points="505,652 529,647 545,652 521,657" stroke-linejoin="round" fill="#8aab62" stroke="#d7f3ff" stroke-width="0.5" />
+  </g>
+  <g data-object-id="legend-layer-label">
+    <title>legend-layer-label</title>
+    <text x="562.0" y="654.0" font-family="sans-serif" font-size="11.0" fill="#e2e8f0">layered active memory</text>
+  </g>
+  <g data-object-id="legend-layer-note">
+    <title>legend-layer-note</title>
+    <text x="562.0" y="670.0" font-family="sans-serif" font-size="9.0" fill="#94a3b8">illustrative glyph only</text>
+  </g>
+  <g data-object-id="declarative-item-0">
+    <title>declarative-item-0</title>
+    <text x="50.0" y="239.0" font-family="sans-serif" font-size="12.0" fill="#e2e8f0">d-1 rev 1 · Retention requires an explicit storage o…</text>
+  </g>
+  <g data-object-id="declarative-source-0">
+    <title>declarative-source-0</title>
+    <text x="50.0" y="256.0" font-family="sans-serif" font-size="10.0" fill="#67e8f9">from r-3 / event 5 · Cognitive Field worked example</text>
+  </g>
+  <g data-object-id="retrieval-status">
+    <title>retrieval-status</title>
+    <text x="50.0" y="432.0" font-family="sans-serif" font-size="12.0" fill="#fdba74">retrieval: revision_mismatch</text>
+  </g>
+  <g data-object-id="retrieval-revision">
+    <title>retrieval-revision</title>
+    <text x="50.0" y="453.0" font-family="sans-serif" font-size="11.0" fill="#fdba74">expected rev 0 · actual rev 1</text>
+  </g>
+  <g data-object-id="declarative-rule">
+    <title>declarative-rule</title>
+    <text x="50.0" y="479.0" font-family="sans-serif" font-size="11.0" fill="#94a3b8">Revision mismatch returns no stored record.</text>
+  </g>
+  <g data-object-id="rule-0">
+    <title>rule-0</title>
+    <text x="1003.0" y="235.0" font-family="sans-serif" font-size="12.0" fill="#e2e8f0">p-1 · Review a memory boundary</text>
+  </g>
+  <g data-object-id="rule-tags-0">
+    <title>rule-tags-0</title>
+    <text x="1003.0" y="251.0" font-family="sans-serif" font-size="10.0" fill="#f0abfc">requires procedural, review</text>
+  </g>
+  <g data-object-id="rule-1">
+    <title>rule-1</title>
+    <text x="1003.0" y="273.0" font-family="sans-serif" font-size="12.0" fill="#e2e8f0">p-2 · Require a missing tag</text>
+  </g>
+  <g data-object-id="rule-tags-1">
+    <title>rule-tags-1</title>
+    <text x="1003.0" y="289.0" font-family="sans-serif" font-size="10.0" fill="#f0abfc">requires unavailable</text>
+  </g>
+  <g data-object-id="match-status">
+    <title>match-status</title>
+    <text x="1003.0" y="425.0" font-family="sans-serif" font-size="12.0" fill="#f0abfc">x-1 · matched · 1 matched</text>
+  </g>
+  <g data-object-id="match-ids">
+    <title>match-ids</title>
+    <text x="1003.0" y="447.0" font-family="sans-serif" font-size="11.0" fill="#94a3b8">rules: p-1</text>
+  </g>
+  <g data-object-id="match-boundary">
+    <title>match-boundary</title>
+    <text x="1003.0" y="479.0" font-family="sans-serif" font-size="11.0" fill="#94a3b8">No match =&gt; no performance proposal.</text>
+  </g>
+  <g data-object-id="sensory-item-0">
+    <title>sensory-item-0</title>
+    <text x="50.0" y="626.0" font-family="sans-serif" font-size="11.0" fill="#f0abfc">r-3 · active · Retention requires an explicit s…</text>
+  </g>
+  <g data-object-id="sensory-item-1">
+    <title>sensory-item-1</title>
+    <text x="50.0" y="650.0" font-family="sans-serif" font-size="11.0" fill="#f0abfc">r-4 · active · A matching rule describes perfor…</text>
+  </g>
+  <g data-object-id="sensory-item-2">
+    <title>sensory-item-2</title>
+    <text x="50.0" y="674.0" font-family="sans-serif" font-size="11.0" fill="#f0abfc">r-5 · active · Overflow is retained as an evict…</text>
+  </g>
+  <g data-object-id="sensory-count">
+    <title>sensory-count</title>
+    <text x="50.0" y="700.0" font-family="sans-serif" font-size="10.0" fill="#94a3b8">5 sourced inputs · 1 explicit evictions</text>
+  </g>
+  <g data-object-id="performance-item-0">
+    <title>performance-item-0</title>
+    <text x="1003.0" y="626.0" font-family="sans-serif" font-size="12.0" fill="#86efac">f-1 · review_required</text>
+  </g>
+  <g data-object-id="performance-description-0">
+    <title>performance-description-0</title>
+    <text x="1003.0" y="642.0" font-family="sans-serif" font-size="10.0" fill="#94a3b8">Inspect the matched rule and its provenance be…</text>
+  </g>
+  <g data-object-id="performance-count">
+    <title>performance-count</title>
+    <text x="1003.0" y="700.0" font-family="sans-serif" font-size="10.0" fill="#86efac">1 review-required proposals · executed=False</text>
+  </g>
+  <g data-object-id="memory-panel">
+    <title>memory-panel</title>
+    <rect x="32.0" y="746.0" width="1336.0" height="112.0" fill="#0e1828" stroke="#475569" stroke-width="1.0" />
+  </g>
+  <g data-object-id="memory-title">
+    <title>memory-title</title>
+    <text x="50.0" y="774.0" font-family="sans-serif" font-size="13.0" fill="#fde68a">UNIFIED EVENT MEMORY · 16 sequence-linked events</text>
+  </g>
+  <g data-object-id="memory-hash">
+    <title>memory-hash</title>
+    <text x="50.0" y="795.0" font-family="sans-serif" font-size="10.0" fill="#94a3b8">SHA-256 head · 16 · 72ebf08e9c9f8f54b14e48c7cb612a4dfbc966554c89f6dab57cbf4a2aed358c</text>
+  </g>
+  <g data-object-id="memory-chain">
+    <title>memory-chain</title>
+    <polyline points="60,816 855,816" stroke-linejoin="round" fill="none" stroke="#475569" stroke-width="2.0" />
+  </g>
+  <g data-object-id="memory-event-0">
+    <title>memory-event-0</title>
+    <rect x="56.0" y="812.0" width="8.0" height="8.0" fill="#fde68a" stroke="#fde68a" stroke-width="1.0" />
+  </g>
+  <g data-object-id="memory-event-1">
+    <title>memory-event-1</title>
+    <rect x="109.0" y="812.0" width="8.0" height="8.0" fill="#fde68a" stroke="#fde68a" stroke-width="1.0" />
+  </g>
+  <g data-object-id="memory-event-2">
+    <title>memory-event-2</title>
+    <rect x="162.0" y="812.0" width="8.0" height="8.0" fill="#f0abfc" stroke="#f0abfc" stroke-width="1.0" />
+  </g>
+  <g data-object-id="memory-event-3">
+    <title>memory-event-3</title>
+    <rect x="215.0" y="812.0" width="8.0" height="8.0" fill="#f0abfc" stroke="#f0abfc" stroke-width="1.0" />
+  </g>
+  <g data-object-id="memory-event-4">
+    <title>memory-event-4</title>
+    <rect x="268.0" y="812.0" width="8.0" height="8.0" fill="#f0abfc" stroke="#f0abfc" stroke-width="1.0" />
+  </g>
+  <g data-object-id="memory-event-5">
+    <title>memory-event-5</title>
+    <rect x="321.0" y="812.0" width="8.0" height="8.0" fill="#f0abfc" stroke="#f0abfc" stroke-width="1.0" />
+  </g>
+  <g data-object-id="memory-event-6">
+    <title>memory-event-6</title>
+    <rect x="374.0" y="812.0" width="8.0" height="8.0" fill="#f0abfc" stroke="#f0abfc" stroke-width="1.0" />
+  </g>
+  <g data-object-id="memory-event-7">
+    <title>memory-event-7</title>
+    <rect x="427.0" y="812.0" width="8.0" height="8.0" fill="#f0abfc" stroke="#f0abfc" stroke-width="1.0" />
+  </g>
+  <g data-object-id="memory-event-8">
+    <title>memory-event-8</title>
+    <rect x="480.0" y="812.0" width="8.0" height="8.0" fill="#f0abfc" stroke="#f0abfc" stroke-width="1.0" />
+  </g>
+  <g data-object-id="memory-event-9">
+    <title>memory-event-9</title>
+    <rect x="533.0" y="812.0" width="8.0" height="8.0" fill="#f0abfc" stroke="#f0abfc" stroke-width="1.0" />
+  </g>
+  <g data-object-id="memory-event-10">
+    <title>memory-event-10</title>
+    <rect x="586.0" y="812.0" width="8.0" height="8.0" fill="#f0abfc" stroke="#f0abfc" stroke-width="1.0" />
+  </g>
+  <g data-object-id="memory-event-11">
+    <title>memory-event-11</title>
+    <rect x="639.0" y="812.0" width="8.0" height="8.0" fill="#f0abfc" stroke="#f0abfc" stroke-width="1.0" />
+  </g>
+  <g data-object-id="memory-event-12">
+    <title>memory-event-12</title>
+    <rect x="692.0" y="812.0" width="8.0" height="8.0" fill="#f0abfc" stroke="#f0abfc" stroke-width="1.0" />
+  </g>
+  <g data-object-id="memory-event-13">
+    <title>memory-event-13</title>
+    <rect x="745.0" y="812.0" width="8.0" height="8.0" fill="#f0abfc" stroke="#f0abfc" stroke-width="1.0" />
+  </g>
+  <g data-object-id="memory-event-14">
+    <title>memory-event-14</title>
+    <rect x="798.0" y="812.0" width="8.0" height="8.0" fill="#fde68a" stroke="#fde68a" stroke-width="1.0" />
+  </g>
+  <g data-object-id="memory-event-15">
+    <title>memory-event-15</title>
+    <rect x="851.0" y="812.0" width="8.0" height="8.0" fill="#fde68a" stroke="#fde68a" stroke-width="1.0" />
+  </g>
+  <g data-object-id="firewall">
+    <title>firewall</title>
+    <text x="50.0" y="845.0" font-family="sans-serif" font-size="12.0" fill="#fda4af">measurement != evidence != belief update != action · no autonomous action · tamper evidence, not authentication</text>
+  </g>
+  <g data-object-id="scope">
+    <title>scope</title>
+    <text x="32.0" y="885.0" font-family="sans-serif" font-size="11.0" fill="#94a3b8">A working memory instrument, not a mind · every representation and proposal remains inspectable and replayable</text>
+  </g>
+</svg>
