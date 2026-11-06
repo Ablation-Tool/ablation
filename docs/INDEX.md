@@ -128,6 +128,9 @@ Analyze hardware description language source files: extract constants, compare v
 | [VersalPdi](reference-modules/versal-pdi.md) | Parse Xilinx Versal PDI firmware images: MetaHeader, IHT, image/partition headers, CDO section scanner, CDO command parser; pld and boot sub-formats; git hash extraction |
 | [VerilogSemantic](reference-modules/verilog-semantic.md) | Extract constants, signal widths, FSM states from a single Verilog/VHDL source tree |
 | [HDLVersionDiff](reference-modules/hdl-version-diff.md) | Compare two HDL source versions: added/removed/changed constants, signals, ports, FSM states |
+| [HDLCommandDecoder](reference-modules/hdl-command-decoder.md) | Extract HDL command tables, per-command signal effects, and strobe-only vs guarded dispatch verdicts |
+| [HDLWritePath](reference-modules/hdl-write-path.md) | Trace VHDL command/strobe signals back through registers, port maps, and bus targets to primary inputs, with conditions and address maps |
+| [HDL simulator runner](reference-modules/hdl-sim.md) | Relocate GHDL/Icarus bundles off noexec mounts and run analyze/elaborate/simulate with captured logs |
 | [OneHotFSMExtractor](reference-modules/one-hot-fsm-extractor.md) | Extract state transition tables from one-hot `assign d_next[N] = ...` Verilog FSMs |
 | [XilinxNpiHex](reference-modules/xilinx-npi-hex.md) | Decode Xilinx ASCII NPI RNPI/RCDO hex images into bounded binary CDO for VersalPdi analysis |
 
