@@ -10,6 +10,13 @@
 - Added optional next-token accessible-volume measurement with a local DistilGPT2 provider, strict thresholds, separate evidence events and raw probabilities, complementary volume, accessible momentum with advisory target-band guidance, and candidate-future concentration previews that never authorize or execute actions.
 - Added the NPZ VolumeBridge feedback loop with monotonic elapsed time and no-overwrite reports, plus a reproducible sacred-geometry dataset with exact math transcription, OCR, component measurements, lossless pixel vectors, VDI replay, and Procrustes landmark alignment.
 
+**HP-UX SOM, PA-RISC, and Motorola MC88100 analysis.**
+
+- Added standard-library-only SOM parsing with subspace/VA mapping, dynamic imports and exports, DLT/PLT linkage, dynamic relocations, and unwind recovery. `ablation.hpux` supplies info, import, disassembly, direct-call, and function commands, plus `BinaryContext` integration.
+- Added ordered-table PA-RISC 1.0/1.1 decoding with explicit unknowns. The Lotus Motif corpus decodes all 302,965 instructions with zero unknown encodings and recovers 28,661 direct calls.
+- Replaced the partial M88K model with a table-driven MC88100 decoder and added DG/UX ELF parsing with `.rela.gotp` import recovery. Both M88K samples decode completely; the `dg_gen` `gets` destination is now proven to be a 64-byte stack region.
+- Added focused and real-corpus tests, capability references, and tool-selection guidance.
+
 ## v2.94.0
 
 **Cross-platform GEM desktop integration.**
@@ -33,7 +40,6 @@
 - Hardened concurrent exports with exclusive writer locks and atomic artifact writes, added stale-export rejection and coherent investigation snapshots, and verified process-group termination and bounded agent output.
 - Corrected small-device connector verification by accounting for half-pixel coordinate quantization, and fixed `ablation analyze --entropy` to consume `EntropyMapResult` correctly.
 - Added a real system-binary integration workflow: Ablation analysis becomes scoped Lab evidence and a replayed GEM run.
-
 **Android APK/XAPK, DEX, JNI, and cross-layer taint workflow.**
 
 - Added bounded in-memory APK/XAPK split decoding, namespace/text-aware AXML, overload-aware Java-like DEX decompilation, and byte-backed ARM/Thumb ELF disassembly with PLT/direct-call resolution.

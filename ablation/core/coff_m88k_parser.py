@@ -85,6 +85,8 @@ class M88kCoffBinary:
     data_start:   int           # .data base VA
     sections:     List[Section] = field(default_factory=list)
     _sec_map:     Dict[str, Section] = field(default_factory=dict, repr=False)
+    plt:          Dict[int, str] = field(default_factory=dict)
+    needed:       List[str] = field(default_factory=list)
 
     def section(self, name: str) -> Optional[Section]:
         return self._sec_map.get(name)
