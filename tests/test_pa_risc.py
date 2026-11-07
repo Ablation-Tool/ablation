@@ -27,6 +27,12 @@ class PaRiscDecoderTests(unittest.TestCase):
         self.assertEqual(self.decoder.decode(0x0ED8105A, 0).operands, " c(r22),r26")
         self.assertEqual(self.decoder.decode(0x0E821015, 0).operands, " 1(r20),r21")
 
+    def test_base_modify_immediate(self):
+        store = self.decoder.decode(0x6FC31080, 0x1B95C)
+        self.assertEqual(store.operands, ",ma r3,840(sp)")
+        load = self.decoder.decode(0x4FC33F81, 0x1F950)
+        self.assertEqual(load.operands, ",mb -40(sp),r3")
+
     def test_branch_and_call(self):
         instruction = self.decoder.decode(0xE85F1DF5, 0x2F9DC)
         self.assertEqual(instruction.mnemonic, "b")
