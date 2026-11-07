@@ -18,6 +18,15 @@ class PaRiscDecoderTests(unittest.TestCase):
         store = self.decoder.decode(0x6BC03F99, 0x2F9D8)
         self.assertEqual(store.operands, " r0,-34(sp)")
 
+    def test_short_immediate_operands(self):
+        compare = self.decoder.decode(0x8660207A, 0)
+        self.assertEqual(compare.operands, ",=,n 0,r19,0x44")
+        negative = self.decoder.decode(0x8F9F2020, 0x19CE4)
+        self.assertEqual(negative.operands, ",<> -1,ret0,0x19cfc")
+        self.assertEqual(self.decoder.decode(0x0FF01093, 0).operands, " 8(r31),r19")
+        self.assertEqual(self.decoder.decode(0x0ED8105A, 0).operands, " c(r22),r26")
+        self.assertEqual(self.decoder.decode(0x0E821015, 0).operands, " 1(r20),r21")
+
     def test_branch_and_call(self):
         instruction = self.decoder.decode(0xE85F1DF5, 0x2F9DC)
         self.assertEqual(instruction.mnemonic, "b")

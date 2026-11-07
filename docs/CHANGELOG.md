@@ -13,7 +13,7 @@
 **HP-UX SOM, PA-RISC, and Motorola MC88100 analysis.**
 
 - Added standard-library-only SOM parsing with subspace/VA mapping, dynamic imports and exports, DLT/PLT linkage, dynamic relocations, and unwind recovery. `ablation.hpux` supplies info, import, disassembly, direct-call, and function commands, plus `BinaryContext` integration.
-- Added ordered-table PA-RISC 1.0/1.1 decoding with explicit unknowns. The Lotus Motif corpus decodes all 302,965 instructions with zero unknown encodings and recovers 28,661 direct calls.
+- Added ordered-table PA-RISC 1.0/1.1 decoding with explicit unknowns. The Lotus Motif corpus decodes all 302,965 instructions with zero unknown encodings and recovers 28,661 direct calls. Corrected short five-bit operand extraction to instruction bits 11–15, with comparison and memory-offset regression vectors.
 - Replaced the partial M88K model with a table-driven MC88100 decoder and added DG/UX ELF parsing with `.rela.gotp` import recovery. Both M88K samples decode completely; the `dg_gen` `gets` destination is now proven to be a 64-byte stack region.
 - Added focused and real-corpus tests, capability references, and tool-selection guidance.
 

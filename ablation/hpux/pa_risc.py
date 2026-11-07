@@ -216,7 +216,7 @@ class PaRiscDecoder:
                 elif sub == "x":
                     out += fp_reg(field(word, 11, 15))
             elif ch == "5":
-                out += const_text(low_sign_extend(field(word, 16, 20), 5))
+                out += const_text(low_sign_extend(field(word, 11, 15), 5))
             elif ch == "s":
                 space = field(word, 16, 17)
                 if space:
