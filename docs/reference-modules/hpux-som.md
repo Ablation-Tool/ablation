@@ -53,7 +53,7 @@ For the recovered Lotus 1-2-3 `123_motif` image (SHA256 `42bdf512ad55cd7071acecb
 - 31 subspaces, 2,321 imports, 819 exports, 445 DLT entries, 1,876 PLT entries, three dynamic relocations, and 4,586 unwind ranges;
 - 91 external code imports;
 - 302,965 decoded instructions with zero unknown encodings and 28,661 direct calls;
-- Short five-bit operands are decoded from instruction bits 11–15, with regression vectors for zero and negative comparisons and byte, halfword, and word offsets;
+- Short five-bit operands are decoded from instruction bits 11–15, with regression vectors for zero and negative comparisons and byte, halfword, and word offsets; base-modify load/store immediates use low-bit sign extension;
 - `execlp` at `0x2f9dc`, owned by `0x2f8f8`, and `execvp` at `0x2d560`;
 - `systemcode_wrapper` and `output_of_wrapper` recovered through import-to-PLT mappings.
 

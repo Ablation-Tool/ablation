@@ -452,7 +452,7 @@ class PaRiscDecoder:
                         out += " "
             elif ch in "JKd#":
                 if ch == "J":
-                    out += const_text(sign_extend(word & 0x3fff, 14))
+                    out += const_text(low_sign_extend(word & 0x3fff, 14))
                 elif ch == "#":
                     value = ((-1 << 10) | field(word, 18, 27)) if field(word, 31, 31) else field(word, 18, 27)
                     out += const_text(value << 3)
