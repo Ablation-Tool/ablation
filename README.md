@@ -7,15 +7,7 @@ ABL∀TION is an AI-assisted reverse engineering (AIARE) framework.
 
 ![GEM native workbench demo](assets/demos/gem-workbench-demo.gif)
 
-## Ablation + GEM (Graphics Environment Manager)
 
-**Ablation + GEM (Graphics Environment Manager) is one product and one default download.** Ablation supplies the required CLI, analysis framework, artifact parsers, reverse-engineering tools, target context, and evidence model. GEM (Graphics Environment Manager) is the native UI for that framework, with the shared investigation Lab, embedded AI Agent, Spatial IR, graphical execution, deterministic verification, and replayable visual evidence.
-
-Ablation can operate CLI-only. GEM's complete investigation workflows require Ablation. The default installation includes both; **CLI Only** remains available for users who do not want a graphical environment. The former GUIAI is obsolete, not an alternate interface or supported alias.
-
-![Unified Memory Architecture: human, AI Agent, Ablation, and GEM](assets/demos/gem-unified-memory-architecture.png)
-
-The Lab and AI Agent share the same workspace. The agent reads `gem state`, begins exact selected work with `gem begin`, performs real analysis through Ablation, and records evidence-backed results with `gem emit` or `gem emit-many`. It does not need to infer the Lab from screenshots. Investigation events remain authoritative; Spatial IR, Cairo scenes, VDI commands, and layouts are derived views. Geometric passes are tool evidence, not human confirmation or proof of reverse-engineering coverage. See the [GEM guide](gem-lab/GEM.md) for implementation details and the visual demonstrations below.
 
 
 
