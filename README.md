@@ -1,4 +1,4 @@
-<img src="assets/branding/ablation-1b-riveted-plate-header-2560.png" width="640" alt="ABLATION">
+<img src="assets/branding/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey) [![NIST SP 800-218](https://img.shields.io/badge/NIST%20SP%20800--218-SSDF-grey)](docs/standards-ablation.md) [![CISA Secure by Design](https://img.shields.io/badge/CISA-Secure%20by%20Design-grey)](docs/standards-ablation.md) [![MIL-HDBK-115C](https://img.shields.io/badge/MIL--HDBK--115C-Compliant-grey)](docs/standards-ablation.md)
 
@@ -17,7 +17,6 @@ ABL∀TION is an AI-assisted reverse engineering (AIARE) framework.
 |:---|:---|:---|
 | [**Agent Bridge**](guiai-lab/README.md) | [1](guiai-lab/guiai/environment.py)&nbsp;[2](guiai-lab/metrix/desktop.py) | Embeds your AI Agent inside the GUIAI |
 | [**Evidence Integrity**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/cli.py)&nbsp;[3](guiai-lab/guiai/app.py) | Tracks reviews and validates evidence targets |
-| [**GEM Spatial IR**](guiai-lab/GEM.md) | [1](guiai-lab/guiai/gem/geometry.py)&nbsp;[2](guiai-lab/guiai/gem/vdi.py)&nbsp;[3](guiai-lab/guiai/gem/view.py) | Verifies agent geometry, exports VDI, and links replayable evidence |
 | [**Lab Navigation**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/map_view.py)&nbsp;[3](guiai-lab/metrix/cli.py) | Organizes, searches, and visualizes discoveries |
 | [**Session Persistence**](guiai-lab/README.md) | [1](guiai-lab/guiai/events.py)&nbsp;[2](guiai-lab/guiai/preferences.py)&nbsp;[3](guiai-lab/guiai/gtk_app.py) | Restores Lab sessions, agents, and preferences |
 
