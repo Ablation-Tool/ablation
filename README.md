@@ -1,4 +1,4 @@
-<img src="assets/branding/woven-diamond/repo/logo.png" width="160" alt="Ablation GEM woven diamond">
+<img src="assets/branding/ablation-1b-riveted-plate-header-2560.png" width="640" alt="ABLATION">
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey) [![NIST SP 800-218](https://img.shields.io/badge/NIST%20SP%20800--218-SSDF-grey)](docs/standards-ablation.md) [![CISA Secure by Design](https://img.shields.io/badge/CISA-Secure%20by%20Design-grey)](docs/standards-ablation.md) [![MIL-HDBK-115C](https://img.shields.io/badge/MIL--HDBK--115C-Compliant-grey)](docs/standards-ablation.md)
 
@@ -8,15 +8,9 @@ ABL∀TION is an AI-assisted reverse engineering (AIARE) framework.
 
 ![GEM native workbench demo](assets/demos/gem-workbench-demo.gif)
 
-## Ablation + GEM (Graphics Environment Manager)
 
-**Ablation + GEM (Graphics Environment Manager) is one product and one default download.** Ablation supplies the required CLI, analysis framework, artifact parsers, reverse-engineering tools, target context, and evidence model. GEM (Graphics Environment Manager) is the native UI for that framework, with the shared investigation Lab, embedded AI Agent, Spatial IR, graphical execution, deterministic verification, and replayable visual evidence.
 
-Ablation can operate CLI-only. GEM's complete investigation workflows require Ablation. The default installation includes both; **CLI Only** remains available for users who do not want a graphical environment. The former GUIAI is obsolete, not an alternate interface or supported alias.
 
-![Unified Memory Architecture: human, AI Agent, Ablation, and GEM](assets/demos/gem-unified-memory-architecture.png)
-
-The Lab and AI Agent share the same workspace. The agent reads `gem state`, begins exact selected work with `gem begin`, performs real analysis through Ablation, and records evidence-backed results with `gem emit` or `gem emit-many`. It does not need to infer the Lab from screenshots. Investigation events remain authoritative; Spatial IR, Cairo scenes, VDI commands, and layouts are derived views. Geometric passes are tool evidence, not human confirmation or proof of reverse-engineering coverage. See the [GEM guide](gem-lab/GEM.md) for implementation details and the visual demonstrations below.
 
 ## ZOE · allgems
 
@@ -69,6 +63,7 @@ zoe launch ablation -- --help
 | [**LoongArch**](docs/reference-modules/loongarch.md) | LoongArch64 · [KASAN/KCOV V2](docs/reference-modules/loongarch64-v2.md) |
 | [**MIPS**](docs/reference-modules/mips.md) | MIPS-32 · [nanoMIPS](docs/reference-modules/nanomips.md) · MIPS-64 |
 | [**PowerPC**](docs/reference-modules/ppc32-taint-tracker.md) | PPC-32 · PPC-64 · [VLE](docs/reference-modules/ecu-vle-decoder.md) · [PPC476 Book E](docs/reference-modules/ppc476-lifter.md) · [XCOFF32 / AIX](docs/reference-modules/xcoff32-decompiler.md) |
+| [**PA-RISC**](docs/reference-modules/hpux-som.md) | PA-RISC 1.0 · 1.1 · HP-UX SOM · DLT/PLT · Unwind |
 | [**RISC-V**](docs/reference-modules/risc-v.md) | RV32 · RV64 · [HiSilicon ext](docs/reference-modules/hisi-rv32-ext.md) |
 | [**S/390**](docs/reference-modules/s390.md) | Big-endian S/390 · z/Arch subset · LE/C++ PPA · XPLINK · BFP · Pseudo-C |
 | [**x86**](docs/reference-modules/x86.md) | x86-32 · x86-64 |
@@ -183,9 +178,10 @@ zoe launch ablation -- --help
 | [**Firmware Steganography**](docs/reference-modules/proto-fsm.md) | [1](ablation/analyzers/lsb_stego_extractor.py) | Extracts cryptographic material from firmware images |
 | [**Firmware Triage**](docs/reference-modules/firmware-signature-and-secret-triage.md) | [1](ablation/core/firmware_analyzer.py)&nbsp;[2](ablation/analyzers/firmware_container.py) | Scans firmware and extracts vendor partitions |
 | [**Fortinet**](docs/reference-modules/firmware-extraction.md) | [1](ablation/analyzers/fortios_firmware_extractor.py)&nbsp;[2](ablation/analyzers/firmware_container_key_extractor.py) | Recovers FortiOS keys and firmware containers |
+| [**HP-UX SOM**](docs/reference-modules/hpux-som.md) | [1](ablation/hpux/som.py)&nbsp;[2](ablation/hpux/pa_risc.py)&nbsp;[3](ablation/hpux/cli.py) | Recovers SOM dynamic linkage, unwind ranges, and PA-RISC calls |
 | [**JFFS2 Recovery**](docs/reference-modules/jffs2.md) | [1](ablation/parsers/jffs2.py) | Reconstructs little-endian JFFS2 files with CRC and extent validation |
 | [**Juniper**](docs/reference-modules/junos.md) | [1](ablation/core/junos_package.py)&nbsp;[2](ablation/core/junos_signature.py)&nbsp;[3](ablation/analyzers/junos_function_diff.py)&nbsp;[4](ablation/analyzers/gencfg.py)&nbsp;[5](ablation/analyzers/mips_ownership.py)&nbsp;[6](ablation/analyzers/gencfg_provenance.py)&nbsp;[7](ablation/analyzers/mips_message_provenance.py) | Verifies Junos packages and analyzes MIPS functions |
-| [**Legacy Formats**](docs/reference-modules/motorola-88000-bcs-coff.md) | [1](ablation/core/coff_m88k_parser.py)&nbsp;[2](ablation/core/guardian_pak_extractor.py) | Parses M88K COFF and Guardian PAK archives |
+| [**Legacy Formats**](docs/reference-modules/m88k-decoder.md) | [1](ablation/core/coff_m88k_parser.py)&nbsp;[2](ablation/core/elf_m88k_parser.py)&nbsp;[3](ablation/core/guardian_pak_extractor.py) | Parses M88K COFF, DG/UX ELF, and Guardian PAK archives |
 | [**Texas Instruments**](docs/reference-modules/texas-instruments-firmware.md) | [1](ablation/analyzers/ti_coff_loader.py)&nbsp;[2](ablation/analyzers/ti_nnc_scanner.py) | Parses TI COFF2 symbols and embedded models |
 | [**TIMI Saves**](docs/reference-modules/ibm-timi.md) | [1](ablation/ibm_timi/savf.py)&nbsp;[2](ablation/ibm_timi/catalogue.py)&nbsp;[3](ablation/ibm_timi/program.py)&nbsp;[4](ablation/ibm_timi/cli.py) | Verifies QSYS SAVF records and extracts objects |
 | [**WDB Reader**](docs/reference-modules/xilinx-wdb.md) | [1](ablation/analyzers/xilinx_wdb.py) | Streams Xilinx waveform events with bounded memory |

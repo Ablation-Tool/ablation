@@ -172,8 +172,8 @@ class BinaryContext:
     """
     Pre-computed binary context. One object = complete working context for a
     stripped binary: symbols, strings, function starts, call graph.
-    Supports ELF (x86_64, x86_32, arm64, arm32, loongarch64, mips32, mips64, ppc32, ppc64, riscv32, riscv64)
-    and Windows PE / .sys (x86_64, x86_32).
+    Supports ELF (x86_64, x86_32, arm64, arm32, loongarch64, mips32, mips64, ppc32, ppc64, riscv32, riscv64),
+    Windows PE / .sys (x86_64, x86_32), HP-UX SOM (PA-RISC), and MC88100 COFF/ELF.
     """
 
     def __init__(self):
@@ -644,6 +644,11 @@ class BinaryContext:
         ctx = cls()
         ctx.path = path
         ctx.sha256 = sha
+
+        if len(data) >= 128 and data[:2] in (b'\x02\x0b', b'\x02\x10', b'\x02\x11', b'\x02\x14') and data[2:4] in (b'\x01\x04', b'\x01\x07', b'\x01\x08', b'\x01\x0b', b'\x01\x0d', b'\x01\x0e'):
+            return cls._build_som(data, path, sha)
+        if len(data) >= 52 and data[:7] == b'\x7fELF\x01\x02\x01' and int.from_bytes(data[18:20], 'big') == 5:
+            return cls._build_m88k_elf(data, path, sha)
 
         if not _LIEF_OK:
             return ctx
@@ -3089,6 +3094,95 @@ class BinaryContext:
                         owner = func_arr[idx]
                 edges.append((owner, target, label))
 
+        ctx.call_edges = edges
+        ctx._build_indices()
+        return ctx
+
+    # ── HP-UX SOM support ─────────────────────────────────────────────────────
+
+    @classmethod
+    def _build_som(cls, data: bytes, path: str, sha: str) -> "BinaryContext":
+        from ablation.hpux import parse_som
+
+        ctx = cls()
+        ctx.path = path
+        ctx.sha256 = sha
+        try:
+            image = parse_som(data, path)
+        except Exception:
+            return ctx
+
+        ctx.arch = 'pa-risc'
+        ctx.base_va = image.exec_header['exec_tmem']
+        for item in image.exports:
+            if item.name and item.type == 3:
+                ctx.exports.setdefault(item.name, item.value)
+        for item in image.plt:
+            symbol = image.import_for_plt(item)
+            if item.proc_addr and symbol.type == 3 and symbol.external and symbol.name:
+                ctx.plt[item.proc_addr] = symbol.name
+        for section in image.subspaces:
+            if section.name in ('$LIT$', '$DATA$', '$STATICDATA$', '$SHORTDATA$', '$SHORTSTATICDATA$') and section.initialized_size:
+                _extract_strings_into(data[section.file_offset:section.file_offset + section.initialized_size], section.va, ctx.strings)
+        ctx.func_starts = sorted({item.start for item in image.unwind} | {image.entry})
+        edges: List[Tuple[int, int, str]] = []
+        for section in image.subspaces:
+            if section.name != '$CODE$' or not section.initialized_size:
+                continue
+            for call in image.call_sites(section.va, section.end, 400000):
+                target = call['target_va']
+                if target is None:
+                    continue
+                owner = call['owner_start'] if call['owner_start'] is not None else section.va
+                label = call['name'] or f'sub_{target:08x}'
+                edges.append((owner, target, label))
+        ctx.call_edges = edges
+        ctx._build_indices()
+        return ctx
+
+    # ── m88k ELF support ──────────────────────────────────────────────────────
+
+    @classmethod
+    def _build_m88k_elf(cls, data: bytes, path: str, sha: str) -> "BinaryContext":
+        import bisect
+        import os
+        import tempfile
+        from ablation.analyzers.insn_m88k import M88kDecoder
+        from ablation.core.elf_m88k_parser import parse as m88k_parse
+
+        ctx = cls()
+        ctx.path = path
+        ctx.sha256 = sha
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.elf') as stream:
+                stream.write(data)
+                temporary = stream.name
+            try:
+                binary = m88k_parse(temporary)
+            finally:
+                os.unlink(temporary)
+        except Exception:
+            return ctx
+
+        ctx.arch = 'm88k'
+        ctx.base_va = binary.text_start
+        ctx.plt = dict(binary.plt)
+        for section in binary.sections:
+            if section.name in ('.rodata', '.data') and section.data:
+                _extract_strings_into(section.data, section.vaddr, ctx.strings)
+        decoder = M88kDecoder(binary)
+        ctx.func_starts = sorted(decoder.function_starts())
+        edges: List[Tuple[int, int, str]] = []
+        text = binary.text
+        if text is not None:
+            va = text.vaddr
+            while text.contains_va(va):
+                instruction = decoder.decode_word(text.read_word(va), va)
+                if instruction.is_call and instruction.branch_target is not None:
+                    owner = ctx.func_starts[bisect.bisect_right(ctx.func_starts, va) - 1] if ctx.func_starts and ctx.func_starts[0] <= va else va
+                    label = ctx.plt.get(instruction.branch_target, f'sub_{instruction.branch_target:08x}')
+                    edges.append((owner, instruction.branch_target, label))
+                va += 4
         ctx.call_edges = edges
         ctx._build_indices()
         return ctx

@@ -23,6 +23,9 @@ def _parser():
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
 
+    demo = commands.add_parser("autonomy", help="run the shared Zoe One full-autonomy engine")
+    demo.add_argument("arguments", nargs=argparse.REMAINDER, help="run or verify with canonical Zoe-Autonomy arguments")
+
     demo = commands.add_parser("demo", help="export the verified house example")
     demo.add_argument("--output", required=True, help="new or empty run directory")
 
@@ -125,6 +128,9 @@ def _print_report(report):
 def main(argv=None):
     arguments = _parser().parse_args(argv)
     try:
+        if arguments.command == "autonomy":
+            from .autonomy import main as autonomy_main
+            return autonomy_main(arguments.arguments)
         if arguments.command == "volume":
             artifact_options = (
                 arguments.key != "probabilities"
