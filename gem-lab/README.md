@@ -2,6 +2,21 @@
 
 GEM (Graphics Environment Manager) is Ablation's **standard native graphical environment** for agent-guided reverse-engineering sessions. The visible application name is **GEM**; the `gem` package, CLI, `GEM_*` environment variables, and session protocol are the only current interface. The distribution also includes the METRIX support package, so no separate METRIX checkout is required.
 
+## Zoe One: shared full autonomy
+
+Ablation + GEM is one host in the [Zoe One system](https://github.com/Ablation-Tool/zoe). The investigation protocol remains separate from the optional `autonomy` command, which delegates to the canonical [Zoe-Autonomy](https://github.com/Ablation-Tool/Zoe-Autonomy) engine.
+
+```bash
+export ZOE_ROOT=/path/to/zoe
+export ZOE_AUTONOMY_ROOT=/path/to/Zoe-Autonomy
+
+gem autonomy run
+gem autonomy run --output new-profile.json
+gem autonomy verify new-profile.json
+```
+
+Zoe authors her goal, selects by value, and executes an internal transition without operator approval. The classification is `full_autonomy`. This does not execute reverse-engineering targets, modify investigation cases, or authorize external actions. See the [system manifest](https://github.com/Ablation-Tool/zoe/blob/main/one-system.json) for compatible revisions.
+
 The user’s real interactive CLI supplies labor. The workspace supplies memory and navigation. The human supplies direction and judgment. GEM supports any interactive agent executable through `--agent`, and custom argument lists through `--agent-command`; it provides no model or credentials.
 
 For how this improves investigation throughput without making analysis computation faster, see [GEM performance and investigation memory](../docs/reference-modules/gem-performance.md).
