@@ -29,14 +29,14 @@ def safety_colors(light_background, palette="system", accent=None):
         if light_background:
             colors = {"pass": "#0072b2", "review": "#a94e00", "accent": "#6a51a3"}
         else:
-            colors = {"pass": "#56b4e9", "review": "#e69f00", "accent": "#cc79a7"}
+            colors = {"pass": "#56b4e9", "review": "#e69f00", "accent": "#d482af"}
     elif palette == "high-contrast":
         if light_background:
-            colors = {"pass": "#006400", "review": "#8b0000", "accent": "#000080"}
+            colors = {"pass": "#005700", "review": "#8b0000", "accent": "#000080"}
         else:
-            colors = {"pass": "#00ff66", "review": "#ff6e6e", "accent": "#8ab4ff"}
+            colors = {"pass": "#00ff66", "review": "#ffa6a6", "accent": "#9ec5ff"}
     elif light_background:
-        colors = {"pass": "#1a7f37", "review": "#9a6700", "accent": "#1867c0"}
+        colors = {"pass": "#1a7f37", "review": "#8f5f00", "accent": "#1867c0"}
     else:
         colors = {"pass": "#3fb950", "review": "#d29922", "accent": "#58a6ff"}
     if palette == "system" and accent:

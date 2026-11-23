@@ -7,11 +7,24 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
-from tkinter import filedialog, ttk
+from tkinter import filedialog, font as tkfont, ttk
 
 from metrix.desktop import TerminalPanel
 
-from .accessibility import PALETTE_MODES, contrast_ratio, evaluate_accessibility, load_accessibility, save_accessibility, system_accent_color
+from .accessibility import (
+    FONT_SCALE_PRESETS,
+    LINE_SPACING_PRESETS,
+    PALETTE_MODES,
+    best_text_color,
+    contrast_ratio,
+    evaluate_accessibility,
+    line_spacing_pixels,
+    load_accessibility_settings,
+    recommended_settings_from_system,
+    save_accessibility_settings,
+    step_font_scale,
+    system_accent_color,
+)
 from .agent_bridge import prepare_agent_command
 from .environment import configure_environment
 from .events import STATUSES, Session
@@ -42,7 +55,15 @@ class InvestigationApp:
         except (OSError, ValueError, json.JSONDecodeError) as error:
             self.layout = "lab-left"
             self.layout_error = str(error)
-        self.accessibility_palette, self.accessibility_error = load_accessibility(session.root)
+        self.accessibility_settings, self.accessibility_error = load_accessibility_settings(session.root)
+        self.accessibility_palette = self.accessibility_settings["palette"]
+        self._base_tk_fonts = {}
+        for font_name in ("TkDefaultFont", "TkTextFont", "TkFixedFont", "TkHeadingFont", "TkMenuFont"):
+            try:
+                named = tkfont.nametofont(font_name)
+                self._base_tk_fonts[font_name] = int(named.cget("size"))
+            except tk.TclError:
+                pass
         self.applied_layout = None
         self.layout_after_id = None
         self.layout_buttons = {}
@@ -114,12 +135,62 @@ class InvestigationApp:
         )
         self.accessibility_palette_combo.pack(fill="x", pady=4)
         self.accessibility_palette_combo.bind("<<ComboboxSelected>>", self.on_accessibility_palette)
+        a11y_controls = ttk.Frame(self.accessibility_panel)
+        a11y_controls.pack(fill="x", pady=(0, 4))
+        ttk.Label(a11y_controls, text="Text size").pack(side="left")
+        self.accessibility_font_scale_var = tk.StringVar(
+            value=f"{int(round(self.accessibility_settings['font_scale'] * 100))}%",
+        )
+        self.accessibility_font_scale_combo = ttk.Combobox(
+            a11y_controls, textvariable=self.accessibility_font_scale_var,
+            values=[f"{int(round(scale * 100))}%" for scale in FONT_SCALE_PRESETS],
+            state="readonly", width=7,
+        )
+        self.accessibility_font_scale_combo.pack(side="left", padx=(4, 10))
+        self.accessibility_font_scale_combo.bind("<<ComboboxSelected>>", self.on_accessibility_setting_changed)
+        ttk.Label(a11y_controls, text="Line spacing").pack(side="left")
+        self.accessibility_line_spacing_var = tk.StringVar(
+            value=f"{self.accessibility_settings['line_spacing']:.1f}x",
+        )
+        self.accessibility_line_spacing_combo = ttk.Combobox(
+            a11y_controls, textvariable=self.accessibility_line_spacing_var,
+            values=[f"{spacing:.1f}x" for spacing in LINE_SPACING_PRESETS],
+            state="readonly", width=6,
+        )
+        self.accessibility_line_spacing_combo.pack(side="left", padx=(4, 10))
+        self.accessibility_line_spacing_combo.bind("<<ComboboxSelected>>", self.on_accessibility_setting_changed)
+        self.accessibility_reduced_motion_var = tk.BooleanVar(value=self.accessibility_settings["reduced_motion"])
+        self.accessibility_reduced_motion_check = ttk.Checkbutton(
+            a11y_controls, text="Reduced motion",
+            variable=self.accessibility_reduced_motion_var,
+            command=self.on_accessibility_setting_changed,
+        )
+        self.accessibility_reduced_motion_check.pack(side="left", padx=(0, 8))
+        self.accessibility_focus_ring_var = tk.BooleanVar(value=self.accessibility_settings["focus_ring"])
+        self.accessibility_focus_ring_check = ttk.Checkbutton(
+            a11y_controls, text="Focus ring",
+            variable=self.accessibility_focus_ring_var,
+            command=self.on_accessibility_setting_changed,
+        )
+        self.accessibility_focus_ring_check.pack(side="left", padx=(0, 8))
+        self.accessibility_dyslexia_spacing_var = tk.BooleanVar(value=self.accessibility_settings["dyslexia_spacing"])
+        self.accessibility_dyslexia_spacing_check = ttk.Checkbutton(
+            a11y_controls, text="Letter spacing",
+            variable=self.accessibility_dyslexia_spacing_var,
+            command=self.on_accessibility_setting_changed,
+        )
+        self.accessibility_dyslexia_spacing_check.pack(side="left", padx=(0, 8))
+        self.accessibility_sync_os_button = ttk.Button(
+            a11y_controls, text="Sync OS Defaults", command=self.on_sync_os_accessibility,
+        )
+        self.accessibility_sync_os_button.pack(side="right")
         self.accessibility_status_var = tk.StringVar(
             value=self.accessibility_error or "Screen reader labels and keyboard navigation are always enabled.",
         )
         ttk.Label(self.accessibility_panel, textvariable=self.accessibility_status_var, wraplength=1400).pack(fill="x")
         keyboard_help = (
-            "Keyboard: Alt+S opens Settings, Alt+O opens the audit, Alt+A opens a11y Optimization, and Escape closes these panels. "
+            "Keyboard: Alt+S opens Settings, Alt+O opens the audit, Alt+A opens a11y Optimization, "
+            "Ctrl++/Ctrl+-/Ctrl+0 scales text, and Escape closes these panels. "
             "Tab and Shift+Tab move between controls. Enter activates a control. Arrow keys navigate the Lab tree and charts. "
             "The Lab tree is the text alternative to every chart."
         )
@@ -167,8 +238,12 @@ class InvestigationApp:
         ttk.Button(bottom, text="Refresh", command=self.reload).pack(side="right")
         if session.target_kind == "directory":
             ttk.Button(bottom, text="Rescan directory", command=self.rescan_directory).pack(side="right", padx=(0, 6))
-        for sequence in ("<Alt-s>", "<Alt-o>", "<Alt-a>", "<Escape>"):
+        for sequence in (
+            "<Alt-s>", "<Alt-o>", "<Alt-a>", "<Escape>",
+            "<Control-plus>", "<Control-equal>", "<Control-minus>", "<Control-0>",
+        ):
             self.root.bind(sequence, self.on_accessibility_key)
+        self.apply_accessibility_settings()
         self.reload()
         self.after_refresh()
 
@@ -293,6 +368,7 @@ class InvestigationApp:
         try:
             self.accessibility_report = evaluate_accessibility(
                 self.accessibility_palette, light, background, self.accessibility_features(),
+                settings=self.accessibility_settings,
             )
         except Exception as error:
             self.accessibility_report = None
@@ -314,21 +390,101 @@ class InvestigationApp:
         self.agent_variable.set("a11y Optimization/Debugging request sent; review the terminal output")
         self.clear_safety()
 
+    def _sync_accessibility_controls(self):
+        self.accessibility_font_scale_var.set(f"{int(round(self.accessibility_settings['font_scale'] * 100))}%")
+        self.accessibility_line_spacing_var.set(f"{self.accessibility_settings['line_spacing']:.1f}x")
+        self.accessibility_reduced_motion_var.set(self.accessibility_settings["reduced_motion"])
+        self.accessibility_focus_ring_var.set(self.accessibility_settings["focus_ring"])
+        self.accessibility_dyslexia_spacing_var.set(self.accessibility_settings["dyslexia_spacing"])
+
+    def apply_accessibility_settings(self):
+        font_scale = self.accessibility_settings["font_scale"]
+        line_spacing = self.accessibility_settings["line_spacing"]
+        for font_name, base_size in self._base_tk_fonts.items():
+            try:
+                named = tkfont.nametofont(font_name)
+                if base_size < 0:
+                    scaled = -max(8, round(abs(base_size) * font_scale))
+                else:
+                    scaled = max(8, round(base_size * font_scale))
+                named.configure(size=scaled)
+            except tk.TclError:
+                pass
+        row_height = max(24, round(24 * font_scale * (line_spacing / 1.2)))
+        self.style.configure("Treeview", rowheight=row_height)
+        above, below, wrap = line_spacing_pixels(line_spacing, 10.0 * font_scale)
+        if self.accessibility_settings["dyslexia_spacing"]:
+            wrap += 2
+        accent = getattr(self, "accent_color", None) or system_accent_color() or UBUNTU["accent"]
+        ring_thickness = 2 if self.accessibility_settings["focus_ring"] else 0
+        for widget in (self.safety_details, self.accessibility_details, self.details):
+            widget.configure(
+                spacing1=above, spacing2=wrap, spacing3=below,
+                highlightthickness=ring_thickness, highlightcolor=accent,
+            )
+        self.style.configure("TButton", focuscolor=accent if self.accessibility_settings["focus_ring"] else UBUNTU["border"])
+        if getattr(self, "details_visible", False):
+            self.fit_details()
+
+    def _persist_and_apply_accessibility(self, updated, announcement):
+        try:
+            saved = save_accessibility_settings(self.session.root, updated)
+        except (OSError, ValueError) as error:
+            self.accessibility_status_var.set(f"Could not save accessibility preferences: {error}")
+            return
+        self.accessibility_settings = saved
+        self.accessibility_palette = saved["palette"]
+        self._sync_accessibility_controls()
+        self.apply_accessibility_settings()
+        self.accessibility_status_var.set(announcement)
+        if self.safety_report is not None:
+            self.present_safety_report(self.safety_report)
+        if self.accessibility_panel.winfo_ismapped() or self.accessibility_report is not None:
+            self.run_accessibility_check()
+
     def on_accessibility_palette(self, _event=None):
         label = self.accessibility_palette_var.get().rsplit(": ", 1)[-1]
         palette = next((key for key, value in PALETTE_MODES.items() if value == label), None)
         if palette is None:
             return
+        updated = dict(self.accessibility_settings)
+        updated["palette"] = palette
+        self._persist_and_apply_accessibility(
+            updated, f"{PALETTE_MODES[palette]} applied. PASS and REVIEW text remains visible.",
+        )
+
+    def on_accessibility_setting_changed(self, _event=None):
+        updated = dict(self.accessibility_settings)
+        scale_text = self.accessibility_font_scale_var.get().rstrip("%")
+        if scale_text.isdigit():
+            updated["font_scale"] = round(int(scale_text) / 100.0, 2)
+        spacing_text = self.accessibility_line_spacing_var.get().rstrip("x")
         try:
-            save_accessibility(self.session.root, palette)
-        except OSError as error:
-            self.accessibility_status_var.set(f"Could not save accessibility preferences: {error}")
-            return
-        self.accessibility_palette = palette
-        self.accessibility_status_var.set(f"{PALETTE_MODES[palette]} applied. PASS and REVIEW text remains visible.")
-        if self.safety_report is not None:
-            self.present_safety_report(self.safety_report)
-        self.run_accessibility_check()
+            updated["line_spacing"] = round(float(spacing_text), 2)
+        except ValueError:
+            pass
+        updated["reduced_motion"] = bool(self.accessibility_reduced_motion_var.get())
+        updated["focus_ring"] = bool(self.accessibility_focus_ring_var.get())
+        updated["dyslexia_spacing"] = bool(self.accessibility_dyslexia_spacing_var.get())
+        scale_pct = int(round(updated["font_scale"] * 100))
+        self._persist_and_apply_accessibility(
+            updated,
+            f"Accessibility settings saved ({scale_pct}% text, {updated['line_spacing']:.1f}x spacing).",
+        )
+
+    def on_sync_os_accessibility(self):
+        recommended = recommended_settings_from_system()
+        self._persist_and_apply_accessibility(
+            recommended, "Synced accessibility settings from operating-system preferences.",
+        )
+
+    def _adjust_font_scale(self, direction):
+        next_scale = step_font_scale(self.accessibility_settings["font_scale"], direction)
+        updated = dict(self.accessibility_settings)
+        updated["font_scale"] = next_scale
+        self._persist_and_apply_accessibility(
+            updated, f"Text size set to {int(round(next_scale * 100))}%.",
+        )
 
     def on_accessibility_key(self, event):
         if event.keysym == "Escape":
@@ -336,6 +492,16 @@ class InvestigationApp:
                 self.clear_safety()
                 return "break"
             return None
+        if event.state & 0x4:
+            if event.keysym in {"plus", "equal", "KP_Add"}:
+                self._adjust_font_scale(1)
+                return "break"
+            if event.keysym in {"minus", "underscore", "KP_Subtract"}:
+                self._adjust_font_scale(-1)
+                return "break"
+            if event.keysym in {"0", "KP_0"}:
+                self._adjust_font_scale(0)
+                return "break"
         if event.keysym == "s":
             self.toggle_settings()
         elif event.keysym == "o":
@@ -940,6 +1106,11 @@ class InvestigationApp:
                 pass
             self.refresh_after_id = None
         self.terminal.stop()
+        for font_name, base_size in getattr(self, "_base_tk_fonts", {}).items():
+            try:
+                tkfont.nametofont(font_name).configure(size=base_size)
+            except tk.TclError:
+                pass
         try:
             self.root.destroy()
         except tk.TclError:
