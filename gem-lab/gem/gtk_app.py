@@ -19,7 +19,20 @@ from gi.repository import Atk, Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango, Vte
 
 import metrix
 from metrix.drop import dropped_payload
-from .accessibility import PALETTE_MODES, evaluate_accessibility, load_accessibility, save_accessibility, system_accent_color
+from .accessibility import (
+    FONT_SCALE_PRESETS,
+    LINE_SPACING_PRESETS,
+    PALETTE_MODES,
+    apply_atk_metadata,
+    build_gtk_accessibility_css,
+    evaluate_accessibility,
+    line_spacing_pixels,
+    load_accessibility_settings,
+    recommended_settings_from_system,
+    save_accessibility_settings,
+    step_font_scale,
+    system_accent_color,
+)
 from .agent_bridge import prepare_agent_command
 from .environment import agent_environment, configure_environment
 from .events import Session
@@ -462,7 +475,15 @@ class AblationWindow(Gtk.Window):
         self.workspace_override = self.cli_workspace != session.root
         self.export_actions = export_actions
         self.preferences = WorkbenchPreferences(session.root, configure_native_fonts().to_string())
-        self.accessibility_palette, self.accessibility_error = load_accessibility(session.root)
+        self.accessibility_settings, self.accessibility_error = load_accessibility_settings(session.root)
+        self.accessibility_palette = self.accessibility_settings["palette"]
+        self.accessibility_css_provider = None
+        self._syncing_accessibility_controls = False
+        ui_font = Gtk.Settings.get_default().get_property("gtk-font-name") or "Sans 10.5"
+        parsed_ui_font = Pango.FontDescription.from_string(ui_font)
+        self._base_ui_font_pt = (
+            parsed_ui_font.get_size() / Pango.SCALE if parsed_ui_font.get_size() > 0 else 10.5
+        )
         self.workspaces = []
         self.next_number = 2
         self.preferences_dialog = None
@@ -556,10 +577,74 @@ class AblationWindow(Gtk.Window):
         for palette, label in PALETTE_MODES.items():
             self.accessibility_palette_combo.append(palette, label)
         self.accessibility_palette_combo.set_active_id(self.accessibility_palette)
-        self.accessibility_palette_combo.get_accessible().set_name("Color palette")
-        self.accessibility_palette_combo.get_accessible().set_description("Choose system, colorblind-safe, or high-contrast colors")
+        apply_atk_metadata(
+            self.accessibility_palette_combo,
+            name="Color palette",
+            description="Choose system, colorblind-safe, or high-contrast colors",
+        )
         self.accessibility_palette_combo.connect("changed", self.on_accessibility_palette)
         self.accessibility_panel.pack_start(self.accessibility_palette_combo, False, False, 0)
+        accessibility_controls = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        accessibility_controls.pack_start(Gtk.Label(label="Text size", xalign=0), False, False, 0)
+        self.accessibility_font_scale_combo = Gtk.ComboBoxText()
+        for scale in FONT_SCALE_PRESETS:
+            self.accessibility_font_scale_combo.append(f"{scale:.2f}", f"{int(round(scale * 100))}%")
+        self.accessibility_font_scale_combo.set_active_id(f"{self.accessibility_settings['font_scale']:.2f}")
+        apply_atk_metadata(
+            self.accessibility_font_scale_combo,
+            name="Text size scale",
+            description="Scale workbench and terminal text from 85% to 200% (Ctrl++, Ctrl+-, Ctrl+0)",
+        )
+        self.accessibility_font_scale_combo.connect("changed", self.on_accessibility_setting_changed)
+        accessibility_controls.pack_start(self.accessibility_font_scale_combo, False, False, 0)
+        accessibility_controls.pack_start(Gtk.Label(label="Line spacing", xalign=0), False, False, 0)
+        self.accessibility_line_spacing_combo = Gtk.ComboBoxText()
+        for spacing in LINE_SPACING_PRESETS:
+            self.accessibility_line_spacing_combo.append(f"{spacing:.2f}", f"{spacing:.1f}x")
+        self.accessibility_line_spacing_combo.set_active_id(f"{self.accessibility_settings['line_spacing']:.2f}")
+        apply_atk_metadata(
+            self.accessibility_line_spacing_combo,
+            name="Line spacing",
+            description="Adjust line spacing in audit and node detail views from 1.0x to 2.0x",
+        )
+        self.accessibility_line_spacing_combo.connect("changed", self.on_accessibility_setting_changed)
+        accessibility_controls.pack_start(self.accessibility_line_spacing_combo, False, False, 0)
+        self.accessibility_reduced_motion_check = Gtk.CheckButton(label="Reduced motion")
+        self.accessibility_reduced_motion_check.set_active(self.accessibility_settings["reduced_motion"])
+        apply_atk_metadata(
+            self.accessibility_reduced_motion_check,
+            name="Reduced motion",
+            description="Disable GTK animations and transitions",
+        )
+        self.accessibility_reduced_motion_check.connect("toggled", self.on_accessibility_setting_changed)
+        accessibility_controls.pack_start(self.accessibility_reduced_motion_check, False, False, 0)
+        self.accessibility_focus_ring_check = Gtk.CheckButton(label="Focus ring")
+        self.accessibility_focus_ring_check.set_active(self.accessibility_settings["focus_ring"])
+        apply_atk_metadata(
+            self.accessibility_focus_ring_check,
+            name="High-visibility focus ring",
+            description="Show a 2px high-contrast focus outline on focused controls",
+        )
+        self.accessibility_focus_ring_check.connect("toggled", self.on_accessibility_setting_changed)
+        accessibility_controls.pack_start(self.accessibility_focus_ring_check, False, False, 0)
+        self.accessibility_dyslexia_spacing_check = Gtk.CheckButton(label="Letter spacing")
+        self.accessibility_dyslexia_spacing_check.set_active(self.accessibility_settings["dyslexia_spacing"])
+        apply_atk_metadata(
+            self.accessibility_dyslexia_spacing_check,
+            name="Extra letter spacing",
+            description="Increase character spacing to improve readability",
+        )
+        self.accessibility_dyslexia_spacing_check.connect("toggled", self.on_accessibility_setting_changed)
+        accessibility_controls.pack_start(self.accessibility_dyslexia_spacing_check, False, False, 0)
+        self.accessibility_sync_os_button = Gtk.Button(label="Sync OS Defaults")
+        apply_atk_metadata(
+            self.accessibility_sync_os_button,
+            name="Sync OS Defaults",
+            description="Detect and apply operating-system contrast, motion, and text-scale preferences",
+        )
+        self.accessibility_sync_os_button.connect("clicked", self.on_sync_os_accessibility)
+        accessibility_controls.pack_end(self.accessibility_sync_os_button, False, False, 0)
+        self.accessibility_panel.pack_start(accessibility_controls, False, False, 0)
         self.accessibility_status = Gtk.Label(xalign=0)
         self.accessibility_status.set_line_wrap(True)
         self.accessibility_status.get_accessible().set_role(Atk.Role.STATUSBAR)
@@ -568,7 +653,8 @@ class AblationWindow(Gtk.Window):
         keyboard_help = Gtk.Label(xalign=0)
         keyboard_help.set_line_wrap(True)
         keyboard_help.set_text(
-            "Keyboard: Alt+S opens Settings, Alt+O opens the audit, Alt+A opens a11y Optimization, and Escape closes these panels. "
+            "Keyboard: Alt+S opens Settings, Alt+O opens the audit, Alt+A opens a11y Optimization, "
+            "Ctrl++/Ctrl+-/Ctrl+0 scales text, and Escape closes these panels. "
             "Tab and Shift+Tab move between controls. Enter activates a control. Arrow keys navigate the Lab tree and charts. "
             "The Lab tree is the text alternative to every chart.",
         )
@@ -646,10 +732,12 @@ class AblationWindow(Gtk.Window):
         outer.pack_start(self.notebook, True, True, 0)
         self.register_actions()
         self.restore_investigations()
+        self.apply_accessibility_settings()
         self.connect("delete-event", self.on_delete)
         self.connect("key-press-event", self.on_accessibility_key)
 
     def on_system_accent_changed(self, _settings, _key):
+        self.apply_accessibility_settings()
         if self.safety_report is not None:
             self.present_safety_report(self.safety_report)
         if self.accessibility_report is not None:
@@ -727,6 +815,7 @@ class AblationWindow(Gtk.Window):
         try:
             self.accessibility_report = evaluate_accessibility(
                 self.accessibility_palette, light, background, self.accessibility_features(),
+                settings=self.accessibility_settings,
             )
         except Exception as error:
             self.accessibility_report = None
@@ -756,27 +845,130 @@ class AblationWindow(Gtk.Window):
         workspace.status_changed()
         self.clear_safety()
 
+    def _sync_accessibility_controls(self):
+        self._syncing_accessibility_controls = True
+        try:
+            self.accessibility_palette_combo.set_active_id(self.accessibility_settings["palette"])
+            self.accessibility_font_scale_combo.set_active_id(f"{self.accessibility_settings['font_scale']:.2f}")
+            self.accessibility_line_spacing_combo.set_active_id(f"{self.accessibility_settings['line_spacing']:.2f}")
+            self.accessibility_reduced_motion_check.set_active(self.accessibility_settings["reduced_motion"])
+            self.accessibility_focus_ring_check.set_active(self.accessibility_settings["focus_ring"])
+            self.accessibility_dyslexia_spacing_check.set_active(self.accessibility_settings["dyslexia_spacing"])
+        finally:
+            self._syncing_accessibility_controls = False
+
+    def apply_accessibility_settings(self):
+        colors = self.safety_palette()
+        css = build_gtk_accessibility_css(
+            self.accessibility_settings,
+            accent=colors["accent"],
+            base_font_pt=self._base_ui_font_pt,
+        )
+        screen = Gdk.Screen.get_default()
+        if screen is not None:
+            if self.accessibility_css_provider is None:
+                self.accessibility_css_provider = Gtk.CssProvider()
+                Gtk.StyleContext.add_provider_for_screen(
+                    screen, self.accessibility_css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+                )
+            self.accessibility_css_provider.load_from_data(css.encode("utf-8"))
+        gtk_settings = Gtk.Settings.get_default()
+        if gtk_settings is not None:
+            gtk_settings.set_property("gtk-enable-animations", not self.accessibility_settings["reduced_motion"])
+        above, below, wrap = line_spacing_pixels(self.accessibility_settings["line_spacing"], self._base_ui_font_pt)
+        for text_view in (self.safety_details, self.accessibility_details):
+            text_view.set_pixels_above_lines(above)
+            text_view.set_pixels_below_lines(below)
+            text_view.set_pixels_inside_wrap(wrap)
+        for workspace in self.workspaces:
+            self._apply_workspace_accessibility(workspace)
+
+    def _apply_workspace_accessibility(self, workspace):
+        workspace.terminal.set_font_scale(self.accessibility_settings["font_scale"])
+        above, below, wrap = line_spacing_pixels(self.accessibility_settings["line_spacing"], self._base_ui_font_pt)
+        if hasattr(workspace, "details") and isinstance(workspace.details, Gtk.TextView):
+            workspace.details.set_pixels_above_lines(above)
+            workspace.details.set_pixels_below_lines(below)
+            workspace.details.set_pixels_inside_wrap(wrap)
+
+    def _persist_and_apply_accessibility(self, updated, announcement):
+        try:
+            saved = save_accessibility_settings(self.session.root, updated)
+        except (OSError, ValueError) as error:
+            self.accessibility_status.set_text(f"Could not save accessibility preferences: {error}")
+        else:
+            self.accessibility_settings = saved
+            self.accessibility_palette = saved["palette"]
+            self._sync_accessibility_controls()
+            self.apply_accessibility_settings()
+            self.accessibility_status.set_text(announcement)
+            if self.safety_report is not None:
+                self.present_safety_report(self.safety_report)
+            if self.accessibility_panel.get_visible() or self.accessibility_report is not None:
+                self.run_accessibility_check()
+        apply_atk_metadata(self.accessibility_status, name=self.accessibility_status.get_text())
+
     def on_accessibility_palette(self, combo):
+        if self._syncing_accessibility_controls:
+            return
         palette = combo.get_active_id()
         if palette not in PALETTE_MODES:
             return
-        try:
-            save_accessibility(self.session.root, palette)
-        except OSError as error:
-            self.accessibility_status.set_text(f"Could not save accessibility preferences: {error}")
-        else:
-            self.accessibility_palette = palette
-            self.accessibility_status.set_text(f"{PALETTE_MODES[palette]} applied. PASS and REVIEW text remains visible.")
-            if self.safety_report is not None:
-                self.present_safety_report(self.safety_report)
-            self.run_accessibility_check()
-        self.accessibility_status.get_accessible().set_name(self.accessibility_status.get_text())
+        updated = dict(self.accessibility_settings)
+        updated["palette"] = palette
+        self._persist_and_apply_accessibility(
+            updated, f"{PALETTE_MODES[palette]} applied. PASS and REVIEW text remains visible.",
+        )
+
+    def on_accessibility_setting_changed(self, _widget):
+        if self._syncing_accessibility_controls:
+            return
+        updated = dict(self.accessibility_settings)
+        scale_id = self.accessibility_font_scale_combo.get_active_id()
+        if scale_id is not None:
+            updated["font_scale"] = float(scale_id)
+        spacing_id = self.accessibility_line_spacing_combo.get_active_id()
+        if spacing_id is not None:
+            updated["line_spacing"] = float(spacing_id)
+        updated["reduced_motion"] = bool(self.accessibility_reduced_motion_check.get_active())
+        updated["focus_ring"] = bool(self.accessibility_focus_ring_check.get_active())
+        updated["dyslexia_spacing"] = bool(self.accessibility_dyslexia_spacing_check.get_active())
+        scale_pct = int(round(updated["font_scale"] * 100))
+        self._persist_and_apply_accessibility(
+            updated,
+            f"Accessibility settings saved ({scale_pct}% text, {updated['line_spacing']:.1f}x spacing).",
+        )
+
+    def on_sync_os_accessibility(self, _button):
+        recommended = recommended_settings_from_system()
+        self._persist_and_apply_accessibility(
+            recommended, "Synced accessibility settings from operating-system preferences.",
+        )
+
+    def _adjust_font_scale(self, direction):
+        next_scale = step_font_scale(self.accessibility_settings["font_scale"], direction)
+        updated = dict(self.accessibility_settings)
+        updated["font_scale"] = next_scale
+        self._persist_and_apply_accessibility(
+            updated, f"Text size set to {int(round(next_scale * 100))}%.",
+        )
 
     def on_accessibility_key(self, _widget, event):
-        if event.state & Gdk.ModifierType.CONTROL_MASK and event.keyval == Gdk.keyval_from_name("f"):
-            workspace = self.current_workspace()
-            if workspace is not None:
-                workspace.search.grab_focus()
+        if event.state & Gdk.ModifierType.CONTROL_MASK:
+            key = Gdk.keyval_name(event.keyval)
+            if key == "f":
+                workspace = self.current_workspace()
+                if workspace is not None:
+                    workspace.search.grab_focus()
+                    return True
+            if key in {"plus", "equal", "KP_Add"}:
+                self._adjust_font_scale(1)
+                return True
+            if key in {"minus", "underscore", "KP_Subtract"}:
+                self._adjust_font_scale(-1)
+                return True
+            if key in {"0", "KP_0"}:
+                self._adjust_font_scale(0)
                 return True
         if event.keyval == Gdk.keyval_from_name("Escape"):
             if self.settings_bar.get_visible() or self.safety_panel.get_visible() or self.accessibility_panel.get_visible():
@@ -981,6 +1173,7 @@ class AblationWindow(Gtk.Window):
         workspace.tab_close = close
         workspace.tab = tab
         self.workspaces.append(workspace)
+        self._apply_workspace_accessibility(workspace)
         workspace.show_all()
         workspace.details_toggle.set_active(False)
         if activate:
@@ -1117,6 +1310,11 @@ class AblationWindow(Gtk.Window):
             return
         self.save_project()
         self.closed = True
+        if self.accessibility_css_provider is not None:
+            screen = Gdk.Screen.get_default()
+            if screen is not None:
+                Gtk.StyleContext.remove_provider_for_screen(screen, self.accessibility_css_provider)
+            self.accessibility_css_provider = None
         if self.preferences_dialog is not None:
             self.preferences_dialog.destroy()
             self.preferences_dialog = None
