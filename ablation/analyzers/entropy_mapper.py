@@ -32,7 +32,21 @@ import math
 import struct
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
+
+# Optional Bridge 1B import: falls back cleanly to exact U-statistic replicas in standalone ablation
+try:
+    from guiai.gem.kloster_stopping_law import (
+        KlosterSequentialStoppingController as _GemStoppingController,
+        kloster_unbiased_chi2_stats as _gem_unbiased_chi2_stats,
+        predict_kloster_min_samples as _gem_predict_min_samples,
+    )
+    _HAS_GUIAI_KLOSTER = True
+except ImportError:
+    _GemStoppingController = None  # type: ignore[assignment]
+    _gem_unbiased_chi2_stats = None  # type: ignore[assignment]
+    _gem_predict_min_samples = None  # type: ignore[assignment]
+    _HAS_GUIAI_KLOSTER = False
 
 
 # Entropy class boundaries (bits/byte)
@@ -49,12 +63,118 @@ _CLASS_LABELS = {
 }
 
 
+def _kloster_unbiased_chi2_stats_py(counts: Sequence[int]) -> Dict[str, float]:
+    """Exact pure-Python Theorem 13 unbiased U-statistic M2^(U), excess chi^2, and Z_K."""
+    c = [float(x) for x in counts]
+    n_bins = len(c)
+    s_tot = sum(c)
+    if n_bins < 2 or s_tot < 2.0:
+        return {
+            "n_bins": n_bins,
+            "samples": int(s_tot),
+            "m2_plugin": 0.0,
+            "m2_unbiased": 0.0,
+            "excess_chi2": 0.0,
+            "null_sd": 1.0,
+            "z_kloster": 0.0,
+            "m4_root": 0.0,
+        }
+    p_hat = [x / s_tot for x in c]
+    m2_plug = sum(p * p for p in p_hat)
+    # Exact unbiased estimator E[M2^(U)] == M2(p) eliminates small-sample plug-in bias
+    m2_u = sum(x * (x - 1.0) for x in c) / (s_tot * (s_tot - 1.0))
+    excess = float(n_bins * m2_u - 1.0)
+    null_sd = math.sqrt(2.0 * (n_bins - 1.0) / (s_tot * (s_tot - 1.0)))
+    z_k = excess / max(1e-15, null_sd)
+    m4_root = sum(p ** 4 for p in p_hat) ** 0.25
+    return {
+        "n_bins": n_bins,
+        "samples": int(s_tot),
+        "m2_plugin": round(m2_plug, 6),
+        "m2_unbiased": round(m2_u, 6),
+        "excess_chi2": round(excess, 6),
+        "null_sd": round(null_sd, 6),
+        "z_kloster": round(z_k, 4),
+        "m4_root": round(m4_root, 6),
+    }
+
+
+def _predict_kloster_min_samples_py(p: Sequence[float], z_threshold: float = 4.0) -> int:
+    """Pure-Python Theorem 13 closed-form minimum samples S_min(p, z) vs uniform u_N."""
+    vals = [max(0.0, float(x)) for x in p]
+    n_bins = len(vals)
+    tot = sum(vals)
+    if n_bins < 2 or tot <= 0.0:
+        return 10 ** 9
+    norm = [v / tot for v in vals]
+    delta_k = n_bins * sum(v * v for v in norm) - 1.0
+    if delta_k <= 1e-12:
+        return 10 ** 9
+    disc = 1.0 + 8.0 * (n_bins - 1.0) * (z_threshold ** 2) / (delta_k ** 2)
+    return int(math.ceil(0.5 * (1.0 + math.sqrt(disc))))
+
+
+class _FallbackKlosterStoppingController:
+    """Standalone pure-Python Theorem 13 anytime-valid sequential stopping controller."""
+
+    def __init__(self, n_bins: int = 256, delta: float = 0.005, max_samples: int = 4096) -> None:
+        self.n_bins = int(n_bins)
+        self.delta = float(delta)
+        self.max_samples = int(max_samples)
+        self.counts = [0] * self.n_bins
+        self.checks_done = 0
+
+    def stopping_z_threshold(self, check_index: int) -> float:
+        """Anytime-valid union-bound threshold matching guiai.gem.kloster_stopping_law."""
+        t = max(1, int(check_index))
+        return math.sqrt(2.0 * math.log(2.0 * (t ** 2) / max(1e-12, self.delta))) + 1.15
+
+    def observe_batch(self, indices: Sequence[int]) -> Dict[str, Any]:
+        """Ingest observed byte/bin indices and return Theorem 13 stopping verdict."""
+        for idx in indices:
+            self.counts[int(idx) % self.n_bins] += 1
+        self.checks_done += 1
+        st = _kloster_unbiased_chi2_stats_py(self.counts)
+        z_thr = self.stopping_z_threshold(self.checks_done)
+        samples = st["samples"]
+        if st["z_kloster"] >= z_thr and samples >= 12:
+            action = "DECIDE_SIGNAL"
+        elif samples >= self.max_samples:
+            action = "ABSTAIN_INSUFFICIENT_EVIDENCE"
+        else:
+            action = "GATHER_MORE"
+        est_s_min = (
+            _predict_kloster_min_samples_py([c / max(1, samples) for c in self.counts], z_thr)
+            if st["excess_chi2"] > 0.01
+            else self.max_samples
+        )
+        return {
+            "action": action,
+            "samples": samples,
+            "z_kloster": st["z_kloster"],
+            "z_threshold": round(z_thr, 4),
+            "excess_chi2": st["excess_chi2"],
+            "m4_root": st["m4_root"],
+            "estimated_s_min": int(min(est_s_min, 10 ** 9)),
+            "budget_fraction_used": round(samples / max(1, self.max_samples), 4),
+        }
+
+
+kloster_unbiased_chi2_stats = _gem_unbiased_chi2_stats if _HAS_GUIAI_KLOSTER else _kloster_unbiased_chi2_stats_py
+predict_kloster_min_samples = _gem_predict_min_samples if _HAS_GUIAI_KLOSTER else _predict_kloster_min_samples_py
+KlosterSequentialStoppingController = _GemStoppingController if _HAS_GUIAI_KLOSTER else _FallbackKlosterStoppingController
+
+
 @dataclass
 class EntropyWindow:
     offset: int       # byte offset in file
     size: int         # window size used
     entropy: float    # Shannon entropy in bits per byte (0..8)
     cls: str          # 'ENCRYPTED', 'CODE', 'SPARSE', 'PADDING'
+    z_kloster: float = 0.0
+    m2_unbiased: float = 0.0
+    excess_chi2: float = 0.0
+    kloster_action: str = "GATHER_MORE"
 
     def fmt(self) -> str:
         bar_len = int(self.entropy * 4)  # scale: 8.0 -> 32 chars
@@ -113,6 +233,7 @@ class EntropyMapResult:
     step_size: int
     windows: List[EntropyWindow] = field(default_factory=list)
     regions: List[EntropyRegion] = field(default_factory=list)
+    kloster_stopping_summary: Optional[Dict[str, Any]] = None
 
     def summary(self) -> str:
         if not self.regions:
@@ -161,6 +282,34 @@ def _classify(h: float) -> str:
     if h >= _LOW_THRESHOLD:
         return 'SPARSE'
     return 'PADDING'
+
+
+def _byte_histogram(data: bytes) -> List[int]:
+    """Count 256-bin byte frequencies for unbiased Theorem 13 U-statistic evaluation."""
+    counts = [0] * 256
+    for b in data:
+        counts[b] += 1
+    return counts
+
+
+def _classify_window(
+    h: float,
+    size: int,
+    stats: Dict[str, float],
+    z_thr_single: float,
+    use_kloster: bool = True,
+) -> str:
+    """Classify window while correcting finite-sample downward Shannon bias on <512 B slices."""
+    # On <512 B slices, uniform encrypted bytes fall below H=7.2; Theorem 13 Z_K stays near 0
+    if (
+        use_kloster
+        and size < 512
+        and h >= _MED_THRESHOLD
+        and stats["z_kloster"] < z_thr_single
+        and stats["excess_chi2"] < 0.5
+    ):
+        return 'ENCRYPTED'
+    return _classify(h)
 
 
 def _entropy_of(data: bytes) -> float:
@@ -255,10 +404,17 @@ class EntropyMapper:
         path: str,
         window_size: int = 256,
         step_size: Optional[int] = None,
+        use_kloster: bool = True,
     ):
+        if isinstance(window_size, bool) or int(window_size) < 1:
+            raise ValueError(f"window_size must be >= 1, got {window_size!r}")
+        resolved_step = window_size if step_size is None else step_size
+        if isinstance(resolved_step, bool) or int(resolved_step) < 1:
+            raise ValueError(f"step_size must be >= 1, got {resolved_step!r}")
         self.path = path
-        self.window_size = window_size
-        self.step_size = step_size if step_size is not None else window_size
+        self.window_size = int(window_size)
+        self.step_size = int(resolved_step)
+        self.use_kloster = bool(use_kloster)
 
     @classmethod
     def classify_file(
@@ -266,22 +422,65 @@ class EntropyMapper:
         path: str,
         window_size: int = 256,
         step_size: Optional[int] = None,
+        use_kloster: bool = True,
     ) -> EntropyMapResult:
         """One-shot: read file, compute map, return result."""
-        mapper = cls(path, window_size, step_size or window_size)
+        mapper = cls(path, window_size, step_size, use_kloster=use_kloster)
         return mapper.run()
 
     def run(self) -> EntropyMapResult:
+        if int(self.window_size) < 1 or int(self.step_size) < 1:
+            raise ValueError(f"window_size ({self.window_size}) and step_size ({self.step_size}) must be >= 1")
         data = Path(self.path).read_bytes()
         windows: List[EntropyWindow] = []
+        # Single-window anytime-valid stopping threshold at check_index=1 (~4.6116 for delta=0.005)
+        ctrl = KlosterSequentialStoppingController(
+            n_bins=256,
+            delta=0.005,
+            max_samples=max(512, self.window_size),
+        )
+        z_thr_single = ctrl.stopping_z_threshold(1)
+        reclassified_count = 0
+        final_verdict: Optional[Dict[str, Any]] = None
+
         for offset, h in _entropy_numpy(data, self.window_size, self.step_size):
+            chunk = data[offset: offset + self.window_size]
+            stats = kloster_unbiased_chi2_stats(_byte_histogram(chunk))
+            base_cls = _classify(h)
+            cls_name = _classify_window(h, self.window_size, stats, z_thr_single, self.use_kloster)
+            if cls_name == 'ENCRYPTED' and base_cls != 'ENCRYPTED':
+                reclassified_count += 1
+            verdict = ctrl.observe_batch(list(chunk))
+            final_verdict = verdict
+            # Reset controller after terminal decision so each region streams cleanly
+            if verdict["action"] != "GATHER_MORE":
+                ctrl = KlosterSequentialStoppingController(
+                    n_bins=256,
+                    delta=0.005,
+                    max_samples=max(512, self.window_size),
+                )
             windows.append(EntropyWindow(
                 offset=offset,
                 size=self.window_size,
                 entropy=h,
-                cls=_classify(h),
+                cls=cls_name,
+                z_kloster=float(stats["z_kloster"]),
+                m2_unbiased=float(stats["m2_unbiased"]),
+                excess_chi2=float(stats["excess_chi2"]),
+                kloster_action=(
+                    "DECIDE_SIGNAL"
+                    if stats["z_kloster"] >= z_thr_single and stats["samples"] >= 12
+                    else verdict["action"]
+                ),
             ))
         regions = _merge_regions(windows)
+        summary = {
+            "backend": "guiai" if _HAS_GUIAI_KLOSTER else "standalone_fallback",
+            "small_slice_mode": self.window_size < 512,
+            "z_threshold_single": round(z_thr_single, 4),
+            "reclassified_encrypted_windows": reclassified_count,
+            "final_verdict": final_verdict,
+        }
         return EntropyMapResult(
             path=self.path,
             file_size=len(data),
@@ -289,7 +488,42 @@ class EntropyMapper:
             step_size=self.step_size,
             windows=windows,
             regions=regions,
+            kloster_stopping_summary=summary,
         )
+
+    def scan_kloster_stopping(
+        self,
+        max_samples: int = 512,
+        delta: float = 0.005,
+        chunk_size: int = 64,
+    ) -> Dict[str, Any]:
+        """Stream bytes through Theorem 13 stopping controller (DECIDE_SIGNAL vs ABSTAIN)."""
+        data = Path(self.path).read_bytes()
+        ctrl = KlosterSequentialStoppingController(n_bins=256, delta=delta, max_samples=max_samples)
+        verdict: Dict[str, Any] = {
+            "action": "ABSTAIN_INSUFFICIENT_EVIDENCE",
+            "samples": 0,
+            "z_kloster": 0.0,
+            "z_threshold": round(ctrl.stopping_z_threshold(1), 4),
+            "excess_chi2": 0.0,
+            "m4_root": 0.0,
+            "estimated_s_min": max_samples,
+            "budget_fraction_used": 0.0,
+        }
+        limit = min(len(data), max_samples)
+        step = max(1, int(chunk_size))
+        for off in range(0, limit, step):
+            batch = list(data[off: min(limit, off + step)])
+            verdict = ctrl.observe_batch(batch)
+            if verdict["action"] != "GATHER_MORE":
+                break
+        if len(data) < max_samples and verdict["action"] == "GATHER_MORE":
+            # File EOF reached before max_samples without DECIDE_SIGNAL; abstain cleanly.
+            verdict = {**verdict, "action": "ABSTAIN_INSUFFICIENT_EVIDENCE", "eof_reached": True}
+        return {
+            **verdict,
+            "backend": "guiai" if _HAS_GUIAI_KLOSTER else "standalone_fallback",
+        }
 
     def scan_xor_key_boundary(
         self,

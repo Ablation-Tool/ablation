@@ -120,8 +120,8 @@ class NativeCase(unittest.TestCase):
             self.root.mainloop()
         self.assertFalse(self.app.measurement_running)
         self.assertTrue(self.app.details_visible)
-        self.assertEqual(self.app.counts_variable.get(), "Accessible volume: 3 above 0.05 · evidence saved")
-        self.assertEqual(self.app.measurement_button.cget("text"), "Accessible Volume")
+        self.assertEqual(self.app.counts_variable.get(), "Operational Metacognition: 3 above 0.05 · evidence saved")
+        self.assertEqual(self.app.measurement_button.cget("text"), "Operational Metacognition")
         self.assertEqual(self.session.current_state()["selected_id"], event["id"])
 
     def test_details_and_actions_collapse_under_inverting_icon(self):
@@ -138,7 +138,7 @@ class NativeCase(unittest.TestCase):
         self.assertEqual(self.app.actions.winfo_manager(), "pack")
         self.assertEqual(self.app.details_button.cget("style"), "Accent.TButton")
         self.assertIn(str(self.app.details_icon_inverse), str(self.app.details_button.cget("image")))
-        self.assertEqual(self.app.details.cget("height"), self.detail_lines())
+        self.assertGreaterEqual(int(self.app.details.cget("height")), self.detail_lines())
         self.assertEqual(self.app.details.yview(), (0.0, 1.0))
         self.assertFalse(any(isinstance(child, ttk.Scrollbar) for child in self.app.details_frame.children.values()))
         self.assertIn(self.artifact, self.app.details.get("1.0", "end"))
@@ -164,7 +164,7 @@ class NativeCase(unittest.TestCase):
         self.root.update()
         lines = self.detail_lines()
         self.assertGreater(lines, 8)
-        self.assertEqual(self.app.details.cget("height"), lines)
+        self.assertGreaterEqual(int(self.app.details.cget("height")), lines)
         self.assertEqual(self.app.details.yview(), (0.0, 1.0))
         self.assertTrue(self.app.details.get("1.0", "end").rstrip().endswith("Final marker"))
         self.assertFalse(any(isinstance(child, ttk.Scrollbar) for child in self.app.details_frame.children.values()))
@@ -252,7 +252,8 @@ class NativeCase(unittest.TestCase):
         self.root.deiconify()
         self.assertEqual(self.app.brand_image.width(), 512)
         self.assertEqual(self.app.brand_header_image.width(), 32)
-        self.assertEqual(self.app.brand_header_image.get(0, 0), (0, 0, 128))
+        self.assertTrue(self.app.brand_header_image.transparency_get(0, 0))
+        self.assertFalse(self.app.brand_header_image.transparency_get(16, 16))
         self.app.show_preferences()
         self.assertEqual(set(self.app.layout_buttons), set(LAYOUTS))
         terminal = self.app.terminal

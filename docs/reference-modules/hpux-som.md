@@ -36,13 +36,16 @@ The parser validates all table extents and requires `dlt_count + plt_count == im
 ## Usage
 
 ```bash
-python3 -m ablation.hpux info INPUT
-python3 -m ablation.hpux info INPUT --full
-python3 -m ablation.hpux imports INPUT --external-code --json
-python3 -m ablation.hpux disassemble INPUT 0xSTART --length 0x80 --json
-python3 -m ablation.hpux calls INPUT 0xSTART --length 0x80 --json
-python3 -m ablation.hpux functions INPUT --json
+ablation hpux info INPUT
+ablation hpux info INPUT --full
+ablation hpux imports INPUT --external-code --json
+ablation hpux disassemble INPUT 0xSTART --length 0x80 --json
+ablation hpux calls INPUT 0xSTART --length 0x80 --json
+ablation hpux functions INPUT --json
+ablation window INPUT 0xSTART --calls --funcs
 ```
+
+The equivalent module entry point is `python3 -m ablation.hpux`. Zoe users can launch the same CLI with `zoe launch ablation -- hpux ...`.
 
 Python callers can use `read_som(path)` or `parse_som(data)`. `SomImage.instructions(start, end)` yields typed `Instruction` objects; `call_sites(start, end)` adds import names and unwind owners. `BinaryContext.load_or_build(path)` detects SOM before attempting ELF parsing.
 
@@ -63,5 +66,5 @@ These are format and behavior observations, not a vulnerability verdict or proof
 
 - Only PA-RISC 1.0/1.1 instruction variants are selected. PA2.0 and wide encodings are not claimed.
 - Unwind ranges are candidates, not complete function-boundary proof; indirect calls and dynamically relocated targets remain unresolved.
-- `BinaryContext` gains architecture, symbols, strings, function candidates, and direct call edges. Generic ELF-only analyzers and pseudo-C backends are not implied to support PA-RISC.
-- No dynamic HP-UX execution, loader simulation, or complete ABI emulator is provided.
+- `BinaryContext` gains architecture, symbols, strings, function candidates, and direct call edges. `WindowAnalyzer` uses the native decoder for mapped instruction windows, direct calls, and unwind-based alignment. Generic ELF-only analyzers and pseudo-C backends are not implied to support PA-RISC.
+- `ablation.hpux` itself provides no dynamic HP-UX execution, loader simulation, or complete ABI emulator. Zoe's separate `hpux-tools` component exposes the HP-UX runtime and native GDB without changing these static-analyzer limits.

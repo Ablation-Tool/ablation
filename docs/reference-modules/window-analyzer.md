@@ -4,7 +4,7 @@
 
 Disassembles a configurable byte window centered on any virtual address and annotates each instruction with its PLT call target and `.rodata` string reference. One call returns a formatted text block that an LLM can pattern-match in a single pass.
 
-Supports x86_64, x86_32, ARM32, ARM64, PPC32, PPC64, and PPC64LE (ELFv2).
+Supports x86_64, x86_32, ARM32, ARM64, PPC32, PPC64, PPC64LE (ELFv2), and PA-RISC 1.0/1.1 (HP-UX SOM).
 
 ---
 
@@ -98,6 +98,13 @@ The arch is detected from the ELF header: `e_machine == 21` EM_PPC64 with `EI_DA
 | `ppc32` | 20 (EM_PPC) | CS_ARCH_PPC + CS_MODE_32 + CS_MODE_BIG_ENDIAN |
 | `ppc64` | 21 EM_PPC64, big-endian | CS_ARCH_PPC + CS_MODE_64 + CS_MODE_BIG_ENDIAN |
 | `ppc64le` | 21 EM_PPC64, little-endian | CS_ARCH_PPC + CS_MODE_64 + CS_MODE_LITTLE_ENDIAN |
+| `pa-risc` | HP-UX SOM magic, big-endian | Native `PaRiscDecoder`; Capstone has no PA-RISC backend |
+
+## HP-UX SOM and PA-RISC support
+
+SOM input is detected before ELF parsing. The native loader maps virtual addresses through SOM subspaces, recovers external PLT names and strings, and uses unwind starts as function candidates. The PA-RISC adapter preserves four-byte instruction boundaries and typed direct-call targets instead of parsing formatted operands. `align_to_func_start()` selects the nearest covered unwind start rather than searching for x86 prologues.
+
+The Lotus `123_motif` regression covers native disassembly at `0x23330`, direct `execlp` labeling at `0x2f9dc`, and unwind alignment at `0x23358`. Indirect branches and dynamically relocated targets remain unresolved; unwind starts are candidates rather than complete boundary proof.
 
 ---
 
@@ -117,7 +124,7 @@ For a relocated bFLT image, construct `BfltBinaryContext` first and call `Window
 
 ## Assumptions and failure modes
 
-**Assumption: lief is installed.** Without lief, PLT and string maps are empty so instructions disassemble without annotations. Capstone is still used for disassembly.
+**Assumption: lief is installed for ELF annotation.** Without lief, ELF PLT and string maps are empty so instructions disassemble without annotations. Capstone is used for supported ELF architectures; HP-UX SOM uses the dependency-free native parser and decoder instead.
 
 **Assumption: ELFv2 TOC_BASE follows the ABI convention.** `TOC_BASE =.got_va + 0x8000`. Vendor-modified firmware that deviates from the ABI will produce incorrect GOT slot addresses and miss PLT entries.
 
@@ -135,7 +142,7 @@ Gate: **PASS**. No CRITICAL or HIGH findings. Legacy ARM PLT recovery, typed dir
 
 ## How it works
 
-`WindowAnalyzer.dump_textva, window` extracts `window` bytes centered on `va`, disassembles the range with Capstone x86-64 or ARM64 based on binary architecture, resolves PLT call targets to their names, and annotates `.rodata` string references inline. Returns a list of annotated disassembly lines for LLM or manual analysis. Not a scanner: produces no findings.
+`WindowAnalyzer.dump_text(va, window)` extracts `window` bytes centered on `va`, disassembles the range with the architecture-specific Capstone or native PA-RISC backend, resolves PLT call targets to their names, and annotates string references inline. It returns annotated disassembly lines for LLM or manual analysis. It is not a scanner and produces no findings.
 
 ---
 

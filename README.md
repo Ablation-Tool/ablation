@@ -38,7 +38,7 @@ zoe launch ablation -- --help
 | Capability | Code | Description |
 |:---|:---|:---|
 | [**a11y Optimization**](gem-lab/README.md) | [1](gem-lab/gem/accessibility.py)&nbsp;[2](gem-lab/gem/app.py)&nbsp;[3](gem-lab/gem/gtk_app.py) | Auto-detects OS accessibility preferences and persists WCAG AA/AAA palettes, text scaling, line spacing, focus ring, and reduced motion |
-| [**Accessible Volume**](docs/reference-modules/accessible-volume.md) | [1](gem-lab/gem/accessible_volume.py)&nbsp;[2](gem-lab/gem/cli.py) | Measures and records next-token forecast breadth with a local model |
+| [**Operational Metacognition**](docs/reference-modules/accessible-volume.md) | [1](gem-lab/gem/accessible_volume.py)&nbsp;[2](gem-lab/gem/cli.py) | Measures and records next-token forecast breadth with a local model |
 | [**Agent Bridge**](gem-lab/README.md) | [1](gem-lab/gem/environment.py)&nbsp;[2](gem-lab/metrix/desktop.py) | Embeds your AI Agent into the GEM |
 | [**Debug Diagnostics**](gem-lab/README.md) | [1](gem-lab/gem/app.py)&nbsp;[2](gem-lab/gem/gtk_app.py) | Shows dependency and terminal diagnostics before requesting troubleshooting permission |
 | [**Evidence Integrity**](gem-lab/README.md) | [1](gem-lab/gem/events.py)&nbsp;[2](gem-lab/gem/cli.py)&nbsp;[3](gem-lab/gem/app.py) | Tracks reviews and validates evidence targets |

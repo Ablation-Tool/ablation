@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- Added Wave 3 static analyzers: `RxvmCryptoAnalyzer` (RXVM custom crypto/cookie/hash/quantization analysis), `BeamObfuscationAnalyzer` (BEAM IFF obfuscation detection), and AI-agent binary auditors (`AgentAuthorityAudit`, `AgentObservabilityAudit`, `AgentToolSurfaceEnumerator`, `AIControlIndicators`).
+- Upgraded `EntropyMapper` with Kloster Theorem 13 unbiased U-statistic $M_2^{(U)}$ / $Z_K$ classification and streaming sequential stopping (`scan_kloster_stopping`), with pure-Python standalone parity.
+- Added SunOS SPARC OMAGIC a.out symbol/relocation parsing (`ablation.sunos`, `ablation.analyzers.sunos_aout`), direct-call recovery, and `ablation sunos` / `ablation hpux` CLI subcommands plus native PA-RISC support in `WindowAnalyzer`.
+- Upgraded GEM accessibility to WCAG AA/AAA with persistent text scaling, line spacing, focus ring, reduced motion, dyslexia spacing, and one-click OS sync; renamed the Settings measurement flow to **Operational Metacognition** and ensured detail disclosure height accounts for WCAG line spacing without clipping.
 - Replaced the pre-launch target prompts with a direct GEM home screen on Linux, Windows, and macOS. **Open binary** and **Open directory** now select the target inside GEM before creating a stable session and opening the full workbench.
 - Consolidated node details and actions under a collapsed-by-default bowtie toggle in Tk and GTK, with normal and inverse icon states and preserved responsive layout behavior.
 - Adopted the woven-diamond master icon set across the README, Wiki, Tk and GTK headers, Linux hicolor launchers, native Windows shortcuts, and macOS application bundles.

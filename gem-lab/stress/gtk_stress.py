@@ -113,7 +113,7 @@ class GtkCase(unittest.TestCase):
             self.window.run_accessible_volume()
             self.wait_for(lambda: not self.window.measurement_running, "accessible-volume action did not finish")
         self.assertTrue(self.window.details_toggle.get_active())
-        self.assertEqual(self.window.counts.get_text(), "Accessible volume: 3 above 0.05 · evidence saved")
+        self.assertEqual(self.window.counts.get_text(), "Operational Metacognition: 3 above 0.05 · evidence saved")
         self.assertTrue(self.window.measurement_button.get_sensitive())
 
     def test_welcome_target_choices_and_cancel(self):

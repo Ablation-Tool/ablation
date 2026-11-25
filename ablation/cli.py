@@ -8,6 +8,8 @@ Usage:
     ablation taint    <binary> --interprocedural      cross-function BFS taint chains
     ablation taint    <binary> --flow-sensitive        CFG MFP + interprocedural (most precise)
     ablation overflow <binary>              ARM32 integer overflow scan (MUL -> malloc without check)
+    ablation hpux     info|imports|disassemble|calls|functions  HP-UX SOM / PA-RISC
+    ablation sunos    info|calls|render|dispatch    SunOS SPARC a.out
     ablation window   <binary> <va>         annotated disassembly window around a VA
     ablation profile  <binary> <va>         full function profile: strings + call args + sinks
     ablation cfg      <binary> <va>         control-flow graph for one function (hex VA)
@@ -232,6 +234,18 @@ def cmd_overflow(args):
     scanner = ARM32IntOverflowScanner.from_context(ctx)
     findings = scanner.scan()
     print(scanner.report(findings))
+
+
+def cmd_hpux(args):
+    from ablation.hpux.cli import main as hpux_main
+
+    return hpux_main(args.arguments)
+
+
+def cmd_sunos(args):
+    from ablation.sunos.cli import main as sunos_main
+
+    return sunos_main(args.arguments)
 
 
 def cmd_window(args):
@@ -1568,6 +1582,16 @@ def main():
     p_junos_diff.add_argument('--functions', nargs='+', help='relative ELF paths for function-level diff')
     p_junos_diff.add_argument('--top-k', type=int, default=0, help='deep-diff the K largest changed ELFs')
     p_junos_diff.set_defaults(func=cmd_junos)
+
+    # hpux
+    p_hpux = sub.add_parser('hpux', help='HP-UX SOM and PA-RISC analysis')
+    p_hpux.add_argument('arguments', nargs=argparse.REMAINDER, help='info, imports, disassemble, calls, or functions arguments')
+    p_hpux.set_defaults(func=cmd_hpux)
+
+    # sunos
+    p_sunos = sub.add_parser('sunos', help='SunOS SPARC a.out analysis')
+    p_sunos.add_argument('arguments', nargs=argparse.REMAINDER, help='info, calls, render, or dispatch arguments')
+    p_sunos.set_defaults(func=cmd_sunos)
 
     # search
     p_search = sub.add_parser('search', help='semantic function search')

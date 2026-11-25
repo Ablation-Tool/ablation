@@ -535,8 +535,8 @@ class AblationWindow(Gtk.Window):
         self.debug_button.get_style_context().add_class("suggested-action")
         self.debug_button.connect("clicked", self.run_debug_check)
         self.settings_bar.pack_start(self.debug_button, False, False, 0)
-        self.measurement_button = Gtk.Button(label="Accessible Volume")
-        self.measurement_button.get_accessible().set_name("Accessible Volume")
+        self.measurement_button = Gtk.Button(label="Operational Metacognition")
+        self.measurement_button.get_accessible().set_name("Operational Metacognition")
         self.measurement_button.get_accessible().set_description("Measure next-token forecast breadth and store separate evidence")
         self.measurement_button.get_style_context().add_class("suggested-action")
         self.measurement_button.connect("clicked", lambda _button: self.current_workspace().run_accessible_volume())
@@ -1684,7 +1684,7 @@ class InvestigationWorkspace(Gtk.Box):
             return
         self.measurement_running = True
         self.measurement_button.set_sensitive(False)
-        self.counts.set_text("Accessible volume: running the local model")
+        self.counts.set_text("Operational Metacognition: running the local model")
         future = self.executor.submit(self.measure_accessible_volume)
         future.add_done_callback(lambda completed: GLib.idle_add(self.finish_accessible_volume, completed))
 
@@ -1705,7 +1705,7 @@ class InvestigationWorkspace(Gtk.Box):
         if not self.details_toggle.get_active():
             self.details_toggle.set_active(True)
         threshold = report["decision_threshold"]
-        message = f"Accessible volume: {report['counts'][threshold]} above {threshold}"
+        message = f"Operational Metacognition: {report['counts'][threshold]} above {threshold}"
         guidance = report.get("guidance", {})
         if guidance.get("trend") not in (None, "unmeasured"):
             message += f" · {guidance['suggestion']}"

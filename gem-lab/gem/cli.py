@@ -73,14 +73,14 @@ def _parser():
     launch_agents.add_argument("--agent-command", help="complete interactive agent command")
     launch_agents.add_argument("--no-agent", action="store_true")
 
-    measure = commands.add_parser("measure", help="measure next-token accessible volume and record separate evidence")
+    measure = commands.add_parser("measure", help="measure next-token operational metacognition and record separate evidence")
     measure.add_argument("--session", required=True, help="investigation session directory")
     measure.add_argument("--threshold", type=float, action="append", help="probability threshold; repeat for a custom sweep")
     measure.add_argument("--candidate", action="append", default=[], help="proposed future action to evaluate without executing; repeat for alternatives")
     measure.add_argument("--momentum-band", type=int, default=1, help="accessible-momentum target band (default: 1)")
     measure.add_argument("--json", action="store_true", help="emit the complete measurement report")
 
-    volume = commands.add_parser("volume", help="measure accessible volume and optional accessible momentum from an NPZ artifact")
+    volume = commands.add_parser("volume", help="measure operational metacognition and optional accessible momentum from an NPZ artifact")
     volume.add_argument("distribution", nargs="?", help="NPZ containing probabilities and optional input_ids for the VolumeBridge session flow")
     volume.add_argument("--probabilities", help="NPZ file for a standalone artifact report instead of session feedback")
     volume.add_argument("--key", default="probabilities", help="NPZ key for the current distribution")
@@ -226,7 +226,7 @@ def main(argv=None):
                 print(json.dumps(report, indent=2, ensure_ascii=False, sort_keys=True))
             else:
                 for threshold, count in report["counts"].items():
-                    print(f"Accessible volume above {threshold}: {count}")
+                    print(f"Operational Metacognition above {threshold}: {count}")
                 if report["momentum"] is not None:
                     decision = report["decision_threshold"]
                     print(f"Accessible momentum at {decision}: {report['momentum'][decision]:+d}")
