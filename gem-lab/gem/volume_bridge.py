@@ -44,7 +44,7 @@ class VolumeBridge:
         counts = accessible_volume(probabilities, thresholds)
         decision_threshold = "0.05" if "0.05" in counts else threshold_name(thresholds[0])
         return {
-            "measurement": "next-token accessible volume",
+            "measurement": "next-token operational metacognition",
             "source": str(Path(source).expanduser().resolve()),
             "created_utc": utc_now(),
             "elapsed_ns": time.monotonic_ns() - started,
@@ -115,7 +115,7 @@ class VolumeBridge:
                 f"evidence:accessible-volume:{digest}",
                 state["selected_id"],
                 "evidence",
-                f"Accessible volume: {observation['counts'][observation['decision_threshold']]} above {observation['decision_threshold']}",
+                f"Operational Metacognition: {observation['counts'][observation['decision_threshold']]} above {observation['decision_threshold']}",
                 "partial",
                 "tool",
                 str(report_path),

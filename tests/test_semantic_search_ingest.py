@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -191,3 +192,70 @@ def test_callees_capped_at_32(tmp_db):
     con.close()
 
     assert len(json.loads(call_targets_json)) == 32
+
+
+def test_live_addrs_filter_applies_with_binary_id(tmp_db):
+    con = sqlite3.connect(str(tmp_db))
+    con.execute("INSERT INTO binaries (id, sha256) VALUES (1, 'fixture')")
+    for va, name in ((0x1000, 'alpha'), (0x2000, 'beta'), (0x3000, 'gamma')):
+        con.execute(
+            "INSERT INTO functions (binary_id, va, name, confidence) VALUES (1, ?, ?, 'CONFIRMED')",
+            (va, name),
+        )
+    con.commit()
+    con.close()
+    searcher = SemanticSearcher(str(tmp_db))
+    searcher._binary_id = 1
+
+    class FakeModel:
+        def embed(self, descriptions):
+            return iter([np.array([1, 0], dtype=np.float32)] * len(descriptions))
+
+    with patch.object(searcher, '_get_model', return_value=FakeModel()):
+        assert searcher.build_corpus(live_addrs={0x1000, 0x3000}, force=True) == 2
+    assert [item['name'] for item in searcher._meta] == ['alpha', 'gamma']
+
+
+def test_whitening_is_applied_to_corpus_and_query(tmp_db):
+    searcher = SemanticSearcher(str(tmp_db))
+    searcher._vectors = np.eye(2, dtype=np.float32)
+    searcher._meta = [
+        {'va': 0x1000, 'name': 'alpha', 'role': 'UNKNOWN', 'confidence': 'CONFIRMED'},
+        {'va': 0x2000, 'name': 'beta', 'role': 'UNKNOWN', 'confidence': 'CONFIRMED'},
+    ]
+    searcher._whitener._mu = np.array([.5, .5])
+    searcher._whitener._W = np.array([[2.0, 0.0], [0.0, 1.0]])
+
+    class FakeModel:
+        def embed(self, descriptions):
+            return iter([np.array([1, 0], dtype=np.float32)])
+
+    with patch.object(searcher, '_get_model', return_value=FakeModel()):
+        hits = searcher.query('alpha', top_k=1)
+    assert hits[0].name == 'alpha'
+    assert hits[0].score == pytest.approx(2 / np.sqrt(5))
+
+
+def test_cached_corpus_preserves_whitening_parameters(tmp_db):
+    con = sqlite3.connect(str(tmp_db))
+    con.execute("INSERT INTO binaries (id, sha256) VALUES (1, 'fixture')")
+    for va, name in ((0x1000, 'alpha'), (0x2000, 'beta')):
+        con.execute("INSERT INTO functions (binary_id, va, name, confidence) VALUES (1, ?, ?, 'CONFIRMED')", (va, name))
+    con.commit()
+    con.close()
+    searcher = SemanticSearcher(str(tmp_db))
+    searcher._binary_id = 1
+
+    class FakeModel:
+        def embed(self, descriptions):
+            return iter([np.array([1, 0], dtype=np.float32), np.array([0, 1], dtype=np.float32)])
+
+    with patch.object(searcher, '_get_model', return_value=FakeModel()):
+        assert searcher.build_corpus(force=True) == 2
+    cache_path = searcher._cache_file()
+    assert cache_path.is_file()
+    import pickle
+    with cache_path.open('rb') as stream:
+        cached = pickle.load(stream)
+    assert cached['whitening']['mu'].shape == (2,)
+    assert cached['whitening']['W'].shape == (2, 2)

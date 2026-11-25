@@ -144,6 +144,21 @@ from .crypto_pattern_detector import (
     HashAlgoDiscriminator, HashAlgoMatch, ConstMatch,
     CustomCBCDetector, CBCPattern,
 )
+from .rxvm_crypto_analyzer import (
+    RxvmCryptoAnalyzer, RxvmCryptoFinding, RxvmCryptoReport,
+    analyze_rxvm_source, analyze_rxvm_file, decrypt_rxc_cookie,
+    hybrid_xxh1_fmix32_hash, murmur3_rxvm, rc4_crypt,
+    decode_rxvm_float16, parse_rxc_metrics,
+    analyze_quantization_saturation, render_annotated_markdown,
+)
+from .beam_obfuscation_analyzer import (
+    BeamObfuscationAnalyzer, BeamObfuscationFinding, BeamObfuscationReport,
+    analyze_beam_bytes, analyze_beam_file,
+)
+from .agent_authority_audit import AgentAuthorityAudit, AuthorityFinding
+from .agent_observability_audit import AgentObservabilityAudit, ObservabilityFinding
+from .agent_tool_surface_enumerator import AgentToolSurfaceEnumerator, ToolSurfaceFinding
+from .ai_control_indicators import AIControlIndicators, AICodeFinding
 from .abc_parser import (
     ABCParser, ABCHeader, ABCIndexHeader,
     MethodInfo, CodeItem, FieldInfo, ClassInfo,
@@ -268,6 +283,18 @@ __all__ = [
     # ── Crypto pattern recognition (binary / disassembly) ───────────────────
     "HashAlgoDiscriminator", "HashAlgoMatch", "ConstMatch",
     "CustomCBCDetector", "CBCPattern",
+    "RxvmCryptoAnalyzer", "RxvmCryptoFinding", "RxvmCryptoReport",
+    "analyze_rxvm_source", "analyze_rxvm_file", "decrypt_rxc_cookie",
+    "hybrid_xxh1_fmix32_hash", "murmur3_rxvm", "rc4_crypt",
+    "decode_rxvm_float16", "parse_rxc_metrics",
+    "analyze_quantization_saturation", "render_annotated_markdown",
+    "BeamObfuscationAnalyzer", "BeamObfuscationFinding", "BeamObfuscationReport",
+    "analyze_beam_bytes", "analyze_beam_file",
+    # ── AI-Agent Binary Auditors (Wave 3 — compiled agent static audits) ────
+    "AgentAuthorityAudit", "AuthorityFinding",
+    "AgentObservabilityAudit", "ObservabilityFinding",
+    "AgentToolSurfaceEnumerator", "ToolSurfaceFinding",
+    "AIControlIndicators", "AICodeFinding",
     # ── HarmonyOS / ArkTS ────────────────────────────────────────────────────
     "ABCParser", "ABCHeader", "ABCIndexHeader",
     "MethodInfo", "CodeItem", "FieldInfo", "ClassInfo",

@@ -28,6 +28,7 @@ from __future__ import annotations
 import re
 import struct
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Dict, List, Optional, Tuple
 
 import capstone
@@ -45,8 +46,30 @@ _STD_R2_SAVE = 0xF8410018  # std r2, 0x18(r1) in LE storage — ppc64le ELFv2 TO
 _MAX_TEXT_SCAN_WORDS = 4_000_000  # ~16 MB .text; guard against adversarially large sections
 
 
+class _PaRiscDisassembler:
+    def __init__(self, decoder):
+        self.decoder = decoder
+        self.detail = False
+        self.skipdata = False
+
+    def disasm(self, data, address):
+        for offset in range(0, len(data) - len(data) % 4, 4):
+            instruction = self.decoder.decode(struct.unpack_from('>I', data, offset)[0], address + offset)
+            yield SimpleNamespace(
+                address=instruction.address,
+                mnemonic=instruction.mnemonic,
+                op_str=instruction.operands.strip(),
+                bytes=instruction.word.to_bytes(4, 'big'),
+                size=4,
+                branch_target=instruction.branch_target,
+                is_call=instruction.is_call,
+            )
+
+
 def _elf_arch(data: bytes) -> str:
-    """Return arch string from ELF e_machine or XCOFF magic, respecting byte order."""
+    """Return arch string from ELF e_machine or XCOFF/SOM magic, respecting byte order."""
+    if len(data) >= 128 and data[:2] in (b'\x02\x0b', b'\x02\x10', b'\x02\x11', b'\x02\x14') and data[2:4] in (b'\x01\x04', b'\x01\x07', b'\x01\x08', b'\x01\x0b', b'\x01\x0d', b'\x01\x0e'):
+        return 'pa-risc'
     if len(data) < 20:
         return 'x86_64'
     if data[:2] == b'\x01\xdf':   # XCOFF32
@@ -309,7 +332,11 @@ class WindowAnalyzer:
         self._md: Optional[capstone.Cs] = None
         self._direct_calls: List[Tuple[int, int, str]] = []
         self._sections = []
-        if self.arch in ('mips32', 'mips64') and data:
+        self._som = None
+        self._func_starts = set()
+        if self.arch == 'pa-risc' and data:
+            self._load_som()
+        elif self.arch in ('mips32', 'mips64') and data:
             self._load_mips()
         elif _LIEF_OK and data:
             self._load_lief()
@@ -334,6 +361,28 @@ class WindowAnalyzer:
         inst._sections = []
         inst._is_pie = False
         return inst
+
+    def _load_som(self) -> None:
+        from ablation.hpux import parse_som
+        from ablation.analyzers.binary_context import _extract_strings_into
+
+        self._som = parse_som(self.data, self.path or '<memory>')
+        self.base_va = self._som.exec_header['exec_tmem']
+        self._text_start = self.base_va
+        self._text_end = self.base_va + self._som.exec_header['exec_tsize']
+        self._is_pie = False
+        self._sections = [
+            (section.va, section.file_offset, section.initialized_size)
+            for section in self._som.subspaces
+        ]
+        self._func_starts = {item.start for item in self._som.unwind} | {self._som.entry}
+        for item in self._som.plt:
+            symbol = self._som.import_for_plt(item)
+            if item.proc_addr and symbol.type == 3 and symbol.external and symbol.name:
+                self.plt[item.proc_addr] = symbol.name
+        for section in self._som.subspaces:
+            if section.name in ('$LIT$', '$DATA$', '$STATICDATA$', '$SHORTDATA$', '$SHORTSTATICDATA$') and section.initialized_size:
+                _extract_strings_into(self.data[section.file_offset:section.file_offset + section.initialized_size], section.va, self.strings)
 
     def _load_mips(self) -> None:
         from elftools.elf.elffile import ELFFile
@@ -842,9 +891,11 @@ class WindowAnalyzer:
                 else:
                     i = start + 1
 
-    def _cs(self) -> capstone.Cs:
+    def _cs(self):
         if self._md is None:
-            if self.arch == 'arm32':
+            if self.arch == 'pa-risc':
+                self._md = _PaRiscDisassembler(self._som.decoder)
+            elif self.arch == 'arm32':
                 self._md = capstone.Cs(capstone.CS_ARCH_ARM, capstone.CS_MODE_ARM)
             elif self.arch == 'arm64':
                 self._md = capstone.Cs(capstone.CS_ARCH_ARM64, capstone.CS_MODE_ARM)
@@ -944,6 +995,8 @@ class WindowAnalyzer:
             elif self.arch in ('arm32', 'arm64') and mnemonic in ('push', 'stp', 'stmdb', 'stmfd'):
                 if 'lr' in op_str.lower() or 'x29' in op_str.lower():
                     annotations.append("[FUNC_START?]")
+            elif self.arch == 'pa-risc' and addr in self._func_starts:
+                annotations.append("[FUNC_START?]")
 
             if self.arch == 'x86_64':
                 call_mnems = {'call'}
@@ -951,14 +1004,19 @@ class WindowAnalyzer:
                 call_mnems = {'bl', 'bctrl'}
             elif self.arch in ('mips32', 'mips64'):
                 call_mnems = {'jal', 'jalr'}
+            elif self.arch == 'pa-risc':
+                call_mnems = {'b', 'bl', 'ble', 'bve'}
             else:
                 call_mnems = {'bl', 'blx', 'blr'}
             if mnemonic.lower().split('.')[0] in call_mnems:
-                try:
-                    target_text = op_str.strip().split(',')[0].strip().lstrip('#')
-                    target = int(target_text, 0)
-                except ValueError:
-                    target = None
+                if self.arch == 'pa-risc':
+                    target = insn.branch_target if insn.is_call else None
+                else:
+                    try:
+                        target_text = op_str.strip().split(',')[0].strip().lstrip('#')
+                        target = int(target_text, 0)
+                    except ValueError:
+                        target = None
                 if target is not None:
                     self._direct_calls.append((addr, target, self.plt.get(target, '')))
                     if target in self.plt:
@@ -1036,6 +1094,9 @@ class WindowAnalyzer:
         """
         if self.arch in ('arm32', 'arm64'):
             return call_site_va - search_back
+        if self.arch == 'pa-risc':
+            candidates = [start for start in self._func_starts if call_site_va - search_back <= start <= call_site_va]
+            return max(candidates) if candidates else call_site_va - search_back
         try:
             with open(self.path, 'rb') as f:
                 raw = f.read()

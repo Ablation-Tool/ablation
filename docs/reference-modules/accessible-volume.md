@@ -1,4 +1,4 @@
-# Accessible Volume
+# Operational Metacognition
 
 ## Why this exists
 
@@ -9,7 +9,7 @@
 
 ## What it measures
 
-For context \(S\), output vocabulary \(O\), and threshold \(\tau\), accessible volume counts the alternatives strictly above that threshold:
+For context \(S\), output vocabulary \(O\), and threshold \(\tau\), operational metacognition counts the alternatives strictly above that threshold:
 
 \[
 A_\tau(S)=\sum_{a\in O}\mathbf{1}[P(a\mid h_T(S))>\tau]
@@ -75,7 +75,7 @@ Momentum and its suggestion are advisory only. `executed` remains `false`, and n
 
 ## GUI usage
 
-Open **Settings → Accessible Volume**. The measurement runs in the background so the workbench remains responsive. When it finishes, GEM saves and selects the separate evidence event, expands its details, and reports the count at the decision threshold. Subsequent measurements also display their momentum guidance beside the count.
+Open **Settings → Operational Metacognition**. The measurement runs in the background so the workbench remains responsive. When it finishes, GEM saves and selects the separate evidence event, expands its details, and reports the count at the decision threshold. Subsequent measurements also display their momentum guidance beside the count.
 
 ## Evidence and reproducibility
 

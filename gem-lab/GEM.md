@@ -14,7 +14,7 @@ The name refers to this project's **Graphics Environment Manager** and its GEM V
 
 “Bicameral operating system” is an architectural metaphor here, not a claim that GEM owns a kernel, CPU, memory, or devices. The AI Agent proposes actions stochastically; the human supplies direction and judgment; Ablation and GEM execute constrained operations, preserve evidence, and verify results deterministically.
 
-Next-token accessible volume measures breadth, not correctness:
+Next-token operational metacognition measures breadth, not correctness:
 
 \[
 A_\tau(S)=\sum_{a\in O}\mathbf{1}[P(a\mid h_T(S))>\tau]
@@ -26,9 +26,9 @@ Here \(S\) is the model context and \(O\) is its output vocabulary. In a Lab, co
 B_\tau(S)=\sum_{a\in O}\mathbf{1}[P(a\mid S)>\tau]\cdot\mathbf{1}[a\in\operatorname{Allow}(S)]
 \]
 
-The operational sequence is `proposal → constrained action gate → deterministic execution → evidence on disk → verification/replay`. This reduces unbounded and uninspectable action; it does not eliminate stochastic variation or prove safety. Accessible volume must not be presented as a correctness, autonomy, or safety score.
+The operational sequence is `proposal → constrained action gate → deterministic execution → evidence on disk → verification/replay`. This reduces unbounded and uninspectable action; it does not eliminate stochastic variation or prove safety. Operational Metacognition must not be presented as a correctness, autonomy, or safety score.
 
-GEM can calculate \(A_\tau(S)\) with the optional local DistilGPT2 provider. `gem measure --session SESSION` builds the current selection and recent evidence into a bounded context, performs a forward pass, applies strict thresholds, and writes the raw probabilities and a separate `tool` evidence event. Repeated `--candidate` options evaluate proposed future actions with separate forward passes, concentration deltas, and a most-concentrated candidate for human review; no action is authorized or executed. The GUI exposes the same measurement through **Accessible Volume** in Settings.
+GEM can calculate \(A_\tau(S)\) with the optional local DistilGPT2 provider. `gem measure --session SESSION` builds the current selection and recent evidence into a bounded context, performs a forward pass, applies strict thresholds, and writes the raw probabilities and a separate `tool` evidence event. Repeated `--candidate` options evaluate proposed future actions with separate forward passes, concentration deltas, and a most-concentrated candidate for human review; no action is authorized or executed. The GUI exposes the same measurement through **Operational Metacognition** in Settings.
 
 The complementary volume \(A^c_\tau(S)=|O|-A_\tau(S)\) records alternatives at or below each threshold; it is not an inverse and cannot recover the original distribution or context. Accessible momentum \(M_\tau(t)=A_\tau(S_t)-A_\tau(S_{t-1})\) compares consecutive reports and yields advisory guidance to broaden context, narrow context, continue the current trend, or proceed within a configurable target band. Guidance never authorizes or executes an action.
 

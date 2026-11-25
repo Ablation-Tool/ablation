@@ -241,7 +241,7 @@ def measure_session(session, thresholds=THRESHOLDS, provider=None, candidates=()
     guidance = momentum_guidance(momentum, decision_threshold, momentum_band)
     report = {
         "schema_version": 1,
-        "measurement": "next-token accessible volume",
+        "measurement": "next-token operational metacognition",
         "created_utc": utc_now(),
         "context": {
             "sha256": hashlib.sha256(context.encode("utf-8")).hexdigest(),
@@ -275,7 +275,7 @@ def measure_session(session, thresholds=THRESHOLDS, provider=None, candidates=()
         f"evidence:accessible-volume:{digest[:16]}",
         state["selected_id"],
         "evidence",
-        f"Accessible volume: {counts[first_threshold]} above {first_threshold}",
+        f"Operational Metacognition: {counts[first_threshold]} above {first_threshold}",
         "partial",
         "tool",
         str(report_path),

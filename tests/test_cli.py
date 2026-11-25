@@ -156,3 +156,23 @@ def test_analyze_entropy_prints_regions(capsys):
     assert 'Entropy regions (' in output
     assert 'H=' in output
     assert 'CODE/DATA' in output or 'SPARSE' in output
+
+
+def test_hpux_delegates_all_arguments(monkeypatch):
+    import ablation.hpux.cli as hpux_cli
+
+    called = {}
+    monkeypatch.setattr(hpux_cli, 'main', lambda arguments: called.setdefault('arguments', arguments))
+    arguments = ['disassemble', 'sample.som', '0x23330', '--length', '0x40']
+    cli.cmd_hpux(SimpleNamespace(arguments=arguments))
+    assert called['arguments'] is arguments
+
+
+def test_sunos_delegates_all_arguments(monkeypatch):
+    import ablation.sunos.cli as sunos_cli
+
+    called = {}
+    monkeypatch.setattr(sunos_cli, 'main', lambda arguments: called.setdefault('arguments', arguments))
+    arguments = ['calls', 'sample.aout', '--target', '0xf624', '--json']
+    cli.cmd_sunos(SimpleNamespace(arguments=arguments))
+    assert called['arguments'] is arguments

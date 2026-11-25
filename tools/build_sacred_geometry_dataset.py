@@ -265,7 +265,7 @@ def scene_document():
     return Scene.from_dict({
         "schema_version": 1,
         "id": "sacred-geometry-volume",
-        "title": "Sacred geometry: accessible volume, complement, momentum, and the hub loop",
+        "title": "Sacred geometry: operational metacognition, complement, momentum, and the hub loop",
         "prompt": "Nested circles, symmetric circles, a woven diamond, 12 hub-loop positions, modular arithmetic, and circle formulas.",
         "canvas": {"width": 10000, "height": 7000},
         "objects": objects,

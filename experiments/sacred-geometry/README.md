@@ -55,8 +55,8 @@ A separate full affine least-squares fit is included. Two point pairs provide fo
 gem volume current.npz --previous earlier.npz --tau 0.05 --output momentum.json
 ```
 
-It computes accessible volume and its complement, monotonic elapsed time, source/probability hashes, momentum, and target-band guidance. Feedback reports never overwrite existing files. A session can also store a separate `tool` evidence event. No action is authorized or executed.
+It computes operational metacognition and its complement, monotonic elapsed time, source/probability hashes, momentum, and target-band guidance. Feedback reports never overwrite existing files. A session can also store a separate `tool` evidence event. No action is authorized or executed.
 
 ## Interpretation boundaries
 
-Accessible volume describes forecast breadth, not correctness. Complementary volume is not an algebraic inverse. Momentum and candidate concentration provide advisory guidance only. DistilGPT2 measurements do not measure the interactive agent, and ordinary next-token distributions do not provide a complete structured-action distribution. The HOP and rhythm experiments should be read as evidence about predictor quality, not as a claim that circles, confidence, correctness, or safety are interchangeable.
+Operational Metacognition describes forecast breadth, not correctness. Complementary volume is not an algebraic inverse. Momentum and candidate concentration provide advisory guidance only. DistilGPT2 measurements do not measure the interactive agent, and ordinary next-token distributions do not provide a complete structured-action distribution. The HOP and rhythm experiments should be read as evidence about predictor quality, not as a claim that circles, confidence, correctness, or safety are interchangeable.
