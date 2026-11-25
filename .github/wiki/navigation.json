@@ -236,7 +236,7 @@
           "title": "Lookup and support",
           "entries": [
             {"page": "Module-Reference", "title": "Module Reference", "description": "Browse curated domains or the complete A–Z module index."},
-            {"path": "index.md", "title": "Documentation Index", "description": "Read the original core-guide navigation."},
+            {"path": "documentation-index.md", "title": "Documentation Index", "description": "Read the original core-guide navigation."},
             {"path": "INDEX.md", "title": "Complete Document Library", "description": "Open the full documentation catalog."},
             {"path": "user-guide.md", "title": "CLI & User Guide", "description": "Review sessions, commands, configuration, and examples."},
             {"path": "reference-modules/isa-models.md", "title": "Architecture & ISA Models", "description": "Inspect architecture definitions and ABI behavior."},

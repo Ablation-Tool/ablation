@@ -77,7 +77,7 @@ docs/workflows/android-reverse-engineering.md
 -> Workflows-Android-Reverse-Engineering
 ```
 
-The two existing index files have explicit, distinct names: `docs/index.md` becomes `Documentation-Index`, and `docs/INDEX.md` becomes `Document-Library`. Duplicate generated names stop the build instead of silently replacing one document with another.
+The two existing index files have explicit, distinct names (and distinct filenames to prevent case-insensitive checkout collisions on Windows/macOS): `docs/documentation-index.md` becomes `Documentation-Index`, and `docs/INDEX.md` becomes `Document-Library`. Duplicate generated names stop the build instead of silently replacing one document with another.
 
 ## How links and assets work
 

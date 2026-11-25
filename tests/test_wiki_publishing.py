@@ -14,7 +14,7 @@ def _write(path: Path, text: str = "# Document\n") -> None:
 def _fixture(tmp_path: Path) -> tuple[Path, Path]:
     docs = tmp_path / "docs"
     home = tmp_path / "Home.md"
-    _write(docs / "index.md", "# Documentation Index\n")
+    _write(docs / "documentation-index.md", "# Documentation Index\n")
     _write(docs / "INDEX.md", "# Complete Library\n")
     _write(docs / "getting-started.md", "# Getting Started\n")
     _write(docs / "overview.md", "# Overview\n")

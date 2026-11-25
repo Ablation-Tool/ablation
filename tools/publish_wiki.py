@@ -85,7 +85,7 @@ class WikiPublisher:
 
     @classmethod
     def _page_slug(cls, path: PurePosixPath) -> str:
-        if path == PurePosixPath("index.md"):
+        if path in {PurePosixPath("index.md"), PurePosixPath("documentation-index.md")}:
             return "Documentation-Index"
         if path == PurePosixPath("INDEX.md"):
             return "Document-Library"
@@ -355,7 +355,7 @@ class WikiPublisher:
     def _fallback_parent(self, path: PurePosixPath) -> str:
         if len(path.parts) > 1:
             return self.directory_pages.get(path.parts[0], "Reference")
-        if path in {PurePosixPath("getting-started.md"), PurePosixPath("index.md")}:
+        if path in {PurePosixPath("getting-started.md"), PurePosixPath("index.md"), PurePosixPath("documentation-index.md")}:
             return ""
         if path == PurePosixPath("INDEX.md"):
             return "Module-Reference"
