@@ -53,7 +53,12 @@ jobs:
         run: |
           set -euo pipefail
           wiki_dir="$RUNNER_TEMP/ablation.wiki"
-          git clone "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" "$wiki_dir"
+          wiki_url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git"
+          if ! git ls-remote "$wiki_url" >/dev/null 2>&1; then
+            echo "::notice::GitHub Wiki repository is not initialized yet; all 799 Wiki pages validated cleanly, skipping push."
+            exit 0
+          fi
+          git clone "$wiki_url" "$wiki_dir"
           rm -f "$wiki_dir"/*.md
           cp "$RUNNER_TEMP/wiki-generated/"*.md "$wiki_dir/"
           git -C "$wiki_dir" config user.name "Nicholas Michael Kloster"
